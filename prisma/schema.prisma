@@ -8,7 +8,163 @@ datasource db {
   url       = env("DATABASE_URL")
 }
 
-// ==================== VEHÍCULOS ====================
+// ==================== FORMULARIO DE POSTULACIÓN ====================
+
+model FormDriver {
+  id                String           @id @default(cuid())
+  
+  // Datos personales básicos
+  cedula            String           
+  firstName         String?          @map("first_name")
+  lastName          String?          @map("last_name")
+  fullName          String?          @map("full_name")
+  phoneNumber       String           @map("phone_number")
+  email             String?
+  birthDate         DateTime?        @map("birth_date")
+  
+  // Dirección completa
+  department        String?          // Departamento
+  city              String?          // Ciudad
+  neighborhood      String?          // Barrio (Barrio)
+  address           String?          // Dirección exacta
+  
+  // Vehículo
+  hasVehicle        Boolean          @default(false) @map("has_vehicle")
+  vehicleBrand      String?          @map("vehicle_brand")
+  vehicleModel      String?          @map("vehicle_model")
+  vehicleYear       Int?             @map("vehicle_year")
+  vehiclePlate      String?          @map("vehicle_plate")
+  
+  // Documentos (URLs de Vercel Blob)
+  cedulaPhotoUrl    String?          @map("cedula_photo_url")
+  licensePhotoUrl   String?          @map("license_photo_url")
+  vehiclePhotoUrl   String?          @map("vehicle_photo_url")
+  
+  // Contacto de emergencia
+  emergencyName     String?          @map("emergency_name")
+  emergencyRelationship String?      @map("emergency_relationship") // Familiar, Amigo, Conocido, Otros
+  emergencyPhone    String?          @map("emergency_phone")
+  
+  // Zona de trabajo y referencia
+  workZone          String?          @map("work_zone") // Carmelitas, Centro, Lambaré, etc
+  howHeardAboutUs   String?          @map("how_heard_about_us") // Redes Sociales, Recomendación
+  referredBy        String?          @map("referred_by") // Nombre del driver que recomendó
+  
+  // Info adicional
+  experience        String?          // Sin experiencia, <1 año, 1-3 años, >3 años
+  availability      String[]         @default([]) // ["mañana", "tarde", "noche"]
+  whenCanStart      String?          @map("when_can_start") // Inmediato, Esta semana, Este mes, A evaluar
+  
+  // Estado del formulario
+  status            FormDriverStatus @default(IN_PROGRESS)
+  currentStep       Int              @default(1)
+  completedSteps    Int[]            @default([]) @map("completed_steps")
+  
+  // Metadata
+  source            String?          // web, mobile, referral
+  metadata          Json?
+  
+  // Timestamps
+  startedAt         DateTime         @default(now()) @map("started_at")
+  lastActivityAt    DateTime         @updatedAt @map("last_activity_at")
+  completedAt       DateTime?        @map("completed_at")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  
+  // Relaciones
+  submissions       FormSubmission[]
+  
+  @@index([cedula])
+  @@index([phoneNumber])
+  @@index([email])
+  @@index([status])
+  @@index([lastActivityAt])
+  @@map("form_drivers")
+}
+
+model FormSubmission {
+  id                String           @id @default(cuid())
+  sessionId         String           @unique // UUID generado en frontend
+  formDriverId      String?          @map("form_driver_id") // Se asigna después del Step 1
+  
+  // Progreso
+  currentStep       Int              @default(1)
+  totalSteps        Int              @default(7)
+  isComplete        Boolean          @default(false)
+  
+  // Datos completos del formulario (JSON incremental)
+  formData          Json             @map("form_data")
+  
+  // Tracking temporal
+  startedAt         DateTime         @default(now()) @map("started_at")
+  lastActivityAt    DateTime         @updatedAt @map("last_activity_at")
+  completedAt       DateTime?        @map("completed_at")
+  
+  // Analytics de abandono
+  isAbandoned       Boolean          @default(false) @map("is_abandoned")
+  abandonedAt       DateTime?        @map("abandoned_at")
+  abandonedAtStep   Int?             @map("abandoned_at_step")
+  
+  // Metadata de tracking
+  userAgent         String?          @map("user_agent")
+  ipAddress         String?          @map("ip_address")
+  referralSource    String?          @map("referral_source")
+  utmSource         String?          @map("utm_source")
+  utmMedium         String?          @map("utm_medium")
+  utmCampaign       String?          @map("utm_campaign")
+  
+  // Relaciones
+  formDriver        FormDriver?      @relation(fields: [formDriverId], references: [id], onDelete: SetNull)
+  stepCompletions   FormStepCompletion[]
+  
+  @@index([sessionId])
+  @@index([formDriverId])
+  @@index([isComplete])
+  @@index([isAbandoned])
+  @@index([lastActivityAt])
+  @@map("form_submissions")
+}
+
+model FormStepCompletion {
+  id                String           @id @default(cuid())
+  submissionId      String           @map("submission_id")
+  
+  step              Int              // 1-7
+  stepName          String           @map("step_name") // "contact_info", "location", etc
+  
+  // Datos del step específico
+  stepData          Json             @map("step_data")
+  
+  // Timestamps
+  startedAt         DateTime         @default(now()) @map("started_at")
+  completedAt       DateTime?        @map("completed_at")
+  timeSpentSeconds  Int?             @map("time_spent_seconds")
+  
+  // Metadata
+  validationErrors  Json?            @map("validation_errors") // Si hubo errores
+  wasEdited         Boolean          @default(false) @map("was_edited") // Si volvió a editar
+  editCount         Int              @default(0) @map("edit_count")
+  
+  // Relaciones
+  submission        FormSubmission   @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  
+  @@unique([submissionId, step]) // Un step por submission
+  @@index([submissionId])
+  @@map("form_step_completions")
+}
+
+// ==================== ENUMS PARA FORMULARIO ====================
+
+enum FormDriverStatus {
+  IN_PROGRESS      // Completando formulario
+  COMPLETED        // Formulario completado
+  ABANDONED        // Abandonó el proceso
+  SUBMITTED        // Enviado para revisión
+  APPROVED         // Aprobado por admin
+  REJECTED         // Rechazado
+}
+
+// ==================== VEHÍCULOS (EXISTENTE) ====================
 model Vehicle {
   id                String             @id @default(cuid())
   driverId          String             @map("driver_id")
