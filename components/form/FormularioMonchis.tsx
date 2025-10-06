@@ -12,6 +12,11 @@ import { InformationSection } from './InformationSection';
 import { TopNavigation } from './TopNavigation';
 import { getFormSteps } from './formSteps';
 
+// ============================================
+// CONFIGURACIÓN - Cambia esto para testing
+// ============================================
+const SKIP_VALIDATION = true; // Cambia a false para activar validaciones
+
 const MONCHIS_RED = '#e7243f';
 
 const generateUUID = () => {
@@ -47,6 +52,7 @@ const FormularioMonchis: React.FC = () => {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
+    birthDate: '',
     cedula: '',
     phoneNumber: '',
     email: '',
@@ -71,6 +77,9 @@ const FormularioMonchis: React.FC = () => {
     experience: '',
     availability: [] as string[],
     whenCanStart: '',
+    hasUenoAccount: '',
+    uenoAccountNumber: '',
+    canInvoice: '',
   });
 
   useEffect(() => {
@@ -132,34 +141,51 @@ const FormularioMonchis: React.FC = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleFileUpload = async (field: string, file: File) => {
-    if (!file) return;
+  const handleFileUpload = async (field: string, files: FileList) => {
+    if (!files || files.length === 0) return;
     
     setUploadingDoc(field);
     
     try {
-      const uploadFormData = new FormData();
-      uploadFormData.append('file', file);
-      uploadFormData.append('sessionId', sessionId);
-      uploadFormData.append('documentType', field.replace('PhotoUrl', ''));
+      const uploadedUrls: string[] = [];
       
-      const response = await fetch('/api/form/upload-document', {
-        method: 'POST',
-        body: uploadFormData
-      });
+      // Subir cada archivo
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', file);
+        uploadFormData.append('sessionId', sessionId);
+        uploadFormData.append('documentType', field.replace('PhotoUrl', ''));
+        
+        const response = await fetch('/api/form/upload-document', {
+          method: 'POST',
+          body: uploadFormData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          uploadedUrls.push(data.url);
+        } else {
+          toast.error(`Error al subir ${file.name}: ${data.error}`);
+        }
+      }
       
-      const data = await response.json();
-      
-      if (data.success) {
-        handleInputChange(field, data.url);
+      if (uploadedUrls.length > 0) {
+        // Agregar las nuevas URLs a las existentes
+        // Solución: forzar el tipo de field como keyof typeof formData para evitar el error de tipo
+        const currentUrls = formData[field as keyof typeof formData]
+          ? (formData[field as keyof typeof formData] as string).split(',').filter((u: string) => u)
+          : [];
+        const allUrls = [...currentUrls, ...uploadedUrls];
+        handleInputChange(field, allUrls.join(','));
+
         trackDocumentUploaded(field.replace('PhotoUrl', ''));
-        toast.success('Documento subido correctamente');
-      } else {
-        toast.error('Error al subir el archivo: ' + data.error);
+        toast.success(`${uploadedUrls.length} archivo(s) subido(s) correctamente`);
       }
     } catch (error) {
       console.error('Error:', error);
-      toast.error('Error al subir el archivo');
+      toast.error('Error al subir los archivos');
     } finally {
       setUploadingDoc(null);
     }
@@ -220,6 +246,11 @@ const FormularioMonchis: React.FC = () => {
   };
 
   const validateCurrentStep = (): boolean => {
+    // Si SKIP_VALIDATION está en true, saltear todas las validaciones
+    if (SKIP_VALIDATION) {
+      return true;
+    }
+
     const currentStep = step + 1;
     
     switch (currentStep) {
@@ -276,46 +307,33 @@ const FormularioMonchis: React.FC = () => {
         break;
         
       case 4:
-        if (!formData.cedulaPhotoUrl) {
+        if (!formData.cedulaPhotoUrl || formData.cedulaPhotoUrl.trim() === '') {
           toast.error('Por favor sube la foto de tu cédula');
           return false;
         }
-        if (!formData.licensePhotoUrl) {
-          toast.error('Por favor sube la foto de tu licencia');
-          return false;
-        }
-        if (formData.hasVehicle === 'si' && !formData.vehiclePhotoUrl) {
-          toast.error('Por favor sube la foto de tu vehículo');
+        if (!formData.licensePhotoUrl || formData.licensePhotoUrl.trim() === '') {
+          toast.error('Por favor sube el certificado de antecedentes penales');
           return false;
         }
         break;
         
       case 5:
-        if (!formData.emergencyName.trim()) {
-          toast.error('Por favor completa el nombre del contacto de emergencia');
-          return false;
-        }
-        if (!formData.emergencyRelationship) {
-          toast.error('Por favor selecciona el parentesco');
-          return false;
-        }
-        if (!formData.emergencyPhone.trim()) {
-          toast.error('Por favor completa el teléfono de emergencia');
-          return false;
-        }
+        // Contacto de emergencia ahora es completamente opcional
+        // No se valida nada en este paso
         break;
         
       case 6:
-        if (!formData.workZone) {
-          toast.error('Por favor selecciona tu zona de trabajo');
+        if (!formData.workZone || formData.workZone.trim() === '') {
+          toast.error('Por favor selecciona al menos una zona de trabajo');
+          return false;
+        }
+        const zones = formData.workZone.split(',').filter((z: string) => z.trim());
+        if (zones.length === 0) {
+          toast.error('Por favor selecciona al menos una zona de trabajo');
           return false;
         }
         if (!formData.howHeardAboutUs) {
           toast.error('Por favor indica cómo te enteraste de nosotros');
-          return false;
-        }
-        if (formData.howHeardAboutUs === 'Recomendación' && !formData.referredBy.trim()) {
-          toast.error('Por favor indica quién te recomendó');
           return false;
         }
         break;
@@ -492,6 +510,16 @@ const FormularioMonchis: React.FC = () => {
         <div className="absolute top-1/4 -right-40 w-[500px] h-[500px] bg-white/15 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 left-1/3 w-[600px] h-[600px] bg-white/10 rounded-full blur-3xl"></div>
       </div>
+
+      {/* Indicador de modo testing - aparece solo si SKIP_VALIDATION es true */}
+      {SKIP_VALIDATION && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-top duration-300">
+          <div className="bg-yellow-400 text-yellow-900 px-6 py-2 rounded-full shadow-lg flex items-center gap-2">
+            <span className="text-lg">⚡</span>
+            <span className="font-semibold">Modo Testing - Validaciones OFF</span>
+          </div>
+        </div>
+      )}
 
       {/* Header fijo arriba - SIEMPRE muestra el progreso */}
       <Header 
