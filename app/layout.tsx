@@ -1,6 +1,7 @@
 import { Montserrat } from 'next/font/google';
 import { Toaster } from 'sonner';
 import Script from 'next/script';
+import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css';
 
 const montserrat = Montserrat({
@@ -30,30 +31,13 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const gaId = process.env.NEXT_PUBLIC_GA_ID;
+  const gaId : string = process.env.NEXT_PUBLIC_GA_ID || '';
 
   return (
     <html lang="es">
       <body className={`${montserrat.variable} font-sans`}>
         {/* Google Analytics - Solo si existe el ID */}
-        {gaId && (
-          <>
-            <Script
-              src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}
-              strategy="afterInteractive"
-            />
-            <Script id="google-analytics" strategy="afterInteractive">
-              {`
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                gtag('config', '${gaId}', {
-                  page_path: window.location.pathname,
-                });
-              `}
-            </Script>
-          </>
-        )}
+
 
         {children}
 
@@ -70,6 +54,7 @@ export default function RootLayout({
             duration: 3000,
           }}
         />
+        <GoogleAnalytics gaId={gaId} />
       </body>
     </html>
   );

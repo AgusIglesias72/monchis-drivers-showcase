@@ -1,6 +1,10 @@
 // app/admin/layout.tsx
 
-import { Sidebar } from "@/components/admin/sidebar"
+import { AppSidebar } from "@/components/admin/app-sidebar"
+import {
+  SidebarInset,
+  SidebarProvider,
+} from "@/components/ui/sidebar"
 
 export default function AdminLayout({
   children,
@@ -8,11 +12,11 @@ export default function AdminLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto bg-slate-50">
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
         {children}
-      </main>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }
