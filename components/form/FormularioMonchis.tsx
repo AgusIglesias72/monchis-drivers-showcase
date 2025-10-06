@@ -30,11 +30,11 @@ const generateUUID = () => {
 const getStepName = (stepNumber: number): string => {
   const stepNames: Record<number, string> = {
     1: 'contact_info',
-    2: 'location',
-    3: 'vehicle',
-    4: 'documents',
-    5: 'emergency_contact',
-    6: 'work_zone',
+    2: 'work_zone',
+    3: 'location',
+    4: 'vehicle',
+    5: 'documents',
+    6: 'emergency_contact',
     7: 'additional_info'
   };
   return stepNames[stepNumber] || 'unknown';
@@ -173,9 +173,8 @@ const FormularioMonchis: React.FC = () => {
       
       if (uploadedUrls.length > 0) {
         // Agregar las nuevas URLs a las existentes
-        // Solución: forzar el tipo de field como keyof typeof formData para evitar el error de tipo
-        const currentUrls = formData[field as keyof typeof formData]
-          ? (formData[field as keyof typeof formData] as string).split(',').filter((u: string) => u)
+        const currentUrls = (formData as Record<string, any>)[field]
+          ? (formData as Record<string, any>)[field].split(',').filter((u: string) => u)
           : [];
         const allUrls = [...currentUrls, ...uploadedUrls];
         handleInputChange(field, allUrls.join(','));
@@ -197,18 +196,25 @@ const FormularioMonchis: React.FC = () => {
         return {
           firstName: formData.firstName,
           lastName: formData.lastName,
+          birthDate: formData.birthDate,
           cedula: formData.cedula,
           phoneNumber: formData.phoneNumber,
           email: formData.email
         };
       case 2:
         return {
+          workZone: formData.workZone,
+          howHeardAboutUs: formData.howHeardAboutUs,
+          referredBy: formData.referredBy
+        };
+      case 3:
+        return {
           department: formData.department,
           city: formData.city,
           neighborhood: formData.neighborhood,
           address: formData.address
         };
-      case 3:
+      case 4:
         return {
           hasVehicle: formData.hasVehicle,
           vehicleBrand: formData.vehicleBrand,
@@ -216,29 +222,26 @@ const FormularioMonchis: React.FC = () => {
           vehicleYear: formData.vehicleYear,
           vehiclePlate: formData.vehiclePlate
         };
-      case 4:
+      case 5:
         return {
           cedulaPhotoUrl: formData.cedulaPhotoUrl,
           licensePhotoUrl: formData.licensePhotoUrl,
           vehiclePhotoUrl: formData.vehiclePhotoUrl
         };
-      case 5:
+      case 6:
         return {
           emergencyName: formData.emergencyName,
           emergencyRelationship: formData.emergencyRelationship,
           emergencyPhone: formData.emergencyPhone
         };
-      case 6:
-        return {
-          workZone: formData.workZone,
-          howHeardAboutUs: formData.howHeardAboutUs,
-          referredBy: formData.referredBy
-        };
       case 7:
         return {
           experience: formData.experience,
           availability: formData.availability,
-          whenCanStart: formData.whenCanStart
+          whenCanStart: formData.whenCanStart,
+          hasUenoAccount: formData.hasUenoAccount,
+          uenoAccountNumber: formData.uenoAccountNumber,
+          canInvoice: formData.canInvoice
         };
       default:
         return {};
@@ -435,9 +438,11 @@ const FormularioMonchis: React.FC = () => {
 
   const shareWhatsApp = () => {
     const message = encodeURIComponent(
-      `¡Hola! Acabo de completar mi postulación para ser driver de Monchis 🛵\n\n` +
-      `Nombre: ${formData.firstName} ${formData.lastName}\n` +
-      `Ciudad: ${formData.city}`
+      `¡Hola! 👋\n\n` +
+      `¿Te gustaría trabajar como driver de Monchis? 🛵\n\n` +
+      `Es súper fácil postularte, solo tenés que completar este formulario:\n` +
+      `${window.location.origin}\n\n` +
+      `¡Te están esperando! 🚀`
     );
     window.open(`https://wa.me/?text=${message}`, '_blank');
   };
@@ -489,13 +494,39 @@ const FormularioMonchis: React.FC = () => {
           <p className="text-gray-600 mb-6">
             Gracias por tu interés en unirte al equipo de Monchis. Te contactaremos pronto.
           </p>
+
+          {/* Botón para ver postulación */}
           <Button
-            onClick={shareWhatsApp}
-            className="w-full bg-green-500 hover:bg-green-600 text-white"
+            onClick={() => {
+              // Aquí puedes implementar la lógica para mostrar la postulación
+              // Por ahora, abre WhatsApp para consultas
+              const message = encodeURIComponent(
+                `Hola! Acabo de completar mi postulación para ser driver de Monchis.\n\n` +
+                `Quisiera consultar sobre mi postulación.\n\n` +
+                `Nombre: ${formData.firstName} ${formData.lastName}`
+              );
+              window.open(`https://wa.me/595981234567?text=${message}`, '_blank');
+            }}
+            variant="outline"
+            className="w-full mb-4"
           >
-            <Share2 className="w-5 h-5 mr-2" />
-            Compartir en WhatsApp
+            Consultar sobre mi postulación
           </Button>
+
+          {/* Sección de referidos */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <p className="text-sm text-gray-700 font-medium mb-3">
+              ¿Conocés a otra persona a la que le pueda interesar?
+            </p>
+            <p className="text-xs text-gray-500 mb-4">Compartir por:</p>
+            <Button
+              onClick={shareWhatsApp}
+              className="w-full bg-green-500 hover:bg-green-600 text-white"
+            >
+              <Share2 className="w-5 h-5 mr-2" />
+              WhatsApp
+            </Button>
+          </div>
         </div>
       </div>
     );

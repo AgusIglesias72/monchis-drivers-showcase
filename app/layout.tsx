@@ -13,6 +13,10 @@ const montserrat = Montserrat({
 export const metadata = {
   title: 'Monchis - Postulación Driver',
   description: 'Únete al equipo de drivers de Monchis',
+  icons: {
+    icon: '/monchis-icon.svg',
+    apple: '/monchis-icon.svg',
+  }
 };
 
 export default function RootLayout({

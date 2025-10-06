@@ -6,10 +6,11 @@ import { aiDocumentValidator } from '@/lib/services/ai-document-validator.servic
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const driverId = params.id;
+    const resolvedParams = await params;
+    const driverId = resolvedParams.id;
     
     console.log(`🚀 Iniciando validación de documentos para driver ${driverId}`);
     

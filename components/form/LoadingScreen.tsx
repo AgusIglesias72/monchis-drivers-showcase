@@ -17,7 +17,7 @@ export const LoadingScreen: React.FC = () => {
       <div 
         className="relative z-10 animate-in slide-in-from-bottom duration-700"
         style={{
-          animation: 'slideInFromBottom 700ms ease-out, fadeOut 1500ms ease-out 1500ms forwards'
+          animation: 'slideInFromBottom 400ms ease-out, fadeOut 1500ms ease-out 1500ms forwards'
         }}
       >
         <div className="relative w-32 h-32 mx-auto mb-4">
@@ -27,7 +27,7 @@ export const LoadingScreen: React.FC = () => {
             width={128} 
             height={128}
             className="animate-spin"
-            style={{ animationDuration: '1.5s' }}
+            style={{ animationDuration: '1s' }}
           />
         </div>
       </div>

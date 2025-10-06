@@ -1,11 +1,11 @@
-import React from 'react';
-import { User, MapPin, Bike, FileText, Phone, Briefcase, MapPinned, X, Paperclip, Building2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { User, MapPin, Bike, FileText, Phone,  MapPinned, X, Paperclip, Building2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
 
 const MONCHIS_RED = '#e7243f';
 
@@ -98,6 +98,19 @@ export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({
 };
 
 export const getFormSteps = (formData: any, handleInputChange: any, handleFileUpload: any, uploadingDoc: string | null) => {
+  const [birthDateInput, setBirthDateInput] = useState('');
+
+  // Sincronizar el input con formData cuando cambia desde el calendario
+  React.useEffect(() => {
+    if (formData.birthDate && formData.birthDate.includes('-')) {
+      try {
+        setBirthDateInput(format(new Date(formData.birthDate), 'dd/MM/yyyy'));
+      } catch {
+        setBirthDateInput('');
+      }
+    }
+  }, [formData.birthDate]);
+
   const workZones = [
     'Carmelitas',
     'Centro',
@@ -123,10 +136,14 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
 
   const selectedZones = formData.workZone ? formData.workZone.split(',').filter((z: string) => z) : [];
 
+  // Generar años para el selector (últimos 30 años)
+  const currentYear = new Date().getFullYear();
+  const vehicleYears = Array.from({ length: 30 }, (_, i) => currentYear - i);
+
   return [
     {
       title: '¡Empecemos!',
-      subtitle: 'Solo necesitamos tu contacto',
+      subtitle: 'Datos de contacto',
       icon: User,
       component: (
         <div className="space-y-5">
@@ -157,18 +174,36 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="birthDate">
-              Fecha de Nacimiento <span style={{ color: MONCHIS_RED }}>*</span>
-            </Label>
-            <Input
-              id="birthDate"
-              className="w-full"
-              type="date"
-              value={formData.birthDate}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('birthDate', e.target.value)}
-              required
-            />
-          </div>
+  <Label htmlFor="birthDate">
+    Fecha de Nacimiento <span style={{ color: MONCHIS_RED }}>*</span>
+  </Label>
+  <Input
+    id="birthDate"
+    className="w-full"
+    placeholder="dd/mm/aaaa"
+    value={formData.birthDate || ''}
+    onChange={(e) => {
+      let value = e.target.value;
+      const numbersOnly = value.replace(/\D/g, '');
+      
+      if (numbersOnly.length <= 8) {
+        let formatted = numbersOnly;
+        
+        if (numbersOnly.length >= 3) {
+          formatted = numbersOnly.slice(0, 2) + '/' + numbersOnly.slice(2);
+        }
+        if (numbersOnly.length >= 5) {
+          formatted = numbersOnly.slice(0, 2) + '/' + 
+                      numbersOnly.slice(2, 4) + '/' + 
+                      numbersOnly.slice(4);
+        }
+        
+        handleInputChange('birthDate', formatted);
+      }
+    }}
+    maxLength={10}
+  />
+</div>
           <div className="space-y-2">
             <Label htmlFor="cedula">
               Cédula de Identidad <span style={{ color: MONCHIS_RED }}>*</span>
@@ -212,7 +247,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
     },
     {
       title: 'Zona de Trabajo',
-      subtitle: '¿Dónde te gustaría trabajar?',
+      subtitle: '¿En qué zona te gustaría trabajar?',
       icon: MapPinned,
       component: (
         <div className="space-y-5">
@@ -221,9 +256,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
               <Label>
                 Zona Preferida <span style={{ color: MONCHIS_RED }}>*</span>
               </Label>
-              {selectedZones.length > 0 && (
                 <span className="text-sm text-gray-500">{selectedZones.length}/3 seleccionadas</span>
-              )}
             </div>
             
             <div className="gap-2 grid grid-cols-2 md:grid-cols-3">
@@ -290,7 +323,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
     },
     {
       title: '¿Dónde estás?',
-      subtitle: 'Necesitamos tu ubicación',
+      subtitle: 'Datos de domicilio',
       icon: MapPin,
       component: (
         <div className="space-y-5">
@@ -366,7 +399,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
       )
     },
     {
-      title: 'Tu Vehículo',
+      title: 'Vehículo',
       subtitle: '¿Con qué vas a trabajar?',
       icon: Bike,
       component: (
@@ -399,7 +432,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
             <>
               <div className="space-y-2">
                 <Label htmlFor="vehicleBrand">
-                  Marca <span style={{ color: MONCHIS_RED }}>*</span>
+                  Marca
                 </Label>
                 <Input
                   id="vehicleBrand"
@@ -407,12 +440,11 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
                   value={formData.vehicleBrand}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('vehicleBrand', e.target.value)}
                   placeholder="Toyota, Honda, Yamaha..."
-                  required
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="vehicleModel">
-                  Modelo <span style={{ color: MONCHIS_RED }}>*</span>
+                  Modelo
                 </Label>
                 <Input
                   id="vehicleModel"
@@ -420,25 +452,28 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
                   value={formData.vehicleModel}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('vehicleModel', e.target.value)}
                   placeholder="Corolla, Civic, Crypton..."
-                  required
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="vehicleYear">
-                  Año <span style={{ color: MONCHIS_RED }}>*</span>
+                  Año
                 </Label>
-                <Input
-                  id="vehicleYear"
-                  className="w-full"
-                  value={formData.vehicleYear}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('vehicleYear', e.target.value)}
-                  placeholder="2020"
-                  required
-                />
+                <Select value={formData.vehicleYear} onValueChange={(value) => handleInputChange('vehicleYear', value)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecciona el año" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vehicleYears.map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="vehiclePlate">
-                  Placa/Chapa <span style={{ color: MONCHIS_RED }}>*</span>
+                  Placa/Chapa
                 </Label>
                 <Input
                   id="vehiclePlate"
@@ -446,7 +481,6 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
                   value={formData.vehiclePlate}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('vehiclePlate', e.target.value)}
                   placeholder="ABC123"
-                  required
                 />
               </div>
             </>
@@ -582,16 +616,16 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Inmediatamente">Inmediatamente</SelectItem>
-                <SelectItem value="Esta semana">Esta semana</SelectItem>
-                <SelectItem value="Este mes">Este mes</SelectItem>
-                <SelectItem value="A evaluar">A evaluar</SelectItem>
+                <SelectItem value="La próxima semana">La próxima semana</SelectItem>
+                <SelectItem value="El próximo mes">El próximo mes</SelectItem>
+                <SelectItem value="A definir">A definir</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label>
-              ¿Tenés cuenta en Ueno Bank? <span style={{ color: MONCHIS_RED }}>*</span>
+              ¿Tenés cuenta en ueno? <span style={{ color: MONCHIS_RED }}>*</span>
             </Label>
             <div className="flex gap-4 w-full">
               <Button
@@ -616,7 +650,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
           {formData.hasUenoAccount === 'si' && (
             <div className="space-y-2">
               <Label htmlFor="uenoAccountNumber">
-                Número de Cuenta Ueno <span style={{ color: MONCHIS_RED }}>*</span>
+                Número de Cuenta ueno 
               </Label>
               <Input
                 id="uenoAccountNumber"
@@ -624,7 +658,6 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
                 value={formData.uenoAccountNumber}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange('uenoAccountNumber', e.target.value)}
                 placeholder="Ingresa tu número de cuenta"
-                required
               />
             </div>
           )}

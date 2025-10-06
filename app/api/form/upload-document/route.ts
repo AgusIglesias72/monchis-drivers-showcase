@@ -1,4 +1,3 @@
-
 // app/api/form/upload-document/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
@@ -9,7 +8,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const sessionId = formData.get('sessionId') as string;
-    const documentType = formData.get('documentType') as string; // cedula, licencia, vehiculo
+    const documentType = formData.get('documentType') as string;
 
     if (!file || !sessionId || !documentType) {
       return NextResponse.json(
@@ -18,10 +17,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validar tipo de archivo
-    if (!file.type.startsWith('image/')) {
+    // Validar tipo de archivo - ACTUALIZADO PARA ACEPTAR PDF E IMÁGENES
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Solo se permiten imágenes' },
+        { error: 'Solo se permiten imágenes (JPG, PNG, WebP) o PDF' },
         { status: 400 }
       );
     }
@@ -51,7 +51,13 @@ export async function POST(request: NextRequest) {
 
     if (submission) {
       const formData = submission.formData as any;
-      formData[`${documentType}PhotoUrl`] = blob.url;
+      
+      // Agregar URL al array existente o crear nuevo
+      const currentUrls = formData[`${documentType}PhotoUrl`] 
+        ? formData[`${documentType}PhotoUrl`].split(',').filter((u: string) => u)
+        : [];
+      currentUrls.push(blob.url);
+      formData[`${documentType}PhotoUrl`] = currentUrls.join(',');
 
       await prisma.formSubmission.update({
         where: { sessionId },
@@ -61,7 +67,7 @@ export async function POST(request: NextRequest) {
       // Actualizar FormDriver si existe
       if (submission.formDriverId) {
         const updateData: any = {};
-        updateData[`${documentType}PhotoUrl`] = blob.url;
+        updateData[`${documentType}PhotoUrl`] = currentUrls.join(',');
 
         await prisma.formDriver.update({
           where: { id: submission.formDriverId },
