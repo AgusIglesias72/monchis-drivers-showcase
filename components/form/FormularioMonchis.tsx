@@ -486,90 +486,79 @@ const FormularioMonchis: React.FC = () => {
   const CurrentStepIcon = steps[step].icon;
 
   return (
-    <div className="min-h-screen relative overflow-hidden" style={{ backgroundColor: MONCHIS_RED }}>
+    <div className="min-h-screen relative overflow-hidden pb-20" style={{ backgroundColor: MONCHIS_RED }}>
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
         <div className="absolute top-1/4 -right-40 w-[500px] h-[500px] bg-white/15 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 left-1/3 w-[600px] h-[600px] bg-white/10 rounded-full blur-3xl"></div>
       </div>
 
+      {/* Header fijo arriba - SIEMPRE muestra el progreso */}
+      <Header 
+        currentStep={step + 1} 
+        totalSteps={steps.length} 
+        stepTitle={steps[step].title}
+        showProgress={true}
+      />
+
+      {/* Switch de navegación debajo del Header */}
       <TopNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <div className="relative overflow-hidden">
-        <div 
-          className="flex transition-transform duration-500 ease-out"
-          style={{ 
-            transform: activeTab === 'form' ? 'translateX(0)' : 'translateX(-100%)',
-            width: '200%'
-          }}
-        >
-          {/* Panel Formulario */}
-          <div className="w-1/2 flex-shrink-0">
-            <Header 
-              currentStep={step + 1} 
-              totalSteps={steps.length} 
-              stepTitle={steps[step].title}
-              showProgress={true}
-            />
-
-            <div className="relative max-w-2xl mx-auto px-4 py-6">
-              <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${MONCHIS_RED}20` }}>
-                    <CurrentStepIcon className="w-7 h-7" style={{ color: MONCHIS_RED }} />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-800">{steps[step].title}</h2>
-                    <p className="text-sm text-gray-500">{steps[step].subtitle}</p>
-                  </div>
-                </div>
-
-                <div className="mb-8">
-                  {steps[step].component}
-                </div>
-
-                <div className="flex gap-4">
-                  {step > 0 && (
-                    <Button
-                      onClick={prevStep}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      <ChevronLeft className="w-5 h-5 mr-2" />
-                      Anterior
-                    </Button>
-                  )}
-                  
-                  {step < steps.length - 1 ? (
-                    <Button
-                      onClick={nextStep}
-                      className="flex-1 text-white"
-                      style={{ backgroundColor: MONCHIS_RED }}
-                    >
-                      Siguiente
-                      <ChevronRight className="w-5 h-5 ml-2" />
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={handleSubmit}
-                      className="flex-1 text-white"
-                      style={{ backgroundColor: MONCHIS_RED }}
-                    >
-                      <Check className="w-5 h-5 mr-2" />
-                      Enviar
-                    </Button>
-                  )}
-                </div>
+      {/* Contenido - cambia directamente sin slide */}
+      {activeTab === 'form' ? (
+        <div className="relative max-w-2xl mx-auto px-4 pb-6 animate-in fade-in zoom-in-95 duration-700">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${MONCHIS_RED}20` }}>
+                <CurrentStepIcon className="w-7 h-7" style={{ color: MONCHIS_RED }} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">{steps[step].title}</h2>
+                <p className="text-sm text-gray-500">{steps[step].subtitle}</p>
               </div>
             </div>
-          </div>
 
-          {/* Panel Información */}
-          <div className="w-1/2 flex-shrink-0">
-            <InformationSection />
+            <div className="mb-8">
+              {steps[step].component}
+            </div>
+
+            <div className="flex gap-4">
+              {step > 0 && (
+                <Button
+                  onClick={prevStep}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  <ChevronLeft className="w-5 h-5 mr-2" />
+                  Anterior
+                </Button>
+              )}
+              
+              {step < steps.length - 1 ? (
+                <Button
+                  onClick={nextStep}
+                  className="flex-1 text-white"
+                  style={{ backgroundColor: MONCHIS_RED }}
+                >
+                  Siguiente
+                  <ChevronRight className="w-5 h-5 ml-2" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSubmit}
+                  className="flex-1 text-white"
+                  style={{ backgroundColor: MONCHIS_RED }}
+                >
+                  <Check className="w-5 h-5 mr-2" />
+                  Enviar
+                </Button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <InformationSection />
+      )}
     </div>
   );
 };

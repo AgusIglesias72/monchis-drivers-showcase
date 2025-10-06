@@ -24,11 +24,11 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Image 
-              src="/monchis-logo.png" 
+              src="/monchis-logo-white.png" 
               alt="Monchis" 
               width={140} 
               height={35}
-              className="h-9 w-auto brightness-0 invert"
+              className="h-9 w-auto"
               priority
             />
             {showProgress && currentStep && totalSteps && (

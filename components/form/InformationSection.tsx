@@ -7,7 +7,7 @@ export const InformationSection: React.FC = () => {
   const [activeInfoTab, setActiveInfoTab] = useState<'requisitos' | 'pagos' | 'tarifas'>('requisitos');
 
   return (
-    <div className="relative max-w-2xl mx-auto p-4 pt-6">
+    <div className="relative max-w-2xl mx-auto p-4 pb-6">
       <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
         {/* Tabs internos */}
         <div className="border-b border-gray-200 p-4">

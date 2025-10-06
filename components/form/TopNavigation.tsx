@@ -1,5 +1,4 @@
 import React from 'react';
-import Image from 'next/image';
 import { ClipboardList, Info } from 'lucide-react';
 
 const MONCHIS_RED = '#e7243f';
@@ -11,19 +10,8 @@ interface TopNavigationProps {
 
 export const TopNavigation: React.FC<TopNavigationProps> = ({ activeTab, onTabChange }) => {
   return (
-    <div className="relative bg-white/10 backdrop-blur-sm border-b border-white/20">
-      <div className="max-w-2xl mx-auto px-4 py-4">
-        <div className="flex items-center justify-between mb-4">
-          <Image 
-            src="/monchis-logo.png" 
-            alt="Monchis" 
-            width={140} 
-            height={35}
-            className="h-9 w-auto brightness-0 invert"
-            priority
-          />
-        </div>
-        
+    <div className="relative backdrop-blur-sm">
+      <div className="max-w-2xl mx-auto px-4 py-3">
         <div className="bg-white/20 rounded-full p-1 flex gap-1">
           <button
             onClick={() => onTabChange('form')}
