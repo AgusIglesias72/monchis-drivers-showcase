@@ -249,15 +249,14 @@ const FormularioMonchis: React.FC = () => {
   };
 
   const validateCurrentStep = (): boolean => {
-    // Si SKIP_VALIDATION está en true, saltear todas las validaciones
     if (SKIP_VALIDATION) {
       return true;
     }
-
+  
     const currentStep = step + 1;
     
     switch (currentStep) {
-      case 1:
+      case 1: // Datos de contacto
         if (!formData.firstName.trim()) {
           toast.error('Por favor completa tu nombre');
           return false;
@@ -276,7 +275,23 @@ const FormularioMonchis: React.FC = () => {
         }
         break;
         
-      case 2:
+      case 2: // Zona de Trabajo
+        if (!formData.workZone || formData.workZone.trim() === '') {
+          toast.error('Por favor selecciona al menos una zona de trabajo');
+          return false;
+        }
+        const zones = formData.workZone.split(',').filter((z: string) => z.trim());
+        if (zones.length === 0) {
+          toast.error('Por favor selecciona al menos una zona de trabajo');
+          return false;
+        }
+        if (!formData.howHeardAboutUs) {
+          toast.error('Por favor indica cómo te enteraste de nosotros');
+          return false;
+        }
+        break;
+        
+      case 3: // Ubicación/Domicilio
         if (!formData.department) {
           toast.error('Por favor selecciona tu departamento');
           return false;
@@ -295,21 +310,13 @@ const FormularioMonchis: React.FC = () => {
         }
         break;
         
-      case 3:
+      case 4: // Vehículo
         if (!formData.hasVehicle) {
           toast.error('Por favor indica si tenés vehículo');
           return false;
         }
-        if (formData.hasVehicle === 'si') {
-          if (!formData.vehicleBrand.trim() || !formData.vehicleModel.trim() || 
-              !formData.vehicleYear.trim() || !formData.vehiclePlate.trim()) {
-            toast.error('Por favor completa todos los datos del vehículo');
-            return false;
-          }
-        }
-        break;
-        
-      case 4:
+        break;        
+      case 5: // Documentos
         if (!formData.cedulaPhotoUrl || formData.cedulaPhotoUrl.trim() === '') {
           toast.error('Por favor sube la foto de tu cédula');
           return false;
@@ -320,28 +327,11 @@ const FormularioMonchis: React.FC = () => {
         }
         break;
         
-      case 5:
-        // Contacto de emergencia ahora es completamente opcional
-        // No se valida nada en este paso
+      case 6: // Contacto de Emergencia - OPCIONAL
+        // No se valida nada, es completamente opcional
         break;
         
-      case 6:
-        if (!formData.workZone || formData.workZone.trim() === '') {
-          toast.error('Por favor selecciona al menos una zona de trabajo');
-          return false;
-        }
-        const zones = formData.workZone.split(',').filter((z: string) => z.trim());
-        if (zones.length === 0) {
-          toast.error('Por favor selecciona al menos una zona de trabajo');
-          return false;
-        }
-        if (!formData.howHeardAboutUs) {
-          toast.error('Por favor indica cómo te enteraste de nosotros');
-          return false;
-        }
-        break;
-        
-      case 7:
+      case 7: // Información Adicional
         if (!formData.experience) {
           toast.error('Por favor indica tu experiencia');
           return false;
@@ -352,6 +342,14 @@ const FormularioMonchis: React.FC = () => {
         }
         if (!formData.whenCanStart) {
           toast.error('Por favor indica cuándo podés empezar');
+          return false;
+        }
+        if (!formData.hasUenoAccount) {
+          toast.error('Por favor indica si tenés cuenta en ueno');
+          return false;
+        }
+        if (!formData.canInvoice) {
+          toast.error('Por favor indica si podés emitir facturas');
           return false;
         }
         break;
@@ -464,7 +462,7 @@ const FormularioMonchis: React.FC = () => {
         <div className="text-center relative z-10">
           <div className="relative w-24 h-24 mx-auto mb-4">
             <Image 
-              src="/monchis-icon.png" 
+              src="/monchis-short-white.png" 
               alt="Monchis" 
               width={96} 
               height={96}
@@ -505,11 +503,16 @@ const FormularioMonchis: React.FC = () => {
                 `Quisiera consultar sobre mi postulación.\n\n` +
                 `Nombre: ${formData.firstName} ${formData.lastName}`
               );
-              window.open(`https://wa.me/595981234567?text=${message}`, '_blank');
+              window.open(`https://wa.me/595974236666?text=${message}`, '_blank');
             }}
             variant="outline"
-            className="w-full mb-4"
+            className="w-full cursor-pointer"
           >
+            <svg className="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+  <path fill="currentColor" fill-rule="evenodd" d="M12 4a8 8 0 0 0-6.895 12.06l.569.718-.697 2.359 2.32-.648.379.243A8 8 0 1 0 12 4ZM2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10a9.96 9.96 0 0 1-5.016-1.347l-4.948 1.382 1.426-4.829-.006-.007-.033-.055A9.958 9.958 0 0 1 2 12Z" clip-rule="evenodd"/>
+  <path fill="currentColor" d="M16.735 13.492c-.038-.018-1.497-.736-1.756-.83a1.008 1.008 0 0 0-.34-.075c-.196 0-.362.098-.49.291-.146.217-.587.732-.723.886-.018.02-.042.045-.057.045-.013 0-.239-.093-.307-.123-1.564-.68-2.751-2.313-2.914-2.589-.023-.04-.024-.057-.024-.057.005-.021.058-.074.085-.101.08-.079.166-.182.249-.283l.117-.14c.121-.14.175-.25.237-.375l.033-.066a.68.68 0 0 0-.02-.64c-.034-.069-.65-1.555-.715-1.711-.158-.377-.366-.552-.655-.552-.027 0 0 0-.112.005-.137.005-.883.104-1.213.311-.35.22-.94.924-.94 2.16 0 1.112.705 2.162 1.008 2.561l.041.06c1.161 1.695 2.608 2.951 4.074 3.537 1.412.564 2.081.63 2.461.63.16 0 .288-.013.4-.024l.072-.007c.488-.043 1.56-.599 1.804-1.276.192-.534.243-1.117.115-1.329-.088-.144-.239-.216-.43-.308Z"/>
+</svg>
+
             Consultar sobre mi postulación
           </Button>
 
@@ -521,9 +524,12 @@ const FormularioMonchis: React.FC = () => {
             <p className="text-xs text-gray-500 mb-4">Compartir por:</p>
             <Button
               onClick={shareWhatsApp}
-              className="w-full bg-green-500 hover:bg-green-600 text-white"
+              className="w-full bg-green-500 hover:bg-green-600 text-white cursor-pointer"
             >
-              <Share2 className="w-5 h-5 mr-2" />
+            <svg className="w-6 h-6 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+  <path fill="currentColor" fill-rule="evenodd" d="M12 4a8 8 0 0 0-6.895 12.06l.569.718-.697 2.359 2.32-.648.379.243A8 8 0 1 0 12 4ZM2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10a9.96 9.96 0 0 1-5.016-1.347l-4.948 1.382 1.426-4.829-.006-.007-.033-.055A9.958 9.958 0 0 1 2 12Z" clip-rule="evenodd"/>
+  <path fill="currentColor" d="M16.735 13.492c-.038-.018-1.497-.736-1.756-.83a1.008 1.008 0 0 0-.34-.075c-.196 0-.362.098-.49.291-.146.217-.587.732-.723.886-.018.02-.042.045-.057.045-.013 0-.239-.093-.307-.123-1.564-.68-2.751-2.313-2.914-2.589-.023-.04-.024-.057-.024-.057.005-.021.058-.074.085-.101.08-.079.166-.182.249-.283l.117-.14c.121-.14.175-.25.237-.375l.033-.066a.68.68 0 0 0-.02-.64c-.034-.069-.65-1.555-.715-1.711-.158-.377-.366-.552-.655-.552-.027 0 0 0-.112.005-.137.005-.883.104-1.213.311-.35.22-.94.924-.94 2.16 0 1.112.705 2.162 1.008 2.561l.041.06c1.161 1.695 2.608 2.951 4.074 3.537 1.412.564 2.081.63 2.461.63.16 0 .288-.013.4-.024l.072-.007c.488-.043 1.56-.599 1.804-1.276.192-.534.243-1.117.115-1.329-.088-.144-.239-.216-.43-.308Z"/>
+</svg>
               WhatsApp
             </Button>
           </div>
