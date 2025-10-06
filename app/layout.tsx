@@ -13,6 +13,12 @@ const montserrat = Montserrat({
 export const metadata = {
   title: 'Monchis - Postulación Driver',
   description: 'Únete al equipo de drivers de Monchis',
+  // Add data for when link is shared
+  openGraph: {
+    title: 'Monchis - Postulación Driver',
+    description: 'Únete al equipo de drivers de Monchis',
+    images: '/monchis-icon.svg',
+  },
   icons: {
     icon: '/monchis-icon.svg',
     apple: '/monchis-icon.svg',

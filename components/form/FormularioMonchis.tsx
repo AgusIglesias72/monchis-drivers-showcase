@@ -15,7 +15,7 @@ import { getFormSteps } from './formSteps';
 // ============================================
 // CONFIGURACIÓN - Cambia esto para testing
 // ============================================
-const SKIP_VALIDATION = true; // Cambia a false para activar validaciones
+const SKIP_VALIDATION = false; // Cambia a false para activar validaciones
 
 const MONCHIS_RED = '#e7243f';
 
