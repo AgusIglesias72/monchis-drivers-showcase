@@ -208,7 +208,7 @@ export function DocumentPreview({
               type="button"
               onClick={handleUploadClick}
               variant="outline"
-              className="w-full gap-2"
+              className="w-full gap-2 cursor-pointer"
             >
               <Plus className="h-4 w-4" />
               Agregar Documento
@@ -257,7 +257,7 @@ export function DocumentPreview({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 cursor-pointer"
                         onClick={() => handlePreview(doc)}
                       >
                         <Eye className="h-4 w-4" />
@@ -265,7 +265,7 @@ export function DocumentPreview({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 cursor-pointer"
                         onClick={() => window.open(doc.blobUrl, '_blank')}
                       >
                         <Download className="h-4 w-4" />
@@ -274,7 +274,7 @@ export function DocumentPreview({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          className="h-8 w-8 text-destructive hover:text-destructive cursor-pointer"
                           onClick={() => onDocumentDelete(doc.id)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -314,7 +314,7 @@ export function DocumentPreview({
               type="button"
               onClick={handleUploadClick}
               variant="outline"
-              className="w-full gap-2 mt-4"
+              className="w-full gap-2 mt-4 cursor-pointer"
             >
               <Plus className="h-4 w-4" />
               Agregar Documento
@@ -376,7 +376,7 @@ export function DocumentPreview({
                 type="button"
                 variant="outline"
                 onClick={() => setShowUploadDialog(false)}
-                className="flex-1"
+                className="flex-1 cursor-pointer"
                 disabled={isUploading}
               >
                 Cancelar
@@ -384,7 +384,7 @@ export function DocumentPreview({
               <Button
                 type="button"
                 onClick={handleConfirmUpload}
-                className="flex-1"
+                className="flex-1 cursor-pointer"
                 disabled={!selectedDocType || !selectedFiles || isUploading}
               >
                 {isUploading ? (
@@ -461,7 +461,7 @@ export function DocumentPreview({
                 <div className="flex items-center gap-2 pt-4 border-t">
                   <Button
                     variant="default"
-                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    className="flex-1 bg-green-600 hover:bg-green-700 cursor-pointer"
                     onClick={() => {
                       onDocumentApprove(selectedDoc.id)
                       setShowPreview(false)
@@ -472,7 +472,7 @@ export function DocumentPreview({
                   </Button>
                   <Button
                     variant="destructive"
-                    className="flex-1"
+                    className="flex-1 cursor-pointer"
                     onClick={() => {
                       const reason = prompt('Razón del rechazo:')
                       if (reason) {

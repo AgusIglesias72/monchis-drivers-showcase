@@ -271,7 +271,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
           <div className="flex flex-wrap items-center gap-2">
             {!isEditing ? (
               <>
-                <Button variant="outline" onClick={() => setIsEditing(true)} className="gap-2 flex-1 sm:flex-none">
+                <Button variant="outline" onClick={() => setIsEditing(true)} className="gap-2 flex-1 sm:flex-none cursor-pointer">
                   <Edit className="h-4 w-4" />
                   <span className="hidden sm:inline">Editar</span>
                 </Button>
@@ -280,7 +280,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                   <Tooltip delayDuration={200}>
                     <TooltipTrigger asChild>
                       <span className="inline-block flex-1 sm:flex-none">
-                        <Button variant="outline" className="gap-2 w-full" disabled>
+                        <Button variant="outline" className="gap-2 w-full" disabled title="Verificar con IA"  >
                           <Bot className="h-4 w-4" />
                           <span className="hidden sm:inline">Verificar con IA</span>
                         </Button>
@@ -294,13 +294,14 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
 
                 <Button 
                   variant="default" 
-                  className="gap-2 bg-green-600 hover:bg-green-700 flex-1 sm:flex-none"
+                  className="gap-2 bg-green-600 hover:bg-green-700 flex-1 sm:flex-none cursor-pointer"
+                  title="Aprobar postulación"
                   onClick={handleApprove}
                 >
                   <CheckCircle className="h-4 w-4" />
                   <span className="hidden sm:inline">Aprobar</span>
                 </Button>
-                <Button variant="destructive" className="gap-2 flex-1 sm:flex-none" onClick={handleReject}>
+                <Button variant="destructive" className="gap-2 flex-1 sm:flex-none cursor-pointer" onClick={handleReject} title="Rechazar postulación">
                   <XCircle className="h-4 w-4" />
                   <span className="hidden sm:inline">Rechazar</span>
                 </Button>
@@ -310,7 +311,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                 <Button 
                   variant="outline" 
                   onClick={handleCancel} 
-                  className="gap-2 flex-1 sm:flex-none"
+                  className="gap-2 flex-1 sm:flex-none cursor-pointer"
                   disabled={isSaving}
                 >
                   <X className="h-4 w-4" />
@@ -319,7 +320,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                 <Button 
                   variant="default" 
                   onClick={handleSave} 
-                  className="gap-2 flex-1 sm:flex-none"
+                  className="gap-2 flex-1 sm:flex-none cursor-pointer"
                   disabled={isSaving}
                 >
                   {isSaving ? (
@@ -632,8 +633,8 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                   />
                   <Button 
                     onClick={handleAddNote} 
-                    size="sm" 
-                    className="w-full h-8"
+                    size="sm"   
+                    className="w-full h-8 cursor-pointer"
                     disabled={!newNote.trim() || isSavingNote}
                   >
                     {isSavingNote ? (

@@ -152,7 +152,7 @@ export function DashboardPostulaciones({
 
             <button
               onClick={() => setUseMockData(!useMockData)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${useMockData ? 'bg-amber-500' : 'bg-green-500'
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${useMockData ? 'bg-amber-500' : 'bg-green-500'
                 }`}
             >
               <span
@@ -201,10 +201,10 @@ export function DashboardPostulaciones({
             className="w-40 h-9"
             placeholder="Hasta"
           />
-          <Button onClick={handleApplyFilters} size="sm" className="gap-2">
+          <Button onClick={handleApplyFilters} size="sm" className="gap-2 cursor-pointer">
             Aplicar
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleResetFilters} className="gap-2">
+          <Button variant="ghost" size="sm" onClick={handleResetFilters} className="gap-2 cursor-pointer  ">
             <RotateCcw className="h-3.5 w-3.5" />
           </Button>
         </div>
