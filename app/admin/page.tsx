@@ -11,13 +11,15 @@ export default async function AdminDashboard() {
     funnelData,
     visitasPorDia,
     completadosPorDia,
-    abandonoPorStep
+    abandonoPorStep,
+    edadesPorRango
   ] = await Promise.all([
     postulacionesStatsService.getStats(),
     postulacionesStatsService.getFunnelData(),
     postulacionesStatsService.getVisitasPorDia(),
     postulacionesStatsService.getCompletadosPorDia(),
-    postulacionesStatsService.getAbandonoPorStep()
+    postulacionesStatsService.getAbandonoPorStep(),
+    postulacionesStatsService.getEdadesPorRango()
   ])
   
   return (
@@ -27,6 +29,7 @@ export default async function AdminDashboard() {
       visitasPorDia={visitasPorDia}
       completadosPorDia={completadosPorDia}
       abandonoPorStep={abandonoPorStep}
+      edadesPorRango={edadesPorRango}
     />
   )
 }

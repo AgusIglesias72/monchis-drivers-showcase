@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       data: {
         isComplete: true,
         completedAt: new Date(),
-        currentStep: 7
+        currentStep: 5
       }
     });
 
@@ -30,8 +30,8 @@ export async function POST(request: NextRequest) {
         where: { id: submission.formDriverId },
         data: {
           status: 'COMPLETED',
-          currentStep: 7,
-          completedSteps: [1, 2, 3, 4, 5, 6, 7],
+          currentStep: 5,
+          completedSteps: [1, 2, 3, 4, 5],
           completedAt: new Date()
         }
       });

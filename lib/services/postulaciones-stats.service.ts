@@ -1,7 +1,7 @@
 // lib/services/postulaciones-stats.service.ts
 
 import { prisma } from '@/lib/prisma';
-import { subDays, format, startOfDay, endOfDay } from 'date-fns';
+import { subDays, format, startOfDay, endOfDay, differenceInYears } from 'date-fns';
 
 export class PostulacionesStatsService {
   
@@ -184,6 +184,7 @@ export class PostulacionesStatsService {
           department: true,
           city: true,
           neighborhood: true,
+          address: true,
           hasVehicle: true,
           vehicleBrand: true,
           vehicleModel: true,
@@ -211,6 +212,59 @@ export class PostulacionesStatsService {
       total,
       hasMore: (filters?.offset || 0) + (filters?.limit || 50) < total
     };
+  }
+  async getEdadesPorRango() {
+    // Obtener todas las fechas de nacimiento
+    const formDrivers = await prisma.formDriver.findMany({
+      where: {
+        birthDate: { not: null }
+      },
+      select: {
+        birthDate: true
+      }
+    });
+  
+    // Inicializar contadores por rango
+    const rangos = {
+      '18-24': 0,
+      '25-34': 0,
+      '35-44': 0,
+      '45-54': 0,
+      '55+': 0
+    };
+  
+    // Contar por rango de edad
+    formDrivers.forEach(driver => {
+      if (!driver.birthDate) return;
+      
+      const edad = differenceInYears(new Date(), driver.birthDate);
+      
+      if (edad >= 18 && edad <= 24) {
+        rangos['18-24']++;
+      } else if (edad >= 25 && edad <= 34) {
+        rangos['25-34']++;
+      } else if (edad >= 35 && edad <= 44) {
+        rangos['35-44']++;
+      } else if (edad >= 45 && edad <= 54) {
+        rangos['45-54']++;
+      } else if (edad >= 55) {
+        rangos['55+']++;
+      }
+    });
+  
+    // Calcular total para porcentajes
+    const total = formDrivers.length;
+  
+    // Colores progresivos de rojo (igual que en el componente)
+    const colores = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca'];
+  
+    // Convertir a formato esperado por el componente
+    return Object.entries(rangos).map(([rango, cantidad], index) => ({
+      rango,
+      cantidad,
+      porcentaje: total > 0 ? (cantidad / total) * 100 : 0,
+      fill: colores[index]
+    }));
   }
   
   /**

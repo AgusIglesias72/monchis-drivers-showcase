@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { Check, Share2, ChevronRight, ChevronLeft } from 'lucide-react';
+import Script from 'next/script';
+import { Check, ChevronRight, ChevronLeft, Loader2, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { trackFormStepCompleted, trackFormCompleted, trackDocumentUploaded, trackFormResumed } from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
@@ -12,11 +13,7 @@ import { InformationSection } from './InformationSection';
 import { TopNavigation } from './TopNavigation';
 import { getFormSteps } from './formSteps';
 
-// ============================================
-// CONFIGURACIÓN - Cambia esto para testing
-// ============================================
-const SKIP_VALIDATION = false; // Cambia a false para activar validaciones
-
+const SKIP_VALIDATION = false;
 const MONCHIS_RED = '#e7243f';
 
 const generateUUID = () => {
@@ -30,12 +27,10 @@ const generateUUID = () => {
 const getStepName = (stepNumber: number): string => {
   const stepNames: Record<number, string> = {
     1: 'contact_info',
-    2: 'work_zone',
-    3: 'location',
-    4: 'vehicle',
-    5: 'documents',
-    6: 'emergency_contact',
-    7: 'additional_info'
+    2: 'personal_data',
+    3: 'work_vehicle',
+    4: 'documents',
+    5: 'additional_info'
   };
   return stepNames[stepNumber] || 'unknown';
 };
@@ -44,10 +39,12 @@ const FormularioMonchis: React.FC = () => {
   const [sessionId, setSessionId] = useState('');
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [savingStep, setSavingStep] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [showLoading, setShowLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'form' | 'info'>('form');
+  const [mapsLoaded, setMapsLoaded] = useState(false);
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -149,7 +146,6 @@ const FormularioMonchis: React.FC = () => {
     try {
       const uploadedUrls: string[] = [];
       
-      // Subir cada archivo
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const uploadFormData = new FormData();
@@ -172,7 +168,6 @@ const FormularioMonchis: React.FC = () => {
       }
       
       if (uploadedUrls.length > 0) {
-        // Agregar las nuevas URLs a las existentes
         const currentUrls = (formData as Record<string, any>)[field]
           ? (formData as Record<string, any>)[field].split(',').filter((u: string) => u)
           : [];
@@ -203,38 +198,32 @@ const FormularioMonchis: React.FC = () => {
         };
       case 2:
         return {
-          workZone: formData.workZone,
-          howHeardAboutUs: formData.howHeardAboutUs,
-          referredBy: formData.referredBy
-        };
-      case 3:
-        return {
           department: formData.department,
           city: formData.city,
           neighborhood: formData.neighborhood,
-          address: formData.address
+          address: formData.address,
+          emergencyName: formData.emergencyName,
+          emergencyRelationship: formData.emergencyRelationship,
+          emergencyPhone: formData.emergencyPhone
         };
-      case 4:
+      case 3:
         return {
+          workZone: formData.workZone,
+          howHeardAboutUs: formData.howHeardAboutUs,
+          referredBy: formData.referredBy,
           hasVehicle: formData.hasVehicle,
           vehicleBrand: formData.vehicleBrand,
           vehicleModel: formData.vehicleModel,
           vehicleYear: formData.vehicleYear,
           vehiclePlate: formData.vehiclePlate
         };
-      case 5:
+      case 4:
         return {
           cedulaPhotoUrl: formData.cedulaPhotoUrl,
           licensePhotoUrl: formData.licensePhotoUrl,
           vehiclePhotoUrl: formData.vehiclePhotoUrl
         };
-      case 6:
-        return {
-          emergencyName: formData.emergencyName,
-          emergencyRelationship: formData.emergencyRelationship,
-          emergencyPhone: formData.emergencyPhone
-        };
-      case 7:
+      case 5:
         return {
           experience: formData.experience,
           availability: formData.availability,
@@ -256,7 +245,7 @@ const FormularioMonchis: React.FC = () => {
     const currentStep = step + 1;
     
     switch (currentStep) {
-      case 1: // Datos de contacto
+      case 1:
         if (!formData.firstName.trim()) {
           toast.error('Por favor completa tu nombre');
           return false;
@@ -273,9 +262,28 @@ const FormularioMonchis: React.FC = () => {
           toast.error('Por favor completa tu teléfono');
           return false;
         }
+        if (!formData.email.trim()) {
+          toast.error('Por favor completa tu email');
+          return false;
+        }
         break;
         
-      case 2: // Zona de Trabajo
+      case 2:
+        if (!formData.department) {
+          toast.error('Por favor selecciona tu departamento');
+          return false;
+        }
+        if (!formData.city.trim()) {
+          toast.error('Por favor completa tu ciudad');
+          return false;
+        }
+        if (!formData.address.trim()) {
+          toast.error('Por favor completa tu dirección');
+          return false;
+        }
+        break;
+        
+      case 3:
         if (!formData.workZone || formData.workZone.trim() === '') {
           toast.error('Por favor selecciona al menos una zona de trabajo');
           return false;
@@ -289,34 +297,13 @@ const FormularioMonchis: React.FC = () => {
           toast.error('Por favor indica cómo te enteraste de nosotros');
           return false;
         }
-        break;
-        
-      case 3: // Ubicación/Domicilio
-        if (!formData.department) {
-          toast.error('Por favor selecciona tu departamento');
-          return false;
-        }
-        if (!formData.city.trim()) {
-          toast.error('Por favor completa tu ciudad');
-          return false;
-        }
-        if (!formData.neighborhood.trim()) {
-          toast.error('Por favor completa tu barrio');
-          return false;
-        }
-        if (!formData.address.trim()) {
-          toast.error('Por favor completa tu dirección');
-          return false;
-        }
-        break;
-        
-      case 4: // Vehículo
         if (!formData.hasVehicle) {
           toast.error('Por favor indica si tenés vehículo');
           return false;
         }
-        break;        
-      case 5: // Documentos
+        break;
+        
+      case 4:
         if (!formData.cedulaPhotoUrl || formData.cedulaPhotoUrl.trim() === '') {
           toast.error('Por favor sube la foto de tu cédula');
           return false;
@@ -327,11 +314,7 @@ const FormularioMonchis: React.FC = () => {
         }
         break;
         
-      case 6: // Contacto de Emergencia - OPCIONAL
-        // No se valida nada, es completamente opcional
-        break;
-        
-      case 7: // Información Adicional
+      case 5:
         if (!formData.experience) {
           toast.error('Por favor indica tu experiencia');
           return false;
@@ -391,7 +374,10 @@ const FormularioMonchis: React.FC = () => {
       return;
     }
     
+    setSavingStep(true);
     const saved = await saveStep(step + 1);
+    setSavingStep(false);
+    
     if (saved && step < steps.length - 1) {
       setStep(step + 1);
     }
@@ -407,7 +393,7 @@ const FormularioMonchis: React.FC = () => {
     setLoading(true);
     
     try {
-      await saveStep(7);
+      await saveStep(5);
       
       const response = await fetch('/api/form/complete', {
         method: 'POST',
@@ -448,6 +434,11 @@ const FormularioMonchis: React.FC = () => {
   const steps = getFormSteps(formData, handleInputChange, handleFileUpload, uploadingDoc);
 
   if (showLoading) {
+    return <LoadingScreen />;
+  }
+
+  // Validar que steps existe y tiene contenido
+  if (!steps || steps.length === 0) {
     return <LoadingScreen />;
   }
 
@@ -493,11 +484,8 @@ const FormularioMonchis: React.FC = () => {
             Gracias por tu interés en unirte al equipo de Monchis. Te contactaremos pronto.
           </p>
 
-          {/* Botón para ver postulación */}
           <Button
             onClick={() => {
-              // Aquí puedes implementar la lógica para mostrar la postulación
-              // Por ahora, abre WhatsApp para consultas
               const message = encodeURIComponent(
                 `Hola! Acabo de completar mi postulación para ser driver de Monchis.\n\n` +
                 `Quisiera consultar sobre mi postulación.\n\n` +
@@ -508,15 +496,12 @@ const FormularioMonchis: React.FC = () => {
             variant="outline"
             className="w-full cursor-pointer"
           >
-            <svg className="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-  <path fill="currentColor" fill-rule="evenodd" d="M12 4a8 8 0 0 0-6.895 12.06l.569.718-.697 2.359 2.32-.648.379.243A8 8 0 1 0 12 4ZM2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10a9.96 9.96 0 0 1-5.016-1.347l-4.948 1.382 1.426-4.829-.006-.007-.033-.055A9.958 9.958 0 0 1 2 12Z" clip-rule="evenodd"/>
-  <path fill="currentColor" d="M16.735 13.492c-.038-.018-1.497-.736-1.756-.83a1.008 1.008 0 0 0-.34-.075c-.196 0-.362.098-.49.291-.146.217-.587.732-.723.886-.018.02-.042.045-.057.045-.013 0-.239-.093-.307-.123-1.564-.68-2.751-2.313-2.914-2.589-.023-.04-.024-.057-.024-.057.005-.021.058-.074.085-.101.08-.079.166-.182.249-.283l.117-.14c.121-.14.175-.25.237-.375l.033-.066a.68.68 0 0 0-.02-.64c-.034-.069-.65-1.555-.715-1.711-.158-.377-.366-.552-.655-.552-.027 0 0 0-.112.005-.137.005-.883.104-1.213.311-.35.22-.94.924-.94 2.16 0 1.112.705 2.162 1.008 2.561l.041.06c1.161 1.695 2.608 2.951 4.074 3.537 1.412.564 2.081.63 2.461.63.16 0 .288-.013.4-.024l.072-.007c.488-.043 1.56-.599 1.804-1.276.192-.534.243-1.117.115-1.329-.088-.144-.239-.216-.43-.308Z"/>
-</svg>
-
+            <svg className="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+            </svg>
             Consultar sobre mi postulación
           </Button>
 
-          {/* Sección de referidos */}
           <div className="mt-8 pt-6 border-t border-gray-200">
             <p className="text-sm text-gray-700 font-medium mb-3">
               ¿Conocés a otra persona a la que le pueda interesar?
@@ -526,10 +511,9 @@ const FormularioMonchis: React.FC = () => {
               onClick={shareWhatsApp}
               className="w-full bg-green-500 hover:bg-green-600 text-white cursor-pointer"
             >
-            <svg className="w-6 h-6 text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-  <path fill="currentColor" fill-rule="evenodd" d="M12 4a8 8 0 0 0-6.895 12.06l.569.718-.697 2.359 2.32-.648.379.243A8 8 0 1 0 12 4ZM2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10a9.96 9.96 0 0 1-5.016-1.347l-4.948 1.382 1.426-4.829-.006-.007-.033-.055A9.958 9.958 0 0 1 2 12Z" clip-rule="evenodd"/>
-  <path fill="currentColor" d="M16.735 13.492c-.038-.018-1.497-.736-1.756-.83a1.008 1.008 0 0 0-.34-.075c-.196 0-.362.098-.49.291-.146.217-.587.732-.723.886-.018.02-.042.045-.057.045-.013 0-.239-.093-.307-.123-1.564-.68-2.751-2.313-2.914-2.589-.023-.04-.024-.057-.024-.057.005-.021.058-.074.085-.101.08-.079.166-.182.249-.283l.117-.14c.121-.14.175-.25.237-.375l.033-.066a.68.68 0 0 0-.02-.64c-.034-.069-.65-1.555-.715-1.711-.158-.377-.366-.552-.655-.552-.027 0 0 0-.112.005-.137.005-.883.104-1.213.311-.35.22-.94.924-.94 2.16 0 1.112.705 2.162 1.008 2.561l.041.06c1.161 1.695 2.608 2.951 4.074 3.537 1.412.564 2.081.63 2.461.63.16 0 .288-.013.4-.024l.072-.007c.488-.043 1.56-.599 1.804-1.276.192-.534.243-1.117.115-1.329-.088-.144-.239-.216-.43-.308Z"/>
-</svg>
+              <svg className="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+              </svg>
               WhatsApp
             </Button>
           </div>
@@ -538,93 +522,118 @@ const FormularioMonchis: React.FC = () => {
     );
   }
 
-  const CurrentStepIcon = steps[step].icon;
+  const CurrentStepIcon = steps && steps[step] ? steps[step].icon : User;
 
   return (
-    <div className="min-h-screen relative overflow-hidden pb-20" style={{ backgroundColor: MONCHIS_RED }}>
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/4 -right-40 w-[500px] h-[500px] bg-white/15 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 left-1/3 w-[600px] h-[600px] bg-white/10 rounded-full blur-3xl"></div>
-      </div>
-
-      {/* Indicador de modo testing - aparece solo si SKIP_VALIDATION es true */}
-      {SKIP_VALIDATION && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-top duration-300">
-          <div className="bg-yellow-400 text-yellow-900 px-6 py-2 rounded-full shadow-lg flex items-center gap-2">
-            <span className="text-lg">⚡</span>
-            <span className="font-semibold">Modo Testing - Validaciones OFF</span>
-          </div>
-        </div>
-      )}
-
-      {/* Header fijo arriba - SIEMPRE muestra el progreso */}
-      <Header 
-        currentStep={step + 1} 
-        totalSteps={steps.length} 
-        stepTitle={steps[step].title}
-        showProgress={true}
+    <>
+      <Script
+        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&language=es`}
+        onLoad={() => setMapsLoaded(true)}
+        strategy="afterInteractive"
       />
+      
+      <div className="min-h-screen relative overflow-hidden pb-20" style={{ backgroundColor: MONCHIS_RED }}>
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-32 -left-32 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
+          <div className="absolute top-1/4 -right-40 w-[500px] h-[500px] bg-white/15 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-40 left-1/3 w-[600px] h-[600px] bg-white/10 rounded-full blur-3xl"></div>
+        </div>
 
-      {/* Switch de navegación debajo del Header */}
-      <TopNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-
-      {/* Contenido - cambia directamente sin slide */}
-      {activeTab === 'form' ? (
-        <div className="relative max-w-2xl mx-auto px-4 pb-6 animate-in fade-in zoom-in-95 duration-700">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${MONCHIS_RED}20` }}>
-                <CurrentStepIcon className="w-7 h-7" style={{ color: MONCHIS_RED }} />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-800">{steps[step].title}</h2>
-                <p className="text-sm text-gray-500">{steps[step].subtitle}</p>
-              </div>
-            </div>
-
-            <div className="mb-8">
-              {steps[step].component}
-            </div>
-
-            <div className="flex gap-4">
-              {step > 0 && (
-                <Button
-                  onClick={prevStep}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  <ChevronLeft className="w-5 h-5 mr-2" />
-                  Anterior
-                </Button>
-              )}
-              
-              {step < steps.length - 1 ? (
-                <Button
-                  onClick={nextStep}
-                  className="flex-1 text-white"
-                  style={{ backgroundColor: MONCHIS_RED }}
-                >
-                  Siguiente
-                  <ChevronRight className="w-5 h-5 ml-2" />
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleSubmit}
-                  className="flex-1 text-white"
-                  style={{ backgroundColor: MONCHIS_RED }}
-                >
-                  <Check className="w-5 h-5 mr-2" />
-                  Enviar
-                </Button>
-              )}
+        {SKIP_VALIDATION && (
+          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-top duration-300">
+            <div className="bg-yellow-400 text-yellow-900 px-6 py-2 rounded-full shadow-lg flex items-center gap-2">
+              <span className="text-lg">⚡</span>
+              <span className="font-semibold">Modo Testing - Validaciones OFF</span>
             </div>
           </div>
-        </div>
-      ) : (
-        <InformationSection />
-      )}
-    </div>
+        )}
+
+        <Header 
+          currentStep={step + 1} 
+          totalSteps={steps.length} 
+          stepTitle={steps[step].title}
+          showProgress={true}
+        />
+
+        <TopNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+
+        {activeTab === 'form' ? (
+          <div className="relative max-w-2xl mx-auto px-4 pb-6 animate-in fade-in zoom-in-95 duration-700">
+            <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${MONCHIS_RED}20` }}>
+                  <CurrentStepIcon className="w-7 h-7" style={{ color: MONCHIS_RED }} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-800">{steps[step].title}</h2>
+                  <p className="text-sm text-gray-500">{steps[step].subtitle}</p>
+                </div>
+              </div>
+
+              <div className="mb-8">
+                {steps[step].component}
+              </div>
+
+              <div className="flex gap-4">
+                {step > 0 && (
+                  <Button
+                    onClick={prevStep}
+                    variant="outline"
+                    className="flex-1 cursor-pointer"
+                    disabled={savingStep}
+                  >
+                    <ChevronLeft className="w-5 h-5 mr-2" />
+                    Anterior
+                  </Button>
+                )}
+                
+                {step < steps.length - 1 ? (
+                  <Button
+                    onClick={nextStep}
+                    className="flex-1 text-white cursor-pointer"
+                    style={{ backgroundColor: MONCHIS_RED }}
+                    disabled={savingStep}
+                  >
+                    {savingStep ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Guardando...
+                      </>
+                    ) : (
+                      <>
+                        Siguiente
+                        <ChevronRight className="w-5 h-5 ml-2" />
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSubmit}
+                    className="flex-1 text-white cursor-pointer"
+                    style={{ backgroundColor: MONCHIS_RED }}
+                    disabled={savingStep}
+                  >
+                    {savingStep ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-5 h-5 mr-2" />
+                        Enviar
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <InformationSection />
+        )}
+      </div>
+    </>
   );
 };
 

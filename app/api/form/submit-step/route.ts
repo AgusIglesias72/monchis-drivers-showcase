@@ -2,6 +2,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Función para parsear fecha de formato dd/MM/yyyy a Date
+function parseBirthDate(dateStr: string | null): Date | null {
+  if (!dateStr) return null;
+  
+  try {
+    // Si ya es una fecha válida ISO
+    if (dateStr.includes('-')) {
+      return new Date(dateStr);
+    }
+    
+    // Si es formato dd/MM/yyyy
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1; // Los meses en JS son 0-indexed
+      const year = parseInt(parts[2]);
+      return new Date(year, month, day);
+    }
+    
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -57,6 +82,8 @@ export async function POST(request: NextRequest) {
         }
       });
 
+      const birthDate = parseBirthDate(stepData.birthDate);
+
       if (!formDriver) {
         // Crear nuevo FormDriver
         formDriver = await prisma.formDriver.create({
@@ -66,7 +93,8 @@ export async function POST(request: NextRequest) {
             lastName: stepData.lastName,
             fullName: `${stepData.firstName || ''} ${stepData.lastName || ''}`.trim(),
             phoneNumber: stepData.phoneNumber,
-            email: stepData.email,
+            email: stepData.email || null,
+            birthDate: birthDate,
             currentStep: 1,
             completedSteps: [1],
             status: 'IN_PROGRESS'
@@ -81,7 +109,8 @@ export async function POST(request: NextRequest) {
             lastName: stepData.lastName,
             fullName: `${stepData.firstName || ''} ${stepData.lastName || ''}`.trim(),
             phoneNumber: stepData.phoneNumber,
-            email: stepData.email,
+            email: stepData.email || null,
+            birthDate: birthDate,
             currentStep: Math.max(formDriver.currentStep, 1),
             completedSteps: Array.from(new Set([...formDriver.completedSteps, 1])),
             lastActivityAt: new Date()
@@ -178,16 +207,22 @@ export async function PATCH(request: NextRequest) {
         }))?.currentStep || 0)
       };
 
-      // Step 2: Ubicación
+      // Step 2: Ubicación + Contacto de emergencia
       if (step === 2) {
         updateData.department = stepData.department;
         updateData.city = stepData.city;
         updateData.neighborhood = stepData.neighborhood;
         updateData.address = stepData.address;
+        updateData.emergencyName = stepData.emergencyName;
+        updateData.emergencyRelationship = stepData.emergencyRelationship;
+        updateData.emergencyPhone = stepData.emergencyPhone;
       }
 
-      // Step 3: Vehículo
+      // Step 3: Zona de trabajo + Vehículo
       if (step === 3) {
+        updateData.workZone = stepData.workZone;
+        updateData.howHeardAboutUs = stepData.howHeardAboutUs;
+        updateData.referredBy = stepData.referredBy;
         updateData.hasVehicle = stepData.hasVehicle === 'si';
         if (stepData.hasVehicle === 'si') {
           updateData.vehicleBrand = stepData.vehicleBrand;
@@ -197,25 +232,17 @@ export async function PATCH(request: NextRequest) {
         }
       }
 
-      // Step 5: Contacto de emergencia
+      // Step 4: Documentos - no hay campos que guardar directamente en FormDriver
+      // Los URLs ya se guardan via upload-document
+
+      // Step 5: Info adicional
       if (step === 5) {
-        updateData.emergencyName = stepData.emergencyName;
-        updateData.emergencyRelationship = stepData.emergencyRelationship;
-        updateData.emergencyPhone = stepData.emergencyPhone;
-      }
-
-      // Step 6: Zona de trabajo
-      if (step === 6) {
-        updateData.workZone = stepData.workZone;
-        updateData.howHeardAboutUs = stepData.howHeardAboutUs;
-        updateData.referredBy = stepData.referredBy;
-      }
-
-      // Step 7: Info adicional
-      if (step === 7) {
         updateData.experience = stepData.experience;
         updateData.availability = stepData.availability || [];
         updateData.whenCanStart = stepData.whenCanStart;
+        updateData.hasUenoAccount = stepData.hasUenoAccount === 'si';
+        updateData.uenoAccountNumber = stepData.uenoAccountNumber || null;
+        updateData.canInvoice = stepData.canInvoice === 'si';
       }
 
       // Agregar step a completedSteps
@@ -273,12 +300,10 @@ export async function PATCH(request: NextRequest) {
 function getStepName(step: number): string {
   const stepNames: Record<number, string> = {
     1: 'contact_info',
-    2: 'location',
-    3: 'vehicle',
+    2: 'personal_data',
+    3: 'work_vehicle',
     4: 'documents',
-    5: 'emergency_contact',
-    6: 'work_zone',
-    7: 'additional_info'
+    5: 'additional_info'
   };
   return stepNames[step] || 'unknown';
 }

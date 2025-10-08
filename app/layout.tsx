@@ -1,6 +1,5 @@
 import { Montserrat } from 'next/font/google';
 import { Toaster } from 'sonner';
-import Script from 'next/script';
 import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css';
 
@@ -36,9 +35,6 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${montserrat.variable} font-sans`}>
-        {/* Google Analytics - Solo si existe el ID */}
-
-
         {children}
 
         {/* Sonner Toast */}
@@ -54,8 +50,8 @@ export default function RootLayout({
             duration: 3000,
           }}
         />
-        <GoogleAnalytics gaId={gaId} />
-      </body>
+        {gaId && <GoogleAnalytics gaId={gaId} />}
+        </body>
     </html>
   );
 }

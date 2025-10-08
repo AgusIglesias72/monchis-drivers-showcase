@@ -4,76 +4,81 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ==================== FORMULARIO DE POSTULACIÓN ====================
 
 model FormDriver {
-  id                String           @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Datos personales básicos
-  cedula            String           
-  firstName         String?          @map("first_name")
-  lastName          String?          @map("last_name")
-  fullName          String?          @map("full_name")
-  phoneNumber       String           @map("phone_number")
-  email             String?
-  birthDate         DateTime?        @map("birth_date")
-  
+  cedula      String
+  firstName   String?   @map("first_name")
+  lastName    String?   @map("last_name")
+  fullName    String?   @map("full_name")
+  phoneNumber String    @map("phone_number")
+  email       String?
+  birthDate   DateTime? @map("birth_date")
+
   // Dirección completa
-  department        String?          // Departamento
-  city              String?          // Ciudad
-  neighborhood      String?          // Barrio (Barrio)
-  address           String?          // Dirección exacta
-  
+  department   String? // Departamento
+  city         String? // Ciudad
+  neighborhood String? // Barrio (Barrio)
+  address      String? // Dirección exacta
+
   // Vehículo
-  hasVehicle        Boolean          @default(false) @map("has_vehicle")
-  vehicleBrand      String?          @map("vehicle_brand")
-  vehicleModel      String?          @map("vehicle_model")
-  vehicleYear       Int?             @map("vehicle_year")
-  vehiclePlate      String?          @map("vehicle_plate")
-  
+  hasVehicle   Boolean @default(false) @map("has_vehicle")
+  vehicleBrand String? @map("vehicle_brand")
+  vehicleModel String? @map("vehicle_model")
+  vehicleYear  Int?    @map("vehicle_year")
+  vehiclePlate String? @map("vehicle_plate")
+
   // Documentos (URLs de Vercel Blob)
-  cedulaPhotoUrl    String?          @map("cedula_photo_url")
-  licensePhotoUrl   String?          @map("license_photo_url")
-  vehiclePhotoUrl   String?          @map("vehicle_photo_url")
-  
+  cedulaPhotoUrl  String? @map("cedula_photo_url")
+  licensePhotoUrl String? @map("license_photo_url")
+  vehiclePhotoUrl String? @map("vehicle_photo_url")
+
   // Contacto de emergencia
-  emergencyName     String?          @map("emergency_name")
-  emergencyRelationship String?      @map("emergency_relationship") // Familiar, Amigo, Conocido, Otros
-  emergencyPhone    String?          @map("emergency_phone")
-  
+  emergencyName         String? @map("emergency_name")
+  emergencyRelationship String? @map("emergency_relationship") // Familiar, Amigo, Conocido, Otros
+  emergencyPhone        String? @map("emergency_phone")
+
   // Zona de trabajo y referencia
-  workZone          String?          @map("work_zone") // Carmelitas, Centro, Lambaré, etc
-  howHeardAboutUs   String?          @map("how_heard_about_us") // Redes Sociales, Recomendación
-  referredBy        String?          @map("referred_by") // Nombre del driver que recomendó
-  
+  workZone        String? @map("work_zone") // Carmelitas, Centro, Lambaré, etc
+  howHeardAboutUs String? @map("how_heard_about_us") // Redes Sociales, Recomendación
+  referredBy      String? @map("referred_by") // Nombre del driver que recomendó
+
   // Info adicional
-  experience        String?          // Sin experiencia, <1 año, 1-3 años, >3 años
-  availability      String[]         @default([]) // ["mañana", "tarde", "noche"]
-  whenCanStart      String?          @map("when_can_start") // Inmediato, Esta semana, Este mes, A evaluar
-  
+  experience        String? // Sin experiencia, <1 año, 1-3 años, >3 años
+  availability      String[] @default([]) // ["mañana", "tarde", "noche"]
+  whenCanStart      String?  @map("when_can_start") // Inmediato, Esta semana, Este mes, A evaluar
+  hasUenoAccount    Boolean  @default(false) @map("has_ueno_account")
+  uenoAccountNumber String?  @map("ueno_account_number")
+  canInvoice        Boolean  @default(false) @map("can_invoice")
+
   // Estado del formulario
-  status            FormDriverStatus @default(IN_PROGRESS)
-  currentStep       Int              @default(1)
-  completedSteps    Int[]            @default([]) @map("completed_steps")
-  
+  status         FormDriverStatus @default(IN_PROGRESS)
+  currentStep    Int              @default(1)
+  completedSteps Int[]            @default([]) @map("completed_steps")
+
   // Metadata
-  source            String?          // web, mobile, referral
-  metadata          Json?
-  
+  source   String? // web, mobile, referral
+  metadata Json?
+
   // Timestamps
-  startedAt         DateTime         @default(now()) @map("started_at")
-  lastActivityAt    DateTime         @updatedAt @map("last_activity_at")
-  completedAt       DateTime?        @map("completed_at")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
-  
+  startedAt      DateTime  @default(now()) @map("started_at")
+  lastActivityAt DateTime  @updatedAt @map("last_activity_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
   // Relaciones
-  submissions       FormSubmission[]
-  
+  submissions FormSubmission[]
+  notes       FormNote[]
+
+
   @@index([cedula])
   @@index([phoneNumber])
   @@index([email])
@@ -82,41 +87,55 @@ model FormDriver {
   @@map("form_drivers")
 }
 
+model FormNote {
+  id           String     @id @default(cuid())
+  content      String     @db.Text
+  formDriverId String     @map("form_driver_id")
+  formDriver   FormDriver @relation(fields: [formDriverId], references: [id], onDelete: Cascade)
+  createdBy    String     @map("created_by") // ID o nombre del usuario admin
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@index([formDriverId])
+  @@index([createdAt])
+  @@map("form_notes")
+}
+
 model FormSubmission {
-  id                String           @id @default(cuid())
-  sessionId         String           @unique // UUID generado en frontend
-  formDriverId      String?          @map("form_driver_id") // Se asigna después del Step 1
-  
+  id           String  @id @default(cuid())
+  sessionId    String  @unique // UUID generado en frontend
+  formDriverId String? @map("form_driver_id") // Se asigna después del Step 1
+
   // Progreso
-  currentStep       Int              @default(1)
-  totalSteps        Int              @default(7)
-  isComplete        Boolean          @default(false)
-  
+  currentStep Int     @default(1)
+  totalSteps  Int     @default(7)
+  isComplete  Boolean @default(false)
+
   // Datos completos del formulario (JSON incremental)
-  formData          Json             @map("form_data")
-  
+  formData Json @map("form_data")
+
   // Tracking temporal
-  startedAt         DateTime         @default(now()) @map("started_at")
-  lastActivityAt    DateTime         @updatedAt @map("last_activity_at")
-  completedAt       DateTime?        @map("completed_at")
-  
+  startedAt      DateTime  @default(now()) @map("started_at")
+  lastActivityAt DateTime  @updatedAt @map("last_activity_at")
+  completedAt    DateTime? @map("completed_at")
+
   // Analytics de abandono
-  isAbandoned       Boolean          @default(false) @map("is_abandoned")
-  abandonedAt       DateTime?        @map("abandoned_at")
-  abandonedAtStep   Int?             @map("abandoned_at_step")
-  
+  isAbandoned     Boolean   @default(false) @map("is_abandoned")
+  abandonedAt     DateTime? @map("abandoned_at")
+  abandonedAtStep Int?      @map("abandoned_at_step")
+
   // Metadata de tracking
-  userAgent         String?          @map("user_agent")
-  ipAddress         String?          @map("ip_address")
-  referralSource    String?          @map("referral_source")
-  utmSource         String?          @map("utm_source")
-  utmMedium         String?          @map("utm_medium")
-  utmCampaign       String?          @map("utm_campaign")
-  
+  userAgent      String? @map("user_agent")
+  ipAddress      String? @map("ip_address")
+  referralSource String? @map("referral_source")
+  utmSource      String? @map("utm_source")
+  utmMedium      String? @map("utm_medium")
+  utmCampaign    String? @map("utm_campaign")
+
   // Relaciones
-  formDriver        FormDriver?      @relation(fields: [formDriverId], references: [id], onDelete: SetNull)
-  stepCompletions   FormStepCompletion[]
-  
+  formDriver      FormDriver?          @relation(fields: [formDriverId], references: [id], onDelete: SetNull)
+  stepCompletions FormStepCompletion[]
+
   @@index([sessionId])
   @@index([formDriverId])
   @@index([isComplete])
@@ -126,28 +145,28 @@ model FormSubmission {
 }
 
 model FormStepCompletion {
-  id                String           @id @default(cuid())
-  submissionId      String           @map("submission_id")
-  
-  step              Int              // 1-7
-  stepName          String           @map("step_name") // "contact_info", "location", etc
-  
+  id           String @id @default(cuid())
+  submissionId String @map("submission_id")
+
+  step     Int // 1-7
+  stepName String @map("step_name") // "contact_info", "location", etc
+
   // Datos del step específico
-  stepData          Json             @map("step_data")
-  
+  stepData Json @map("step_data")
+
   // Timestamps
-  startedAt         DateTime         @default(now()) @map("started_at")
-  completedAt       DateTime?        @map("completed_at")
-  timeSpentSeconds  Int?             @map("time_spent_seconds")
-  
+  startedAt        DateTime  @default(now()) @map("started_at")
+  completedAt      DateTime? @map("completed_at")
+  timeSpentSeconds Int?      @map("time_spent_seconds")
+
   // Metadata
-  validationErrors  Json?            @map("validation_errors") // Si hubo errores
-  wasEdited         Boolean          @default(false) @map("was_edited") // Si volvió a editar
-  editCount         Int              @default(0) @map("edit_count")
-  
+  validationErrors Json?   @map("validation_errors") // Si hubo errores
+  wasEdited        Boolean @default(false) @map("was_edited") // Si volvió a editar
+  editCount        Int     @default(0) @map("edit_count")
+
   // Relaciones
-  submission        FormSubmission   @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  
+  submission FormSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
   @@unique([submissionId, step]) // Un step por submission
   @@index([submissionId])
   @@map("form_step_completions")
@@ -156,42 +175,42 @@ model FormStepCompletion {
 // ==================== ENUMS PARA FORMULARIO ====================
 
 enum FormDriverStatus {
-  IN_PROGRESS      // Completando formulario
-  COMPLETED        // Formulario completado
-  ABANDONED        // Abandonó el proceso
-  SUBMITTED        // Enviado para revisión
-  APPROVED         // Aprobado por admin
-  REJECTED         // Rechazado
+  IN_PROGRESS // Completando formulario
+  COMPLETED // Formulario completado
+  ABANDONED // Abandonó el proceso
+  SUBMITTED // Enviado para revisión
+  APPROVED // Aprobado por admin
+  REJECTED // Rechazado
 }
 
 // ==================== VEHÍCULOS (EXISTENTE) ====================
 model Vehicle {
-  id                String             @id @default(cuid())
-  driverId          String             @map("driver_id")
-  
+  id       String @id @default(cuid())
+  driverId String @map("driver_id")
+
   // Datos del vehículo
-  brand             String?            // Marca
-  model             String?            // Modelo
-  year              Int?               // Año
-  plate             String?            @unique // Chapa/Placa
-  color             String?            // Color
-  type              VehicleType?       // Tipo (MOTO, AUTO, etc)
-  
+  brand String? // Marca
+  model String? // Modelo
+  year  Int? // Año
+  plate String?      @unique // Chapa/Placa
+  color String? // Color
+  type  VehicleType? // Tipo (MOTO, AUTO, etc)
+
   // Estado y documentación
-  isActive          Boolean            @default(true) @map("is_active")
-  hasInsurance      Boolean            @default(false) @map("has_insurance")
-  insuranceExpiry   DateTime?          @map("insurance_expiry")
-  
+  isActive        Boolean   @default(true) @map("is_active")
+  hasInsurance    Boolean   @default(false) @map("has_insurance")
+  insuranceExpiry DateTime? @map("insurance_expiry")
+
   // Metadata
-  metadata          Json?
-  
+  metadata Json?
+
   // Timestamps
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relaciones
-  driver            Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
   @@index([driverId])
   @@index([plate])
   @@map("vehicles")
@@ -199,95 +218,95 @@ model Vehicle {
 
 // ==================== CONTACTOS DE EMERGENCIA ====================
 model EmergencyContact {
-  id                String             @id @default(cuid())
-  driverId          String             @map("driver_id")
-  
+  id       String @id @default(cuid())
+  driverId String @map("driver_id")
+
   // Datos del contacto
-  name              String             // Nombre completo
-  relationship      String?            // Parentesco
-  phoneNumber       String             @map("phone_number")
-  alternativePhone  String?            @map("alternative_phone")
-  
+  name             String // Nombre completo
+  relationship     String? // Parentesco
+  phoneNumber      String  @map("phone_number")
+  alternativePhone String? @map("alternative_phone")
+
   // Prioridad
-  isPrimary         Boolean            @default(true) @map("is_primary")
-  
+  isPrimary Boolean @default(true) @map("is_primary")
+
   // Timestamps
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relaciones
-  driver            Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
   @@index([driverId])
   @@map("emergency_contacts")
 }
 
 // ==================== PAGOS DE EQUIPAMIENTO ====================
 model EquipmentPayment {
-  id                String             @id @default(cuid())
-  driverId          String             @map("driver_id")
-  
+  id       String @id @default(cuid())
+  driverId String @map("driver_id")
+
   // Información del pago
-  paymentMethod     String?            @map("payment_method") // FORMA DE PAGO
-  paymentNumber     String?            @map("payment_number") // NRO COMP. DE PAGO
-  invoiceNumber     String?            @map("invoice_number") // NRO DE FACTURA
-  amount            Float?             // MONTO ENTREGA
-  paymentDate       DateTime?          @map("payment_date") // Fecha del pago (del comprobante)
-  
+  paymentMethod String?   @map("payment_method") // FORMA DE PAGO
+  paymentNumber String?   @map("payment_number") // NRO COMP. DE PAGO
+  invoiceNumber String?   @map("invoice_number") // NRO DE FACTURA
+  amount        Float? // MONTO ENTREGA
+  paymentDate   DateTime? @map("payment_date") // Fecha del pago (del comprobante)
+
   // Comprobante de pago
-  paymentProofId    String?            @map("payment_proof_id") // Drive ID del comprobante
-  paymentProofUrl   String?            @map("payment_proof_url")
-  
+  paymentProofId  String? @map("payment_proof_id") // Drive ID del comprobante
+  paymentProofUrl String? @map("payment_proof_url")
+
   // Estado del pago
-  status            PaymentStatus      @default(PENDING)
-  verifiedAt        DateTime?          @map("verified_at")
-  verifiedBy        String?            @map("verified_by")
-  
+  status     PaymentStatus @default(PENDING)
+  verifiedAt DateTime?     @map("verified_at")
+  verifiedBy String?       @map("verified_by")
+
   // Metadata
-  metadata          Json?
-  
+  metadata Json?
+
   // Timestamps
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relaciones
-  driver            Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
   @@index([driverId])
   @@map("equipment_payments")
 }
 
 // ==================== SERVICIOS FINANCIEROS (actualizado) ====================
 model FinancialService {
-  id                String             @id @default(cuid())
-  driverId          String             @map("driver_id")
-  
+  id       String @id @default(cuid())
+  driverId String @map("driver_id")
+
   // Facturación
-  hasInvoice        Boolean            @default(false) @map("has_invoice")
-  invoiceRuc        String?            @map("invoice_ruc")
-  
+  hasInvoice Boolean @default(false) @map("has_invoice")
+  invoiceRuc String? @map("invoice_ruc")
+
   // Certificado de cumplimiento tributario
-  taxComplianceId   String?            @map("tax_compliance_id") // Drive ID del certificado
-  taxComplianceUrl  String?            @map("tax_compliance_url")
-  
+  taxComplianceId  String? @map("tax_compliance_id") // Drive ID del certificado
+  taxComplianceUrl String? @map("tax_compliance_url")
+
   // Servicio Conto (contabilidad)
-  interestedInConto Boolean            @default(false) @map("interested_in_conto")
-  contoStatus       String?            @map("conto_status") // INTERESTED, CONTACTED, ACTIVE, etc
-  
+  interestedInConto Boolean @default(false) @map("interested_in_conto")
+  contoStatus       String? @map("conto_status") // INTERESTED, CONTACTED, ACTIVE, etc
+
   // Ueno Bank
-  hasUenoAccount    Boolean            @default(false) @map("has_ueno_account")
-  uenoAccountNumber String?            @map("ueno_account_number")
-  
+  hasUenoAccount    Boolean @default(false) @map("has_ueno_account")
+  uenoAccountNumber String? @map("ueno_account_number")
+
   // Metadata
-  metadata          Json?
-  
+  metadata Json?
+
   // Timestamps
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relaciones
-  driver            Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
   @@unique([driverId])
   @@index([driverId])
   @@map("financial_services")
@@ -295,50 +314,50 @@ model FinancialService {
 
 // ==================== DRIVER (actualizado) ====================
 model Driver {
-  id                String           @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Datos personales básicos
-  cedula            String           @unique
-  firstName         String?          @map("first_name")
-  lastName          String?          @map("last_name")
-  fullName          String?          @map("full_name")
-  phoneNumber       String           @unique @map("phone_number")
-  email             String?          @unique
-  birthDate         DateTime?        @map("birth_date")
-  nationality       String?
-  sex               String?
-  
+  cedula      String    @unique
+  firstName   String?   @map("first_name")
+  lastName    String?   @map("last_name")
+  fullName    String?   @map("full_name")
+  phoneNumber String    @unique @map("phone_number")
+  email       String?   @unique
+  birthDate   DateTime? @map("birth_date")
+  nationality String?
+  sex         String?
+
   // Dirección completa
-  department        String?          // Departamento
-  city              String?          // Ciudad
-  neighborhood      String?          // Barrio
-  address           String?          // Dirección exacta
-  
+  department   String? // Departamento
+  city         String? // Ciudad
+  neighborhood String? // Barrio
+  address      String? // Dirección exacta
+
   // Estado del driver
-  status            DriverStatus     @default(PENDING)
-  isEnabled         Boolean          @default(false) @map("is_enabled")
-  
+  status    DriverStatus @default(PENDING)
+  isEnabled Boolean      @default(false) @map("is_enabled")
+
   // Datos de actividad (CRÍTICO para churn)
-  lastTripAt        DateTime?        @map("last_trip_at")
-  firstTripAt       DateTime?        @map("first_trip_at")
-  totalTrips        Int              @default(0) @map("total_trips")
-  daysInactive      Int?             @map("days_inactive")
-  daysSinceRegistration Int?         @map("days_since_registration")
-  
+  lastTripAt            DateTime? @map("last_trip_at")
+  firstTripAt           DateTime? @map("first_trip_at")
+  totalTrips            Int       @default(0) @map("total_trips")
+  daysInactive          Int?      @map("days_inactive")
+  daysSinceRegistration Int?      @map("days_since_registration")
+
   // Segmentación de Churn
-  churnSegment      ChurnSegment     @default(NEW)
-  churnScore        Float?           @map("churn_score")
-  lastChurnCheckAt  DateTime?        @map("last_churn_check_at")
-  
+  churnSegment     ChurnSegment @default(NEW)
+  churnScore       Float?       @map("churn_score")
+  lastChurnCheckAt DateTime?    @map("last_churn_check_at")
+
   // Onboarding Journey
-  onboardingStage   OnboardingStage  @default(REGISTERED)
-  onboardingStartAt DateTime?        @map("onboarding_start_at")
-  onboardingEndAt   DateTime?        @map("onboarding_end_at")
-  
+  onboardingStage   OnboardingStage @default(REGISTERED)
+  onboardingStartAt DateTime?       @map("onboarding_start_at")
+  onboardingEndAt   DateTime?       @map("onboarding_end_at")
+
   // Documentación
-  documentStatus    DocumentStatus   @default(PENDING)
-  documents         Document[]
-  
+  documentStatus DocumentStatus @default(PENDING)
+  documents      Document[]
+
   // Relaciones
   vehicles          Vehicle[]
   emergencyContacts EmergencyContact[]
@@ -348,18 +367,18 @@ model Driver {
   messages          Message[]
   activities        DriverActivity[]
   notes             DriverNote[]
-  
+
   // Metadata
-  source            String?
-  referralCode      String?          @map("referral_code")
-  tags              String[]         @default([])
-  metadata          Json?
-  
+  source       String?
+  referralCode String?  @map("referral_code")
+  tags         String[] @default([])
+  metadata     Json?
+
   // Timestamps
-  registeredAt      DateTime         @default(now()) @map("registered_at")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
-  
+  registeredAt DateTime @default(now()) @map("registered_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
   @@index([churnSegment])
   @@index([status])
   @@index([lastTripAt])
@@ -370,44 +389,44 @@ model Driver {
 
 // ==================== DOCUMENTOS ====================
 model Document {
-  id                String           @id @default(cuid())
-  driverId          String           @map("driver_id")
-  
+  id       String @id @default(cuid())
+  driverId String @map("driver_id")
+
   // Tipo y categoría del documento
-  type              DocumentType
-  category          DocumentCategory @default(REQUIRED)
-  
+  type     DocumentType
+  category DocumentCategory @default(REQUIRED)
+
   // Referencias a Google Drive (NO almacenamos archivos)
-  driveFileId       String?          @unique @map("drive_file_id")
-  driveUrl          String?          @map("drive_url")
-  fileName          String           @map("file_name")
-  mimeType          String?          @map("mime_type")
-  fileSize          Int?             @map("file_size") // en bytes
-  
+  driveFileId String? @unique @map("drive_file_id")
+  driveUrl    String? @map("drive_url")
+  fileName    String  @map("file_name")
+  mimeType    String? @map("mime_type")
+  fileSize    Int?    @map("file_size") // en bytes
+
   // Validación con IA
-  status            ValidationStatus @default(PENDING)
-  aiValidation      Json?            @map("ai_validation") // Respuesta completa de Claude
-  extractedData     Json?            @map("extracted_data") // Datos extraídos
-  confidenceScore   Float?           @map("confidence_score") // 0-100
-  validatedAt       DateTime?        @map("validated_at")
-  validatedBy       String?          @map("validated_by") // SYSTEM o user ID
-  
+  status          ValidationStatus @default(PENDING)
+  aiValidation    Json?            @map("ai_validation") // Respuesta completa de Claude
+  extractedData   Json?            @map("extracted_data") // Datos extraídos
+  confidenceScore Float?           @map("confidence_score") // 0-100
+  validatedAt     DateTime?        @map("validated_at")
+  validatedBy     String?          @map("validated_by") // SYSTEM o user ID
+
   // Razones de rechazo o notas
-  rejectionReason   String?          @map("rejection_reason")
-  notes             String?
-  
+  rejectionReason String? @map("rejection_reason")
+  notes           String?
+
   // Timestamps
-  uploadedAt        DateTime         @default(now()) @map("uploaded_at")
-  expiresAt         DateTime?        @map("expires_at") // Para docs que expiran
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
+  uploadedAt DateTime  @default(now()) @map("uploaded_at")
+  expiresAt  DateTime? @map("expires_at") // Para docs que expiran
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
   // Agregar este campo
-  metadata          Json?
-  
+  metadata Json?
+
   // Relaciones
-  driver            Driver           @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
   @@index([driverId, type])
   @@index([status])
   @@map("documents")
@@ -415,70 +434,70 @@ model Document {
 
 // ==================== CAMPAÑAS ====================
 model Campaign {
-  id                String             @id @default(cuid())
-  name              String
-  description       String?
-  
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
   // Tipo y segmentación
-  type              CampaignType
-  targetSegments    ChurnSegment[]     // A qué segmentos apunta
-  targetTags        String[]           @default([]) // Tags adicionales para filtrar
-  
+  type           CampaignType
+  targetSegments ChurnSegment[] // A qué segmentos apunta
+  targetTags     String[]       @default([]) // Tags adicionales para filtrar
+
   // Estado
-  status            CampaignStatus     @default(DRAFT)
-  
+  status CampaignStatus @default(DRAFT)
+
   // Configuración del mensaje
-  channel           CampaignChannel    @default(WHATSAPP)
-  messageTemplate   String             @map("message_template")
-  variables         Json?              // Variables para personalización
-  
+  channel         CampaignChannel @default(WHATSAPP)
+  messageTemplate String          @map("message_template")
+  variables       Json? // Variables para personalización
+
   // Programación
-  scheduledAt       DateTime?          @map("scheduled_at")
-  sentAt            DateTime?          @map("sent_at")
-  completedAt       DateTime?          @map("completed_at")
-  
+  scheduledAt DateTime? @map("scheduled_at")
+  sentAt      DateTime? @map("sent_at")
+  completedAt DateTime? @map("completed_at")
+
   // Métricas
-  totalRecipients   Int                @default(0) @map("total_recipients")
-  sentCount         Int                @default(0) @map("sent_count")
-  deliveredCount    Int                @default(0) @map("delivered_count")
-  readCount         Int                @default(0) @map("read_count")
-  responseCount     Int                @default(0) @map("response_count")
-  
+  totalRecipients Int @default(0) @map("total_recipients")
+  sentCount       Int @default(0) @map("sent_count")
+  deliveredCount  Int @default(0) @map("delivered_count")
+  readCount       Int @default(0) @map("read_count")
+  responseCount   Int @default(0) @map("response_count")
+
   // Relaciones
-  recipients        CampaignRecipient[]
-  
+  recipients CampaignRecipient[]
+
   // Timestamps
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  createdBy         String?            @map("created_by")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String?  @map("created_by")
+
   @@index([status])
   @@index([type])
   @@map("campaigns")
 }
 
 model CampaignRecipient {
-  id                String             @id @default(cuid())
-  campaignId        String             @map("campaign_id")
-  driverId          String             @map("driver_id")
-  
+  id         String @id @default(cuid())
+  campaignId String @map("campaign_id")
+  driverId   String @map("driver_id")
+
   // Estado del mensaje
-  status            MessageStatus      @default(PENDING)
-  sentAt            DateTime?          @map("sent_at")
-  deliveredAt       DateTime?          @map("delivered_at")
-  readAt            DateTime?          @map("read_at")
-  respondedAt       DateTime?          @map("responded_at")
-  failedAt          DateTime?          @map("failed_at")
-  
+  status      MessageStatus @default(PENDING)
+  sentAt      DateTime?     @map("sent_at")
+  deliveredAt DateTime?     @map("delivered_at")
+  readAt      DateTime?     @map("read_at")
+  respondedAt DateTime?     @map("responded_at")
+  failedAt    DateTime?     @map("failed_at")
+
   // Detalles
-  messageId         String?            @map("message_id") // ID de Twilio
-  errorMessage      String?            @map("error_message")
-  response          String?            // Si el driver responde
-  
+  messageId    String? @map("message_id") // ID de Twilio
+  errorMessage String? @map("error_message")
+  response     String? // Si el driver responde
+
   // Relaciones
-  campaign          Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  driver            Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  driver   Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
   @@unique([campaignId, driverId])
   @@index([driverId])
   @@index([status])
@@ -487,41 +506,41 @@ model CampaignRecipient {
 
 // ==================== MENSAJES ====================
 model Message {
-  id                String             @id @default(cuid())
-  driverId          String             @map("driver_id")
-  
+  id       String @id @default(cuid())
+  driverId String @map("driver_id")
+
   // Tipo y contenido
-  type              MessageType
-  channel           CampaignChannel    @default(WHATSAPP)
-  direction         MessageDirection   @default(OUTBOUND)
-  
+  type      MessageType
+  channel   CampaignChannel  @default(WHATSAPP)
+  direction MessageDirection @default(OUTBOUND)
+
   // Contenido
-  content           String
-  mediaUrl          String?            @map("media_url")
-  
+  content  String
+  mediaUrl String? @map("media_url")
+
   // Estado y tracking
-  status            MessageStatus      @default(PENDING)
-  twilioMessageId   String?            @unique @map("twilio_message_id")
-  twilioStatus      String?            @map("twilio_status")
-  
+  status          MessageStatus @default(PENDING)
+  twilioMessageId String?       @unique @map("twilio_message_id")
+  twilioStatus    String?       @map("twilio_status")
+
   // Timestamps de eventos
-  sentAt            DateTime?          @map("sent_at")
-  deliveredAt       DateTime?          @map("delivered_at")
-  readAt            DateTime?          @map("read_at")
-  failedAt          DateTime?          @map("failed_at")
-  
+  sentAt      DateTime? @map("sent_at")
+  deliveredAt DateTime? @map("delivered_at")
+  readAt      DateTime? @map("read_at")
+  failedAt    DateTime? @map("failed_at")
+
   // Error handling
-  errorCode         String?            @map("error_code")
-  errorMessage      String?            @map("error_message")
-  retryCount        Int                @default(0) @map("retry_count")
-  
+  errorCode    String? @map("error_code")
+  errorMessage String? @map("error_message")
+  retryCount   Int     @default(0) @map("retry_count")
+
   // Relaciones
-  driver            Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
   // Timestamps
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@index([driverId])
   @@index([status])
   @@index([twilioMessageId])
@@ -530,18 +549,18 @@ model Message {
 
 // ==================== ACTIVIDAD ====================
 model DriverActivity {
-  id                String             @id @default(cuid())
-  driverId          String             @map("driver_id")
-  
-  type              ActivityType
-  description       String
-  metadata          Json?
-  
-  performedAt       DateTime           @default(now()) @map("performed_at")
-  performedBy       String?            @map("performed_by") // SYSTEM o user ID
-  
-  driver            Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  
+  id       String @id @default(cuid())
+  driverId String @map("driver_id")
+
+  type        ActivityType
+  description String
+  metadata    Json?
+
+  performedAt DateTime @default(now()) @map("performed_at")
+  performedBy String?  @map("performed_by") // SYSTEM o user ID
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
   @@index([driverId])
   @@index([type])
   @@map("driver_activities")
@@ -549,17 +568,17 @@ model DriverActivity {
 
 // ==================== NOTAS ====================
 model DriverNote {
-  id                String             @id @default(cuid())
-  driverId          String             @map("driver_id")
-  
-  content           String
-  isImportant       Boolean            @default(false) @map("is_important")
-  
-  createdAt         DateTime           @default(now()) @map("created_at")
-  createdBy         String             @map("created_by")
-  
-  driver            Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  
+  id       String @id @default(cuid())
+  driverId String @map("driver_id")
+
+  content     String
+  isImportant Boolean @default(false) @map("is_important")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String   @map("created_by")
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
   @@index([driverId])
   @@map("driver_notes")
 }
@@ -567,47 +586,47 @@ model DriverNote {
 // ==================== ENUMS ====================
 
 enum DriverStatus {
-  PENDING          // Recién registrado
-  IN_REVIEW        // En proceso de revisión
-  APPROVED         // Aprobado
-  ACTIVE           // Activo (ha tomado turnos)
-  INACTIVE         // Inactivo temporalmente
-  SUSPENDED        // Suspendido
-  REJECTED         // Rechazado
-  BLACKLISTED      // En lista negra
+  PENDING // Recién registrado
+  IN_REVIEW // En proceso de revisión
+  APPROVED // Aprobado
+  ACTIVE // Activo (ha tomado turnos)
+  INACTIVE // Inactivo temporalmente
+  SUSPENDED // Suspendido
+  REJECTED // Rechazado
+  BLACKLISTED // En lista negra
 }
 
 enum ChurnSegment {
-  NEW              // Registrado pero nunca tomó un turno
-  ONBOARDING       // En primeros 30 días con actividad
-  ACTIVE           // Activo en últimos 7 días
-  AT_RISK          // 7-14 días sin actividad
-  EARLY_CHURN      // 15-21 días sin actividad
-  MODERATE_CHURN   // 22-30 días sin actividad
-  LATE_CHURN       // 31-60 días sin actividad
-  SEVERE_CHURN     // 61-90 días sin actividad
-  CRITICAL_CHURN   // 91-180 días sin actividad
-  LOST             // +180 días sin actividad
-  NEVER_ACTIVATED  // +30 días desde registro, nunca tomó turno
+  NEW // Registrado pero nunca tomó un turno
+  ONBOARDING // En primeros 30 días con actividad
+  ACTIVE // Activo en últimos 7 días
+  AT_RISK // 7-14 días sin actividad
+  EARLY_CHURN // 15-21 días sin actividad
+  MODERATE_CHURN // 22-30 días sin actividad
+  LATE_CHURN // 31-60 días sin actividad
+  SEVERE_CHURN // 61-90 días sin actividad
+  CRITICAL_CHURN // 91-180 días sin actividad
+  LOST // +180 días sin actividad
+  NEVER_ACTIVATED // +30 días desde registro, nunca tomó turno
 }
 
 enum OnboardingStage {
-  REGISTERED       // Se registró
+  REGISTERED // Se registró
   DOCUMENTS_PENDING // Falta documentación
   DOCUMENTS_SUBMITTED // Documentos enviados
   DOCUMENTS_APPROVED // Documentos aprobados
-  READY_TO_DRIVE   // Listo para manejar
+  READY_TO_DRIVE // Listo para manejar
   FIRST_TRIP_COMPLETED // Completó primer viaje
-  ONBOARDED        // Completó onboarding (30 días)
+  ONBOARDED // Completó onboarding (30 días)
 }
 
 enum DocumentStatus {
-  PENDING          // Sin documentos
-  INCOMPLETE       // Algunos documentos
-  IN_REVIEW        // En revisión
-  APPROVED         // Aprobados
-  REJECTED         // Rechazados
-  EXPIRED          // Expirados
+  PENDING // Sin documentos
+  INCOMPLETE // Algunos documentos
+  IN_REVIEW // En revisión
+  APPROVED // Aprobados
+  REJECTED // Rechazados
+  EXPIRED // Expirados
 }
 
 enum DocumentType {
@@ -626,9 +645,9 @@ enum DocumentType {
 }
 
 enum DocumentCategory {
-  REQUIRED         // Obligatorio
-  OPTIONAL         // Opcional
-  ADDITIONAL       // Adicional
+  REQUIRED // Obligatorio
+  OPTIONAL // Opcional
+  ADDITIONAL // Adicional
 }
 
 enum ValidationStatus {
@@ -641,12 +660,12 @@ enum ValidationStatus {
 }
 
 enum CampaignType {
-  ONBOARDING       // Journey de onboarding
-  REACTIVATION     // Reactivación
-  RETENTION        // Retención
-  PROMOTIONAL      // Promocional
-  INFORMATIONAL    // Informativo
-  SURVEY           // Encuesta
+  ONBOARDING // Journey de onboarding
+  REACTIVATION // Reactivación
+  RETENTION // Retención
+  PROMOTIONAL // Promocional
+  INFORMATIONAL // Informativo
+  SURVEY // Encuesta
 }
 
 enum CampaignStatus {
@@ -677,8 +696,8 @@ enum MessageType {
 }
 
 enum MessageDirection {
-  INBOUND          // Del driver hacia nosotros
-  OUTBOUND         // De nosotros hacia el driver
+  INBOUND // Del driver hacia nosotros
+  OUTBOUND // De nosotros hacia el driver
 }
 
 enum MessageStatus {
@@ -692,20 +711,20 @@ enum MessageStatus {
 }
 
 enum PaymentStatus {
-  PENDING          // Pendiente de verificación
-  VERIFIED         // Verificado
-  REJECTED         // Rechazado
-  REFUNDED         // Reembolsado
+  PENDING // Pendiente de verificación
+  VERIFIED // Verificado
+  REJECTED // Rechazado
+  REFUNDED // Reembolsado
 }
 
 enum VehicleType {
-  MOTORCYCLE       // Moto
-  CAR             // Auto
-  VAN             // Van/Furgoneta
-  TRUCK           // Camión
-  BICYCLE         // Bicicleta
-  SCOOTER         // Scooter eléctrico
-  OTHER           // Otro
+  MOTORCYCLE // Moto
+  CAR // Auto
+  VAN // Van/Furgoneta
+  TRUCK // Camión
+  BICYCLE // Bicicleta
+  SCOOTER // Scooter eléctrico
+  OTHER // Otro
 }
 
 enum ActivityType {
