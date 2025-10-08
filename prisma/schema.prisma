@@ -10,6 +10,55 @@ datasource db {
 
 // ==================== FORMULARIO DE POSTULACIÓN ====================
 
+model FormDocument {
+  id           String @id @default(cuid())
+  formDriverId String @map("form_driver_id")
+
+  // Tipo de documento (reutilizamos tu enum existente)
+  documentType DocumentType @map("document_type")
+
+  // Almacenamiento (Vercel Blob)
+  blobUrl  String  @map("blob_url")
+  fileName String  @map("file_name")
+  mimeType String? @map("mime_type")
+  fileSize Int?    @map("file_size") // bytes
+
+  // Estado y validación del documento individual
+  status FormDocumentStatus @default(PENDING)
+
+  // Notas administrativas sobre este documento específico
+  adminNotes String? @map("admin_notes") @db.Text
+
+  // Quién revisó y cuándo
+  reviewedBy String?   @map("reviewed_by") // ID o email del admin
+  reviewedAt DateTime? @map("reviewed_at")
+
+  // Razón de rechazo si aplica
+  rejectionReason String? @map("rejection_reason") @db.Text
+
+  // Soft delete (para mantener historial)
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by")
+
+  // Metadata adicional
+  metadata Json?
+
+  // Timestamps
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relaciones
+  formDriver FormDriver @relation(fields: [formDriverId], references: [id], onDelete: Cascade)
+
+  @@index([formDriverId])
+  @@index([documentType])
+  @@index([status])
+  @@index([isDeleted])
+  @@map("form_documents")
+}
+
 model FormDriver {
   id String @id @default(cuid())
 
@@ -63,6 +112,25 @@ model FormDriver {
   currentStep    Int              @default(1)
   completedSteps Int[]            @default([]) @map("completed_steps")
 
+  // Estado general de documentos
+  documentsStatus FormDocumentsStatus @default(INCOMPLETE) @map("documents_status")
+
+  // On Boarding
+  onboardingStatus      OnboardingStatus? @map("onboarding_status")
+  onboardingScheduledAt DateTime?         @map("onboarding_scheduled_at")
+  onboardingCompletedAt DateTime?         @map("onboarding_completed_at")
+  onboardingNotes       String?           @map("onboarding_notes") @db.Text
+
+  // Gestión administrativa interna
+  assignedTo          String?  @map("assigned_to") // Admin que gestiona este caso
+  internalNotes       String?  @map("internal_notes") @db.Text // Notas generales del proceso
+
+  // Aprobación final
+  finalApprovedBy     String?  @map("final_approved_by")
+  finalApprovedAt     DateTime? @map("final_approved_at")
+  
+
+
   // Metadata
   source   String? // web, mobile, referral
   metadata Json?
@@ -75,9 +143,9 @@ model FormDriver {
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   // Relaciones
-  submissions FormSubmission[]
-  notes       FormNote[]
-
+  submissions  FormSubmission[]
+  notes        FormNote[]
+  documents FormDocument[]
 
   @@index([cedula])
   @@index([phoneNumber])
@@ -175,12 +243,37 @@ model FormStepCompletion {
 // ==================== ENUMS PARA FORMULARIO ====================
 
 enum FormDriverStatus {
-  IN_PROGRESS // Completando formulario
-  COMPLETED // Formulario completado
-  ABANDONED // Abandonó el proceso
-  SUBMITTED // Enviado para revisión
-  APPROVED // Aprobado por admin
-  REJECTED // Rechazado
+  IN_PROGRESS       // Completando formulario
+  COMPLETED         // Formulario completado
+  ABANDONED         // Abandonó el proceso
+  SUBMITTED         // Enviado para revisión
+  UNDER_REVIEW      // En revisión administrativa (NUEVO)
+  DOCS_PENDING      // Esperando correcciones de docs (NUEVO)
+  APPROVED          // Aprobado por admin
+  READY_ONBOARDING  // Listo para On Boarding (NUEVO)
+  ONBOARDING        // En proceso de On Boarding (NUEVO)
+  ACTIVE            // Activo como driver (NUEVO)
+  REJECTED          // Rechazado
+}
+
+// Enum para estado general de documentación
+enum FormDocumentsStatus {
+  INCOMPLETE // Faltan documentos
+  PENDING // Todos subidos, esperando revisión
+  IN_REVIEW // En proceso de revisión
+  CORRECTIONS // Algunos rechazados, esperando correcciones
+  APPROVED // Todos aprobados
+}
+
+// Enum para On Boarding
+enum OnboardingStatus {
+  NOT_READY // No cumple condiciones aún
+  READY // Listo para agendar
+  SCHEDULED // On boarding agendado
+  IN_PROGRESS // En proceso
+  COMPLETED // Completado
+  CANCELLED // Cancelado
+  NO_SHOW // No se presentó
 }
 
 // ==================== VEHÍCULOS (EXISTENTE) ====================
@@ -594,6 +687,14 @@ enum DriverStatus {
   SUSPENDED // Suspendido
   REJECTED // Rechazado
   BLACKLISTED // En lista negra
+}
+
+enum FormDocumentStatus {
+  PENDING // Subido, esperando revisión
+  IN_REVIEW // En proceso de revisión
+  APPROVED // Aprobado por admin
+  REJECTED // Rechazado - necesita resubir
+  RESUBMITTED // Re-subido después de rechazo
 }
 
 enum ChurnSegment {
