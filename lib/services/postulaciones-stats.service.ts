@@ -58,7 +58,7 @@ export class PostulacionesStatsService {
    */
   async getFunnelData() {
     const funnelData = await Promise.all(
-      [1, 2, 3, 4, 5, 6, 7].map(async (step) => {
+      [1, 2, 3, 4, 5].map(async (step) => {
         const count = await prisma.formDriver.count({
           where: {
             completedSteps: {
@@ -146,6 +146,46 @@ export class PostulacionesStatsService {
   }
   
   /**
+   * Genera el timeline de una postulación basado en sus steps completados
+   */
+  private generateTimeline(completedSteps: number[], startedAt: Date, completedAt: Date | null) {
+    const stepNames = [
+      'Contacto Básico',
+      'Datos Personales',
+      'Trabajo y Vehículo',
+      'Documentos',
+      'Información Adicional'
+    ];
+
+    return stepNames.map((name, index) => {
+      const step = index + 1;
+      const isCompleted = completedSteps.includes(step);
+      
+      // Estimación de fechas de completado
+      let completedAtEstimate = null;
+      if (isCompleted) {
+        if (step === completedSteps.length && completedAt) {
+          // Último step usa la fecha de completado real
+          completedAtEstimate = completedAt;
+        } else {
+          // Estimar basado en progreso
+          const progressRatio = step / completedSteps.length;
+          const totalTime = completedAt 
+            ? completedAt.getTime() - startedAt.getTime()
+            : Date.now() - startedAt.getTime();
+          completedAtEstimate = new Date(startedAt.getTime() + (totalTime * progressRatio));
+        }
+      }
+
+      return {
+        step,
+        name,
+        completedAt: completedAtEstimate
+      };
+    });
+  }
+  
+  /**
    * Obtiene todas las postulaciones con filtros opcionales
    */
   async getPostulaciones(filters?: {
@@ -170,7 +210,7 @@ export class PostulacionesStatsService {
       ];
     }
     
-    const [postulaciones, total] = await Promise.all([
+    const [formDrivers, total] = await Promise.all([
       prisma.formDriver.findMany({
         where,
         select: {
@@ -197,6 +237,12 @@ export class PostulacionesStatsService {
           startedAt: true,
           completedAt: true,
           lastActivityAt: true,
+          emergencyName: true,
+          emergencyPhone: true,
+          emergencyRelationship: true,
+          experience: true,
+          availability: true,
+          whenCanStart: true,
         },
         orderBy: {
           lastActivityAt: 'desc'
@@ -207,14 +253,20 @@ export class PostulacionesStatsService {
       prisma.formDriver.count({ where })
     ]);
     
+    // ✅ Agregar timeline a cada postulación
+    const postulaciones = formDrivers.map(driver => ({
+      ...driver,
+      timeline: this.generateTimeline(driver.completedSteps, driver.startedAt, driver.completedAt)
+    }));
+    
     return {
       postulaciones,
       total,
       hasMore: (filters?.offset || 0) + (filters?.limit || 50) < total
     };
   }
+
   async getEdadesPorRango() {
-    // Obtener todas las fechas de nacimiento
     const formDrivers = await prisma.formDriver.findMany({
       where: {
         birthDate: { not: null }
@@ -224,7 +276,6 @@ export class PostulacionesStatsService {
       }
     });
   
-    // Inicializar contadores por rango
     const rangos = {
       '18-24': 0,
       '25-34': 0,
@@ -233,7 +284,6 @@ export class PostulacionesStatsService {
       '55+': 0
     };
   
-    // Contar por rango de edad
     formDrivers.forEach(driver => {
       if (!driver.birthDate) return;
       
@@ -252,13 +302,9 @@ export class PostulacionesStatsService {
       }
     });
   
-    // Calcular total para porcentajes
     const total = formDrivers.length;
-  
-    // Colores progresivos de rojo (igual que en el componente)
     const colores = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca'];
   
-    // Convertir a formato esperado por el componente
     return Object.entries(rangos).map(([rango, cantidad], index) => ({
       rango,
       cantidad,

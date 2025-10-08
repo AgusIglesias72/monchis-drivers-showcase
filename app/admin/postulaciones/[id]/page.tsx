@@ -4,7 +4,7 @@ import { PostulacionDetailContent } from "@/components/admin/postulacion-detail-
 import { prisma } from "@/lib/prisma"
 import { notFound } from "next/navigation"
 
-// Mock data para IDs específicos
+// Mock data para IDs específicos (mantenemos para desarrollo)
 const MOCK_DATA: Record<string, any> = {
   "1": {
     id: '1',
@@ -24,6 +24,7 @@ const MOCK_DATA: Record<string, any> = {
     vehicleYear: 2020,
     vehiclePlate: 'ABC123',
     status: 'COMPLETED',
+    documentsStatus: 'APPROVED',
     currentStep: 5,
     completedSteps: [1, 2, 3, 4, 5],
     startedAt: new Date('2025-10-01T10:30:00'),
@@ -40,16 +41,38 @@ const MOCK_DATA: Record<string, any> = {
     hasUenoAccount: 'si',
     uenoAccountNumber: '12345678',
     canInvoice: 'si',
-    documents: {
-      cedula: {
-        files: ['/uploads/cedula-front.jpg', '/uploads/cedula-back.jpg'],
+    documents: [
+      {
+        id: 'doc1',
+        documentType: 'CEDULA_FRONT',
+        fileName: 'cedula-frente.jpg',
+        blobUrl: '/uploads/cedula-front.jpg',
+        status: 'APPROVED',
         uploadedAt: new Date('2025-10-01T10:35:00'),
+        fileSize: 245000,
+        mimeType: 'image/jpeg',
       },
-      antecedentes: {
-        files: ['/uploads/antecedentes.pdf'],
+      {
+        id: 'doc2',
+        documentType: 'CEDULA_BACK',
+        fileName: 'cedula-dorso.jpg',
+        blobUrl: '/uploads/cedula-back.jpg',
+        status: 'APPROVED',
+        uploadedAt: new Date('2025-10-01T10:35:00'),
+        fileSize: 238000,
+        mimeType: 'image/jpeg',
+      },
+      {
+        id: 'doc3',
+        documentType: 'CRIMINAL_RECORD',
+        fileName: 'antecedentes-penales.pdf',
+        blobUrl: '/uploads/antecedentes.pdf',
+        status: 'PENDING',
         uploadedAt: new Date('2025-10-01T11:00:00'),
+        fileSize: 1200000,
+        mimeType: 'application/pdf',
       },
-    },
+    ],
     notes: [
       {
         id: '1',
@@ -84,6 +107,7 @@ const MOCK_DATA: Record<string, any> = {
     vehicleYear: 2019,
     vehiclePlate: 'XYZ789',
     status: 'IN_PROGRESS',
+    documentsStatus: 'INCOMPLETE',
     currentStep: 3,
     completedSteps: [1, 2, 3],
     startedAt: new Date('2025-10-05T14:20:00'),
@@ -100,12 +124,18 @@ const MOCK_DATA: Record<string, any> = {
     hasUenoAccount: 'no',
     uenoAccountNumber: null,
     canInvoice: 'no',
-    documents: {
-      cedula: {
-        files: ['/uploads/cedula-front-2.jpg'],
+    documents: [
+      {
+        id: 'doc4',
+        documentType: 'CEDULA_FRONT',
+        fileName: 'cedula-maria.jpg',
+        blobUrl: '/uploads/cedula-front-2.jpg',
+        status: 'PENDING',
         uploadedAt: new Date('2025-10-05T14:25:00'),
+        fileSize: 280000,
+        mimeType: 'image/jpeg',
       },
-    },
+    ],
     notes: [],
     timeline: [
       { step: 1, name: 'Contacto Básico', completedAt: new Date('2025-10-05T14:22:00') },
@@ -115,76 +145,10 @@ const MOCK_DATA: Record<string, any> = {
       { step: 5, name: 'Información Adicional', completedAt: null },
     ],
   },
-  "3": {
-    id: '3',
-    cedula: '3.987.654',
-    firstName: 'Carlos',
-    lastName: 'Rodríguez',
-    fullName: 'Carlos Rodríguez',
-    birthDate: '10/11/1995',
-    phoneNumber: '+595983456789',
-    email: 'carlos.rodriguez@email.com',
-    department: 'Central',
-    city: 'San Lorenzo',
-    address: 'Barrio Obrero 890',
-    hasVehicle: false,
-    vehicleBrand: null,
-    vehicleModel: null,
-    vehicleYear: null,
-    vehiclePlate: null,
-    status: 'COMPLETED',
-    currentStep: 5,
-    completedSteps: [1, 2, 3, 4, 5],
-    startedAt: new Date('2025-10-03T09:15:00'),
-    completedAt: new Date('2025-10-03T10:30:00'),
-    workZone: 'Centro,Luque',
-    emergencyName: 'Ana Rodríguez',
-    emergencyPhone: '+595983456790',
-    emergencyRelationship: 'Esposa',
-    howHeardAboutUs: 'Recomendación',
-    referredBy: 'Juan Pérez',
-    experience: 'Menos de 1 año',
-    availability: ['Mañana'],
-    whenCanStart: 'Esta semana',
-    hasUenoAccount: 'si',
-    uenoAccountNumber: '87654321',
-    canInvoice: 'si',
-    documents: {
-      cedula: {
-        files: ['/uploads/cedula-front-3.jpg', '/uploads/cedula-back-3.jpg'],
-        uploadedAt: new Date('2025-10-03T09:20:00'),
-      },
-      antecedentes: {
-        files: ['/uploads/antecedentes-3.pdf'],
-        uploadedAt: new Date('2025-10-03T09:45:00'),
-      },
-    },
-    notes: [
-      {
-        id: '1',
-        content: 'Excelente candidato. Muy puntual en las respuestas.',
-        createdAt: new Date('2025-10-03T11:00:00'),
-        createdBy: 'Admin User',
-      },
-      {
-        id: '2',
-        content: 'Listo para OnBoarding. Agendar para esta semana.',
-        createdAt: new Date('2025-10-03T11:15:00'),
-        createdBy: 'Admin User',
-      },
-    ],
-    timeline: [
-      { step: 1, name: 'Contacto Básico', completedAt: new Date('2025-10-03T09:17:00') },
-      { step: 2, name: 'Datos Personales', completedAt: new Date('2025-10-03T09:22:00') },
-      { step: 3, name: 'Trabajo y Vehículo', completedAt: new Date('2025-10-03T09:28:00') },
-      { step: 4, name: 'Documentos', completedAt: new Date('2025-10-03T10:05:00') },
-      { step: 5, name: 'Información Adicional', completedAt: new Date('2025-10-03T10:30:00') },
-    ],
-  },
 }
 
 async function getPostulacion(id: string) {
-  // Si es un ID de mock (1, 2, o 3), devolver mock data
+  // Si es un ID de mock (1, 2), devolver mock data
   if (MOCK_DATA[id]) {
     return MOCK_DATA[id]
   }
@@ -197,6 +161,14 @@ async function getPostulacion(id: string) {
         notes: {
           orderBy: {
             createdAt: 'desc'
+          }
+        },
+        documents: {
+          where: {
+            isDeleted: false
+          },
+          orderBy: {
+            uploadedAt: 'desc'
           }
         }
       }
@@ -225,6 +197,7 @@ async function getPostulacion(id: string) {
       vehicleYear: formDriver.vehicleYear,
       vehiclePlate: formDriver.vehiclePlate,
       status: formDriver.status,
+      documentsStatus: formDriver.documentsStatus,
       currentStep: formDriver.currentStep,
       completedSteps: formDriver.completedSteps,
       startedAt: formDriver.startedAt,
@@ -242,17 +215,21 @@ async function getPostulacion(id: string) {
       uenoAccountNumber: formDriver.uenoAccountNumber,
       canInvoice: formDriver.canInvoice ? 'si' : 'no',
       
-      // Procesar documentos
-      documents: {
-        cedula: formDriver.cedulaPhotoUrl ? {
-          files: formDriver.cedulaPhotoUrl.split(',').filter(f => f),
-          uploadedAt: formDriver.startedAt, // Usar fecha aproximada
-        } : undefined,
-        antecedentes: formDriver.licensePhotoUrl ? {
-          files: formDriver.licensePhotoUrl.split(',').filter(f => f),
-          uploadedAt: formDriver.startedAt,
-        } : undefined,
-      },
+      // ✅ NUEVO: Documentos desde la tabla FormDocument
+      documents: formDriver.documents.map(doc => ({
+        id: doc.id,
+        documentType: doc.documentType,
+        fileName: doc.fileName,
+        blobUrl: doc.blobUrl,
+        status: doc.status,
+        uploadedAt: doc.uploadedAt,
+        fileSize: doc.fileSize,
+        mimeType: doc.mimeType,
+        reviewedAt: doc.reviewedAt,
+        reviewedBy: doc.reviewedBy,
+        rejectionReason: doc.rejectionReason,
+        adminNotes: doc.adminNotes,
+      })),
       
       // Notas
       notes: formDriver.notes.map(note => ({

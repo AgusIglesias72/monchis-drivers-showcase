@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import Script from 'next/script';
 import { Check, ChevronRight, ChevronLeft, Loader2, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { trackFormStepCompleted, trackFormCompleted, trackDocumentUploaded, trackFormResumed } from '@/lib/analytics';
@@ -44,7 +43,6 @@ const FormularioMonchis: React.FC = () => {
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [showLoading, setShowLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'form' | 'info'>('form');
-  const [mapsLoaded, setMapsLoaded] = useState(false);
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -65,6 +63,7 @@ const FormularioMonchis: React.FC = () => {
     cedulaPhotoUrl: '',
     licensePhotoUrl: '',
     vehiclePhotoUrl: '',
+    taxCompliancePhotoUrl: '', // ✅ NUEVO CAMPO
     emergencyName: '',
     emergencyRelationship: '',
     emergencyPhone: '',
@@ -187,55 +186,56 @@ const FormularioMonchis: React.FC = () => {
 
   const getStepData = (stepNumber: number) => {
     switch (stepNumber) {
-      case 1:
-        return {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          birthDate: formData.birthDate,
-          cedula: formData.cedula,
-          phoneNumber: formData.phoneNumber,
-          email: formData.email
-        };
-      case 2:
-        return {
-          department: formData.department,
-          city: formData.city,
-          neighborhood: formData.neighborhood,
-          address: formData.address,
-          emergencyName: formData.emergencyName,
-          emergencyRelationship: formData.emergencyRelationship,
-          emergencyPhone: formData.emergencyPhone
-        };
-      case 3:
-        return {
-          workZone: formData.workZone,
-          howHeardAboutUs: formData.howHeardAboutUs,
-          referredBy: formData.referredBy,
-          hasVehicle: formData.hasVehicle,
-          vehicleBrand: formData.vehicleBrand,
-          vehicleModel: formData.vehicleModel,
-          vehicleYear: formData.vehicleYear,
-          vehiclePlate: formData.vehiclePlate
-        };
-      case 4:
-        return {
-          cedulaPhotoUrl: formData.cedulaPhotoUrl,
-          licensePhotoUrl: formData.licensePhotoUrl,
-          vehiclePhotoUrl: formData.vehiclePhotoUrl
-        };
-      case 5:
-        return {
-          experience: formData.experience,
-          availability: formData.availability,
-          whenCanStart: formData.whenCanStart,
-          hasUenoAccount: formData.hasUenoAccount,
-          uenoAccountNumber: formData.uenoAccountNumber,
-          canInvoice: formData.canInvoice
-        };
-      default:
-        return {};
-    }
-  };
+        case 1:
+          return {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            birthDate: formData.birthDate,
+            cedula: formData.cedula,
+            phoneNumber: formData.phoneNumber,
+            email: formData.email
+          };
+        case 2:
+          return {
+            department: formData.department,
+            city: formData.city,
+            neighborhood: formData.neighborhood,
+            address: formData.address,
+            emergencyName: formData.emergencyName,
+            emergencyRelationship: formData.emergencyRelationship,
+            emergencyPhone: formData.emergencyPhone
+          };
+        case 3:
+          return {
+            workZone: formData.workZone,
+            howHeardAboutUs: formData.howHeardAboutUs,
+            referredBy: formData.referredBy,
+            hasVehicle: formData.hasVehicle,
+            vehicleBrand: formData.vehicleBrand,
+            vehicleModel: formData.vehicleModel,
+            vehicleYear: formData.vehicleYear,
+            vehiclePlate: formData.vehiclePlate
+          };
+        case 4:
+          return {
+            cedulaPhotoUrl: formData.cedulaPhotoUrl,
+            licensePhotoUrl: formData.licensePhotoUrl,
+            vehiclePhotoUrl: formData.vehiclePhotoUrl
+          };
+        case 5:
+          return {
+            experience: formData.experience,
+            availability: formData.availability,
+            whenCanStart: formData.whenCanStart,
+            hasUenoAccount: formData.hasUenoAccount,
+            uenoAccountNumber: formData.uenoAccountNumber,
+            canInvoice: formData.canInvoice,
+            taxCompliancePhotoUrl: formData.taxCompliancePhotoUrl // ✅ NUEVO CAMPO
+          };
+        default:
+          return {};
+      }
+    };
 
   const validateCurrentStep = (): boolean => {
     if (SKIP_VALIDATION) {
@@ -304,14 +304,6 @@ const FormularioMonchis: React.FC = () => {
         break;
         
       case 4:
-        if (!formData.cedulaPhotoUrl || formData.cedulaPhotoUrl.trim() === '') {
-          toast.error('Por favor sube la foto de tu cédula');
-          return false;
-        }
-        if (!formData.licensePhotoUrl || formData.licensePhotoUrl.trim() === '') {
-          toast.error('Por favor sube el certificado de antecedentes penales');
-          return false;
-        }
         break;
         
       case 5:
@@ -526,12 +518,6 @@ const FormularioMonchis: React.FC = () => {
 
   return (
     <>
-      <Script
-        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&language=es`}
-        onLoad={() => setMapsLoaded(true)}
-        strategy="afterInteractive"
-      />
-      
       <div className="min-h-screen relative overflow-hidden pb-20" style={{ backgroundColor: MONCHIS_RED }}>
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-32 -left-32 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>

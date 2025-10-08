@@ -15,15 +15,17 @@ interface MultiFileUploadProps {
   onRemove: (index: number) => void;
   uploading?: boolean;
   acceptedTypes?: string;
+  required?: boolean;
 }
 
-export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({ 
-  label, 
-  value, 
-  onChange, 
+export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({
+  label,
+  value,
+  onChange,
   onRemove,
   uploading,
-  acceptedTypes = "image/*,.pdf"
+  acceptedTypes = "image/*,.pdf",
+  required = false,
 }) => {
   const files = value ? value.split(',').filter(f => f) : [];
   const inputId = `file-${label.replace(/\s+/g, '-')}`;
@@ -31,14 +33,14 @@ export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({
   return (
     <div className="space-y-3">
       <Label>
-        {label} <span style={{ color: MONCHIS_RED }}>*</span>
+        {label} {required && <span style={{ color: MONCHIS_RED }}>*</span>}
       </Label>
-      
+
       {files.length > 0 && (
         <div className="space-y-2">
           {files.map((file, index) => {
             const fileName = file.split('/').pop() || file;
-            
+
             return (
               <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -76,9 +78,8 @@ export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({
         />
         <label
           htmlFor={inputId}
-          className={`flex items-center justify-center gap-2 w-full px-4 py-6 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
-            uploading ? 'opacity-50 cursor-not-allowed' : 'hover:border-red-500 hover:bg-red-50'
-          } border-gray-300`}
+          className={`flex items-center justify-center gap-2 w-full px-4 py-6 border-2 border-dashed rounded-xl cursor-pointer transition-all ${uploading ? 'opacity-50 cursor-not-allowed' : 'hover:border-red-500 hover:bg-red-50'
+            } border-gray-300`}
         >
           {uploading ? (
             <div className="text-center">
@@ -102,113 +103,8 @@ export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({
   );
 };
 
-// Componente de Autocomplete con Google Maps
-interface AddressAutocompleteProps {
-  value: string;
-  onChange: (value: string) => void;
-  onAddressSelect: (addressComponents: any) => void;
-}
 
-const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({ value, onChange, onAddressSelect }) => {
-  const [predictions, setPredictions] = useState<any[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const autocompleteService = useRef<any>(null);
-  const placesService = useRef<any>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.google) {
-      autocompleteService.current = new window.google.maps.places.AutocompleteService();
-      placesService.current = new window.google.maps.places.PlacesService(document.createElement('div'));
-    }
-  }, []);
-
-  const handleInputChange = (inputValue: string) => {
-    onChange(inputValue);
-    
-    if (!inputValue || inputValue.length < 3) {
-      setPredictions([]);
-      setShowDropdown(false);
-      return;
-    }
-
-    if (autocompleteService.current) {
-      autocompleteService.current.getPlacePredictions(
-        {
-          input: inputValue,
-          componentRestrictions: { country: 'py' },
-          types: ['address']
-        },
-        (predictions: any[], status: string) => {
-          if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-            setPredictions(predictions);
-            setShowDropdown(true);
-          } else {
-            setPredictions([]);
-            setShowDropdown(false);
-          }
-        }
-      );
-    }
-  };
-
-  const handleSelectAddress = (placeId: string, description: string) => {
-    onChange(description);
-    setShowDropdown(false);
-    setPredictions([]);
-
-    if (placesService.current) {
-      placesService.current.getDetails(
-        { placeId: placeId },
-        (place: any, status: string) => {
-          if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-            onAddressSelect(place.address_components);
-          }
-        }
-      );
-    }
-  };
-
-  return (
-    <div className="relative">
-      <Input
-        ref={inputRef}
-        value={value}
-        onChange={(e) => handleInputChange(e.target.value)}
-        placeholder="Escribe tu dirección..."
-        className="w-full"
-      />
-      
-      {showDropdown && predictions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-          {predictions.map((prediction) => (
-            <button
-              key={prediction.place_id}
-              type="button"
-              onClick={() => handleSelectAddress(prediction.place_id, prediction.description)}
-              className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0"
-            >
-              <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {prediction.structured_formatting.main_text}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">
-                    {prediction.structured_formatting.secondary_text}
-                  </p>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
 
 export const getFormSteps = (formData: any, handleInputChange: any, handleFileUpload: any, uploadingDoc: string | null) => {
   const workZones = [
@@ -222,7 +118,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
 
   const handleWorkZoneToggle = (zone: string) => {
     const currentZones = formData.workZone ? formData.workZone.split(',') : [];
-    
+
     if (currentZones.includes(zone)) {
       const updated = currentZones.filter((z: string) => z !== zone);
       handleInputChange('workZone', updated.join(','));
@@ -239,10 +135,10 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
     let streetNumber = '';
     let city = '';
     let department = '';
-    
+
     addressComponents.forEach((component: any) => {
       const types = component.types;
-      
+
       if (types.includes('route')) {
         street = component.long_name;
       }
@@ -257,7 +153,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
         department = component.long_name;
       }
     });
-    
+
     const fullAddress = `${street} ${streetNumber} ${city} ${department}`.trim();
     handleInputChange('address', fullAddress);
     handleInputChange('city', city);
@@ -311,19 +207,19 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
               onChange={(e) => {
                 let value = e.target.value;
                 const numbersOnly = value.replace(/\D/g, '');
-                
+
                 if (numbersOnly.length <= 8) {
                   let formatted = numbersOnly;
-                  
+
                   if (numbersOnly.length >= 3) {
                     formatted = numbersOnly.slice(0, 2) + '/' + numbersOnly.slice(2);
                   }
                   if (numbersOnly.length >= 5) {
-                    formatted = numbersOnly.slice(0, 2) + '/' + 
-                                numbersOnly.slice(2, 4) + '/' + 
-                                numbersOnly.slice(4);
+                    formatted = numbersOnly.slice(0, 2) + '/' +
+                      numbersOnly.slice(2, 4) + '/' +
+                      numbersOnly.slice(4);
                   }
-                  
+
                   handleInputChange('birthDate', formatted);
                 }
               }}
@@ -381,19 +277,32 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
           {/* Sección de Ubicación */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800">Ubicación</h3>
-            
+
             <div className="space-y-2">
-              <Label>
+              <Label htmlFor="address">
                 Dirección <span style={{ color: MONCHIS_RED }}>*</span>
               </Label>
-              <AddressAutocomplete
+              <Input
+                id="address"
                 value={formData.address}
-                onChange={(value) => handleInputChange('address', value)}
-                onAddressSelect={handleAddressSelect}
+                onChange={(e) => handleInputChange('address', e.target.value)}
+                placeholder="Calle y número"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="city">
+                  Ciudad <span style={{ color: MONCHIS_RED }}>*</span>
+                </Label>
+                <Input
+                  id="city"
+                  value={formData.city}
+                  onChange={(e) => handleInputChange('city', e.target.value)}
+                  placeholder="Asunción"
+                />
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="department">
                   Departamento <span style={{ color: MONCHIS_RED }}>*</span>
@@ -424,18 +333,6 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="city">
-                  Ciudad <span style={{ color: MONCHIS_RED }}>*</span>
-                </Label>
-                <Input
-                  id="city"
-                  value={formData.city}
-                  onChange={(e) => handleInputChange('city', e.target.value)}
-                  placeholder="Asunción"
-                />
-              </div>
             </div>
           </div>
 
@@ -452,7 +349,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
           {/* Sección de Contacto de Emergencia */}
           <div className="space-y-4">
             <p className="text-sm text-gray-500">Para tu seguridad (opcional)</p>
-            
+
             <div className="space-y-2">
               <Label htmlFor="emergencyName">Nombre y Apellido</Label>
               <Input
@@ -498,7 +395,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
           {/* Sección de Zona de Trabajo */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800">Zona de Trabajo</h3>
-            
+
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label>
@@ -506,7 +403,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
                 </Label>
                 <span className="text-sm text-gray-500">{selectedZones.length}/3 seleccionadas</span>
               </div>
-              
+
               <div className="gap-2 grid grid-cols-2 md:grid-cols-3">
                 {workZones.map((zone) => {
                   const isSelected = selectedZones.includes(zone);
@@ -515,11 +412,10 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
                       key={zone}
                       type="button"
                       onClick={() => handleWorkZoneToggle(zone)}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                        isSelected
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${isSelected
                           ? 'text-white hover:opacity-90'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      } ${!isSelected && selectedZones.length >= 3 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        } ${!isSelected && selectedZones.length >= 3 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                       style={isSelected ? { backgroundColor: MONCHIS_RED } : {}}
                       disabled={!isSelected && selectedZones.length >= 3}
                     >
@@ -529,7 +425,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
                 })}
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label>
                 ¿Cómo te enteraste de nosotros? <span style={{ color: MONCHIS_RED }}>*</span>
@@ -553,7 +449,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
                 </Button>
               </div>
             </div>
-            
+
             {formData.howHeardAboutUs === 'Recomendación' && (
               <div className="space-y-2">
                 <Label htmlFor="referredBy">¿Quién te recomendó? (opcional)</Label>
@@ -712,7 +608,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
               </SelectContent>
             </Select>
           </div>
-          
+
           <div className="space-y-2">
             <Label>
               ¿Cuándo podés trabajar? <span style={{ color: MONCHIS_RED }}>*</span>
@@ -736,7 +632,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
               ))}
             </div>
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="whenCanStart">
               ¿Cuándo podés empezar? <span style={{ color: MONCHIS_RED }}>*</span>
@@ -781,7 +677,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
           {formData.hasUenoAccount === 'si' && (
             <div className="space-y-2">
               <Label htmlFor="uenoAccountNumber">
-                Número de Cuenta ueno 
+                Número de Cuenta ueno
               </Label>
               <Input
                 id="uenoAccountNumber"
@@ -791,6 +687,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
               />
             </div>
           )}
+
 
           <div className="space-y-2">
             <Label>
@@ -815,6 +712,32 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
               </Button>
             </div>
           </div>
+
+          {/* Certificado de Cumplimiento Tributario - Solo si puede facturar */}
+          {formData.canInvoice === 'si' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+              <div className="space-y-1">
+                <Label className="text-blue-900 font-semibold">
+                  Certificado de Cumplimiento Tributario (Opcional)
+                </Label>
+                <p className="text-xs text-blue-700">
+                  Este documento es gratis y lo podés solicitar a tu contador. Podés cargarlo ahora o te lo solicitaremos más adelante.
+                </p>
+              </div>
+
+              <MultiFileUpload
+                label="Certificado Tributario"
+                value={formData.taxCompliancePhotoUrl || ''}
+                onChange={(files) => handleFileUpload('taxCompliancePhotoUrl', files)}
+                onRemove={(index) => {
+                  const current = (formData.taxCompliancePhotoUrl || '').split(',').filter((f: string) => f);
+                  current.splice(index, 1);
+                  handleInputChange('taxCompliancePhotoUrl', current.join(','));
+                }}
+                uploading={uploadingDoc === 'taxCompliancePhotoUrl'}
+              />
+            </div>
+          )}
         </div>
       )
     }

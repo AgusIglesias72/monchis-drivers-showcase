@@ -52,16 +52,24 @@ const MOCK_POSTULACIONES = [
     vehicleYear: 2020,
     vehiclePlate: 'ABC123',
     status: 'COMPLETED',
-    currentStep: 7,
-    completedSteps: [1, 2, 3, 4, 5, 6, 7],
+    currentStep: 5,
+    completedSteps: [1, 2, 3, 4, 5],
     startedAt: new Date('2025-10-01T10:30:00'),
     completedAt: new Date('2025-10-01T11:45:00'),
     workZone: 'Centro,Carmelitas',
     emergencyName: 'María Pérez',
     emergencyPhone: '+595981234568',
     emergencyRelationship: 'Hermana',
-    experience: 'si',
-    whenCanStart: 'inmediato',
+    experience: 'Más de 3 años',
+    availability: ['Mañana', 'Tarde'],
+    whenCanStart: 'Inmediatamente',
+    timeline: [
+      { step: 1, name: 'Contacto Básico', completedAt: new Date('2025-10-01T10:32:00') },
+      { step: 2, name: 'Datos Personales', completedAt: new Date('2025-10-01T10:35:00') },
+      { step: 3, name: 'Trabajo y Vehículo', completedAt: new Date('2025-10-01T10:38:00') },
+      { step: 4, name: 'Documentos', completedAt: new Date('2025-10-01T11:25:00') },
+      { step: 5, name: 'Información Adicional', completedAt: new Date('2025-10-01T11:35:00') },
+    ],
   },
   {
     id: '2',
@@ -81,16 +89,24 @@ const MOCK_POSTULACIONES = [
     vehicleYear: 2019,
     vehiclePlate: 'XYZ789',
     status: 'IN_PROGRESS',
-    currentStep: 4,
-    completedSteps: [1, 2, 3, 4],
+    currentStep: 3,
+    completedSteps: [1, 2, 3],
     startedAt: new Date('2025-10-05T14:20:00'),
     completedAt: null,
     workZone: 'Lambaré,Fernando de la Mora',
     emergencyName: null,
     emergencyPhone: null,
     emergencyRelationship: null,
-    experience: null,
-    whenCanStart: null,
+    experience: 'Sin experiencia',
+    availability: ['Tarde', 'Noche'],
+    whenCanStart: 'La próxima semana',
+    timeline: [
+      { step: 1, name: 'Contacto Básico', completedAt: new Date('2025-10-05T14:22:00') },
+      { step: 2, name: 'Datos Personales', completedAt: new Date('2025-10-05T14:28:00') },
+      { step: 3, name: 'Trabajo y Vehículo', completedAt: new Date('2025-10-05T14:35:00') },
+      { step: 4, name: 'Documentos', completedAt: null },
+      { step: 5, name: 'Información Adicional', completedAt: null },
+    ],
   },
   {
     id: '3',
@@ -110,16 +126,24 @@ const MOCK_POSTULACIONES = [
     vehicleYear: null,
     vehiclePlate: null,
     status: 'COMPLETED',
-    currentStep: 7,
-    completedSteps: [1, 2, 3, 4, 5, 6, 7],
+    currentStep: 5,
+    completedSteps: [1, 2, 3, 4, 5],
     startedAt: new Date('2025-10-03T09:15:00'),
     completedAt: new Date('2025-10-03T10:30:00'),
     workZone: 'Centro,Luque',
     emergencyName: 'Ana Rodríguez',
     emergencyPhone: '+595983456790',
     emergencyRelationship: 'Esposa',
-    experience: 'no',
-    whenCanStart: 'esta_semana',
+    experience: '1-3 años',
+    availability: ['Mañana'],
+    whenCanStart: 'Esta semana',
+    timeline: [
+      { step: 1, name: 'Contacto Básico', completedAt: new Date('2025-10-03T09:17:00') },
+      { step: 2, name: 'Datos Personales', completedAt: new Date('2025-10-03T09:22:00') },
+      { step: 3, name: 'Trabajo y Vehículo', completedAt: new Date('2025-10-03T09:28:00') },
+      { step: 4, name: 'Documentos', completedAt: new Date('2025-10-03T10:05:00') },
+      { step: 5, name: 'Información Adicional', completedAt: new Date('2025-10-03T10:30:00') },
+    ],
   },
   {
     id: '4',
@@ -148,7 +172,15 @@ const MOCK_POSTULACIONES = [
     emergencyPhone: null,
     emergencyRelationship: null,
     experience: null,
+    availability: [],
     whenCanStart: null,
+    timeline: [
+      { step: 1, name: 'Contacto Básico', completedAt: new Date('2025-10-04T16:47:00') },
+      { step: 2, name: 'Datos Personales', completedAt: new Date('2025-10-04T16:50:00') },
+      { step: 3, name: 'Trabajo y Vehículo', completedAt: null },
+      { step: 4, name: 'Documentos', completedAt: null },
+      { step: 5, name: 'Información Adicional', completedAt: null },
+    ],
   },
 ]
 
@@ -174,7 +206,6 @@ export function PostulacionesTableExpandable({
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      // Ciclo: asc -> desc -> null
       if (sortOrder === 'asc') {
         setSortOrder('desc')
       } else if (sortOrder === 'desc') {
@@ -203,7 +234,6 @@ export function PostulacionesTableExpandable({
     return 0
   })
 
-  // Paginación
   const totalPages = Math.ceil(sortedPostulaciones.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
@@ -224,7 +254,6 @@ export function PostulacionesTableExpandable({
   }
 
   const handleViewDetails = (postulacionId: string) => {
-    // En producción esto haría: router.push(`/admin/postulaciones/${postulacionId}`)
     console.log('Ver detalles de postulación:', postulacionId)
     window.location.href = `/admin/postulaciones/${postulacionId}`
   }
@@ -242,7 +271,6 @@ export function PostulacionesTableExpandable({
                 <tr>
                   <th className="px-4 py-3 text-left w-10"></th>
                   
-                  {/* Nombre - Sortable */}
                   <th 
                     className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
                     onClick={() => handleSort('fullName')}
@@ -257,7 +285,6 @@ export function PostulacionesTableExpandable({
                     Contacto
                   </th>
                   
-                  {/* Ciudad - Sortable */}
                   <th 
                     className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
                     onClick={() => handleSort('city')}
@@ -272,7 +299,6 @@ export function PostulacionesTableExpandable({
                     Progreso
                   </th>
                   
-                  {/* Estado - Sortable */}
                   <th 
                     className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
                     onClick={() => handleSort('status')}
@@ -283,7 +309,6 @@ export function PostulacionesTableExpandable({
                     </div>
                   </th>
                   
-                  {/* Fecha - Sortable */}
                   <th 
                     className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
                     onClick={() => handleSort('startedAt')}
@@ -314,14 +339,10 @@ export function PostulacionesTableExpandable({
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-8 p-0"
+                            className="h-8 w-8 p-0 cursor-pointer"
                             onClick={() => toggleRow(postulacion.id)}
                           >
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
+                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </Button>
                         </td>
                         <td className="px-4 py-4">
@@ -357,11 +378,11 @@ export function PostulacionesTableExpandable({
                             <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden max-w-[100px]">
                               <div
                                 className="bg-primary h-full transition-all"
-                                style={{ width: `${(postulacion.currentStep / 7) * 100}%` }}
+                                style={{ width: `${(postulacion.currentStep / 5) * 100}%` }}
                               />
                             </div>
                             <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                              {postulacion.currentStep}/7
+                              {postulacion.currentStep}/5
                             </span>
                           </div>
                         </td>
@@ -373,24 +394,23 @@ export function PostulacionesTableExpandable({
                         </td>
                         <td className="px-4 py-4 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            {/* Botón Ver Detalles */}
                             <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-8 w-8 p-0"
+                                variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 cursor-pointer"
                               onClick={() => handleViewDetails(postulacion.id)}
                               title="Ver detalles"
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            
-                            {/* Menú de acciones */}
+
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button 
                                   variant="ghost" 
                                   size="sm" 
                                   className="h-8 w-8 p-0 cursor-pointer"
+                                  title="Acciones"
                                 >
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
@@ -403,14 +423,14 @@ export function PostulacionesTableExpandable({
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
                                   onClick={() => handleAction('aprobar', postulacion)}
-                                  className="text-green-600"
+                                  className="text-green-600 cursor-pointer"
                                 >
                                   <CheckCircle className="h-4 w-4 mr-2" />
                                   Aprobar
                                 </DropdownMenuItem>
                                 <DropdownMenuItem 
                                   onClick={() => handleAction('rechazar', postulacion)}
-                                  className="text-red-600"
+                                  className="text-red-600 cursor-pointer"
                                 >
                                   <XCircle className="h-4 w-4 mr-2" />
                                   Rechazar
@@ -421,172 +441,176 @@ export function PostulacionesTableExpandable({
                         </td>
                       </tr>
 
-                      {/* Fila expandida con detalles */}
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={8} className="px-6 py-4 bg-muted/20">
-                            <div className="space-y-4">
-                              {/* Información Personal */}
-                              <div className="grid grid-cols-4 gap-x-8 gap-y-3 text-sm pb-4 border-b">
-                                <div>
-                                  <span className="text-muted-foreground text-xs">Nombre completo</span>
-                                  <p className="font-medium">{postulacion.fullName}</p>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground text-xs">Cédula</span>
-                                  <p className="font-medium">{postulacion.cedula}</p>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground text-xs">Teléfono</span>
-                                  <p className="font-medium">{postulacion.phoneNumber}</p>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground text-xs">Email</span>
-                                  <p className="font-medium">{postulacion.email}</p>
-                                </div>
-                              </div>
+{/* Fila expandida - DISEÑO MEJORADO */}
+{isExpanded && (
+  <tr>
+    <td colSpan={8} className="px-6 py-6 bg-muted/20">
+      <div className="space-y-6">
+        {/* Grid principal: 2 columnas balanceadas */}
+        <div className="grid grid-cols-2 gap-8">
+          {/* Columna izquierda: Info Personal + Ubicación */}
+          <div className="space-y-6">
+            {/* Info Personal */}
+            <div className="space-y-3">
+              <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5" />
+                INFORMACIÓN PERSONAL
+              </h5>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <InfoRow label="Nombre" value={postulacion.fullName} />
+                <InfoRow label="Cédula" value={postulacion.cedula} />
+                <InfoRow label="Teléfono" value={postulacion.phoneNumber} />
+                <InfoRow label="Email" value={postulacion.email} />
+              </div>
+            </div>
 
-                              {/* Ubicación */}
-                              <div className="grid grid-cols-4 gap-x-8 gap-y-3 text-sm pb-4 border-b">
-                                <div>
-                                  <span className="text-muted-foreground text-xs">Departamento</span>
-                                  <p className="font-medium">{postulacion.department}</p>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground text-xs">Ciudad</span>
-                                  <p className="font-medium">{postulacion.city}</p>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground text-xs">Barrio</span>
-                                  <p className="font-medium">{postulacion.neighborhood}</p>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground text-xs">Dirección</span>
-                                  <p className="font-medium">{postulacion.address}</p>
-                                </div>
-                              </div>
+            {/* Ubicación */}
+            <div className="space-y-3 pt-3 border-t">
+              <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5" />
+                UBICACIÓN
+              </h5>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <InfoRow label="Departamento" value={postulacion.department} />
+                <InfoRow label="Ciudad" value={postulacion.city} />
+                <InfoRow label="Barrio" value={postulacion.neighborhood || '-'} />
+                <InfoRow label="Dirección" value={postulacion.address} />
+              </div>
+            </div>
 
-                              {/* Vehículo y Zonas */}
-                              <div className="grid grid-cols-2 gap-x-8 text-sm pb-4 border-b">
-                                <div>
-                                  <h5 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                                    <Bike className="h-3.5 w-3.5" />
-                                    VEHÍCULO
-                                  </h5>
-                                  {postulacion.hasVehicle ? (
-                                    <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                                      <div>
-                                        <span className="text-muted-foreground text-xs">Marca</span>
-                                        <p className="font-medium">{postulacion.vehicleBrand}</p>
-                                      </div>
-                                      <div>
-                                        <span className="text-muted-foreground text-xs">Modelo</span>
-                                        <p className="font-medium">{postulacion.vehicleModel}</p>
-                                      </div>
-                                      <div>
-                                        <span className="text-muted-foreground text-xs">Año</span>
-                                        <p className="font-medium">{postulacion.vehicleYear}</p>
-                                      </div>
-                                      <div>
-                                        <span className="text-muted-foreground text-xs">Placa</span>
-                                        <p className="font-medium">{postulacion.vehiclePlate}</p>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <p className="text-muted-foreground italic">No posee vehículo</p>
-                                  )}
-                                </div>
-                                
-                                {postulacion.workZone && (
-                                  <div>
-                                    <h5 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                                      <MapPin className="h-3.5 w-3.5" />
-                                      ZONAS DE TRABAJO
-                                    </h5>
-                                    <div className="flex flex-wrap gap-2">
-                                      {postulacion.workZone.split(',').map((zone: string, i: number) => (
-                                        <Badge key={i} variant="secondary">
-                                          {zone}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+            {/* Contacto de Emergencia */}
+            {postulacion.emergencyName && (
+              <div className="space-y-3 pt-3 border-t">
+                <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5" />
+                  CONTACTO DE EMERGENCIA
+                </h5>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  <InfoRow label="Nombre" value={postulacion.emergencyName} />
+                  <InfoRow label="Relación" value={postulacion.emergencyRelationship} />
+                  <InfoRow label="Teléfono" value={postulacion.emergencyPhone} />
+                </div>
+              </div>
+            )}
+          </div>
 
-                              {/* Emergencia e Info Adicional */}
-                              <div className="grid grid-cols-2 gap-x-8 text-sm">
-                                {postulacion.emergencyName && (
-                                  <div>
-                                    <h5 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                                      <Phone className="h-3.5 w-3.5" />
-                                      CONTACTO DE EMERGENCIA
-                                    </h5>
-                                    <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                                      <div>
-                                        <span className="text-muted-foreground text-xs">Nombre</span>
-                                        <p className="font-medium">{postulacion.emergencyName}</p>
-                                      </div>
-                                      <div>
-                                        <span className="text-muted-foreground text-xs">Relación</span>
-                                        <p className="font-medium">{postulacion.emergencyRelationship}</p>
-                                      </div>
-                                      <div className="col-span-2">
-                                        <span className="text-muted-foreground text-xs">Teléfono</span>
-                                        <p className="font-medium">{postulacion.emergencyPhone}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                <div>
-                                  {postulacion.experience && (
-                                    <div className="mb-4">
-                                      <h5 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                                        <FileText className="h-3.5 w-3.5" />
-                                        INFORMACIÓN ADICIONAL
-                                      </h5>
-                                      <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                                        <div>
-                                          <span className="text-muted-foreground text-xs">Experiencia previa</span>
-                                          <p className="font-medium">{postulacion.experience === 'si' ? 'Sí' : 'No'}</p>
-                                        </div>
-                                        <div>
-                                          <span className="text-muted-foreground text-xs">Disponibilidad</span>
-                                          <p className="font-medium capitalize">{postulacion.whenCanStart?.replace('_', ' ') || 'No especificado'}</p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                  
-                                  <div>
-                                    <h5 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                                      <Clock className="h-3.5 w-3.5" />
-                                      TIMELINE
-                                    </h5>
-                                    <div className="space-y-2">
-                                      <div>
-                                        <span className="text-muted-foreground text-xs">Inicio</span>
-                                        <p className="font-medium">{new Date(postulacion.startedAt).toLocaleString('es-PY')}</p>
-                                      </div>
-                                      {postulacion.completedAt && (
-                                        <div>
-                                          <span className="text-muted-foreground text-xs">Completado</span>
-                                          <p className="font-medium">{new Date(postulacion.completedAt).toLocaleString('es-PY')}</p>
-                                        </div>
-                                      )}
-                                      <div>
-                                        <span className="text-muted-foreground text-xs">Steps completados</span>
-                                        <p className="font-medium">{postulacion.completedSteps.join(', ')}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
+          {/* Columna derecha: Vehículo + Zonas + Info Adicional */}
+          <div className="space-y-6">
+            {/* Vehículo */}
+            <div className="space-y-3">
+              <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <Bike className="h-3.5 w-3.5" />
+                VEHÍCULO
+              </h5>
+              {postulacion.hasVehicle ? (
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  <InfoRow label="Marca" value={postulacion.vehicleBrand} />
+                  <InfoRow label="Modelo" value={postulacion.vehicleModel} />
+                  <InfoRow label="Año" value={postulacion.vehicleYear} />
+                  <InfoRow label="Placa" value={postulacion.vehiclePlate} />
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No posee vehículo</p>
+              )}
+            </div>
+
+            {/* Zonas de Trabajo */}
+            {postulacion.workZone && (
+              <div className="space-y-3 pt-3 border-t">
+                <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" />
+                  ZONAS DE TRABAJO
+                </h5>
+                <div className="flex flex-wrap gap-1.5">
+                  {postulacion.workZone.split(',').map((zone: string, i: number) => (
+                    <Badge key={i} variant="secondary" className="text-xs">
+                      {zone}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Información Adicional */}
+            {postulacion.experience && (
+              <div className="space-y-3 pt-3 border-t">
+                <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5" />
+                  INFORMACIÓN ADICIONAL
+                </h5>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  <InfoRow label="Experiencia" value={postulacion.experience} />
+                  <InfoRow label="Puede empezar" value={postulacion.whenCanStart || '-'} />
+                  <div className="col-span-2">
+                    <span className="text-xs text-muted-foreground block">Disponibilidad</span>
+                    <span className="font-medium text-xs">{postulacion.availability?.join(', ') || '-'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Timeline visual - Ancho completo abajo */}
+        {postulacion.timeline && postulacion.timeline.length > 0 && (
+          <div className="pt-6 border-t">
+            <h5 className="text-xs font-semibold text-muted-foreground mb-4 flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" />
+              HISTORIAL DEL PROCESO
+            </h5>
+            <div className="relative">
+              {/* Línea horizontal de fondo */}
+              <div className="absolute top-6 left-0 right-0 h-0.5 bg-muted" />
+              
+              {/* Línea de progreso */}
+              <div 
+                className="absolute top-6 left-0 h-0.5 bg-primary transition-all duration-500"
+                style={{ 
+                  width: `${((postulacion.completedSteps.length - 1) / (postulacion.timeline.length - 1)) * 100}%` 
+                }}
+              />
+              
+              {/* Steps */}
+              <div className="relative grid grid-cols-5 gap-2">
+                {postulacion.timeline.map((step: any) => {
+                  const isCompleted = postulacion.completedSteps.includes(step.step)
+                  
+                  return (
+                    <div key={step.step} className="text-center">
+                      {/* Círculo del step */}
+                      <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center text-sm font-semibold mb-3 transition-all ${
+                        isCompleted
+                          ? 'bg-primary text-primary-foreground shadow-md'
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {step.step}
+                      </div>
+                      
+                      {/* Nombre del step */}
+                      <p className="text-xs font-medium text-foreground mb-1 px-1">
+                        {step.name}
+                      </p>
+                      
+                      {/* Hora de completado */}
+                      {step.completedAt && (
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(step.completedAt).toLocaleTimeString('es-PY', { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </p>
                       )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </td>
+  </tr>
+)}
                     </>
                   )
                 })}
@@ -594,7 +618,6 @@ export function PostulacionesTableExpandable({
             </table>
           </div>
 
-          {/* Empty State */}
           {postulaciones.length === 0 && (
             <div className="text-center py-12">
               <p className="text-muted-foreground font-medium">No hay postulaciones</p>
@@ -646,7 +669,6 @@ export function PostulacionesTableExpandable({
   )
 }
 
-// Componente para el badge de estado
 function StatusBadge({ status }: { status: string }) {
   const config = {
     COMPLETED: {
@@ -672,7 +694,6 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-// Componente para los iconos de ordenamiento
 function SortIcon({ 
   field, 
   currentField, 
@@ -697,12 +718,11 @@ function SortIcon({
   return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/50" />
 }
 
-// Componente para filas de información
 function InfoRow({ label, value }: { label: string, value: string | number }) {
   return (
-    <div className="flex flex-col">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="font-medium text-foreground text-sm">{value}</span>
+    <div>
+      <span className="text-xs text-muted-foreground block">{label}</span>
+      <span className="font-medium text-xs">{value}</span>
     </div>
   )
 }

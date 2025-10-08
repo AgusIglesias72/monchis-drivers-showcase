@@ -97,12 +97,12 @@ export function PostulacionesPageContent({
             
             <button
               onClick={() => setUseMockData(!useMockData)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              className={`relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer transition-colors ${
                 useMockData ? 'bg-amber-500' : 'bg-green-500'
               }`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                className={`inline-block h-4 w-4 transform rounded-full cursor-pointer bg-white transition-transform ${
                   useMockData ? 'translate-x-1' : 'translate-x-6'
                 }`}
               />
@@ -161,12 +161,12 @@ export function PostulacionesPageContent({
               </Select>
 
               {/* Botón reset */}
-              <Button variant="outline" onClick={handleResetFilters} size="icon">
+              <Button variant="outline" onClick={handleResetFilters} size="icon" className="cursor-pointer">
                 <RotateCcw className="h-4 w-4" />
               </Button>
 
               {/* Botón exportar */}
-              <Button variant="outline" onClick={handleExport} className="gap-2">
+              <Button variant="outline" onClick={handleExport} className="gap-2 cursor-pointer">
                 <Download className="h-4 w-4" />
                 Exportar
               </Button>

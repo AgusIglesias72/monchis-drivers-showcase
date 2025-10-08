@@ -27,14 +27,14 @@ model FormDocument {
   status FormDocumentStatus @default(PENDING)
 
   // Notas administrativas sobre este documento específico
-  adminNotes String? @map("admin_notes") @db.Text
+  adminNotes String? @db.Text @map("admin_notes")
 
   // Quién revisó y cuándo
   reviewedBy String?   @map("reviewed_by") // ID o email del admin
   reviewedAt DateTime? @map("reviewed_at")
 
   // Razón de rechazo si aplica
-  rejectionReason String? @map("rejection_reason") @db.Text
+  rejectionReason String? @db.Text @map("rejection_reason")
 
   // Soft delete (para mantener historial)
   isDeleted Boolean   @default(false) @map("is_deleted")
@@ -84,7 +84,7 @@ model FormDriver {
   vehicleYear  Int?    @map("vehicle_year")
   vehiclePlate String? @map("vehicle_plate")
 
-  // Documentos (URLs de Vercel Blob)
+  // Documentos (URLs de Vercel Blob) - LEGACY, mantener por compatibilidad
   cedulaPhotoUrl  String? @map("cedula_photo_url")
   licensePhotoUrl String? @map("license_photo_url")
   vehiclePhotoUrl String? @map("vehicle_photo_url")
@@ -100,7 +100,7 @@ model FormDriver {
   referredBy      String? @map("referred_by") // Nombre del driver que recomendó
 
   // Info adicional
-  experience        String? // Sin experiencia, <1 año, 1-3 años, >3 años
+  experience        String?  // Sin experiencia, <1 año, 1-3 años, >3 años
   availability      String[] @default([]) // ["mañana", "tarde", "noche"]
   whenCanStart      String?  @map("when_can_start") // Inmediato, Esta semana, Este mes, A evaluar
   hasUenoAccount    Boolean  @default(false) @map("has_ueno_account")
@@ -119,17 +119,15 @@ model FormDriver {
   onboardingStatus      OnboardingStatus? @map("onboarding_status")
   onboardingScheduledAt DateTime?         @map("onboarding_scheduled_at")
   onboardingCompletedAt DateTime?         @map("onboarding_completed_at")
-  onboardingNotes       String?           @map("onboarding_notes") @db.Text
+  onboardingNotes       String?           @db.Text @map("onboarding_notes")
 
   // Gestión administrativa interna
-  assignedTo          String?  @map("assigned_to") // Admin que gestiona este caso
-  internalNotes       String?  @map("internal_notes") @db.Text // Notas generales del proceso
+  assignedTo    String? @map("assigned_to") // Admin que gestiona este caso
+  internalNotes String? @db.Text @map("internal_notes") // Notas generales del proceso
 
   // Aprobación final
-  finalApprovedBy     String?  @map("final_approved_by")
-  finalApprovedAt     DateTime? @map("final_approved_at")
-  
-
+  finalApprovedBy String?   @map("final_approved_by")
+  finalApprovedAt DateTime? @map("final_approved_at")
 
   // Metadata
   source   String? // web, mobile, referral
@@ -143,15 +141,17 @@ model FormDriver {
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   // Relaciones
-  submissions  FormSubmission[]
-  notes        FormNote[]
-  documents FormDocument[]
+  submissions FormSubmission[]
+  notes       FormNote[]
+  documents   FormDocument[]
 
   @@index([cedula])
   @@index([phoneNumber])
   @@index([email])
   @@index([status])
   @@index([lastActivityAt])
+  @@index([documentsStatus])
+  @@index([onboardingStatus])
   @@map("form_drivers")
 }
 
@@ -216,7 +216,7 @@ model FormStepCompletion {
   id           String @id @default(cuid())
   submissionId String @map("submission_id")
 
-  step     Int // 1-7
+  step     Int    // 1-7
   stepName String @map("step_name") // "contact_info", "location", etc
 
   // Datos del step específico
@@ -243,37 +243,43 @@ model FormStepCompletion {
 // ==================== ENUMS PARA FORMULARIO ====================
 
 enum FormDriverStatus {
-  IN_PROGRESS       // Completando formulario
-  COMPLETED         // Formulario completado
-  ABANDONED         // Abandonó el proceso
-  SUBMITTED         // Enviado para revisión
-  UNDER_REVIEW      // En revisión administrativa (NUEVO)
-  DOCS_PENDING      // Esperando correcciones de docs (NUEVO)
-  APPROVED          // Aprobado por admin
-  READY_ONBOARDING  // Listo para On Boarding (NUEVO)
-  ONBOARDING        // En proceso de On Boarding (NUEVO)
-  ACTIVE            // Activo como driver (NUEVO)
-  REJECTED          // Rechazado
+  IN_PROGRESS      // Completando formulario
+  COMPLETED        // Formulario completado
+  ABANDONED        // Abandonó el proceso
+  SUBMITTED        // Enviado para revisión
+  UNDER_REVIEW     // En revisión administrativa
+  DOCS_PENDING     // Esperando correcciones de docs
+  APPROVED         // Aprobado por admin
+  READY_ONBOARDING // Listo para On Boarding
+  ONBOARDING       // En proceso de On Boarding
+  ACTIVE           // Activo como driver
+  REJECTED         // Rechazado
 }
 
-// Enum para estado general de documentación
+enum FormDocumentStatus {
+  PENDING     // Subido, esperando revisión
+  IN_REVIEW   // En proceso de revisión
+  APPROVED    // Aprobado por admin
+  REJECTED    // Rechazado - necesita resubir
+  RESUBMITTED // Re-subido después de rechazo
+}
+
 enum FormDocumentsStatus {
-  INCOMPLETE // Faltan documentos
-  PENDING // Todos subidos, esperando revisión
-  IN_REVIEW // En proceso de revisión
+  INCOMPLETE  // Faltan documentos
+  PENDING     // Todos subidos, esperando revisión
+  IN_REVIEW   // En proceso de revisión
   CORRECTIONS // Algunos rechazados, esperando correcciones
-  APPROVED // Todos aprobados
+  APPROVED    // Todos aprobados
 }
 
-// Enum para On Boarding
 enum OnboardingStatus {
-  NOT_READY // No cumple condiciones aún
-  READY // Listo para agendar
-  SCHEDULED // On boarding agendado
+  NOT_READY   // No cumple condiciones aún
+  READY       // Listo para agendar
+  SCHEDULED   // On boarding agendado
   IN_PROGRESS // En proceso
-  COMPLETED // Completado
-  CANCELLED // Cancelado
-  NO_SHOW // No se presentó
+  COMPLETED   // Completado
+  CANCELLED   // Cancelado
+  NO_SHOW     // No se presentó
 }
 
 // ==================== VEHÍCULOS (EXISTENTE) ====================
@@ -282,11 +288,11 @@ model Vehicle {
   driverId String @map("driver_id")
 
   // Datos del vehículo
-  brand String? // Marca
-  model String? // Modelo
-  year  Int? // Año
+  brand String?      // Marca
+  model String?      // Modelo
+  year  Int?         // Año
   plate String?      @unique // Chapa/Placa
-  color String? // Color
+  color String?      // Color
   type  VehicleType? // Tipo (MOTO, AUTO, etc)
 
   // Estado y documentación
@@ -315,7 +321,7 @@ model EmergencyContact {
   driverId String @map("driver_id")
 
   // Datos del contacto
-  name             String // Nombre completo
+  name             String  // Nombre completo
   relationship     String? // Parentesco
   phoneNumber      String  @map("phone_number")
   alternativePhone String? @map("alternative_phone")
@@ -343,7 +349,7 @@ model EquipmentPayment {
   paymentMethod String?   @map("payment_method") // FORMA DE PAGO
   paymentNumber String?   @map("payment_number") // NRO COMP. DE PAGO
   invoiceNumber String?   @map("invoice_number") // NRO DE FACTURA
-  amount        Float? // MONTO ENTREGA
+  amount        Float?    // MONTO ENTREGA
   paymentDate   DateTime? @map("payment_date") // Fecha del pago (del comprobante)
 
   // Comprobante de pago
@@ -514,7 +520,7 @@ model Document {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  // Agregar este campo
+  // Metadata
   metadata Json?
 
   // Relaciones
@@ -679,55 +685,47 @@ model DriverNote {
 // ==================== ENUMS ====================
 
 enum DriverStatus {
-  PENDING // Recién registrado
-  IN_REVIEW // En proceso de revisión
-  APPROVED // Aprobado
-  ACTIVE // Activo (ha tomado turnos)
-  INACTIVE // Inactivo temporalmente
-  SUSPENDED // Suspendido
-  REJECTED // Rechazado
+  PENDING     // Recién registrado
+  IN_REVIEW   // En proceso de revisión
+  APPROVED    // Aprobado
+  ACTIVE      // Activo (ha tomado turnos)
+  INACTIVE    // Inactivo temporalmente
+  SUSPENDED   // Suspendido
+  REJECTED    // Rechazado
   BLACKLISTED // En lista negra
 }
 
-enum FormDocumentStatus {
-  PENDING // Subido, esperando revisión
-  IN_REVIEW // En proceso de revisión
-  APPROVED // Aprobado por admin
-  REJECTED // Rechazado - necesita resubir
-  RESUBMITTED // Re-subido después de rechazo
-}
-
 enum ChurnSegment {
-  NEW // Registrado pero nunca tomó un turno
-  ONBOARDING // En primeros 30 días con actividad
-  ACTIVE // Activo en últimos 7 días
-  AT_RISK // 7-14 días sin actividad
-  EARLY_CHURN // 15-21 días sin actividad
-  MODERATE_CHURN // 22-30 días sin actividad
-  LATE_CHURN // 31-60 días sin actividad
-  SEVERE_CHURN // 61-90 días sin actividad
-  CRITICAL_CHURN // 91-180 días sin actividad
-  LOST // +180 días sin actividad
-  NEVER_ACTIVATED // +30 días desde registro, nunca tomó turno
+  NEW              // Registrado pero nunca tomó un turno
+  ONBOARDING       // En primeros 30 días con actividad
+  ACTIVE           // Activo en últimos 7 días
+  AT_RISK          // 7-14 días sin actividad
+  EARLY_CHURN      // 15-21 días sin actividad
+  MODERATE_CHURN   // 22-30 días sin actividad
+  LATE_CHURN       // 31-60 días sin actividad
+  SEVERE_CHURN     // 61-90 días sin actividad
+  CRITICAL_CHURN   // 91-180 días sin actividad
+  LOST             // +180 días sin actividad
+  NEVER_ACTIVATED  // +30 días desde registro, nunca tomó turno
 }
 
 enum OnboardingStage {
-  REGISTERED // Se registró
-  DOCUMENTS_PENDING // Falta documentación
-  DOCUMENTS_SUBMITTED // Documentos enviados
-  DOCUMENTS_APPROVED // Documentos aprobados
-  READY_TO_DRIVE // Listo para manejar
-  FIRST_TRIP_COMPLETED // Completó primer viaje
-  ONBOARDED // Completó onboarding (30 días)
+  REGISTERED            // Se registró
+  DOCUMENTS_PENDING     // Falta documentación
+  DOCUMENTS_SUBMITTED   // Documentos enviados
+  DOCUMENTS_APPROVED    // Documentos aprobados
+  READY_TO_DRIVE        // Listo para manejar
+  FIRST_TRIP_COMPLETED  // Completó primer viaje
+  ONBOARDED             // Completó onboarding (30 días)
 }
 
 enum DocumentStatus {
-  PENDING // Sin documentos
+  PENDING    // Sin documentos
   INCOMPLETE // Algunos documentos
-  IN_REVIEW // En revisión
-  APPROVED // Aprobados
-  REJECTED // Rechazados
-  EXPIRED // Expirados
+  IN_REVIEW  // En revisión
+  APPROVED   // Aprobados
+  REJECTED   // Rechazados
+  EXPIRED    // Expirados
 }
 
 enum DocumentType {
@@ -741,13 +739,14 @@ enum DocumentType {
   VEHICLE_PHOTO_FRONT
   VEHICLE_PHOTO_BACK
   VEHICLE_PHOTO_SIDE
+  TAX_COMPLIANCE
   SELFIE
   OTHER
 }
 
 enum DocumentCategory {
-  REQUIRED // Obligatorio
-  OPTIONAL // Opcional
+  REQUIRED   // Obligatorio
+  OPTIONAL   // Opcional
   ADDITIONAL // Adicional
 }
 
@@ -761,12 +760,12 @@ enum ValidationStatus {
 }
 
 enum CampaignType {
-  ONBOARDING // Journey de onboarding
-  REACTIVATION // Reactivación
-  RETENTION // Retención
-  PROMOTIONAL // Promocional
+  ONBOARDING    // Journey de onboarding
+  REACTIVATION  // Reactivación
+  RETENTION     // Retención
+  PROMOTIONAL   // Promocional
   INFORMATIONAL // Informativo
-  SURVEY // Encuesta
+  SURVEY        // Encuesta
 }
 
 enum CampaignStatus {
@@ -797,7 +796,7 @@ enum MessageType {
 }
 
 enum MessageDirection {
-  INBOUND // Del driver hacia nosotros
+  INBOUND  // Del driver hacia nosotros
   OUTBOUND // De nosotros hacia el driver
 }
 
@@ -812,7 +811,7 @@ enum MessageStatus {
 }
 
 enum PaymentStatus {
-  PENDING // Pendiente de verificación
+  PENDING  // Pendiente de verificación
   VERIFIED // Verificado
   REJECTED // Rechazado
   REFUNDED // Reembolsado
@@ -820,12 +819,12 @@ enum PaymentStatus {
 
 enum VehicleType {
   MOTORCYCLE // Moto
-  CAR // Auto
-  VAN // Van/Furgoneta
-  TRUCK // Camión
-  BICYCLE // Bicicleta
-  SCOOTER // Scooter eléctrico
-  OTHER // Otro
+  CAR        // Auto
+  VAN        // Van/Furgoneta
+  TRUCK      // Camión
+  BICYCLE    // Bicicleta
+  SCOOTER    // Scooter eléctrico
+  OTHER      // Otro
 }
 
 enum ActivityType {

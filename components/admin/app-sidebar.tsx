@@ -13,6 +13,7 @@ import {
   MessageSquare,
   BarChart3,
   Settings,
+  BikeIcon,
 } from "lucide-react"
 
 import {
@@ -49,9 +50,14 @@ const menuItems = [
     title: "Gestión",
     items: [
       {
+        title: "On Boarding",
+        url: "/admin/onboarding",
+        icon: Users
+      },
+      {
         title: "Drivers Activos",
         url: "/admin/drivers",
-        icon: Users,
+        icon: BikeIcon,
       },
       {
         title: "Comunicaciones",

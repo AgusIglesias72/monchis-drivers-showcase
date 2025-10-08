@@ -16,6 +16,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
     "@hookform/resolvers": "^5.2.2",
+    "@microsoft/clarity": "^1.0.0",
     "@next/third-parties": "^15.5.4",
     "@prisma/client": "^6.16.2",
     "@radix-ui/react-accordion": "^1.2.12",

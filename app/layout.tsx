@@ -1,6 +1,7 @@
 import { Montserrat } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { GoogleAnalytics } from '@next/third-parties/google'
+import ClarityScript from "@/components/ClarityScript"
 import './globals.css';
 
 const montserrat = Montserrat({
@@ -50,6 +51,8 @@ export default function RootLayout({
             duration: 3000,
           }}
         />
+                  <ClarityScript />
+
         {gaId && <GoogleAnalytics gaId={gaId} />}
         </body>
     </html>
