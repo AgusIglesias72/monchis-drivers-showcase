@@ -8,13 +8,185 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==================== FORMULARIO DE POSTULACIÓN ====================
+// ==================== AdminUser - ACTUALIZADO ====================
+model AdminUser {
+  id      String @id
+  clerkId String @unique @map("clerk_id")
 
+  email           String  @unique
+  firstName       String? @map("first_name")
+  lastName        String? @map("last_name")
+  fullName        String? @map("full_name")
+  phoneNumber     String? @map("phone_number")
+  profileImageUrl String? @map("profile_image_url")
+
+  role        AdminRole @default(ADMIN)
+  isActive    Boolean   @default(true) @map("is_active")
+  permissions String[]  @default([])
+
+  assignedZones String[] @default([]) @map("assigned_zones")
+
+  metadata Json?
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  lastLoginAt DateTime? @map("last_login_at")
+
+  // Relaciones ACTUALIZADAS
+  formNotesCreated       FormNote[]           @relation("FormNoteCreatedBy")
+  driverNotesCreated     DriverNote[]         @relation("DriverNoteCreatedBy")
+  documentsUploaded      FormDocument[]       @relation("DocumentUploadedBy") // NUEVO
+  documentReviews        FormDocument[]       @relation("DocumentReviewedBy")
+  // ELIMINADO: documentDeletes
+  activitiesLogged       DriverActivity[]     @relation("ActivityLoggedBy")
+  // ELIMINADO: driversAssigned
+  finalApprovalsGiven    FormDriver[]         @relation("FinalApprovedBy")
+  onboardingsScheduled   OnboardingSchedule[] @relation("OnboardingScheduledBy")
+  onboardingsCompleted   OnboardingSchedule[] @relation("OnboardingCompletedBy")
+  onboardingsCancelled   OnboardingSchedule[] @relation("OnboardingCancelledBy")
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@map("admin_users")
+}
+
+
+enum AdminRole {
+  SUPER_ADMIN // Acceso total
+  ADMIN       // Administrador normal
+  OPERATOR    // Operador (acciones limitadas)
+  VIEWER      // Solo lectura
+}
+
+// ==================== AUDIT LOG ====================
+
+model AuditLog {
+  id String @id @default(cuid())
+
+  // Quién hizo la acción
+  userId    String  @map("user_id") // clerkId
+  userEmail String? @map("user_email") // Para facilitar búsquedas
+
+  // Qué hizo
+  action      AuditAction
+  actionType  String      @map("action_type") // "CREATE", "UPDATE", "DELETE", "APPROVE", etc
+  description String?     @db.Text
+
+  // Sobre qué entidad
+  entityType String @map("entity_type") // "FormDriver", "Document", "Driver"
+  entityId   String @map("entity_id")
+
+  // Metadata de la acción
+  changes  Json? // Cambios específicos (before/after)
+  metadata Json?
+
+  // Contexto de la request
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+
+  // Timestamp
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  // Drivers
+  DRIVER_CREATED
+  DRIVER_UPDATED
+  DRIVER_STATUS_CHANGED
+  DRIVER_ASSIGNED
+  DRIVER_APPROVED
+  DRIVER_REJECTED
+
+  // Documentos
+  DOCUMENT_UPLOADED
+  DOCUMENT_REVIEWED
+  DOCUMENT_APPROVED
+  DOCUMENT_REJECTED
+  DOCUMENT_DELETED
+
+  // Onboarding
+  ONBOARDING_SCHEDULED
+  ONBOARDING_COMPLETED
+  ONBOARDING_CANCELLED
+
+  // Notas
+  NOTE_CREATED
+  NOTE_UPDATED
+  NOTE_DELETED
+
+  // Sistema
+  USER_LOGIN
+  USER_LOGOUT
+  SETTINGS_CHANGED
+
+  // Otros
+  OTHER
+}
+
+// ==================== ONBOARDING SCHEDULES ====================
+
+model OnboardingSchedule {
+  id String @id @default(cuid())
+
+  formDriverId String     @map("form_driver_id")
+  formDriver   FormDriver @relation(fields: [formDriverId], references: [id], onDelete: Cascade)
+
+  // Quién lo agendó
+  scheduledBy      String    @map("scheduled_by") // clerkId del admin
+  scheduledByEmail String?   @map("scheduled_by_email")
+  scheduledByUser  AdminUser @relation("OnboardingScheduledBy", fields: [scheduledBy], references: [id])
+
+  // Detalles del agendamiento
+  scheduledFor DateTime @map("scheduled_for")
+  location     String?
+  notes        String?  @db.Text
+
+  // Estado
+  status OnboardingScheduleStatus @default(SCHEDULED)
+
+  // Quién completó (si aplica)
+  completedBy     String?    @map("completed_by") // clerkId
+  completedByUser AdminUser? @relation("OnboardingCompletedBy", fields: [completedBy], references: [id])
+  completedAt     DateTime?  @map("completed_at")
+
+  // Quién canceló (si aplica)
+  cancelledBy     String?    @map("cancelled_by") // clerkId
+  cancelledByUser AdminUser? @relation("OnboardingCancelledBy", fields: [cancelledBy], references: [id])
+  cancelledAt     DateTime?  @map("cancelled_at")
+  cancelReason    String?    @db.Text @map("cancel_reason")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([formDriverId])
+  @@index([scheduledBy])
+  @@index([scheduledFor])
+  @@index([status])
+  @@map("onboarding_schedules")
+}
+
+enum OnboardingScheduleStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+  NO_SHOW
+}
+
+// ==================== FormDocument - ACTUALIZADO ====================
 model FormDocument {
   id           String @id @default(cuid())
   formDriverId String @map("form_driver_id")
 
-  // Tipo de documento (reutilizamos tu enum existente)
+  // Tipo de documento
   documentType DocumentType @map("document_type")
 
   // Almacenamiento (Vercel Blob)
@@ -29,17 +201,17 @@ model FormDocument {
   // Notas administrativas sobre este documento específico
   adminNotes String? @db.Text @map("admin_notes")
 
+  // Quién cargó el documento (puede ser admin o el propio driver desde el form)
+  uploadedBy     String?    @map("uploaded_by") // clerkId del admin O "driver" si lo subió desde el form
+  uploadedByUser AdminUser? @relation("DocumentUploadedBy", fields: [uploadedBy], references: [id])
+
   // Quién revisó y cuándo
-  reviewedBy String?   @map("reviewed_by") // ID o email del admin
-  reviewedAt DateTime? @map("reviewed_at")
+  reviewedBy     String?    @map("reviewed_by") // clerkId del admin
+  reviewedByUser AdminUser? @relation("DocumentReviewedBy", fields: [reviewedBy], references: [id])
+  reviewedAt     DateTime?  @map("reviewed_at")
 
-  // Razón de rechazo si aplica
+  // Razón de rechazo si aplica (cuando status = REJECTED)
   rejectionReason String? @db.Text @map("rejection_reason")
-
-  // Soft delete (para mantener historial)
-  isDeleted Boolean   @default(false) @map("is_deleted")
-  deletedAt DateTime? @map("deleted_at")
-  deletedBy String?   @map("deleted_by")
 
   // Metadata adicional
   metadata Json?
@@ -55,10 +227,11 @@ model FormDocument {
   @@index([formDriverId])
   @@index([documentType])
   @@index([status])
-  @@index([isDeleted])
+  @@index([uploadedBy])
   @@map("form_documents")
 }
 
+// ==================== FormDriver - ACTUALIZADO ====================
 model FormDriver {
   id String @id @default(cuid())
 
@@ -91,18 +264,18 @@ model FormDriver {
 
   // Contacto de emergencia
   emergencyName         String? @map("emergency_name")
-  emergencyRelationship String? @map("emergency_relationship") // Familiar, Amigo, Conocido, Otros
+  emergencyRelationship String? @map("emergency_relationship")
   emergencyPhone        String? @map("emergency_phone")
 
   // Zona de trabajo y referencia
-  workZone        String? @map("work_zone") // Carmelitas, Centro, Lambaré, etc
-  howHeardAboutUs String? @map("how_heard_about_us") // Redes Sociales, Recomendación
-  referredBy      String? @map("referred_by") // Nombre del driver que recomendó
+  workZone        String? @map("work_zone")
+  howHeardAboutUs String? @map("how_heard_about_us")
+  referredBy      String? @map("referred_by")
 
   // Info adicional
-  experience        String?  // Sin experiencia, <1 año, 1-3 años, >3 años
-  availability      String[] @default([]) // ["mañana", "tarde", "noche"]
-  whenCanStart      String?  @map("when_can_start") // Inmediato, Esta semana, Este mes, A evaluar
+  experience        String?
+  availability      String[] @default([])
+  whenCanStart      String?  @map("when_can_start")
   hasUenoAccount    Boolean  @default(false) @map("has_ueno_account")
   uenoAccountNumber String?  @map("ueno_account_number")
   canInvoice        Boolean  @default(false) @map("can_invoice")
@@ -122,12 +295,13 @@ model FormDriver {
   onboardingNotes       String?           @db.Text @map("onboarding_notes")
 
   // Gestión administrativa interna
-  assignedTo    String? @map("assigned_to") // Admin que gestiona este caso
+  // ELIMINADO: assignedTo y assignedToUser (múltiples admins pueden accionar)
   internalNotes String? @db.Text @map("internal_notes") // Notas generales del proceso
 
-  // Aprobación final
-  finalApprovedBy String?   @map("final_approved_by")
-  finalApprovedAt DateTime? @map("final_approved_at")
+  // Aprobación final (quien da el OK final)
+  finalApprovedBy     String?    @map("final_approved_by") // clerkId del admin
+  finalApprovedByUser AdminUser? @relation("FinalApprovedBy", fields: [finalApprovedBy], references: [id])
+  finalApprovedAt     DateTime?  @map("final_approved_at")
 
   // Metadata
   source   String? // web, mobile, referral
@@ -141,9 +315,10 @@ model FormDriver {
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   // Relaciones
-  submissions FormSubmission[]
-  notes       FormNote[]
-  documents   FormDocument[]
+  submissions         FormSubmission[]
+  notes               FormNote[]
+  documents           FormDocument[]
+  onboardingSchedules OnboardingSchedule[]
 
   @@index([cedula])
   @@index([phoneNumber])
@@ -160,7 +335,8 @@ model FormNote {
   content      String     @db.Text
   formDriverId String     @map("form_driver_id")
   formDriver   FormDriver @relation(fields: [formDriverId], references: [id], onDelete: Cascade)
-  createdBy    String     @map("created_by") // ID o nombre del usuario admin
+  createdBy    String     @map("created_by") // clerkId del admin
+  createdByUser AdminUser @relation("FormNoteCreatedBy", fields: [createdBy], references: [id])
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
@@ -656,7 +832,11 @@ model DriverActivity {
   metadata    Json?
 
   performedAt DateTime @default(now()) @map("performed_at")
-  performedBy String?  @map("performed_by") // SYSTEM o user ID
+  performedBy String?  @map("performed_by") // SYSTEM o clerkId
+
+  // Relación con admin user (si es manual)
+  loggedBy     String?    @map("logged_by") // clerkId (null si es automático)
+  loggedByUser AdminUser? @relation("ActivityLoggedBy", fields: [loggedBy], references: [id])
 
   driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
@@ -673,8 +853,9 @@ model DriverNote {
   content     String
   isImportant Boolean @default(false) @map("is_important")
 
-  createdAt DateTime @default(now()) @map("created_at")
-  createdBy String   @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  createdBy     String    @map("created_by") // clerkId del admin
+  createdByUser AdminUser @relation("DriverNoteCreatedBy", fields: [createdBy], references: [id])
 
   driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
@@ -696,27 +877,27 @@ enum DriverStatus {
 }
 
 enum ChurnSegment {
-  NEW              // Registrado pero nunca tomó un turno
-  ONBOARDING       // En primeros 30 días con actividad
-  ACTIVE           // Activo en últimos 7 días
-  AT_RISK          // 7-14 días sin actividad
-  EARLY_CHURN      // 15-21 días sin actividad
-  MODERATE_CHURN   // 22-30 días sin actividad
-  LATE_CHURN       // 31-60 días sin actividad
-  SEVERE_CHURN     // 61-90 días sin actividad
-  CRITICAL_CHURN   // 91-180 días sin actividad
-  LOST             // +180 días sin actividad
-  NEVER_ACTIVATED  // +30 días desde registro, nunca tomó turno
+  NEW             // Registrado pero nunca tomó un turno
+  ONBOARDING      // En primeros 30 días con actividad
+  ACTIVE          // Activo en últimos 7 días
+  AT_RISK         // 7-14 días sin actividad
+  EARLY_CHURN     // 15-21 días sin actividad
+  MODERATE_CHURN  // 22-30 días sin actividad
+  LATE_CHURN      // 31-60 días sin actividad
+  SEVERE_CHURN    // 61-90 días sin actividad
+  CRITICAL_CHURN  // 91-180 días sin actividad
+  LOST            // +180 días sin actividad
+  NEVER_ACTIVATED // +30 días desde registro, nunca tomó turno
 }
 
 enum OnboardingStage {
-  REGISTERED            // Se registró
-  DOCUMENTS_PENDING     // Falta documentación
-  DOCUMENTS_SUBMITTED   // Documentos enviados
-  DOCUMENTS_APPROVED    // Documentos aprobados
-  READY_TO_DRIVE        // Listo para manejar
-  FIRST_TRIP_COMPLETED  // Completó primer viaje
-  ONBOARDED             // Completó onboarding (30 días)
+  REGISTERED           // Se registró
+  DOCUMENTS_PENDING    // Falta documentación
+  DOCUMENTS_SUBMITTED  // Documentos enviados
+  DOCUMENTS_APPROVED   // Documentos aprobados
+  READY_TO_DRIVE       // Listo para manejar
+  FIRST_TRIP_COMPLETED // Completó primer viaje
+  ONBOARDED            // Completó onboarding (30 días)
 }
 
 enum DocumentStatus {

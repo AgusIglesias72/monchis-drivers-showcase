@@ -1,8 +1,11 @@
+// app/layout.tsx
 import { Montserrat } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { GoogleAnalytics } from '@next/third-parties/google'
 import ClarityScript from "@/components/ClarityScript"
+import { ClerkProvider } from '@clerk/nextjs'
 import './globals.css';
+import { esES } from '@clerk/localizations'
 
 const montserrat = Montserrat({
   subsets: ['latin'],
@@ -14,7 +17,6 @@ const montserrat = Montserrat({
 export const metadata = {
   title: 'Monchis - Postulación Driver',
   description: 'Únete al equipo de drivers de Monchis',
-  // Add data for when link is shared
   openGraph: {
     title: 'Monchis - Postulación Driver',
     description: 'Únete al equipo de drivers de Monchis',
@@ -26,35 +28,39 @@ export const metadata = {
   }
 };
 
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const gaId : string = process.env.NEXT_PUBLIC_GA_ID || '';
-
+  
   return (
-    <html lang="es">
-      <body className={`${montserrat.variable} font-sans`}>
-        {children}
-
-        {/* Sonner Toast */}
-        <Toaster
-          position="top-center"
-          richColors
-          closeButton
-          expand={false}
-          toastOptions={{
-            style: {
-              fontFamily: 'var(--font-montserrat)',
-            },
-            duration: 3000,
-          }}
-        />
-                  <ClarityScript />
-
-        {gaId && <GoogleAnalytics gaId={gaId} />}
+    <ClerkProvider localization={esES}>
+      <html lang="es">
+        <body className={`${montserrat.variable} font-sans`}>
+          {children}
+         
+          {/* Sonner Toast */}
+          <Toaster
+            position="top-center"
+            richColors
+            closeButton
+            expand={false}
+            toastOptions={{
+              style: {
+                fontFamily: 'var(--font-montserrat)',
+              },
+              duration: 3000,
+            }}
+          />
+                  
+          <ClarityScript />
+         
+          {gaId && <GoogleAnalytics gaId={gaId} />}
         </body>
-    </html>
+      </html>
+    </ClerkProvider>
   );
 }
