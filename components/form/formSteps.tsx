@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, MapPin, Bike, FileText, Building2 } from 'lucide-react';
+import { User, MapPin, Bike, FileText, Building2, X, Upload, Info } from 'lucide-react';
+import Image from 'next/image';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -27,8 +28,37 @@ export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({
   acceptedTypes = "image/*,.pdf",
   required = false,
 }) => {
+  const [isDragging, setIsDragging] = useState(false);
   const files = value ? value.split(',').filter(f => f) : [];
   const inputId = `file-${label.replace(/\s+/g, '-')}`;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles && droppedFiles.length > 0) {
+      onChange(droppedFiles);
+    }
+  };
+
+  const isPDF = (url: string) => {
+    return url.toLowerCase().includes('.pdf') || url.toLowerCase().includes('pdf');
+  };
 
   return (
     <div className="space-y-3">
@@ -37,24 +67,39 @@ export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({
       </Label>
 
       {files.length > 0 && (
-        <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-3">
           {files.map((file, index) => {
             const fileName = file.split('/').pop() || file;
+            const isImage = !isPDF(file);
 
             return (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <FileText className="w-5 h-5 text-gray-500 flex-shrink-0" />
-                  <span className="text-sm text-gray-700 truncate flex-1">{fileName}</span>
+              <div key={index} className="relative group">
+                <div className="aspect-square rounded-lg border-2 border-gray-200 overflow-hidden bg-gray-50">
+                  {isImage ? (
+                    <Image
+                      src={file}
+                      alt={fileName}
+                      width={200}
+                      height={200}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-4">
+                      <FileText className="w-12 h-12 text-red-500 mb-2" />
+                      <span className="text-xs text-gray-600 text-center truncate w-full px-2">
+                        {fileName}
+                      </span>
+                    </div>
+                  )}
                 </div>
+                
                 <button
                   type="button"
                   onClick={() => onRemove(index)}
-                  className="ml-2 p-1 hover:bg-gray-200 rounded-full transition-colors"
+                  className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                  aria-label="Eliminar archivo"
                 >
-                  <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             );
@@ -64,6 +109,7 @@ export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({
 
       <div className="relative">
         <input
+          ref={fileInputRef}
           type="file"
           multiple
           accept={acceptedTypes}
@@ -76,10 +122,18 @@ export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({
           id={inputId}
           disabled={uploading}
         />
-        <label
-          htmlFor={inputId}
-          className={`flex items-center justify-center gap-2 w-full px-4 py-6 border-2 border-dashed rounded-xl cursor-pointer transition-all ${uploading ? 'opacity-50 cursor-not-allowed' : 'hover:border-red-500 hover:bg-red-50'
-            } border-gray-300`}
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => !uploading && fileInputRef.current?.click()}
+          className={`flex items-center justify-center gap-2 w-full px-4 py-8 border-2 border-dashed rounded-xl transition-all ${
+            uploading 
+              ? 'opacity-50 cursor-not-allowed' 
+              : isDragging
+              ? 'border-red-500 bg-red-50'
+              : 'hover:border-red-500 hover:bg-red-50 cursor-pointer'
+          } border-gray-300`}
         >
           {uploading ? (
             <div className="text-center">
@@ -90,14 +144,14 @@ export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({
             </div>
           ) : (
             <div className="text-center">
-              <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
-              <p className="text-sm text-gray-600">Click para subir {files.length > 0 ? 'más archivos' : 'archivos'}</p>
+              <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-600 font-medium">
+                {isDragging ? 'Soltá para subir' : files.length > 0 ? 'Agregar más archivos' : 'Click o arrastrá archivos'}
+              </p>
               <p className="text-xs text-gray-400 mt-1">PDF o imágenes (JPG, PNG) hasta 5MB</p>
             </div>
           )}
-        </label>
+        </div>
       </div>
     </div>
   );
@@ -713,6 +767,37 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
             </div>
           </div>
 
+          {/* Pregunta sobre Conto - INDEPENDIENTE */}
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-3">
+            <div className="space-y-2">
+              <Label className="text-purple-900 font-semibold">
+                ¿Te interesaría nuestro servicio de contabilidad con Conto?
+              </Label>
+              <p className="text-xs text-purple-700">
+                Conto te ayuda a mantener tu contabilidad al día y facturar fácilmente. Es un servicio opcional que podés contratar. Si seleccionás que sí, un representante se contactará contigo para gestionar el alta.
+              </p>
+            </div>
+
+            <div className="flex gap-4 w-full">
+              <Button
+                type="button"
+                variant={formData.interestedInConto === 'si' ? 'default' : 'outline'}
+                onClick={() => handleInputChange('interestedInConto', 'si')}
+                className="flex-1"
+              >
+                Me interesa
+              </Button>
+              <Button
+                type="button"
+                variant={formData.interestedInConto === 'no' ? 'default' : 'outline'}
+                onClick={() => handleInputChange('interestedInConto', 'no')}
+                className="flex-1"
+              >
+                No por ahora
+              </Button>
+            </div>
+          </div>
+
           {/* Certificado de Cumplimiento Tributario - Solo si puede facturar */}
           {formData.canInvoice === 'si' && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
@@ -736,6 +821,124 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
                 }}
                 uploading={uploadingDoc === 'taxCompliancePhotoUrl'}
               />
+            </div>
+          )}
+        </div>
+      )
+    },
+    // STEP 6: Pago de Equipamiento - ✅ NUEVO STEP
+    {
+      title: 'Pago de Equipamiento',
+      subtitle: 'Última información antes de finalizar',
+      icon: Building2,
+      component: (
+        <div className="space-y-5">
+          {/* Información sobre el pago */}
+          <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-xl p-5 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-gray-900 mb-1">
+                  Pago de Agendamiento
+                </h3>
+                <p className="text-sm text-gray-700 mb-3">
+                  El equipamiento completo tiene un costo de <strong className="text-red-600">410.000 Gs</strong>. 
+                  <br />
+El pago parcial inicial es de <strong className="text-red-600">100.000 Gs</strong>. Este pago es obligatorio para recibir tu equipamiento y comenzar a entregar.
+               
+               
+                </p>
+                <div className="bg-white rounded-lg p-3 space-y-2">
+                  <p className="text-xs text-gray-600">
+                    <strong>💳 Formas de pago:</strong>
+                  </p>
+                  <ul className="text-xs text-gray-600 space-y-1 ml-4 list-disc">
+                    <li><strong>Transferencia:</strong> Podés pagar ahora y cargar el comprobante</li>
+                    <li><strong>POS en el HUB:</strong> Pagás presencialmente el día del On Boarding</li>
+                  </ul>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Los 310.000 Gs restantes se descuentan gradualmente de tus pedidos. No es necesario abonarlos para comenzar a realizar entregas.
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2 flex items-center gap-2">
+                    <Info className="w-4 h-4" /> <span className="text-xs text-gray-500">Abonando mediante transferencia tendrás preferencia para la disponibilidad de equipos y capacitación.</span>
+                  </p>
+                </div>  
+              </div>
+            </div>
+          </div>
+
+          {/* Método de pago */}
+          <div className="space-y-2">
+            <Label>
+              ¿Cómo querés realizar el pago? <span style={{ color: MONCHIS_RED }}>*</span>
+            </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant={formData.paymentMethod === 'TRANSFERENCIA' ? 'default' : 'outline'}
+                onClick={() => handleInputChange('paymentMethod', 'TRANSFERENCIA')}
+                className="h-auto py-4 flex-col"
+              >
+                <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+                <span className="text-sm">Transferencia</span>
+                <span className="text-xs text-gray-500">Pago ahora</span>
+              </Button>
+              <Button
+                type="button"
+                variant={formData.paymentMethod === 'POS' ? 'default' : 'outline'}
+                onClick={() => handleInputChange('paymentMethod', 'POS')}
+                className="h-auto py-4 flex-col"
+              >
+                <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <span className="text-sm">POS en HUB</span>
+                <span className="text-xs text-gray-500">Pago presencial</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Campos adicionales según método de pago */}
+          {formData.paymentMethod === 'TRANSFERENCIA' && (
+            <div className="space-y-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-900 font-medium">
+                Realizá la transferencia a esta cuenta:
+              </p>
+              <div className="bg-white rounded-lg p-3 text-sm space-y-1">
+                <p><strong>Entidad:</strong> Ueno Bank S.A.</p>
+                <p><strong>Beneficiario:</strong> Hanoi S.A.</p>
+                <p><strong>RUC:</strong> 80089722-6</p>
+                <p><strong>Cuenta:</strong> 619751858</p>
+                <p><strong>Mail:</strong> hanoimonchis@gmail.com</p>
+                <p className="text-red-600 font-semibold mt-2">Monto mínimo: 100.000 Gs</p>
+              </div>
+
+              <MultiFileUpload
+                label="Comprobante de Transferencia"
+                value={formData.paymentProofUrl || ''}
+                onChange={(files) => handleFileUpload('paymentProofUrl', files)}
+                onRemove={(index) => {
+                  const current = (formData.paymentProofUrl || '').split(',').filter((f: string) => f);
+                  current.splice(index, 1);
+                  handleInputChange('paymentProofUrl', current.join(','));
+                }}
+                uploading={uploadingDoc === 'paymentProofUrl'}
+                required
+              />
+            </div>
+          )}
+
+          {formData.paymentMethod === 'POS' && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p className="text-sm text-green-900">
+                ✓ Perfecto! El pago se realizará presencialmente en el HUB el día de tu On Boarding mediante POS.
+              </p>
             </div>
           )}
         </div>

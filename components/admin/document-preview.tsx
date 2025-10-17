@@ -29,6 +29,8 @@ import {
   Clock,
   AlertCircle,
   Plus,
+  Loader2,
+  User,
 } from "lucide-react"
 
 interface Document {
@@ -42,6 +44,11 @@ interface Document {
   mimeType?: string
   reviewedAt?: Date
   reviewedBy?: string
+  reviewedByUser?: {
+    firstName?: string
+    fullName?: string
+    email?: string
+  }
   rejectionReason?: string
   adminNotes?: string
 }
@@ -51,8 +58,8 @@ interface DocumentPreviewProps {
   isEditing: boolean
   onDocumentDelete?: (documentId: string) => void
   onDocumentUpload?: (documentType: string, files: FileList) => void
-  onDocumentApprove?: (documentId: string) => void
-  onDocumentReject?: (documentId: string, reason: string) => void
+  onDocumentApprove?: (documentId: string) => Promise<void>
+  onDocumentReject?: (documentId: string, reason: string) => Promise<void>
 }
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
@@ -101,6 +108,7 @@ export function DocumentPreview({
   const [selectedDocType, setSelectedDocType] = useState<string>('')
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [processingDocId, setProcessingDocId] = useState<string | null>(null)
 
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return 'N/A'
@@ -180,6 +188,31 @@ export function DocumentPreview({
     }
   }
 
+  const handleApprove = async (docId: string) => {
+    if (!onDocumentApprove) return
+    setProcessingDocId(docId)
+    try {
+      await onDocumentApprove(docId)
+      setShowPreview(false)
+    } finally {
+      setProcessingDocId(null)
+    }
+  }
+
+  const handleReject = async (docId: string) => {
+    if (!onDocumentReject) return
+    const reason = prompt('Razón del rechazo:')
+    if (!reason) return
+    
+    setProcessingDocId(docId)
+    try {
+      await onDocumentReject(docId, reason)
+      setShowPreview(false)
+    } finally {
+      setProcessingDocId(null)
+    }
+  }
+
   // Agrupar documentos por tipo
   const groupedDocs = documents.reduce((acc, doc) => {
     if (!acc[doc.documentType]) {
@@ -232,89 +265,99 @@ export function DocumentPreview({
                 {docs.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border hover:border-primary/50 transition-colors"
+                    className="flex flex-col gap-2 p-3 bg-muted/50 rounded-lg border border-border hover:border-primary/50 transition-colors"
                   >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {doc.fileName}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-muted-foreground">
-                            {formatFileSize(doc.fileSize)}
-                          </span>
-                          <span className="text-xs text-muted-foreground">•</span>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(doc.uploadedAt).toLocaleDateString('es-PY')}
-                          </span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {doc.fileName}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-muted-foreground">
+                              {formatFileSize(doc.fileSize)}
+                            </span>
+                            <span className="text-xs text-muted-foreground">•</span>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(doc.uploadedAt).toLocaleDateString('es-PY')}
+                            </span>
+                          </div>
                         </div>
+                        {getStatusBadge(doc.status)}
                       </div>
-                      {getStatusBadge(doc.status)}
-                    </div>
 
-                    <div className="flex items-center gap-1 ml-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 cursor-pointer"
-                        onClick={() => handlePreview(doc)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 cursor-pointer"
-                        onClick={() => window.open(doc.blobUrl, '_blank')}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      {isEditing && onDocumentDelete && (
+                      <div className="flex items-center gap-1 ml-2">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive cursor-pointer"
-                          onClick={() => onDocumentDelete(doc.id)}
+                          className="h-8 w-8 cursor-pointer"
+                          onClick={() => handlePreview(doc)}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Eye className="h-4 w-4" />
                         </Button>
-                      )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 cursor-pointer"
+                          onClick={() => window.open(doc.blobUrl, '_blank')}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        {isEditing && onDocumentDelete && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive cursor-pointer"
+                            onClick={() => onDocumentDelete(doc.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Mostrar quién revisó el documento */}
+                    {(doc.status === 'APPROVED' || doc.status === 'REJECTED') && (
+                      <div className="flex items-center gap-2 pt-2 border-t text-xs text-muted-foreground">
+                        <User className="h-3 w-3" />
+                        <span>
+                          {doc.status === 'APPROVED' ? 'Aprobado' : 'Rechazado'} por{' '}
+                          <span className="font-medium">
+                            {doc.reviewedByUser?.firstName || doc.reviewedByUser?.fullName || doc.reviewedByUser?.email || 'Admin'}
+                          </span>
+                        </span>
+                        {doc.reviewedAt && (
+                          <>
+                            <span>•</span>
+                            <span>{new Date(doc.reviewedAt).toLocaleDateString('es-PY')}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Razón de rechazo si existe */}
+                    {doc.status === 'REJECTED' && doc.rejectionReason && (
+                      <div className="flex items-start gap-2 pt-2 border-t text-xs bg-red-50 p-2 rounded">
+                        <AlertCircle className="h-3 w-3 text-red-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-medium text-red-900">Razón del rechazo:</span>
+                          <p className="text-red-700 mt-1">{doc.rejectionReason}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-
-              {/* Mostrar razón de rechazo si existe */}
-              {docs.some(d => d.status === 'REJECTED' && d.rejectionReason) && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-red-900 mb-1">
-                        Razón del rechazo:
-                      </p>
-                      {docs
-                        .filter(d => d.status === 'REJECTED' && d.rejectionReason)
-                        .map(d => (
-                          <p key={d.id} className="text-xs text-red-800">
-                            {d.rejectionReason}
-                          </p>
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           ))}
 
-          {/* Botón para agregar más documentos */}
           {isEditing && onDocumentUpload && (
             <Button
               type="button"
               onClick={handleUploadClick}
               variant="outline"
-              className="w-full gap-2 mt-4 cursor-pointer"
+              className="w-full gap-2 cursor-pointer"
             >
               <Plus className="h-4 w-4" />
               Agregar Documento
@@ -323,7 +366,94 @@ export function DocumentPreview({
         </div>
       )}
 
-      {/* Dialog para subir documento - SIEMPRE renderizado */}
+      {/* Dialog para preview de documento */}
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedDoc && DOCUMENT_TYPE_LABELS[selectedDoc.documentType]}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedDoc && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-center bg-muted/50 rounded-lg p-4 min-h-[500px]">
+                {selectedDoc.mimeType?.startsWith('image/') ? (
+                  <img
+                    src={selectedDoc.blobUrl}
+                    alt={selectedDoc.fileName}
+                    className="max-w-full max-h-[500px] object-contain"
+                  />
+                ) : selectedDoc.mimeType === 'application/pdf' ? (
+                  <iframe
+                    src={selectedDoc.blobUrl}
+                    className="w-full h-[500px] border-0"
+                    title={selectedDoc.fileName}
+                  />
+                ) : (
+                  <div className="text-center">
+                    <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-sm text-muted-foreground">
+                      Vista previa no disponible para este tipo de archivo
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => window.open(selectedDoc.blobUrl, '_blank')}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Descargar archivo
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Acciones de revisión con loading */}
+              {selectedDoc.status === 'PENDING' && onDocumentApprove && onDocumentReject && (
+                <div className="flex items-center gap-2 pt-4 border-t">
+                  <Button
+                    variant="default"
+                    className="flex-1 bg-green-600 hover:bg-green-700 cursor-pointer"
+                    onClick={() => handleApprove(selectedDoc.id)}
+                    disabled={processingDocId === selectedDoc.id}
+                  >
+                    {processingDocId === selectedDoc.id ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Aprobando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Aprobar Documento
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1 cursor-pointer"
+                    onClick={() => handleReject(selectedDoc.id)}
+                    disabled={processingDocId === selectedDoc.id}
+                  >
+                    {processingDocId === selectedDoc.id ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Rechazando...
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Rechazar Documento
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para subir documento */}
       <Dialog 
         open={showUploadDialog} 
         onOpenChange={(open) => {
@@ -389,7 +519,7 @@ export function DocumentPreview({
               >
                 {isUploading ? (
                   <>
-                    <Upload className="h-4 w-4 mr-2 animate-pulse" />
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Subiendo...
                   </>
                 ) : (
@@ -401,93 +531,6 @@ export function DocumentPreview({
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Preview Dialog */}
-      <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>{selectedDoc?.fileName}</DialogTitle>
-          </DialogHeader>
-          {selectedDoc && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-4">
-                  {getStatusBadge(selectedDoc.status)}
-                  <span className="text-muted-foreground">
-                    {formatFileSize(selectedDoc.fileSize)}
-                  </span>
-                  <span className="text-muted-foreground">
-                    Subido: {new Date(selectedDoc.uploadedAt).toLocaleString('es-PY')}
-                  </span>
-                </div>
-              </div>
-
-              {/* Preview del documento */}
-              <div className="bg-muted rounded-lg p-4 min-h-[400px] flex items-center justify-center">
-                {selectedDoc.mimeType?.startsWith('image/') ? (
-                  <img
-                    src={selectedDoc.blobUrl}
-                    alt={selectedDoc.fileName}
-                    className="max-w-full max-h-[500px] object-contain"
-                  />
-                ) : selectedDoc.mimeType === 'application/pdf' ? (
-                  <iframe
-                    src={selectedDoc.blobUrl}
-                    className="w-full h-[500px] border-0"
-                    title={selectedDoc.fileName}
-                  />
-                ) : (
-                  <div className="text-center">
-                    <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-sm text-muted-foreground">
-                      Vista previa no disponible para este tipo de archivo
-                    </p>
-                    <Button
-                      variant="outline"
-                      className="mt-4"
-                      onClick={() => window.open(selectedDoc.blobUrl, '_blank')}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Descargar archivo
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Acciones de revisión */}
-              {selectedDoc.status === 'PENDING' && onDocumentApprove && onDocumentReject && (
-                <div className="flex items-center gap-2 pt-4 border-t">
-                  <Button
-                    variant="default"
-                    className="flex-1 bg-green-600 hover:bg-green-700 cursor-pointer"
-                    onClick={() => {
-                      onDocumentApprove(selectedDoc.id)
-                      setShowPreview(false)
-                    }}
-                  >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Aprobar Documento
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="flex-1 cursor-pointer"
-                    onClick={() => {
-                      const reason = prompt('Razón del rechazo:')
-                      if (reason) {
-                        onDocumentReject(selectedDoc.id, reason)
-                        setShowPreview(false)
-                      }
-                    }}
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Rechazar Documento
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -76,6 +76,9 @@ const FormularioMonchis: React.FC = () => {
     hasUenoAccount: '',
     uenoAccountNumber: '',
     canInvoice: '',
+    interestedInConto: '', // 'si' o 'no'
+    paymentMethod: '', // 'TRANSFERENCIA', 'POS'
+    paymentProofUrl: '', // URL del comprobante (solo para transferencia)
   });
 
   useEffect(() => {
@@ -186,152 +189,176 @@ const FormularioMonchis: React.FC = () => {
 
   const getStepData = (stepNumber: number) => {
     switch (stepNumber) {
-        case 1:
-          return {
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            birthDate: formData.birthDate,
-            cedula: formData.cedula,
-            phoneNumber: formData.phoneNumber,
-            email: formData.email
-          };
-        case 2:
-          return {
-            department: formData.department,
-            city: formData.city,
-            neighborhood: formData.neighborhood,
-            address: formData.address,
-            emergencyName: formData.emergencyName,
-            emergencyRelationship: formData.emergencyRelationship,
-            emergencyPhone: formData.emergencyPhone
-          };
-        case 3:
-          return {
-            workZone: formData.workZone,
-            howHeardAboutUs: formData.howHeardAboutUs,
-            referredBy: formData.referredBy,
-            hasVehicle: formData.hasVehicle,
-            vehicleBrand: formData.vehicleBrand,
-            vehicleModel: formData.vehicleModel,
-            vehicleYear: formData.vehicleYear,
-            vehiclePlate: formData.vehiclePlate
-          };
-        case 4:
-          return {
-            cedulaPhotoUrl: formData.cedulaPhotoUrl,
-            licensePhotoUrl: formData.licensePhotoUrl,
-            vehiclePhotoUrl: formData.vehiclePhotoUrl
-          };
-        case 5:
-          return {
-            experience: formData.experience,
-            availability: formData.availability,
-            whenCanStart: formData.whenCanStart,
-            hasUenoAccount: formData.hasUenoAccount,
-            uenoAccountNumber: formData.uenoAccountNumber,
-            canInvoice: formData.canInvoice,
-            taxCompliancePhotoUrl: formData.taxCompliancePhotoUrl // ✅ NUEVO CAMPO
-          };
-        default:
-          return {};
-      }
-    };
-
-  const validateCurrentStep = (): boolean => {
-    if (SKIP_VALIDATION) {
-      return true;
-    }
-  
-    const currentStep = step + 1;
-    
-    switch (currentStep) {
       case 1:
-        if (!formData.firstName.trim()) {
-          toast.error('Por favor completa tu nombre');
-          return false;
-        }
-        if (!formData.lastName.trim()) {
-          toast.error('Por favor completa tu apellido');
-          return false;
-        }
-        if (!formData.cedula.trim()) {
-          toast.error('Por favor completa tu cédula');
-          return false;
-        }
-        if (!formData.phoneNumber.trim()) {
-          toast.error('Por favor completa tu teléfono');
-          return false;
-        }
-        if (!formData.email.trim()) {
-          toast.error('Por favor completa tu email');
-          return false;
-        }
-        break;
-        
+        return {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          birthDate: formData.birthDate,
+          cedula: formData.cedula,
+          phoneNumber: formData.phoneNumber,
+          email: formData.email
+        };
       case 2:
-        if (!formData.department) {
-          toast.error('Por favor selecciona tu departamento');
-          return false;
-        }
-        if (!formData.city.trim()) {
-          toast.error('Por favor completa tu ciudad');
-          return false;
-        }
-        if (!formData.address.trim()) {
-          toast.error('Por favor completa tu dirección');
-          return false;
-        }
-        break;
-        
+        return {
+          department: formData.department,
+          city: formData.city,
+          neighborhood: formData.neighborhood,
+          address: formData.address,
+          emergencyName: formData.emergencyName,
+          emergencyRelationship: formData.emergencyRelationship,
+          emergencyPhone: formData.emergencyPhone
+        };
       case 3:
-        if (!formData.workZone || formData.workZone.trim() === '') {
-          toast.error('Por favor selecciona al menos una zona de trabajo');
-          return false;
-        }
-        const zones = formData.workZone.split(',').filter((z: string) => z.trim());
-        if (zones.length === 0) {
-          toast.error('Por favor selecciona al menos una zona de trabajo');
-          return false;
-        }
-        if (!formData.howHeardAboutUs) {
-          toast.error('Por favor indica cómo te enteraste de nosotros');
-          return false;
-        }
-        if (!formData.hasVehicle) {
-          toast.error('Por favor indica si tenés vehículo');
-          return false;
-        }
-        break;
-        
+        return {
+          workZone: formData.workZone,
+          howHeardAboutUs: formData.howHeardAboutUs,
+          referredBy: formData.referredBy,
+          hasVehicle: formData.hasVehicle,
+          vehicleBrand: formData.vehicleBrand,
+          vehicleModel: formData.vehicleModel,
+          vehicleYear: formData.vehicleYear,
+          vehiclePlate: formData.vehiclePlate
+        };
       case 4:
-        break;
-        
+        return {
+          cedulaPhotoUrl: formData.cedulaPhotoUrl,
+          licensePhotoUrl: formData.licensePhotoUrl,
+          vehiclePhotoUrl: formData.vehiclePhotoUrl
+        };
       case 5:
-        if (!formData.experience) {
-          toast.error('Por favor indica tu experiencia');
-          return false;
-        }
-        if (!formData.availability || formData.availability.length === 0) {
-          toast.error('Por favor selecciona al menos un horario disponible');
-          return false;
-        }
-        if (!formData.whenCanStart) {
-          toast.error('Por favor indica cuándo podés empezar');
-          return false;
-        }
-        if (!formData.hasUenoAccount) {
-          toast.error('Por favor indica si tenés cuenta en ueno');
-          return false;
-        }
-        if (!formData.canInvoice) {
-          toast.error('Por favor indica si podés emitir facturas');
-          return false;
-        }
-        break;
+        return {
+          experience: formData.experience,
+          availability: formData.availability,
+          whenCanStart: formData.whenCanStart,
+          hasUenoAccount: formData.hasUenoAccount,
+          uenoAccountNumber: formData.uenoAccountNumber,
+          canInvoice: formData.canInvoice,
+          taxCompliancePhotoUrl: formData.taxCompliancePhotoUrl,
+          interestedInConto: formData.interestedInConto // ✅ NUEVO
+        };
+      case 6: // ✅ NUEVO STEP
+        return {
+          paymentMethod: formData.paymentMethod,
+          paymentProofUrl: formData.paymentProofUrl
+        };
+      default:
+        return {};
     }
-    
-    return true;
   };
+  
+
+const validateCurrentStep = (): boolean => {
+  if (SKIP_VALIDATION) {
+    return true;
+  }
+
+  const currentStep = step + 1;
+  
+  switch (currentStep) {
+    case 1:
+      if (!formData.firstName.trim()) {
+        toast.error('Por favor completa tu nombre');
+        return false;
+      }
+      if (!formData.lastName.trim()) {
+        toast.error('Por favor completa tu apellido');
+        return false;
+      }
+      if (!formData.cedula.trim()) {
+        toast.error('Por favor completa tu cédula');
+        return false;
+      }
+      if (!formData.phoneNumber.trim()) {
+        toast.error('Por favor completa tu teléfono');
+        return false;
+      }
+      if (!formData.email.trim()) {
+        toast.error('Por favor completa tu email');
+        return false;
+      }
+      break;
+      
+    case 2:
+      if (!formData.department) {
+        toast.error('Por favor selecciona tu departamento');
+        return false;
+      }
+      if (!formData.city.trim()) {
+        toast.error('Por favor completa tu ciudad');
+        return false;
+      }
+      if (!formData.address.trim()) {
+        toast.error('Por favor completa tu dirección');
+        return false;
+      }
+      break;
+      
+    case 3:
+      if (!formData.workZone || formData.workZone.trim() === '') {
+        toast.error('Por favor selecciona al menos una zona de trabajo');
+        return false;
+      }
+      const zones = formData.workZone.split(',').filter((z: string) => z.trim());
+      if (zones.length === 0) {
+        toast.error('Por favor selecciona al menos una zona de trabajo');
+        return false;
+      }
+      if (!formData.howHeardAboutUs) {
+        toast.error('Por favor indica cómo te enteraste de nosotros');
+        return false;
+      }
+      if (!formData.hasVehicle) {
+        toast.error('Por favor indica si tenés vehículo');
+        return false;
+      }
+      break;
+      
+    case 4:
+      // Documentos son opcionales en el formulario
+      break;
+      
+    case 5:
+      if (!formData.experience) {
+        toast.error('Por favor indica tu experiencia');
+        return false;
+      }
+      if (!formData.availability || formData.availability.length === 0) {
+        toast.error('Por favor selecciona al menos un horario disponible');
+        return false;
+      }
+      if (!formData.whenCanStart) {
+        toast.error('Por favor indica cuándo podés empezar');
+        return false;
+      }
+      if (!formData.hasUenoAccount) {
+        toast.error('Por favor indica si tenés cuenta en ueno');
+        return false;
+      }
+      if (!formData.canInvoice) {
+        toast.error('Por favor indica si podés emitir facturas');
+        return false;
+      }
+      // ✅ ACTUALIZADO: interestedInConto ahora es obligatorio siempre
+      if (!formData.interestedInConto) {
+        toast.error('Por favor indica si te interesa el servicio de Conto');
+        return false;
+      }
+      break;
+      
+    case 6: // ✅ NUEVA VALIDACIÓN
+      if (!formData.paymentMethod) {
+        toast.error('Por favor selecciona un método de pago');
+        return false;
+      }
+      if (formData.paymentMethod === 'TRANSFERENCIA' && !formData.paymentProofUrl) {
+        toast.error('Por favor sube el comprobante de transferencia');
+        return false;
+      }
+      break;
+  }
+  
+  return true;
+};
 
   const saveStep = async (stepNumber: number) => {
     try {
@@ -385,7 +412,7 @@ const FormularioMonchis: React.FC = () => {
     setLoading(true);
     
     try {
-      await saveStep(5);
+      await saveStep(6);
       
       const response = await fetch('/api/form/complete', {
         method: 'POST',

@@ -58,7 +58,7 @@ export class PostulacionesStatsService {
    */
   async getFunnelData() {
     const funnelData = await Promise.all(
-      [1, 2, 3, 4, 5].map(async (step) => {
+      [1, 2, 3, 4, 5, 6].map(async (step) => {
         const count = await prisma.formDriver.count({
           where: {
             completedSteps: {
@@ -154,7 +154,8 @@ export class PostulacionesStatsService {
       'Datos Personales',
       'Trabajo y Vehículo',
       'Documentos',
-      'Información Adicional'
+      'Información Adicional',
+      'Pago de Equipamiento' // ✅ NUEVO STEP
     ];
 
     return stepNames.map((name, index) => {
@@ -221,6 +222,7 @@ export class PostulacionesStatsService {
           fullName: true,
           phoneNumber: true,
           email: true,
+          birthDate: true, // ✅ AGREGADO
           department: true,
           city: true,
           neighborhood: true,
@@ -243,6 +245,48 @@ export class PostulacionesStatsService {
           experience: true,
           availability: true,
           whenCanStart: true,
+          onboardingStatus: true, // ✅ AGREGADO
+          
+          // ✅ NUEVO: Incluir relaciones
+          equipmentPayments: {
+            orderBy: {
+              createdAt: 'desc'
+            },
+            take: 1, // Solo el más reciente
+            select: {
+              id: true,
+              paymentMethod: true,
+              paymentNumber: true,
+              invoiceNumber: true,
+              amount: true,
+              paymentDate: true,
+              paymentProofUrl: true,
+              status: true,
+              createdAt: true,
+            }
+          },
+          onboardingAttendances: {
+            orderBy: {
+              createdAt: 'desc'
+            },
+            take: 1, // Solo el más reciente
+            select: {
+              id: true,
+              status: true,
+              confirmedAt: true,
+              checkedInAt: true,
+              event: {
+                select: {
+                  id: true,
+                  title: true,
+                  scheduledDate: true,
+                  startTime: true,
+                  location: true,
+                  status: true,
+                }
+              }
+            }
+          }
         },
         orderBy: {
           lastActivityAt: 'desc'
@@ -326,6 +370,30 @@ export class PostulacionesStatsService {
               orderBy: { step: 'asc' }
             }
           }
+        },
+        equipmentPayments: {
+          orderBy: { createdAt: 'desc' }
+        },
+        financialService: true,
+        onboardingAttendances: {
+          include: {
+            event: true
+          },
+          orderBy: { createdAt: 'desc' }
+        },
+        documents: {
+          orderBy: { uploadedAt: 'desc' }
+        },
+        notes: {
+          include: {
+            createdByUser: {
+              select: {
+                fullName: true,
+                email: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
         }
       }
     });

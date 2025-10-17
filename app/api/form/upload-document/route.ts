@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
       license: "CRIMINAL_RECORD",
       vehicle: "VEHICLE_PHOTO_FRONT",
       taxCompliance: "TAX_COMPLIANCE",
+      paymentProof: "PAYMENT_PROOF", // ✅ NUEVO
     };
 
     const enumDocType = docTypeMap[documentType] || "OTHER";
@@ -88,7 +89,6 @@ export async function POST(request: NextRequest) {
           sessionId,
           uploadedFrom: "web_form",
           originalDocType: documentType,
-          // ✅ Agregar metadata adicional para certificado tributario
           ...(documentType === "taxCompliance" && {
             isTaxCompliance: true,
             documentLabel: "Certificado de Cumplimiento Tributario",
@@ -117,10 +117,11 @@ export async function POST(request: NextRequest) {
 
 // Helper para recalcular el estado de documentos
 async function recalculateDocumentsStatus(formDriverId: string) {
+  // ✅ CORREGIDO: Ya no usamos isDeleted, solo traemos todos los documentos del FormDriver
   const documents = await prisma.formDocument.findMany({
     where: {
       formDriverId,
-      isDeleted: false,
+      // isDeleted eliminado - no existe en el schema
     },
   });
 

@@ -19,10 +19,9 @@ import {
 import {
   Search,
   Download,
-  TestTube,
-  Database,
   RotateCcw,
 } from "lucide-react"
+import { toast } from "sonner"
 
 interface PostulacionesPageContentProps {
   stats: any
@@ -33,39 +32,68 @@ interface PostulacionesPageContentProps {
 }
 
 export function PostulacionesPageContent({
-  stats: realStats,
-  postulaciones: realPostulaciones,
-  total: realTotal,
+  stats,
+  postulaciones,
+  total,
   currentStatus,
   currentSearch
 }: PostulacionesPageContentProps) {
-  const [useMockData, setUseMockData] = useState(true)
   const [searchTerm, setSearchTerm] = useState(currentSearch || '')
   const [statusFilter, setStatusFilter] = useState(currentStatus || 'all')
-
-  // Decidir qué datos usar
-  const stats = useMockData ? {
-    totalPostulaciones: 48,
-    completadas: 12,
-    enProgreso: 28,
-    abandonadas: 8,
-    nuevasUltimaSemana: 15,
-    completadasUltimaSemana: 4,
-    tasaCompletado: 25,
-  } : realStats
+  const [isExporting, setIsExporting] = useState(false)
 
   const handleSearch = () => {
-    console.log('Buscar:', { searchTerm, statusFilter })
+    const params = new URLSearchParams()
+    if (searchTerm) params.set('search', searchTerm)
+    if (statusFilter !== 'all') params.set('status', statusFilter)
+    
+    const queryString = params.toString()
+    window.location.href = `/admin/postulaciones${queryString ? `?${queryString}` : ''}`
   }
 
   const handleResetFilters = () => {
     setSearchTerm('')
     setStatusFilter('all')
-    console.log('Filtros reseteados')
+    window.location.href = '/admin/postulaciones'
   }
 
-  const handleExport = () => {
-    console.log('Exportar datos')
+  const handleExport = async () => {
+    setIsExporting(true)
+    
+    try {
+      const response = await fetch('/api/admin/postulaciones/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: statusFilter !== 'all' ? statusFilter : undefined,
+          searchTerm: searchTerm || undefined,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al exportar')
+      }
+
+      // Descargar el archivo
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `postulaciones_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast.success('Datos exportados correctamente')
+    } catch (error) {
+      console.error('Error al exportar:', error)
+      toast.error('Error al exportar los datos')
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   return (
@@ -77,55 +105,13 @@ export function PostulacionesPageContent({
       />
       
       <div className="flex-1 p-8 space-y-6">
-        {/* Header con Switch */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Postulaciones de Drivers</h1>
-            <p className="text-muted-foreground mt-1">
-              Gestión completa de las postulaciones del formulario
-            </p>
-          </div>
-
-          {/* Switch Mock/Real */}
-          <div className="flex items-center gap-3 bg-muted rounded-lg p-2">
-            <div className="flex items-center gap-2">
-              <TestTube className={`h-4 w-4 ${useMockData ? 'text-amber-600' : 'text-muted-foreground'}`} />
-              <span className={`text-sm font-medium ${useMockData ? 'text-foreground' : 'text-muted-foreground'}`}>
-                Mock
-              </span>
-            </div>
-            
-            <button
-              onClick={() => setUseMockData(!useMockData)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer transition-colors ${
-                useMockData ? 'bg-amber-500' : 'bg-green-500'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full cursor-pointer bg-white transition-transform ${
-                  useMockData ? 'translate-x-1' : 'translate-x-6'
-                }`}
-              />
-            </button>
-            
-            <div className="flex items-center gap-2">
-              <Database className={`h-4 w-4 ${!useMockData ? 'text-green-600' : 'text-muted-foreground'}`} />
-              <span className={`text-sm font-medium ${!useMockData ? 'text-foreground' : 'text-muted-foreground'}`}>
-                Real
-              </span>
-            </div>
-          </div>
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Postulaciones de Drivers</h1>
+          <p className="text-muted-foreground mt-1">
+            Gestión completa de las postulaciones del formulario
+          </p>
         </div>
-
-        {/* Badge de modo desarrollo */}
-        {useMockData && (
-          <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5">
-            <TestTube className="h-3.5 w-3.5 text-amber-600" />
-            <span className="text-xs font-medium text-amber-900">
-              Modo desarrollo: Mostrando datos de prueba
-            </span>
-          </div>
-        )}
 
         {/* KPIs */}
         <PostulacionesKPIs stats={stats} />
@@ -160,15 +146,26 @@ export function PostulacionesPageContent({
                 </SelectContent>
               </Select>
 
+              {/* Botón buscar */}
+              <Button onClick={handleSearch} className="cursor-pointer">
+                <Search className="h-4 w-4 mr-2" />
+                Buscar
+              </Button>
+
               {/* Botón reset */}
               <Button variant="outline" onClick={handleResetFilters} size="icon" className="cursor-pointer">
                 <RotateCcw className="h-4 w-4" />
               </Button>
 
               {/* Botón exportar */}
-              <Button variant="outline" onClick={handleExport} className="gap-2 cursor-pointer">
+              <Button 
+                variant="outline" 
+                onClick={handleExport} 
+                className="gap-2 cursor-pointer"
+                disabled={isExporting}
+              >
                 <Download className="h-4 w-4" />
-                Exportar
+                {isExporting ? 'Exportando...' : 'Exportar'}
               </Button>
             </div>
           </CardContent>
@@ -176,8 +173,7 @@ export function PostulacionesPageContent({
 
         {/* Tabla de postulaciones */}
         <PostulacionesTableExpandable 
-          postulaciones={realPostulaciones}
-          useMockData={useMockData}
+          postulaciones={postulaciones}
         />
       </div>
     </div>

@@ -1,159 +1,10 @@
 // app/admin/postulaciones/[id]/page.tsx
 
-import { PostulacionDetailContent } from "@/components/admin/postulacion-detail-content"
-import { prisma } from "@/lib/prisma"
-import { notFound } from "next/navigation"
-
-// Mock data para IDs específicos (mantenemos para desarrollo)
-const MOCK_DATA: Record<string, any> = {
-  "1": {
-    id: '1',
-    cedula: '4.567.890',
-    firstName: 'Juan',
-    lastName: 'Pérez',
-    fullName: 'Juan Pérez',
-    birthDate: '15/05/1990',
-    phoneNumber: '+595981234567',
-    email: 'juan.perez@email.com',
-    department: 'Central',
-    city: 'Asunción',
-    address: 'Av. España 1234',
-    hasVehicle: true,
-    vehicleBrand: 'Honda',
-    vehicleModel: 'Wave',
-    vehicleYear: 2020,
-    vehiclePlate: 'ABC123',
-    status: 'COMPLETED',
-    documentsStatus: 'APPROVED',
-    currentStep: 5,
-    completedSteps: [1, 2, 3, 4, 5],
-    startedAt: new Date('2025-10-01T10:30:00'),
-    completedAt: new Date('2025-10-01T11:45:00'),
-    workZone: 'Centro,Carmelitas,Lambaré',
-    emergencyName: 'María Pérez',
-    emergencyPhone: '+595981234568',
-    emergencyRelationship: 'Hermana',
-    howHeardAboutUs: 'Recomendación',
-    referredBy: 'Carlos López',
-    experience: '1-3 años',
-    availability: ['Mañana', 'Tarde'],
-    whenCanStart: 'Inmediatamente',
-    hasUenoAccount: 'si',
-    uenoAccountNumber: '12345678',
-    canInvoice: 'si',
-    documents: [
-      {
-        id: 'doc1',
-        documentType: 'CEDULA_FRONT',
-        fileName: 'cedula-frente.jpg',
-        blobUrl: '/uploads/cedula-front.jpg',
-        status: 'APPROVED',
-        uploadedAt: new Date('2025-10-01T10:35:00'),
-        fileSize: 245000,
-        mimeType: 'image/jpeg',
-      },
-      {
-        id: 'doc2',
-        documentType: 'CEDULA_BACK',
-        fileName: 'cedula-dorso.jpg',
-        blobUrl: '/uploads/cedula-back.jpg',
-        status: 'APPROVED',
-        uploadedAt: new Date('2025-10-01T10:35:00'),
-        fileSize: 238000,
-        mimeType: 'image/jpeg',
-      },
-      {
-        id: 'doc3',
-        documentType: 'CRIMINAL_RECORD',
-        fileName: 'antecedentes-penales.pdf',
-        blobUrl: '/uploads/antecedentes.pdf',
-        status: 'PENDING',
-        uploadedAt: new Date('2025-10-01T11:00:00'),
-        fileSize: 1200000,
-        mimeType: 'application/pdf',
-      },
-    ],
-    notes: [
-      {
-        id: '1',
-        content: 'Candidato muy interesado. Llamó para consultar sobre el proceso.',
-        createdAt: new Date('2025-10-02T09:00:00'),
-        createdBy: 'Admin User',
-      },
-    ],
-    timeline: [
-      { step: 1, name: 'Contacto Básico', completedAt: new Date('2025-10-01T10:32:00') },
-      { step: 2, name: 'Datos Personales', completedAt: new Date('2025-10-01T10:35:00') },
-      { step: 3, name: 'Trabajo y Vehículo', completedAt: new Date('2025-10-01T10:38:00') },
-      { step: 4, name: 'Documentos', completedAt: new Date('2025-10-01T11:25:00') },
-      { step: 5, name: 'Información Adicional', completedAt: new Date('2025-10-01T11:35:00') },
-    ],
-  },
-  "2": {
-    id: '2',
-    cedula: '5.123.456',
-    firstName: 'María',
-    lastName: 'González',
-    fullName: 'María González',
-    birthDate: '20/03/1988',
-    phoneNumber: '+595982345678',
-    email: 'maria.gonzalez@email.com',
-    department: 'Central',
-    city: 'Lambaré',
-    address: 'Calle Principal 567',
-    hasVehicle: true,
-    vehicleBrand: 'Yamaha',
-    vehicleModel: 'Crypton',
-    vehicleYear: 2019,
-    vehiclePlate: 'XYZ789',
-    status: 'IN_PROGRESS',
-    documentsStatus: 'INCOMPLETE',
-    currentStep: 3,
-    completedSteps: [1, 2, 3],
-    startedAt: new Date('2025-10-05T14:20:00'),
-    completedAt: null,
-    workZone: 'Lambaré,Fernando de la Mora',
-    emergencyName: 'Pedro González',
-    emergencyPhone: '+595982345679',
-    emergencyRelationship: 'Hermano',
-    howHeardAboutUs: 'Redes Sociales',
-    referredBy: null,
-    experience: 'Sin experiencia',
-    availability: ['Tarde', 'Noche'],
-    whenCanStart: 'La próxima semana',
-    hasUenoAccount: 'no',
-    uenoAccountNumber: null,
-    canInvoice: 'no',
-    documents: [
-      {
-        id: 'doc4',
-        documentType: 'CEDULA_FRONT',
-        fileName: 'cedula-maria.jpg',
-        blobUrl: '/uploads/cedula-front-2.jpg',
-        status: 'PENDING',
-        uploadedAt: new Date('2025-10-05T14:25:00'),
-        fileSize: 280000,
-        mimeType: 'image/jpeg',
-      },
-    ],
-    notes: [],
-    timeline: [
-      { step: 1, name: 'Contacto Básico', completedAt: new Date('2025-10-05T14:22:00') },
-      { step: 2, name: 'Datos Personales', completedAt: new Date('2025-10-05T14:28:00') },
-      { step: 3, name: 'Trabajo y Vehículo', completedAt: new Date('2025-10-05T14:35:00') },
-      { step: 4, name: 'Documentos', completedAt: null },
-      { step: 5, name: 'Información Adicional', completedAt: null },
-    ],
-  },
-}
+import { prisma } from '@/lib/prisma'
+import { notFound } from 'next/navigation'
+import { PostulacionDetailContent } from '@/components/admin/postulacion-detail-content'
 
 async function getPostulacion(id: string) {
-  // Si es un ID de mock (1, 2), devolver mock data
-  if (MOCK_DATA[id]) {
-    return MOCK_DATA[id]
-  }
-
-  // Para IDs reales, buscar en la base de datos
   try {
     const formDriver = await prisma.formDriver.findUnique({
       where: { id },
@@ -164,13 +15,35 @@ async function getPostulacion(id: string) {
           }
         },
         documents: {
-          where: {
-            isDeleted: false
-          },
           orderBy: {
             uploadedAt: 'desc'
+          },
+          include: {
+            reviewedByUser: {
+              select: {
+                firstName: true,
+                fullName: true,
+                email: true,
+              }
+            }
           }
-        }
+        },
+        equipmentPayments: {
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1 // Solo el más reciente
+        },
+        onboardingAttendances: {
+          include: {
+            event: true
+          },
+          orderBy: {
+            invitedAt: 'desc'
+          },
+          take: 1 // Solo el más reciente
+        },
+        financialService: true
       }
     })
 
@@ -214,8 +87,12 @@ async function getPostulacion(id: string) {
       hasUenoAccount: formDriver.hasUenoAccount ? 'si' : 'no',
       uenoAccountNumber: formDriver.uenoAccountNumber,
       canInvoice: formDriver.canInvoice ? 'si' : 'no',
+      onboardingStatus: formDriver.onboardingStatus,
+      onboardingScheduledAt: formDriver.onboardingScheduledAt,
+      onboardingCompletedAt: formDriver.onboardingCompletedAt,
+      onboardingNotes: formDriver.onboardingNotes,
       
-      // ✅ NUEVO: Documentos desde la tabla FormDocument
+      // Documentos desde la tabla FormDocument
       documents: formDriver.documents.map(doc => ({
         id: doc.id,
         documentType: doc.documentType,
@@ -226,10 +103,62 @@ async function getPostulacion(id: string) {
         fileSize: doc.fileSize,
         mimeType: doc.mimeType,
         reviewedAt: doc.reviewedAt,
-        reviewedBy: doc.reviewedBy,
+//        reviewedBy: doc.reviewedBy,
+        reviewedBy: doc.reviewedByUser?.fullName || doc.reviewedBy,
+        reviewedByUser: doc.reviewedByUser,
         rejectionReason: doc.rejectionReason,
         adminNotes: doc.adminNotes,
+        metadata: doc.metadata,
       })),
+      
+      // Pagos de equipamiento
+      equipmentPayments: formDriver.equipmentPayments.map(payment => ({
+        id: payment.id,
+        paymentMethod: payment.paymentMethod,
+        paymentNumber: payment.paymentNumber,
+        invoiceNumber: payment.invoiceNumber,
+        amount: payment.amount,
+        paymentDate: payment.paymentDate,
+        paymentProofUrl: payment.paymentProofUrl,
+        status: payment.status,
+        verifiedAt: payment.verifiedAt,
+        verifiedBy: payment.verifiedBy,
+        adminNotes: payment.adminNotes,
+        rejectionReason: payment.rejectionReason,
+        metadata: payment.metadata,
+        createdAt: payment.createdAt,
+      })),
+      
+      // OnBoarding attendances
+      onboardingAttendances: formDriver.onboardingAttendances.map(attendance => ({
+        id: attendance.id,
+        status: attendance.status,
+        confirmedAt: attendance.confirmedAt,
+        checkedInAt: attendance.checkedInAt,
+        markedNoShowAt: attendance.markedNoShowAt,
+        cancelledAt: attendance.cancelledAt,
+        cancelledReason: attendance.cancelledReason,
+        attendeeNotes: attendance.attendeeNotes,
+        event: {
+          id: attendance.event.id,
+          title: attendance.event.title,
+          scheduledDate: attendance.event.scheduledDate,
+          startTime: attendance.event.startTime,
+          endTime: attendance.event.endTime,
+          location: attendance.event.location,
+          status: attendance.event.status,
+        }
+      })),
+      
+      // Financial Service
+      financialService: formDriver.financialService ? {
+        id: formDriver.financialService.id,
+        hasInvoice: formDriver.financialService.hasInvoice,
+        invoiceRuc: formDriver.financialService.invoiceRuc,
+        taxComplianceUrl: formDriver.financialService.taxComplianceUrl,
+        interestedInConto: formDriver.financialService.interestedInConto,
+        contoStatus: formDriver.financialService.contoStatus,
+      } : null,
       
       // Notas
       notes: formDriver.notes.map(note => ({
