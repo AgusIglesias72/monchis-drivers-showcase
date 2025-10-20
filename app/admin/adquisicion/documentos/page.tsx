@@ -13,6 +13,8 @@ interface PageProps {
   }
 }
 
+
+
 // Función para validar que el status sea un FormDocumentStatus válido
 function isValidDocumentStatus(status: string | undefined): FormDocumentStatus | undefined {
   if (!status) return undefined
