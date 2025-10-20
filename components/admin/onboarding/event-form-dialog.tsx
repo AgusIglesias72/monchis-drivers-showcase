@@ -33,8 +33,6 @@ interface EventFormDialogProps {
 }
 
 interface FormData {
-  title: string
-  description: string
   scheduledDate: string
   startTime: string
   endTime: string
@@ -42,7 +40,6 @@ interface FormData {
   locationAddress: string
   meetingLink: string
   maxCapacity: string
-  reminderHoursBefore: string
   status: OnboardingEventStatus
   notes: string
 }
@@ -50,8 +47,6 @@ interface FormData {
 export function EventFormDialog({ open, onOpenChange, event, onSave }: EventFormDialogProps) {
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState<FormData>({
-    title: '',
-    description: '',
     scheduledDate: '',
     startTime: '',
     endTime: '',
@@ -59,33 +54,34 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
     locationAddress: '',
     meetingLink: '',
     maxCapacity: '',
-    reminderHoursBefore: '24',
-    status: 'DRAFT',
+    status: 'SCHEDULED',
     notes: '',
   })
 
   // Cargar datos del evento si estamos editando
   useEffect(() => {
     if (event) {
+      // Convertir la fecha a formato local (sin timezone offset)
+      const localDate = new Date(event.scheduledDate)
+      const year = localDate.getFullYear()
+      const month = String(localDate.getMonth() + 1).padStart(2, '0')
+      const day = String(localDate.getDate()).padStart(2, '0')
+      const dateString = `${year}-${month}-${day}`
+
       setFormData({
-        title: event.title,
-        description: event.description || '',
-        scheduledDate: new Date(event.scheduledDate).toISOString().split('T')[0],
+        scheduledDate: dateString,
         startTime: event.startTime,
         endTime: event.endTime || '',
         location: event.location || '',
         locationAddress: event.locationAddress || '',
         meetingLink: event.meetingLink || '',
         maxCapacity: event.maxCapacity?.toString() || '',
-        reminderHoursBefore: event.reminderHoursBefore.toString(),
         status: event.status,
         notes: event.notes || '',
       })
     } else {
       // Reset form para nuevo evento
       setFormData({
-        title: '',
-        description: '',
         scheduledDate: '',
         startTime: '',
         endTime: '',
@@ -93,8 +89,7 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
         locationAddress: '',
         meetingLink: '',
         maxCapacity: '',
-        reminderHoursBefore: '24',
-        status: 'DRAFT',
+        status: 'SCHEDULED',
         notes: '',
       })
     }
@@ -105,10 +100,20 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
     setLoading(true)
 
     try {
+      // Crear fecha en zona horaria local (sin conversión UTC)
+      const [year, month, day] = formData.scheduledDate.split('-').map(Number)
+      const localDate = new Date(year, month - 1, day, 12, 0, 0) // Noon para evitar cambios de día
+
       const dataToSend = {
-        ...formData,
+        scheduledDate: localDate.toISOString(),
+        startTime: formData.startTime,
+        endTime: formData.endTime || undefined,
+        location: formData.location || undefined,
+        locationAddress: formData.locationAddress || undefined,
+        meetingLink: formData.meetingLink || undefined,
         maxCapacity: formData.maxCapacity ? parseInt(formData.maxCapacity) : undefined,
-        reminderHoursBefore: parseInt(formData.reminderHoursBefore),
+        status: formData.status,
+        notes: formData.notes || undefined,
       }
 
       const result = await onSave(dataToSend)
@@ -141,30 +146,6 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Título */}
-          <div className="space-y-2">
-            <Label htmlFor="title">Título *</Label>
-            <Input
-              id="title"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="Ej: OnBoarding Grupal - Marzo 2025"
-              required
-            />
-          </div>
-
-          {/* Descripción */}
-          <div className="space-y-2">
-            <Label htmlFor="description">Descripción</Label>
-            <Textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Describe el contenido del evento..."
-              rows={3}
-            />
-          </div>
-
           {/* Fecha y Hora */}
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
@@ -222,7 +203,7 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
 
           {/* Link de reunión */}
           <div className="space-y-2">
-            <Label htmlFor="meetingLink">Link de Reunión Virtual (opcional)</Label>
+            <Label htmlFor="meetingLink">Link de Reunión Virtual</Label>
             <Input
               id="meetingLink"
               type="url"
@@ -232,29 +213,17 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
             />
           </div>
 
-          {/* Capacidad y Recordatorios */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="maxCapacity">Capacidad Máxima</Label>
-              <Input
-                id="maxCapacity"
-                type="number"
-                min="1"
-                value={formData.maxCapacity}
-                onChange={(e) => setFormData({ ...formData, maxCapacity: e.target.value })}
-                placeholder="Ej: 20"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="reminderHoursBefore">Recordatorio (horas antes)</Label>
-              <Input
-                id="reminderHoursBefore"
-                type="number"
-                min="1"
-                value={formData.reminderHoursBefore}
-                onChange={(e) => setFormData({ ...formData, reminderHoursBefore: e.target.value })}
-              />
-            </div>
+          {/* Capacidad */}
+          <div className="space-y-2">
+            <Label htmlFor="maxCapacity">Capacidad Máxima</Label>
+            <Input
+              id="maxCapacity"
+              type="number"
+              min="1"
+              value={formData.maxCapacity}
+              onChange={(e) => setFormData({ ...formData, maxCapacity: e.target.value })}
+              placeholder="Ej: 20"
+            />
           </div>
 
           {/* Estado */}
@@ -280,13 +249,13 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
 
           {/* Notas */}
           <div className="space-y-2">
-            <Label htmlFor="notes">Notas Adicionales</Label>
+            <Label htmlFor="notes">Notas</Label>
             <Textarea
               id="notes"
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               placeholder="Ej: Traer cédula y licencia original"
-              rows={2}
+              rows={3}
             />
           </div>
 

@@ -3,7 +3,7 @@
 import { postulacionesStatsService } from "@/lib/services/postulaciones-stats.service"
 import { PostulacionesPageContent } from "@/components/admin/postulaciones-page-content"
 
-export const revalidate = 30
+export const revalidate = 60
 
 interface PageProps {
   searchParams: Promise<{

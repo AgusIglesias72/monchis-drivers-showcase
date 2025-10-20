@@ -32,55 +32,92 @@ import {
 } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { Search, Loader2, UserPlus, Mail, Phone, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react'
-import type { EligibleDriver } from '@/types/onboarding'
+import type { EligibleDriver, EligibleDriversResponse } from '@/types/onboarding'
 
 interface AddDriversDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  eligibleDrivers: EligibleDriver[]
-  loading: boolean
-  pagination: {
-    page: number
-    limit: number
-    total: number
-    totalPages: number
-    hasMore: boolean
-  }
-  onAdd: (driverIds: string[], notes?: string) => Promise<{ success: boolean; error?: string }>
-  onPageChange: (page: number) => void
-  onSearch: (search: string) => void
+  eventId: string
+  onSuccess: () => void
 }
 
 export function AddDriversDialog({ 
   open, 
-  onOpenChange, 
-  eligibleDrivers,
-  loading,
-  pagination,
-  onAdd,
-  onPageChange,
-  onSearch,
+  onOpenChange,
+  eventId,
+  onSuccess,
 }: AddDriversDialogProps) {
   const [submitting, setSubmitting] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedDriverIds, setSelectedDriverIds] = useState<Set<string>>(new Set())
   const [notes, setNotes] = useState('')
+  
+  const [drivers, setDrivers] = useState<EligibleDriver[]>([])
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+    hasMore: false,
+  })
+
+  // ✅ Fetch drivers SOLO cuando se abre el modal
+  const fetchDrivers = async (page = 1, search = '') => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({
+        eventId,
+        page: page.toString(),
+        limit: '10',
+      })
+      if (search) params.set('search', search)
+
+      const response = await fetch(`/api/onboarding/actions/eligible-drivers?${params}`)
+      if (!response.ok) throw new Error('Error al cargar drivers')
+      
+      const data: EligibleDriversResponse = await response.json()
+      setDrivers(data.drivers)
+      setPagination(data.pagination)
+    } catch (error) {
+      console.error('Error fetching drivers:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch inicial cuando se abre el modal
+  useEffect(() => {
+    if (open) {
+      fetchDrivers(1, '')
+    }
+  }, [open, eventId])
 
   // Debounce search
   useEffect(() => {
+    if (!open) return
+    
     const timer = setTimeout(() => {
-      onSearch(searchTerm)
+      fetchDrivers(1, searchTerm)
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchTerm, onSearch])
+  }, [searchTerm, open])
 
-  // Reset search cuando se cierra
+  // Reset cuando se cierra
   useEffect(() => {
     if (!open) {
       setSearchTerm('')
       setSelectedDriverIds(new Set())
       setNotes('')
+      setDrivers([])
+      setPagination({
+        page: 1,
+        limit: 10,
+        total: 0,
+        totalPages: 0,
+        hasMore: false,
+      })
     }
   }, [open])
 
@@ -97,7 +134,7 @@ export function AddDriversDialog({
   }
 
   const handleToggleAll = () => {
-    const selectableDrivers = eligibleDrivers.filter(d => d.canBeSelected)
+    const selectableDrivers = drivers.filter(d => d.canBeSelected)
     
     if (selectedDriverIds.size === selectableDrivers.length) {
       setSelectedDriverIds(new Set())
@@ -115,17 +152,30 @@ export function AddDriversDialog({
     }
 
     setSubmitting(true)
-    const result = await onAdd(Array.from(selectedDriverIds), notes || undefined)
-    setSubmitting(false)
+    try {
+      const response = await fetch('/api/onboarding/attendees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId,
+          formDriverIds: Array.from(selectedDriverIds),
+          attendeeNotes: notes || undefined,
+        })
+      })
 
-    if (result.success) {
-      // Reset form
+      if (!response.ok) throw new Error('Error al agregar drivers')
+
+      // Reset y cerrar
       setSelectedDriverIds(new Set())
       setNotes('')
       setSearchTerm('')
       onOpenChange(false)
-    } else {
-      alert(result.error || 'Error al agregar drivers')
+      onSuccess() // Refrescar la lista de attendees
+    } catch (error) {
+      console.error('Error adding drivers:', error)
+      alert('Error al agregar drivers')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -137,14 +187,14 @@ export function AddDriversDialog({
   }
 
   const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('es-PY', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
+    const d = new Date(date)
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    return `${day}/${month}/${year}`
   }
 
-  const selectableCount = eligibleDrivers.filter(d => d.canBeSelected).length
+  const selectableCount = drivers.filter(d => d.canBeSelected).length
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -209,7 +259,7 @@ export function AddDriversDialog({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {eligibleDrivers.length === 0 ? (
+                    {drivers.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
                           {searchTerm 
@@ -218,7 +268,7 @@ export function AddDriversDialog({
                         </TableCell>
                       </TableRow>
                     ) : (
-                      eligibleDrivers.map((driver) => {
+                      drivers.map((driver) => {
                         const isDisabled = !driver.canBeSelected
                         
                         return (
@@ -249,7 +299,7 @@ export function AddDriversDialog({
                                         {driver.assignedEvent && (
                                           <>
                                             <p className="text-xs">
-                                              <strong>{driver.assignedEvent.title}</strong>
+                                              <strong>{driver.assignedEvent.title || formatDate(driver.assignedEvent.scheduledDate)}</strong>
                                             </p>
                                             <p className="text-xs text-muted-foreground">
                                               {formatDate(driver.assignedEvent.scheduledDate)}
@@ -320,7 +370,7 @@ export function AddDriversDialog({
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => onPageChange(pagination.page - 1)}
+                    onClick={() => fetchDrivers(pagination.page - 1, searchTerm)}
                     disabled={pagination.page === 1 || loading}
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -330,7 +380,7 @@ export function AddDriversDialog({
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => onPageChange(pagination.page + 1)}
+                    onClick={() => fetchDrivers(pagination.page + 1, searchTerm)}
                     disabled={!pagination.hasMore || loading}
                   >
                     Siguiente

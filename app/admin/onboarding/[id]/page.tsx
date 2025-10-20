@@ -58,12 +58,8 @@ export default function EventDetailPage() {
 
   const {
     attendees,
-    eligibleDrivers,
-    pagination,
     loading: attendeesLoading,
-    loadingDrivers,
-    assignDrivers,
-    fetchEligibleDrivers,
+    fetchAttendees,
     checkIn,
     markNoShow,
     cancelAttendee,
@@ -148,13 +144,13 @@ export default function EventDetailPage() {
     router.push(`/admin/postulaciones/${driverId}`)
   }
 
+  // Formato corto: dd/mm/yyyy
   const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('es-PY', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
+    const d = new Date(date)
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    return `${day}/${month}/${year}`
   }
 
   const formatTime = (time: string) => {
@@ -224,32 +220,35 @@ export default function EventDetailPage() {
   const confirmedCount = attendees.filter(a => a.status === 'CONFIRMED').length
   const noShowCount = attendees.filter(a => a.status === 'NO_SHOW').length
 
+  // Generar título dinámico si no hay título
+  const displayTitle = event.title || `OnBoarding - ${formatDate(event.scheduledDate)}`
+
   return (
     <div className="flex flex-1 flex-col container mx-auto">
       <AdminHeader
         breadcrumbs={[
           { label: "On Boarding", href: "/admin/onboarding" },
-          { label: event.title }
+          { label: displayTitle }
         ]}
       />
 
       <div className="flex-1 p-8 space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => router.push('/admin/onboarding')}
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <h1 className="text-3xl font-bold tracking-tight">{event.title}</h1>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push('/admin/onboarding')}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">{displayTitle}</h1>
+              {event.description && (
+                <p className="text-muted-foreground mt-1">{event.description}</p>
+              )}
             </div>
-            {event.description && (
-              <p className="text-muted-foreground mt-1 ml-12">{event.description}</p>
-            )}
           </div>
           <div className="flex gap-2">
             {event.status === 'SCHEDULED' && !event.reminderSent && (
@@ -477,12 +476,8 @@ export default function EventDetailPage() {
       <AddDriversDialog
         open={showAddDrivers}
         onOpenChange={setShowAddDrivers}
-        eligibleDrivers={eligibleDrivers}
-        loading={loadingDrivers}
-        pagination={pagination}
-        onAdd={assignDrivers}
-        onPageChange={(page) => fetchEligibleDrivers({ page })}
-        onSearch={(search) => fetchEligibleDrivers({ page: 1, search })}
+        eventId={eventId}
+        onSuccess={fetchAttendees}
       />
 
       {/* Complete Event Dialog */}

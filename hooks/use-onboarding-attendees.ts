@@ -1,39 +1,29 @@
 // hooks/use-onboarding-attendees.ts
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { OnBoardingAPI } from '@/types/onboarding'
 import type { 
   OnboardingAttendeeWithRelations, 
   AttendeeAction,
-  EligibleDriver,
-  EligibleDriversResponse
 } from '@/types/onboarding'
 
 export function useOnboardingAttendees(eventId?: string) {
   const [attendees, setAttendees] = useState<OnboardingAttendeeWithRelations[]>([])
-  const [eligibleDriversData, setEligibleDriversData] = useState<EligibleDriversResponse>({
-    drivers: [],
-    pagination: {
-      page: 1,
-      limit: 10,
-      total: 0,
-      totalPages: 0,
-      hasMore: false,
-    }
-  })
   const [loading, setLoading] = useState(true)
-  const [loadingDrivers, setLoadingDrivers] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const api = new OnBoardingAPI()
+  // Ref para mantener la misma instancia del API
+  const apiRef = useRef(new OnBoardingAPI())
+  // Ref para saber si ya se ejecutó el fetch inicial
+  const initialFetchDone = useRef(false)
 
-  const fetchAttendees = async () => {
+  const fetchAttendees = useCallback(async () => {
     if (!eventId) return
     
     try {
       setLoading(true)
       setError(null)
-      const data = await api.getAttendees({ eventId })
+      const data = await apiRef.current.getAttendees({ eventId })
       setAttendees(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar asistentes')
@@ -41,57 +31,15 @@ export function useOnboardingAttendees(eventId?: string) {
     } finally {
       setLoading(false)
     }
-  }
-
-  const fetchEligibleDrivers = async (params?: {
-    page?: number
-    search?: string
-  }) => {
-    if (!eventId) return
-    
-    try {
-      setLoadingDrivers(true)
-      const data = await api.getEligibleDrivers({
-        eventId,
-        page: params?.page || 1,
-        limit: 10,
-        search: params?.search,
-      })
-      setEligibleDriversData(data)
-    } catch (err) {
-      console.error('Error fetching eligible drivers:', err)
-    } finally {
-      setLoadingDrivers(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchAttendees()
-    fetchEligibleDrivers()
   }, [eventId])
 
-  const assignDrivers = async (formDriverIds: string[], notes?: string) => {
-    if (!eventId) return { success: false, error: 'No event ID' }
-    
-    try {
-      const result = await api.assignDrivers({
-        eventId,
-        formDriverIds,
-        attendeeNotes: notes,
-      })
-      
-      // Actualizar listas
-      await fetchAttendees()
-      await fetchEligibleDrivers()
-      
-      return { success: true, data: result }
-    } catch (err) {
-      return { 
-        success: false, 
-        error: err instanceof Error ? err.message : 'Error al asignar drivers' 
-      }
+  // ✅ SOLO cargar attendees una vez al montar
+  useEffect(() => {
+    if (eventId && !initialFetchDone.current) {
+      initialFetchDone.current = true
+      fetchAttendees()
     }
-  }
+  }, [eventId, fetchAttendees])
 
   const updateAttendee = async (
     attendeeId: string, 
@@ -99,7 +47,7 @@ export function useOnboardingAttendees(eventId?: string) {
     data?: { attendeeNotes?: string; newEventId?: string }
   ) => {
     try {
-      const updatedAttendee = await api.updateAttendee(attendeeId, {
+      const updatedAttendee = await apiRef.current.updateAttendee(attendeeId, {
         action,
         ...data,
       })
@@ -143,14 +91,9 @@ export function useOnboardingAttendees(eventId?: string) {
 
   return {
     attendees,
-    eligibleDrivers: eligibleDriversData.drivers,
-    pagination: eligibleDriversData.pagination,
     loading,
-    loadingDrivers,
     error,
     fetchAttendees,
-    fetchEligibleDrivers,
-    assignDrivers,
     checkIn,
     markNoShow,
     cancelAttendee,

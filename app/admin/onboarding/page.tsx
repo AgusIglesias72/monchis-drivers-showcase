@@ -92,7 +92,7 @@ export default function OnBoardingPage() {
       const matchesSearch = 
         (event.location?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
         (event.organizerUser.fullName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-        event.title.toLowerCase().includes(searchTerm.toLowerCase())
+        (event.title?.toLowerCase() || '').includes(searchTerm.toLowerCase())
       
       const matchesFilter = filterStatus === 'all' || event.status === filterStatus
 
@@ -194,13 +194,13 @@ export default function OnBoardingPage() {
     )
   }
 
+  // Formato de fecha: dd/mm/yyyy
   const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('es-PY', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
+    const d = new Date(date)
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    return `${day}/${month}/${year}`
   }
 
   const handleCreateEvent = () => {
@@ -275,7 +275,7 @@ export default function OnBoardingPage() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por título, ubicación u organizador..."
+                  placeholder="Buscar por ubicación u organizador..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-9"
@@ -311,7 +311,6 @@ export default function OnBoardingPage() {
                 <TableHeader>
                   <TableRow>
                     <SortableHeader field="date">Fecha y Hora</SortableHeader>
-                    <TableHead>Título</TableHead>
                     <SortableHeader field="location">Ubicación</SortableHeader>
                     <SortableHeader field="organizer">Organizador</SortableHeader>
                     <SortableHeader field="capacity">Capacidad</SortableHeader>
@@ -322,7 +321,7 @@ export default function OnBoardingPage() {
                 <TableBody>
                   {filteredAndSortedEvents.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         {searchTerm || filterStatus !== 'all' 
                           ? 'No se encontraron eventos con los filtros aplicados' 
                           : 'No hay eventos creados aún'}
@@ -342,9 +341,6 @@ export default function OnBoardingPage() {
                               {event.endTime && ` - ${event.endTime}`}
                             </span>
                           </div>
-                        </TableCell>
-                        <TableCell onClick={() => handleViewEvent(event)}>
-                          <div className="font-medium">{event.title}</div>
                         </TableCell>
                         <TableCell onClick={() => handleViewEvent(event)}>
                           {event.location ? (
@@ -432,7 +428,7 @@ export default function OnBoardingPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar evento?</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Estás seguro de que deseas eliminar el evento &quot;{eventToDelete?.title}&quot;?
+              ¿Estás seguro de que deseas eliminar este evento del {eventToDelete && formatDate(eventToDelete.scheduledDate)}?
               Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>

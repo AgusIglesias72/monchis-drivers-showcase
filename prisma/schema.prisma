@@ -408,11 +408,11 @@ model FinancialService {
 model OnboardingEvent {
   id String @id @default(cuid())
 
-  // Información del evento
-  title       String
+  // Información del evento (ahora opcionales)
+  title       String? // ✅ AHORA OPCIONAL
   description String? @db.Text
 
-  // Fecha y hora
+  // Fecha y hora (lo importante)
   scheduledDate DateTime @map("scheduled_date")
   startTime     String   @map("start_time") // "09:00"
   endTime       String?  @map("end_time") // "12:00"
