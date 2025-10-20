@@ -3,21 +3,30 @@
 import { documentsService } from "@/lib/services/documents.service"
 import { DocumentsTable } from "@/components/admin/documents-table"
 import { DocumentsFilters } from "@/components/admin/documents-filter"
-import { ValidationStatus } from "@prisma/client"
+import { FormDocumentStatus } from "@prisma/client"
 
 export const revalidate = 10 // Revalidar cada 10 segundos
 
 interface PageProps {
   searchParams: {
-    status?: ValidationStatus
+    status?: string
   }
+}
+
+// Función para validar que el status sea un FormDocumentStatus válido
+function isValidDocumentStatus(status: string | undefined): FormDocumentStatus | undefined {
+  if (!status) return undefined
+  
+  const validStatuses: FormDocumentStatus[] = ['PENDING', 'IN_REVIEW', 'APPROVED', 'REJECTED']
+  return validStatuses.includes(status as FormDocumentStatus) ? status as FormDocumentStatus : undefined
 }
 
 export default async function DocumentosPage({ searchParams }: PageProps) {
   const status = searchParams.status
+  const validStatus = isValidDocumentStatus(status)
 
   const [documents, counts] = await Promise.all([
-    documentsService.getDocuments({ status }),
+    documentsService.getDocuments({ status: validStatus }),
     documentsService.getDocumentCountsByStatus()
   ])
 

@@ -1,6 +1,6 @@
 // lib/services/document-processor.service.ts
 
-import { DocumentType, ValidationStatus } from '@prisma/client';
+import { DocumentType, FormDocumentStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 interface DocumentColumnMapping {
@@ -202,27 +202,15 @@ export class DocumentProcessor {
           const suffix = driveIds.length > 1 ? `_${idx + 1}` : '';
           const fileName = `${documentType.toLowerCase()}${suffix}.jpg`;
           
-          // Upsert del documento
-          await prisma.document.upsert({
-            where: { 
-              driveFileId: driveId 
-            },
-            update: {
-              driverId,
-              type: documentType,
+          // Crear documento directamente (no hay campo único para blobUrl)
+          await prisma.formDocument.create({
+            data: {
+              formDriverId: driverId,
+              documentType: documentType,
+              blobUrl: `https://drive.google.com/file/d/${driveId}/view`,
               fileName,
               status: 'PENDING',
-              updatedAt: new Date()
-            },
-            create: {
-              driverId,
-              type: documentType,
-              driveFileId: driveId,
-              driveUrl: `https://drive.google.com/file/d/${driveId}/view`,
-              fileName,
-              status: 'PENDING',
-              category: 'REQUIRED',
-              extractedData: {
+              metadata: {
                 sourceColumn: header,
                 columnIndex: i,
                 multipleFiles: driveIds.length > 1,
@@ -243,21 +231,21 @@ export class DocumentProcessor {
     
     // Actualizar estado de documentación del driver
     if (processed > 0) {
-      const documentCount = await prisma.document.count({
-        where: { driverId }
+      const documentCount = await prisma.formDocument.count({
+        where: { formDriverId: driverId }
       });
       
-      let documentStatus: 'INCOMPLETE' | 'IN_REVIEW' = 'INCOMPLETE';
+      let documentStatus: 'INCOMPLETE' | 'PENDING' = 'INCOMPLETE';
       
       // Si tiene más de 3 documentos, probablemente está más completo
       if (documentCount >= 3) {
-        documentStatus = 'IN_REVIEW';
+        documentStatus = 'PENDING';
       }
       
-      await prisma.driver.update({
+      await prisma.formDriver.update({
         where: { id: driverId },
         data: { 
-          documentStatus,
+          documentsStatus: documentStatus,
           updatedAt: new Date()
         }
       });
@@ -304,46 +292,23 @@ export class DocumentProcessor {
         vehicleType = 'CAR';
       }
       
-      const vehicle = await prisma.vehicle.create({
+      // Actualizar el vehículo en el FormDriver en lugar de crear una tabla separada
+      await prisma.formDriver.update({
+        where: { id: driverId },
         data: {
-          driverId,
-          brand: vehicleData.brand,
-          model: vehicleData.model,
-          year: vehicleData.year,
-          plate: vehicleData.plate?.toUpperCase().replace(/\s+/g, ''),
-          type: vehicleType,
-          isActive: true,
-          metadata: {
-            importedAt: new Date().toISOString()
-          }
+          hasVehicle: true,
+          vehicleBrand: vehicleData.brand,
+          vehicleModel: vehicleData.model,
+          vehicleYear: vehicleData.year,
+          vehiclePlate: vehicleData.plate?.toUpperCase().replace(/\s+/g, ''),
+          updatedAt: new Date()
         }
       });
       
-      console.log(`🚗 Vehículo creado: ${vehicle.brand} ${vehicle.model} - ${vehicle.plate}`);
-      return vehicle.id;
+      console.log(`🚗 Vehículo actualizado: ${vehicleData.brand} ${vehicleData.model} - ${vehicleData.plate}`);
+      return driverId;
       
     } catch (error: any) {
-      // Si es error de placa duplicada, actualizar el existente
-      if (error.code === 'P2002' && error.meta?.target?.includes('plate')) {
-        console.log(`⚠️ Placa ${vehicleData.plate} ya existe, actualizando...`);
-        
-        const existing = await prisma.vehicle.findFirst({
-          where: { plate: vehicleData.plate }
-        });
-        
-        if (existing) {
-          await prisma.vehicle.update({
-            where: { id: existing.id },
-            data: {
-              driverId,
-              brand: vehicleData.brand || existing.brand,
-              model: vehicleData.model || existing.model,
-              year: vehicleData.year || existing.year
-            }
-          });
-          return existing.id;
-        }
-      }
       
       console.error(`❌ Error procesando vehículo:`, error);
       return null;
@@ -369,18 +334,19 @@ export class DocumentProcessor {
       // Solo limpiar caracteres no deseados, no agregar código de país
       const cleanPhone = contactData.phone.replace(/[\s\-\(\)\.]/g, '');
       
-      const contact = await prisma.emergencyContact.create({
+      // Actualizar contacto de emergencia en FormDriver
+      await prisma.formDriver.update({
+        where: { id: driverId },
         data: {
-          driverId,
-          name: contactData.name,
-          relationship: contactData.relationship,
-          phoneNumber: cleanPhone,
-          isPrimary: true
+          emergencyName: contactData.name,
+          emergencyRelationship: contactData.relationship,
+          emergencyPhone: cleanPhone,
+          updatedAt: new Date()
         }
       });
       
-      console.log(`👥 Contacto de emergencia creado: ${contact.name} - ${contact.relationship}`);
-      return contact.id;
+      console.log(`👥 Contacto de emergencia actualizado: ${contactData.name} - ${contactData.relationship}`);
+      return driverId;
       
     } catch (error) {
       console.error(`❌ Error procesando contacto de emergencia:`, error);
@@ -458,25 +424,19 @@ export class DocumentProcessor {
       console.log(`     ✓ Guardando servicio financiero (siempre se guarda para trazabilidad)`);
       
       const financialService = await prisma.financialService.upsert({
-        where: { driverId },
+        where: { formDriverId: driverId },
         update: {
           hasInvoice,
           interestedInConto,
           contoStatus: interestedInConto ? 'INTERESTED' : null,
-          hasUenoAccount,
-          uenoAccountNumber: financialData.uenoAccountNumber?.trim() || null,
-          taxComplianceId,
           taxComplianceUrl,
           updatedAt: new Date()
         },
         create: {
-          driverId,
+          formDriverId: driverId,
           hasInvoice,
           interestedInConto,
           contoStatus: interestedInConto ? 'INTERESTED' : null,
-          hasUenoAccount,
-          uenoAccountNumber: financialData.uenoAccountNumber?.trim() || null,
-          taxComplianceId,
           taxComplianceUrl
         }
       });
@@ -547,13 +507,12 @@ export class DocumentProcessor {
       
       const payment = await prisma.equipmentPayment.create({
         data: {
-          driverId,
+          formDriverId: driverId,
           paymentMethod: paymentData.paymentMethod,
           paymentNumber: paymentData.paymentNumber,
           invoiceNumber: paymentData.invoiceNumber,
           amount,
           paymentDate: paymentData.paymentDate ? new Date(paymentData.paymentDate) : null,
-          paymentProofId,
           paymentProofUrl,
           status,
           metadata: {

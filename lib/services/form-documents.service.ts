@@ -4,7 +4,7 @@ import { DocumentType } from '@prisma/client';
 
 export async function recalculateDocumentsStatus(formDriverId: string) {
   const documents = await prisma.formDocument.findMany({
-    where: { formDriverId, isDeleted: false }
+    where: { formDriverId }
   });
 
   if (documents.length === 0) {
@@ -49,9 +49,7 @@ export const formDocumentsService = {
     const formDriver = await prisma.formDriver.findUnique({
       where: { id: formDriverId },
       include: {
-        documents: {
-          where: { isDeleted: false }
-        }
+        documents: true
       }
     });
 

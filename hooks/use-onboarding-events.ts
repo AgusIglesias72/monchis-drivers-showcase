@@ -19,11 +19,21 @@ export function useOnboardingEvents() {
     try {
       setLoading(true)
       setError(null)
+      console.log('Fetching events with params:', params)
       const data = await api.getEvents(params)
+      console.log('Events fetched successfully:', data)
       setEvents(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar eventos')
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar eventos'
+      setError(errorMessage)
       console.error('Error fetching events:', err)
+      
+      // Si es un error de autenticación, mostrar mensaje más específico
+      if (errorMessage.includes('401') || errorMessage.includes('No autorizado')) {
+        setError('No tienes permisos para acceder a esta información. Por favor, inicia sesión.')
+      } else if (errorMessage.includes('403') || errorMessage.includes('Usuario admin no encontrado')) {
+        setError('No tienes permisos de administrador para acceder a esta información.')
+      }
     } finally {
       setLoading(false)
     }

@@ -3,6 +3,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -378,10 +379,13 @@ export function DocumentPreview({
             <div className="space-y-4">
               <div className="flex items-center justify-center bg-muted/50 rounded-lg p-4 min-h-[500px]">
                 {selectedDoc.mimeType?.startsWith('image/') ? (
-                  <img
+                  <Image
                     src={selectedDoc.blobUrl}
                     alt={selectedDoc.fileName}
+                    width={1000}
+                    height={1000}
                     className="max-w-full max-h-[500px] object-contain"
+                    style={{ height: 'auto', width: 'auto' }}
                   />
                 ) : selectedDoc.mimeType === 'application/pdf' ? (
                   <iframe

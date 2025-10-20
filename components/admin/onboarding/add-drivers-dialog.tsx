@@ -73,7 +73,7 @@ export function AddDriversDialog({
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchTerm])
+  }, [searchTerm, onSearch])
 
   // Reset search cuando se cierra
   useEffect(() => {

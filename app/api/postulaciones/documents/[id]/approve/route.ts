@@ -1,84 +1,77 @@
 // app/api/postulaciones/documents/[id]/approve/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { auth } from '@clerk/nextjs/server';
+
+import { prisma } from '@/lib/prisma'
+import { FormDocumentsStatus } from '@prisma/client'
+import { NextResponse } from 'next/server'
 
 export async function PATCH(
-  request: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const { id } = await params
 
-    const { id } = await params;
-
-    // Verificar que el usuario admin existe en la base de datos
-    let adminUser = await prisma.adminUser.findUnique({
-      where: { clerkId: userId }
-    });
-
-    // Si no existe, crearlo
-    if (!adminUser) {
-      console.log(`Creando AdminUser para clerkId: ${userId}`);
-      adminUser = await prisma.adminUser.create({
-        data: {
-          id: userId,
-          clerkId: userId,
-          email: 'admin@temp.com', // TODO: obtener del contexto de Clerk
-          role: 'ADMIN',
-          isActive: true,
-        }
-      });
-    }
-
-    const updatedDoc = await prisma.formDocument.update({
+    // 1. Aprobar el documento específico
+    const document = await prisma.formDocument.update({
       where: { id },
       data: {
         status: 'APPROVED',
         reviewedAt: new Date(),
-        reviewedBy: adminUser.id,
+        rejectionReason: null, // Limpiar razón de rechazo si existía
+      },
+      include: {
+        formDriver: {
+          include: {
+            documents: true // Traer todos los documentos del driver
+          }
+        }
       }
-    });
+    })
 
-    // Recalcular el estado general de documentos
-    const allDocs = await prisma.formDocument.findMany({
-      where: { formDriverId: updatedDoc.formDriverId }
-    });
-
-    const allApproved = allDocs.every(doc => doc.status === 'APPROVED');
-    const hasRejected = allDocs.some(doc => doc.status === 'REJECTED');
-    const hasPending = allDocs.some(doc => doc.status === 'PENDING');
-
-    let newDocumentsStatus: 'INCOMPLETE' | 'PENDING' | 'IN_REVIEW' | 'CORRECTIONS' | 'APPROVED';
+    // 2. Recalcular el documentStatus general del FormDriver
+    const allDocuments = document.formDriver.documents
     
-    if (allApproved) {
-      newDocumentsStatus = 'APPROVED';
-    } else if (hasRejected) {
-      newDocumentsStatus = 'CORRECTIONS';
-    } else if (hasPending) {
-      newDocumentsStatus = 'PENDING';
-    } else {
-      newDocumentsStatus = 'IN_REVIEW';
+    // Verificar el estado de todos los documentos
+    const allApproved = allDocuments.every(doc => doc.status === 'APPROVED')
+    const anyRejected = allDocuments.some(doc => doc.status === 'REJECTED')
+    const anyPending = allDocuments.some(doc => doc.status === 'PENDING')
+    const anyInReview = allDocuments.some(doc => doc.status === 'IN_REVIEW')
+
+    // Determinar el nuevo estado general
+    let newDocumentStatus = 'IN_REVIEW' // Default
+    
+    if (allApproved && allDocuments.length > 0) {
+      // Todos aprobados = APPROVED
+      newDocumentStatus = 'APPROVED'
+    } else if (anyRejected) {
+      // Si hay alguno rechazado = CORRECTIONS
+      newDocumentStatus = 'CORRECTIONS'
+    } else if (anyPending) {
+      // Si hay alguno pendiente = PENDING
+      newDocumentStatus = 'PENDING'
+    } else if (anyInReview) {
+      // Si hay alguno en revisión = IN_REVIEW
+      newDocumentStatus = 'IN_REVIEW'
     }
 
+    // 3. Actualizar el FormDriver con el nuevo estado
     await prisma.formDriver.update({
-      where: { id: updatedDoc.formDriverId },
-      data: { documentsStatus: newDocumentsStatus }
-    });
+      where: { id: document.formDriverId },
+      data: {
+        documentsStatus: newDocumentStatus as FormDocumentsStatus
+      }
+    })
 
-    return NextResponse.json({
-      success: true,
-      document: updatedDoc
-    });
-
-  } catch (error: any) {
-    console.error('Error al aprobar documento:', error);
+    return NextResponse.json({ 
+      document,
+      documentStatus: newDocumentStatus,
+      message: 'Documento aprobado exitosamente'
+    })
+  } catch (error) {
+    console.error('Error al aprobar documento:', error)
     return NextResponse.json(
-      { error: error.message || 'Error al aprobar el documento' },
+      { error: 'Error al aprobar el documento' },
       { status: 500 }
-    );
+    )
   }
 }

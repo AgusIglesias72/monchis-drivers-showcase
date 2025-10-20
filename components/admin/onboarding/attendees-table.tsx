@@ -113,7 +113,7 @@ export function AttendeesTable({
     return (
       <div className="text-center py-12 text-muted-foreground">
         <p className="text-lg font-medium">No hay drivers asignados a este evento</p>
-        <p className="text-sm mt-1">Usa el botón "Agregar Drivers" para comenzar</p>
+        <p className="text-sm mt-1">Usa el botón &quot;Agregar Drivers&quot; para comenzar</p>
       </div>
     )
   }

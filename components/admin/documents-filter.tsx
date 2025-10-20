@@ -15,7 +15,7 @@ interface DocumentsFiltersProps {
 
 const statusConfig = {
   ALL: { label: "Todos", color: "default" },
-  MANUAL_REVIEW: { label: "Revisión Manual", color: "orange" },
+  IN_REVIEW: { label: "En Revisión", color: "orange" },
   PENDING: { label: "Pendientes", color: "blue" },
   REJECTED: { label: "Rechazados", color: "red" },
   APPROVED: { label: "Aprobados", color: "green" },
@@ -44,21 +44,21 @@ export function DocumentsFilters({ counts, currentStatus }: DocumentsFiltersProp
         </Button>
       </Link>
 
-      {/* Revisión Manual */}
-      <Link href={`${pathname}?status=MANUAL_REVIEW`}>
+      {/* En Revisión */}
+      <Link href={`${pathname}?status=IN_REVIEW`}>
         <Button
-          variant={currentStatus === "MANUAL_REVIEW" ? "default" : "outline"}
+          variant={currentStatus === "IN_REVIEW" ? "default" : "outline"}
           className={cn(
             "cursor-pointer",
-            currentStatus === "MANUAL_REVIEW" && "bg-orange-500 hover:bg-orange-600"
+            currentStatus === "IN_REVIEW" && "bg-orange-500 hover:bg-orange-600"
           )}
         >
-          Revisión Manual
+          En Revisión
           <Badge 
             variant="secondary" 
             className="ml-2"
           >
-            {counts['MANUAL_REVIEW'] || 0}
+            {counts['IN_REVIEW'] || 0}
           </Badge>
         </Button>
       </Link>

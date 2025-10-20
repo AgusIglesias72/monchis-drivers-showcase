@@ -3,7 +3,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-//import { randomBytes } from 'crypto'
 import { AuditAction } from '@prisma/client'
 
 // 📋 GET - Listar asistentes de un evento
@@ -127,17 +126,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verificar que los drivers existen y tienen documentos aprobados
+    // Verificar que los drivers existen
     const drivers = await prisma.formDriver.findMany({
       where: {
-        id: { in: formDriverIds },
-        documentsStatus: 'APPROVED'
+        id: { in: formDriverIds }
       }
     })
 
     if (drivers.length !== formDriverIds.length) {
       return NextResponse.json(
-        { error: 'Algunos drivers no existen o no tienen documentos aprobados' },
+        { error: 'Algunos drivers no existen' },
         { status: 400 }
       )
     }
@@ -161,15 +159,11 @@ export async function POST(request: NextRequest) {
     // Crear asistentes
     const attendees = await Promise.all(
       formDriverIds.map(async (formDriverId) => {
-        // TODO: Descomentar cuando se implemente confirmación por driver
-        // const confirmationToken = randomBytes(32).toString('hex')
-        
         const attendee = await prisma.onboardingAttendee.create({
           data: {
             eventId,
             formDriverId,
             status: 'INVITED',
-            // confirmationToken, // TODO: Habilitar cuando drivers puedan confirmar
             invitedBy: adminUser.id,
             attendeeNotes,
           },
@@ -298,7 +292,6 @@ export async function PATCH(request: NextRequest) {
         auditAction = 'ONBOARDING_ATTENDEE_CHECKED_IN'
         auditDescription = `Check-in realizado para ${attendee.formDriver.fullName}`
         
-        // Actualizar estado del driver
         await prisma.formDriver.update({
           where: { id: attendee.formDriverId },
           data: {
@@ -366,15 +359,11 @@ export async function PATCH(request: NextRequest) {
         auditAction = 'ONBOARDING_ATTENDEE_RESCHEDULED'
         auditDescription = `Reagendado de "${attendee.event.title}" a "${newEvent.title}"`
         
-        // Crear nuevo attendee en el nuevo evento
-        // TODO: Descomentar cuando se implemente confirmación por driver
-        // const confirmationToken = randomBytes(32).toString('hex')
         await prisma.onboardingAttendee.create({
           data: {
             eventId: newEventId,
             formDriverId: attendee.formDriverId,
             status: 'INVITED',
-            // confirmationToken, // TODO: Habilitar cuando drivers puedan confirmar
             invitedBy: adminUser.id,
             attendeeNotes: `Reagendado desde evento anterior`,
           }

@@ -32,7 +32,6 @@ export const formApplicationsService = {
       where,
       include: {
         documents: {
-          where: { isDeleted: false },
           select: {
             id: true,
             documentType: true,
@@ -121,7 +120,6 @@ export const formApplicationsService = {
       },
       include: {
         documents: {
-          where: { isDeleted: false },
           select: {
             id: true,
             documentType: true,
@@ -145,7 +143,6 @@ export const formApplicationsService = {
       where: { id },
       include: {
         documents: {
-          where: { isDeleted: false },
           orderBy: { uploadedAt: 'desc' }
         },
         notes: {

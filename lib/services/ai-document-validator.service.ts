@@ -3,7 +3,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { google } from 'googleapis';
 import { prisma } from '@/lib/prisma';
-import { DocumentType, ValidationStatus } from '@prisma/client';
+import { DocumentType, FormDocumentsStatus, FormDocumentStatus } from '@prisma/client';
 import sharp from 'sharp';
 
 // Tipos para el análisis de documentos
@@ -385,7 +385,7 @@ export class AIDocumentValidator {
    */
   async validateDocument(
     documentId: string,
-    driveFileId: string,
+    blobUrl: string,
     expectedType: DocumentType,
     driverData?: DriverDataForValidation
   ): Promise<DocumentAnalysis> {
@@ -400,9 +400,14 @@ export class AIDocumentValidator {
         });
       }
       
-      // 1. Descargar archivo a memoria
-      console.log(`  📥 Descargando archivo ${driveFileId} desde Drive...`);
-      const fileBuffer = await this.downloadFromDriveToBuffer(driveFileId);
+      // 1. Descargar archivo desde blobUrl
+      console.log(`  📥 Descargando archivo desde ${blobUrl}...`);
+      const fetchResponse = await fetch(blobUrl);
+      if (!fetchResponse.ok) {
+        throw new Error(`Error descargando archivo: ${fetchResponse.statusText}`);
+      }
+      const arrayBuffer = await fetchResponse.arrayBuffer();
+      const fileBuffer = Buffer.from(arrayBuffer);
       const originalSize = fileBuffer.length;
       
       // 2. Detectar tipo de archivo
@@ -417,7 +422,7 @@ export class AIDocumentValidator {
       // 3. Solo comprimir si es imagen Y excede el límite
       if (mediaType.startsWith('image/')) {
         const compressionResult = await this.compressImageIfNeeded(fileBuffer);
-        processedBuffer = compressionResult.buffer;
+        processedBuffer = Buffer.from(compressionResult.buffer); // Ensure type is Buffer<ArrayBuffer>
         finalSize = compressionResult.finalSize;
         wasCompressed = compressionResult.wasCompressed;
       } else if (mediaType === 'application/pdf') {
@@ -520,7 +525,7 @@ export class AIDocumentValidator {
     }
   ): Promise<void> {
     try {
-      let status: ValidationStatus;
+      let status: FormDocumentStatus;
       switch (analysis.finalVerdict.status) {
         case 'APPROVED':
           status = 'APPROVED';
@@ -529,24 +534,24 @@ export class AIDocumentValidator {
           status = 'REJECTED';
           break;
         default:
-          status = 'MANUAL_REVIEW';
+          status = 'IN_REVIEW';
       }
       
-      await prisma.document.update({
+      await prisma.formDocument.update({
         where: { id: documentId },
         data: {
-          type: analysis.documentType,
+          documentType: analysis.documentType,
           status,
-          aiValidation: analysis as any,
-          extractedData: analysis.extractedData as any,
-          confidenceScore: analysis.finalVerdict.score,
-          validatedAt: new Date(),
-          validatedBy: 'AI_CLAUDE_SONNET',
+          adminNotes: analysis.documentMetadata.additionalObservations,
           rejectionReason: analysis.finalVerdict.status === 'REJECTED' 
             ? analysis.finalVerdict.reasons?.join(', ') 
             : null,
-          notes: analysis.documentMetadata.additionalObservations,
+          reviewedAt: new Date(),
+          reviewedBy: 'AI_CLAUDE_SONNET',
           metadata: {
+            aiValidation: analysis,
+            extractedData: analysis.extractedData,
+            confidenceScore: analysis.finalVerdict.score,
             documentSide: analysis.documentSide,
             fraudRiskScore: analysis.authenticity.fraudRiskScore,
             expiresInDays: analysis.validation.expiresInDays,
@@ -571,27 +576,18 @@ export class AIDocumentValidator {
         }
       });
       
-      const document = await prisma.document.findUnique({
+      const document = await prisma.formDocument.findUnique({
         where: { id: documentId },
-        include: { driver: true }
+        include: { formDriver: true }
       });
       
       if (document) {
-        await prisma.driverActivity.create({
+        // Crear nota en lugar de actividad (no existe driverActivity en el esquema)
+        await prisma.formNote.create({
           data: {
-            driverId: document.driverId,
-            type: status === 'APPROVED' ? 'DOCUMENT_APPROVED' : 'DOCUMENT_REJECTED',
-            description: `Documento ${analysis.documentType} validado por IA: ${status}`,
-            metadata: {
-              documentId,
-              score: analysis.finalVerdict.score,
-              fraudRisk: analysis.authenticity.fraudRiskScore,
-              reasons: analysis.finalVerdict.reasons,
-              discrepancies: analysis.validation.discrepancies,
-              matchesDriverData: analysis.validation.matchesDriverData,
-              isPdf: compressionMetrics?.mediaType === 'application/pdf'
-            },
-            performedBy: 'AI_SYSTEM'
+            content: `Documento ${analysis.documentType} validado por IA: ${status}. Score: ${analysis.finalVerdict.score}, Fraude: ${analysis.authenticity.fraudRiskScore}`,
+            formDriverId: document.formDriverId,
+            createdBy: 'AI_SYSTEM'
           }
         });
       }
@@ -621,15 +617,14 @@ export class AIDocumentValidator {
     };
     
     try {
-      const driver = await prisma.driver.findUnique({
+      const driver = await prisma.formDriver.findUnique({
         where: { id: driverId },
         include: {
           documents: {
             where: {
               status: 'PENDING'
             }
-          },
-          vehicles: true
+          }
         }
       });
       
@@ -644,26 +639,26 @@ export class AIDocumentValidator {
         fullName: driver.fullName || undefined,
         cedula: driver.cedula || undefined,
         birthDate: driver.birthDate?.toISOString().split('T')[0],
-        vehiclePlate: driver.vehicles?.[0]?.plate || undefined,
-        vehicleBrand: driver.vehicles?.[0]?.brand || undefined,
-        vehicleModel: driver.vehicles?.[0]?.model || undefined,
-        vehicleYear: driver.vehicles?.[0]?.year || undefined,
-        vehicleColor: driver.vehicles?.[0]?.color || undefined,
+        vehiclePlate: driver.vehiclePlate || undefined,
+        vehicleBrand: driver.vehicleBrand || undefined,
+        vehicleModel: driver.vehicleModel || undefined,
+        vehicleYear: driver.vehicleYear || undefined,
+        vehicleColor: undefined, // No hay campo color en FormDriver
       };
       
       for (const doc of driver.documents) {
-        if (!doc.driveFileId) {
-          console.log(`  ⚠️  Documento ${doc.id} no tiene driveFileId, saltando...`);
+        if (!doc.blobUrl) {
+          console.log(`  ⚠️  Documento ${doc.id} no tiene blobUrl, saltando...`);
           continue;
         }
         
         try {
-          console.log(`\n  📄 Procesando documento: ${doc.type}`);
+          console.log(`\n  📄 Procesando documento: ${doc.documentType}`);
           
           const analysis = await this.validateDocument(
             doc.id,
-            doc.driveFileId,
-            doc.type,
+            doc.blobUrl, // Usar blobUrl en lugar de driveFileId
+            doc.documentType,
             driverData
           );
           
@@ -671,7 +666,7 @@ export class AIDocumentValidator {
           
           const detail = {
             documentId: doc.id,
-            type: doc.type,
+            type: doc.documentType,
             status: analysis.finalVerdict.status,
             score: analysis.finalVerdict.score,
             matchesDriverData: analysis.validation.matchesDriverData,
@@ -698,7 +693,7 @@ export class AIDocumentValidator {
           console.error(`  ❌ Error procesando documento ${doc.id}:`, error);
           results.details.push({
             documentId: doc.id,
-            type: doc.type,
+            type: doc.documentType,
             status: 'ERROR',
             error: error instanceof Error ? error.message : 'Unknown error'
           });
@@ -738,14 +733,13 @@ export class AIDocumentValidator {
       documentStatus = 'APPROVED';
     }
     
-    await prisma.driver.update({
+    await prisma.formDriver.update({
       where: { id: driverId },
       data: {
-        documentStatus,
+        documentsStatus: documentStatus as FormDocumentsStatus,
         updatedAt: new Date()
       }
     });
-    
     console.log(`   Estado del driver actualizado a: ${documentStatus}`);
   }
   
@@ -754,7 +748,7 @@ export class AIDocumentValidator {
    */
   async processPendingDocumentsBatch(limit: number = 10): Promise<any> {
     try {
-      const drivers = await prisma.driver.findMany({
+      const drivers = await prisma.formDriver.findMany({
         where: {
           documents: {
             some: {

@@ -2,7 +2,7 @@
 
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -70,13 +70,9 @@ export default function EventDetailPage() {
     confirmAttendee,
   } = useOnboardingAttendees(eventId)
 
-  const api = new OnBoardingAPI()
+  const api = useMemo(() => new OnBoardingAPI(), [])
 
-  useEffect(() => {
-    fetchEvent()
-  }, [eventId])
-
-  const fetchEvent = async () => {
+  const fetchEvent = useCallback(async () => {
     try {
       setLoading(true)
       const events = await api.getEvents()
@@ -87,7 +83,11 @@ export default function EventDetailPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [eventId, api])
+
+  useEffect(() => {
+    fetchEvent()
+  }, [fetchEvent])
 
   const handleSendReminders = async () => {
     setActionLoading(true)

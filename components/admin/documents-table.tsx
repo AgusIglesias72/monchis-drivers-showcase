@@ -27,19 +27,19 @@ import { cn } from "@/lib/utils/utils"
 
 interface Document {
   id: string
-  type: string
+  documentType: string
   status: string
-  driveUrl: string | null
-  confidenceScore: number | null
-  validatedAt: Date | null
+  blobUrl: string | null
+  confidenceScore?: number | null
+  reviewedAt: Date | null
   rejectionReason: string | null
   updatedAt: Date
-  driver: {
+  formDriver: {
     id: string
     fullName: string | null
     cedula: string
     phoneNumber: string
-    documentStatus: string
+    documentsStatus: string
   }
 }
 
@@ -49,20 +49,16 @@ interface DocumentsTableProps {
 
 const statusLabels = {
   PENDING: "Pendiente",
-  PROCESSING: "Procesando",
-  MANUAL_REVIEW: "Revisión Manual",
+  IN_REVIEW: "En Revisión",
   APPROVED: "Aprobado",
   REJECTED: "Rechazado",
-  ERROR: "Error",
 }
 
 const statusColors = {
   PENDING: "bg-blue-100 text-blue-700",
-  PROCESSING: "bg-purple-100 text-purple-700",
-  MANUAL_REVIEW: "bg-orange-100 text-orange-700",
+  IN_REVIEW: "bg-orange-100 text-orange-700",
   APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-100 text-red-700",
-  ERROR: "bg-gray-100 text-gray-700",
 }
 
 const documentTypeLabels: Record<string, string> = {
@@ -86,16 +82,16 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
 
   // Agrupar documentos por driver
   const groupedByDriver = documents.reduce((acc, doc) => {
-    const driverId = doc.driver.id
+    const driverId = doc.formDriver.id
     if (!acc[driverId]) {
       acc[driverId] = {
-        driver: doc.driver,
+        driver: doc.formDriver,
         documents: []
       }
     }
     acc[driverId].documents.push(doc)
     return acc
-  }, {} as Record<string, { driver: Document['driver'], documents: Document[] }>)
+  }, {} as Record<string, { driver: Document['formDriver'], documents: Document[] }>)
 
   const drivers = Object.values(groupedByDriver)
 
@@ -241,7 +237,7 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
                       className="px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-accent/50 border-t border-border/50"
                     >
                       <div className="col-span-4 text-sm">
-                        {documentTypeLabels[doc.type] || doc.type}
+                        {documentTypeLabels[doc.documentType] || doc.documentType}
                       </div>
                       
                       <div className="col-span-2">
@@ -251,7 +247,7 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
                       </div>
                       
                       <div className="col-span-2">
-                        {doc.confidenceScore !== null ? (
+                        {doc.confidenceScore !== null && doc.confidenceScore !== undefined ? (
                           <span className={cn(
                             "text-sm font-medium",
                             doc.confidenceScore >= 85 ? "text-green-600" :
@@ -276,9 +272,9 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
                       
                       <div className="col-span-2 flex justify-end gap-1">
                         {/* Ver en Drive */}
-                        {doc.driveUrl && (
+                        {doc.blobUrl && (
                           <a 
-                            href={doc.driveUrl} 
+                            href={doc.blobUrl} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             title="Ver en Google Drive"
@@ -293,8 +289,8 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
                           </a>
                         )}
                         
-                        {/* Aprobar/Rechazar (si está en MANUAL_REVIEW) */}
-                        {doc.status === 'MANUAL_REVIEW' && (
+                        {/* Aprobar/Rechazar (si está en IN_REVIEW) */}
+                        {doc.status === 'IN_REVIEW' && (
                           <>
                             <Button
                               variant="ghost"

@@ -8,16 +8,20 @@ import { prisma } from '@/lib/prisma'
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth()
+    console.log('🔐 User ID from auth:', userId)
     
     if (!userId) {
+      console.log('❌ No user ID found')
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
     const adminUser = await prisma.adminUser.findUnique({
       where: { clerkId: userId }
     })
+    console.log('👤 Admin user found:', adminUser ? { id: adminUser.id, email: adminUser.email, role: adminUser.role } : null)
 
     if (!adminUser) {
+      console.log('❌ Admin user not found for clerkId:', userId)
       return NextResponse.json({ error: 'Usuario admin no encontrado' }, { status: 403 })
     }
 

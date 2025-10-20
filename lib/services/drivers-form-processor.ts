@@ -1,7 +1,7 @@
 // lib/services/driver-form-processor.ts
 
 import { google } from 'googleapis';
-import { DriverStatus, ChurnSegment, OnboardingStage } from '@prisma/client';
+import { FormDriverStatus, OnboardingStatus } from '@prisma/client';
 import { differenceInDays, parse, isValid } from 'date-fns';
 import { prisma } from '@/lib/prisma';
 
@@ -494,69 +494,76 @@ export class DriverFormProcessor {
         throw new Error('Cédula y teléfono son requeridos');
       }
       
-      // Crear o actualizar el driver primero
-      const driver = await prisma.driver.upsert({
-        where: { cedula: formData.cedula },
-        update: {
-          email: formData.email ?? undefined,
-          firstName: formData.firstName ?? undefined,
-          lastName: formData.lastName ?? undefined,
-          fullName: formData.firstName && formData.lastName 
-            ? `${formData.firstName} ${formData.lastName}`
-            : undefined,
-          phoneNumber: formData.phone!,
-          birthDate: formData.birthDate ?? undefined,
-          nationality: formData.rawData.nationality ?? undefined,
-          sex: formData.rawData.sex ?? undefined,
-          // Campos de dirección
-          department: formData.rawData.department ?? undefined,
-          city: formData.city ?? undefined,
-          neighborhood: formData.rawData.neighborhood ?? undefined,
-          address: formData.rawData.address ?? undefined,
-          metadata: {
-            ...((await prisma.driver.findUnique({ where: { cedula: formData.cedula } }))?.metadata as any || {}),
-            lastFormSubmission: formData.timestamp?.toISOString(),
-            referral: formData.referral,
-            formData: formData.rawData
-          },
-          updatedAt: new Date()
-        },
-        create: {
-          cedula: formData.cedula,
-          email: formData.email,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          fullName: formData.firstName && formData.lastName 
-            ? `${formData.firstName} ${formData.lastName}`
-            : null,
-          phoneNumber: formData.phone!,
-          birthDate: formData.birthDate,
-          nationality: formData.rawData.nationality,
-          sex: formData.rawData.sex,
-          // Campos de dirección
-          department: formData.rawData.department,
-          city: formData.city,
-          neighborhood: formData.rawData.neighborhood,
-          address: formData.rawData.address,
-          status: 'PENDING',
-          churnSegment: 'NEW',
-          onboardingStage: 'DOCUMENTS_PENDING',
-          documentStatus: 'PENDING',
-          source: 'GOOGLE_FORM',
-          metadata: {
-            registrationTimestamp: formData.timestamp?.toISOString(),
-            hasSmartphone: formData.hasSmartphone,
-            internetAccess: formData.internetAccess,
-            availability: formData.availability,
-            experience: formData.experience,
-            whyDriver: formData.whyDriver,
-            referral: formData.referral,
-            comments: formData.comments,
-            formData: formData.rawData
-          },
-          registeredAt: formData.timestamp || new Date()
-        }
+      // Buscar driver existente por cédula
+      const existingDriver = await prisma.formDriver.findFirst({
+        where: { cedula: formData.cedula }
       });
+      
+      let driver;
+      if (existingDriver) {
+        // Actualizar driver existente
+        driver = await prisma.formDriver.update({
+          where: { id: existingDriver.id },
+          data: {
+            email: formData.email ?? undefined,
+            firstName: formData.firstName ?? undefined,
+            lastName: formData.lastName ?? undefined,
+            fullName: formData.firstName && formData.lastName 
+              ? `${formData.firstName} ${formData.lastName}`
+              : undefined,
+            phoneNumber: formData.phone!,
+            birthDate: formData.birthDate ?? undefined,
+            // Campos de dirección
+            department: formData.rawData.department ?? undefined,
+            city: formData.city ?? undefined,
+            neighborhood: formData.rawData.neighborhood ?? undefined,
+            address: formData.rawData.address ?? undefined,
+            metadata: {
+              ...(existingDriver.metadata as any || {}),
+              lastFormSubmission: formData.timestamp?.toISOString(),
+              referral: formData.referral,
+              formData: formData.rawData
+            },
+            updatedAt: new Date()
+          }
+        });
+      } else {
+        // Crear nuevo driver
+        driver = await prisma.formDriver.create({
+          data: {
+            cedula: formData.cedula,
+            email: formData.email,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            fullName: formData.firstName && formData.lastName 
+              ? `${formData.firstName} ${formData.lastName}`
+              : null,
+            phoneNumber: formData.phone!,
+            birthDate: formData.birthDate,
+            // Campos de dirección
+            department: formData.rawData.department,
+            city: formData.city,
+            neighborhood: formData.rawData.neighborhood,
+            address: formData.rawData.address,
+            status: 'IN_PROGRESS',
+            documentsStatus: 'INCOMPLETE',
+            onboardingStatus: null,
+            source: 'GOOGLE_FORM',
+            metadata: {
+              registrationTimestamp: formData.timestamp?.toISOString(),
+              hasSmartphone: formData.hasSmartphone,
+              internetAccess: formData.internetAccess,
+              availability: formData.availability,
+              experience: formData.experience,
+              whyDriver: formData.whyDriver,
+              referral: formData.referral,
+              comments: formData.comments,
+              formData: formData.rawData
+            },
+            startedAt: formData.timestamp || new Date()
+          }
+        });
+      }
       
       console.log(`✅ Driver ${driver.cedula} guardado/actualizado`);
       
@@ -635,21 +642,12 @@ export class DriverFormProcessor {
         console.log(`💰 Pago de equipamiento guardado`);
       }
       
-      // Registrar actividad
-      await prisma.driverActivity.create({
+      // Crear nota en lugar de actividad
+      await prisma.formNote.create({
         data: {
-          driverId: driver.id,
-          type: 'REGISTRATION',
-          description: 'Driver procesado desde Google Forms',
-          metadata: {
-            source: 'GOOGLE_FORM',
-            documentsProcessed: docResult.processed,
-            hasVehicle: !!formData.vehicleInfo,
-            hasEmergencyContact: !!(emergencyName && emergencyPhone),
-            hasFinancialServices: !!financialId,
-            hasEquipmentPayment: !!paymentId
-          },
-          performedBy: 'SYSTEM'
+          content: `Driver procesado desde Google Forms. Documentos: ${docResult.processed}, Vehículo: ${!!formData.vehicleInfo}, Contacto emergencia: ${!!(emergencyName && emergencyPhone)}, Servicios financieros: ${!!financialId}, Pago equipamiento: ${!!paymentId}`,
+          formDriverId: driver.id,
+          createdBy: 'SYSTEM'
         }
       });
       

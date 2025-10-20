@@ -243,7 +243,11 @@ export class OnBoardingAPI {
     const url = `${this.baseUrl}/onboarding/events${query ? `?${query}` : ''}`
     
     const response = await fetch(url)
-    if (!response.ok) throw new Error('Failed to fetch events')
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      const errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`
+      throw new Error(`Failed to fetch events: ${errorMessage}`)
+    }
     return response.json()
   }
 

@@ -19,50 +19,50 @@ export class DashboardStatsService {
       processedThisWeek,
     ] = await Promise.all([
       // Documentos que requieren revisión manual
-      prisma.document.count({
-        where: { status: 'MANUAL_REVIEW' }
+      prisma.formDocument.count({
+        where: { status: 'IN_REVIEW' }
       }),
       
       // Documentos pendientes de procesar con IA
-      prisma.document.count({
+      prisma.formDocument.count({
         where: { status: 'PENDING' }
       }),
       
       // Documentos rechazados
-      prisma.document.count({
+      prisma.formDocument.count({
         where: { status: 'REJECTED' }
       }),
       
       // Drivers nuevos (últimos 7 días)
-      prisma.driver.count({
+      prisma.formDriver.count({
         where: {
-          registeredAt: {
+          createdAt: {
             gte: subDays(new Date(), 7)
           }
         }
       }),
       
       // Total de drivers
-      prisma.driver.count(),
+      prisma.formDriver.count(),
       
       // Documentos aprobados esta semana
-      prisma.document.count({
+      prisma.formDocument.count({
         where: {
           status: 'APPROVED',
-          validatedAt: {
+          reviewedAt: {
             gte: subDays(new Date(), 7)
           }
         }
       }),
       
       // Total procesados esta semana
-      prisma.document.count({
+      prisma.formDocument.count({
         where: {
-          validatedAt: {
+          reviewedAt: {
             gte: subDays(new Date(), 7)
           },
           status: {
-            in: ['APPROVED', 'REJECTED', 'MANUAL_REVIEW']
+            in: ['APPROVED', 'REJECTED', 'IN_REVIEW']
           }
         }
       })
@@ -88,7 +88,7 @@ export class DashboardStatsService {
    * Obtiene drivers con documentos pendientes (para mostrar en tabla)
    */
   async getDriversWithPendingDocs(limit: number = 10) {
-    return prisma.driver.findMany({
+    return prisma.formDriver.findMany({
       where: {
         documents: {
           some: {
@@ -101,15 +101,15 @@ export class DashboardStatsService {
         fullName: true,
         cedula: true,
         phoneNumber: true,
-        documentStatus: true,
+        documentsStatus: true,
         createdAt: true,
         documents: {
           where: { status: 'PENDING' },
           select: {
             id: true,
-            type: true,
+            documentType: true,
             status: true,
-            driveUrl: true,
+            blobUrl: true,
           }
         },
         _count: {
@@ -131,11 +131,11 @@ export class DashboardStatsService {
    * Obtiene drivers con documentos en revisión manual
    */
   async getDriversWithManualReviewDocs() {
-    return prisma.driver.findMany({
+    return prisma.formDriver.findMany({
       where: {
         documents: {
           some: {
-            status: 'MANUAL_REVIEW'
+            status: 'IN_REVIEW'
           }
         }
       },
@@ -144,24 +144,23 @@ export class DashboardStatsService {
         fullName: true,
         cedula: true,
         phoneNumber: true,
-        documentStatus: true,
+        documentsStatus: true,
         updatedAt: true,
         documents: {
-          where: { status: 'MANUAL_REVIEW' },
+          where: { status: 'IN_REVIEW' },
           select: {
             id: true,
-            type: true,
+            documentType: true,
             status: true,
-            driveUrl: true,
-            confidenceScore: true,
+            blobUrl: true,
             rejectionReason: true,
-            notes: true,
+            adminNotes: true,
           }
         },
         _count: {
           select: {
             documents: {
-              where: { status: 'MANUAL_REVIEW' }
+              where: { status: 'IN_REVIEW' }
             }
           }
         }

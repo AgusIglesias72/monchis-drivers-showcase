@@ -32,11 +32,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  User,
-  MapPin,
-  Phone,
-  Mail,
-  Bike,
   FileText,
   Clock,
   MessageSquare,
@@ -44,17 +39,20 @@ import {
   Save,
   X,
   CheckCircle,
-  XCircle,
   Bot,
-  AlertCircle,
   Loader2,
   CreditCard,
   Eye,
-  Plus,
   Calendar,
 } from "lucide-react"
 import { DocumentPreview } from "@/components/admin/document-preview"
-import { ContactActions } from "@/components/admin/contact-actions"
+import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
+import { PersonalInfoCard } from "@/components/admin/personal-info-card"
+import { 
+  DocumentsStatusBadge, 
+  PaymentSection, 
+  OnboardingSection 
+} from "@/components/admin/postulacion-helpers"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
@@ -74,7 +72,6 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   
   // Filtrar documentos (excluir comprobantes de pago)
   const regularDocuments = documents.filter((doc: any) => doc.documentType !== 'PAYMENT_PROOF')
-  const paymentProofDocument = documents.find((doc: any) => doc.documentType === 'PAYMENT_PROOF')
   
   // Modal de gestión de pago
   const [showPaymentModal, setShowPaymentModal] = useState(false)
@@ -91,6 +88,15 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   
   // Preview de comprobante
   const [showProofPreview, setShowProofPreview] = useState(false)
+  
+  // Modal de agendamiento de onboarding
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  
+  // ===== VALIDACIONES PARA ONBOARDING (SIN RESTRICCIONES) =====
+  // Ahora se puede agendar independientemente del estado de docs/pagos
+  const isAlreadyScheduled = postulacion.onboardingStatus === 'SCHEDULED' || 
+                             postulacion.onboardingStatus === 'COMPLETED' ||
+                             postulacion.onboardingStatus === 'IN_PROGRESS'
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -143,14 +149,9 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
     }
   }
 
-  const handleApprove = () => {
-    console.log('Aprobando postulación')
-    toast.success('Postulación aprobada')
-  }
-
-  const handleReject = () => {
-    console.log('Rechazando postulación')
-    toast.error('Postulación rechazada')
+  const handleScheduleOnboarding = () => {
+    // Abrir modal directamente sin validaciones restrictivas
+    setShowScheduleModal(true)
   }
 
   const handleDocumentDelete = async (documentId: string) => {
@@ -310,19 +311,26 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                   </Tooltip>
                 </TooltipProvider>
 
-                <Button 
-                  variant="default" 
-                  className="gap-2 bg-green-600 hover:bg-green-700 flex-1 sm:flex-none cursor-pointer"
-                  title="Aprobar postulación"
-                  onClick={handleApprove}
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  <span className="hidden sm:inline">Aprobar</span>
-                </Button>
-                <Button variant="destructive" className="gap-2 flex-1 sm:flex-none cursor-pointer" onClick={handleReject} title="Rechazar postulación">
-                  <XCircle className="h-4 w-4" />
-                  <span className="hidden sm:inline">Rechazar</span>
-                </Button>
+                {/* Botón principal: Agendar o Ver Onboarding */}
+                {isAlreadyScheduled ? (
+                  <Button 
+                    variant="default" 
+                    className="gap-2 bg-blue-600 hover:bg-blue-700 flex-1 sm:flex-none cursor-pointer"
+                    onClick={() => router.push(`/admin/onboarding/${postulacion.id}`)}
+                  >
+                    <Calendar className="h-4 w-4" />
+                    <span className="hidden sm:inline">Ver Onboarding</span>
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="default" 
+                    className="gap-2 bg-green-600 hover:bg-green-700 flex-1 sm:flex-none cursor-pointer"
+                    onClick={handleScheduleOnboarding}
+                  >
+                    <Calendar className="h-4 w-4" />
+                    <span className="hidden sm:inline">Agendar Onboarding</span>
+                  </Button>
+                )}
               </>
             ) : (
               <>
@@ -361,179 +369,13 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
         {/* FILA 1: Info Personal (50%) + Documentos (50%) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
           
-          {/* Información Personal COMPLETA */}
-          <Card>
-            <CardHeader className="pb-3 border-b">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
-                  <User className="h-4 w-4" />
-                  Información Personal
-                </CardTitle>
-                <ContactActions 
-                  phoneNumber={postulacion.phoneNumber}
-                  email={postulacion.email}
-                  name={postulacion.fullName}
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Datos Básicos */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3">            
-                <EditableField 
-                  label="Fecha de Nacimiento" 
-                  value={editedData.birthDate} 
-                  isEditing={isEditing} 
-                  onChange={(v) => setEditedData({...editedData, birthDate: v})} 
-                />
-                <EditableField 
-                  label="Teléfono" 
-                  value={editedData.phoneNumber} 
-                  icon={<Phone className="h-3 w-3" />} 
-                  isEditing={isEditing} 
-                  onChange={(v) => setEditedData({...editedData, phoneNumber: v})} 
-                />
-                <EditableField 
-                  label="Email" 
-                  value={editedData.email} 
-                  icon={<Mail className="h-3 w-3" />} 
-                  isEditing={isEditing} 
-                  onChange={(v) => setEditedData({...editedData, email: v})} 
-                />
-              </div>
-
-              {/* Ubicación */}
-              <div className="border-t pt-3">
-                <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-2">
-                  <MapPin className="h-3 w-3" />
-                  UBICACIÓN
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3 pt-2">
-                  <EditableField 
-                    label="Departamento" 
-                    value={editedData.department} 
-                    isEditing={isEditing} 
-                    onChange={(v) => setEditedData({...editedData, department: v})} 
-                  />
-                  <EditableField 
-                    label="Ciudad" 
-                    value={editedData.city} 
-                    isEditing={isEditing} 
-                    onChange={(v) => setEditedData({...editedData, city: v})} 
-                  />
-                  <EditableField 
-                    label="Dirección" 
-                    value={editedData.address} 
-                    isEditing={isEditing} 
-                    onChange={(v) => setEditedData({...editedData, address: v})} 
-                  />
-                </div>
-              </div>
-
-              {/* Contacto de Emergencia */}
-              {postulacion.emergencyName && (
-                <div className="border-t pt-3">
-                  <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-2">
-                    <AlertCircle className="h-3 w-3" />
-                    CONTACTO DE EMERGENCIA
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3 pt-2">
-                    <EditableField 
-                      label="Nombre" 
-                      value={editedData.emergencyName} 
-                      isEditing={isEditing} 
-                      onChange={(v) => setEditedData({...editedData, emergencyName: v})} 
-                    />
-                    <EditableField 
-                      label="Relación" 
-                      value={editedData.emergencyRelationship} 
-                      isEditing={isEditing} 
-                      onChange={(v) => setEditedData({...editedData, emergencyRelationship: v})} 
-                    />
-                    <EditableField 
-                      label="Teléfono" 
-                      value={editedData.emergencyPhone} 
-                      icon={<Phone className="h-3 w-3" />} 
-                      isEditing={isEditing} 
-                      onChange={(v) => setEditedData({...editedData, emergencyPhone: v})} 
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Zonas y Referencia */}
-              <div className="border-t pt-3">
-                <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-2">
-                  <Bike className="h-3 w-3" />
-                  TRABAJO
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 pt-2 pb-2">
-                  <div className="space-y-2">
-                    <span className="text-xs text-muted-foreground block mb-1.5">Zonas de Trabajo</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {editedData.workZone?.split(',').map((zone: string, i: number) => (
-                        <Badge key={i} variant="secondary" className="text-xs py-0 px-2">
-                          {zone}
-                        </Badge>
-                      ))}
-                    </div>
-                    <InfoField label="¿Cómo se enteró?" value={postulacion.howHeardAboutUs} />
-                    {postulacion.referredBy && (
-                      <InfoField label="Referido por" value={postulacion.referredBy} />
-                    )}
-                  </div>
-                  {editedData.hasVehicle && (
-                  <div className="">
-                    <span className="text-xs text-muted-foreground block mb-2">Vehículo</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 pt-2">
-                      <InfoField label="Marca" value={editedData.vehicleBrand} />
-                      <InfoField label="Modelo" value={editedData.vehicleModel} />
-                      <InfoField label="Año" value={editedData.vehicleYear} />
-                      <InfoField label="Placa" value={editedData.vehiclePlate} />
-                    </div>
-                  </div>
-                )}
-                </div>
-
-
-
-                {/* Disponibilidad */}
-                <div className="pt-2 border-t">
-                  <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-2">
-                    <Calendar className="h-3 w-3" />
-                    DISPONIBILIDAD
-                  </span>
-                  <div className="grid grid-cols-3 gap-3">
-                    <InfoField label="Experiencia" value={postulacion.experience} />
-                    <InfoField label="Horarios" value={postulacion.availability?.join(', ')} />
-                    <InfoField label="Puede empezar" value={postulacion.whenCanStart} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Servicios Financieros - Movido de Info Personal */}
-              <div className="border-t pt-3">
-                <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-2">
-                  <CreditCard className="h-3 w-3" />
-                  SERVICIOS FINANCIEROS
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-x-6 gap-y-3 pt-2">
-                  <InfoField label="Cuenta Ueno" value={postulacion.hasUenoAccount === 'si' ? 'Sí' : 'No'} />
-                  {postulacion.hasUenoAccount === 'si' && postulacion.uenoAccountNumber && (
-                  <div className="">
-                    <InfoField label="Nro. Cuenta Ueno" value={postulacion.uenoAccountNumber} />
-                  </div>
-                )}
-                  <InfoField label="Puede facturar" value={postulacion.canInvoice === 'si' ? 'Sí' : 'No'} />
-                  {postulacion.financialService?.interestedInConto && (
-                  <div className="">
-                    <InfoField label="Interés en Conto" value="Interesado" />
-                  </div>
-                )}
-                </div>
-               
-              </div>
-            </CardContent>
-          </Card>
+          {/* Información Personal */}
+          <PersonalInfoCard 
+            postulacion={postulacion}
+            editedData={editedData}
+            isEditing={isEditing}
+            setEditedData={setEditedData}
+          />
 
           {/* Documentos */}
           <Card>
@@ -570,7 +412,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                 Notas Internas
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 pt-4 jus">
+            <CardContent className="space-y-3 pt-4">
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {notes.map((note: any) => (
                   <div key={note.id} className="bg-muted/50 rounded-lg p-2.5">
@@ -716,6 +558,19 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
         </Card>
       </div>
       
+      {/* Modal de agendamiento de onboarding */}
+      <ScheduleOnboardingModal
+        open={showScheduleModal}
+        onOpenChange={setShowScheduleModal}
+        driverId={postulacion.id}
+        driverName={postulacion.fullName}
+        onSuccess={() => {
+          toast.success('Onboarding agendado exitosamente')
+          router.refresh()
+          router.push(`/admin/onboarding/${postulacion.id}`)
+        }}
+      />
+      
       {/* Modal de Gestión de Pago */}
       <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
         <DialogContent className="max-w-2xl">
@@ -860,228 +715,6 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  )
-}
-
-// ==================== COMPONENTES AUXILIARES ====================
-
-function StatusBadge({ status }: { status: string }) {
-  const config = {
-    COMPLETED: { label: 'Completada', className: 'bg-green-100 text-green-800 hover:bg-green-100' },
-    IN_PROGRESS: { label: 'En Progreso', className: 'bg-amber-100 text-amber-800 hover:bg-amber-100' },
-    ABANDONED: { label: 'Abandonada', className: 'bg-red-100 text-red-800 hover:bg-red-100' },
-  }
-  const { label, className } = config[status as keyof typeof config] || config.IN_PROGRESS
-  return <Badge className={className}>{label}</Badge>
-}
-
-function DocumentsStatusBadge({ status }: { status: string }) {
-  const config = {
-    INCOMPLETE: { label: 'Incompleto', className: 'bg-gray-100 text-gray-800 border-gray-200' },
-    PENDING: { label: 'Pendiente Revisión', className: 'bg-amber-100 text-amber-800 border-amber-200' },
-    IN_REVIEW: { label: 'En Revisión', className: 'bg-blue-100 text-blue-800 border-blue-200' },
-    CORRECTIONS: { label: 'Requiere Correcciones', className: 'bg-red-100 text-red-800 border-red-200' },
-    APPROVED: { label: 'Aprobado', className: 'bg-green-100 text-green-800 border-green-200' },
-  }
-  const { label, className } = config[status as keyof typeof config] || config.INCOMPLETE
-  return <Badge variant="outline" className={className}>{label}</Badge>
-}
-
-function EditableField({ 
-  label, 
-  value, 
-  icon, 
-  isEditing, 
-  onChange,
-  className = ""
-}: { 
-  label: string; 
-  value: any; 
-  icon?: React.ReactNode; 
-  isEditing: boolean; 
-  onChange: (value: string) => void; 
-  className?: string 
-}) {
-  const displayValue = label === "Fecha de Nacimiento" && value && !isEditing ? value : value;
-
-  return (
-    <div className={className}>
-      <Label className="text-xs text-muted-foreground mb-1">{label}</Label>
-      {isEditing ? (
-        <Input 
-          type="text" 
-          value={value || ''} 
-          onChange={(e) => onChange(e.target.value)} 
-          className="h-8 text-xs"
-          placeholder={label === "Fecha de Nacimiento" ? "dd/mm/yyyy" : ""}
-        />
-      ) : (
-        <div className="flex items-center gap-1.5 min-h-[32px]">
-          {icon}
-          <span className="text-xs font-medium">{displayValue || '-'}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function InfoField({ label, value }: { label: string; value: any }) {
-  return (
-    <div>
-      <label className="text-xs text-muted-foreground block mb-0.5">{label}</label>
-      <span className="font-medium text-xs">{value || '-'}</span>
-    </div>
-  )
-}
-
-function PaymentSection({ payment, postulacionId, onManage, onViewProof }: { 
-  payment: any; 
-  postulacionId: string;
-  onManage: () => void;
-  onViewProof: () => void;
-}) {
-  if (!payment) {
-    return (
-      <div className="text-center py-4">
-        <p className="text-xs text-muted-foreground italic mb-3">Sin información de pago registrada</p>
-        <Button size="sm" variant="outline" className="w-full" onClick={onManage}>
-          <Plus className="h-4 w-4 mr-2" />
-          Registrar Pago
-        </Button>
-      </div>
-    )
-  }
-
-  const getPaymentStatusBadge = (status: string) => {
-    const config = {
-      VERIFIED: { label: 'Verificado', variant: 'default' as const },
-      PENDING: { label: 'Pendiente', variant: 'secondary' as const },
-      REJECTED: { label: 'Rechazado', variant: 'destructive' as const },
-      PARTIAL: { label: 'Parcial', variant: 'secondary' as const },
-    }
-    const { label, variant} = config[status as keyof typeof config] || config.PENDING
-    return <Badge variant={variant} className="text-xs">{label}</Badge>
-  }
-
-  return (
-    <div className="space-y-3 text-sm">
-      <div className="grid grid-cols-2 gap-3">
-        <InfoField label="Método" value={payment.paymentMethod || 'Sin especificar'} />
-        <div>
-          <label className="text-xs text-muted-foreground block mb-0.5">Estado</label>
-          {getPaymentStatusBadge(payment.status)}
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-2 gap-3">
-        {payment.amount && (
-          <InfoField label="Monto" value={`${payment.amount.toLocaleString('es-PY')} Gs`} />
-        )}
-        {payment.paymentNumber && (
-          <InfoField label="Nro. Comprobante" value={payment.paymentNumber} />
-        )}
-      </div>
-      
-      {payment.invoiceNumber ? (
-        <InfoField label="Nro. Factura" value={payment.invoiceNumber} />
-      ) : (
-        <div>
-          <label className="text-xs text-muted-foreground block mb-0.5">Nro. Factura</label>
-          <Badge variant="outline" className="text-xs">Pendiente</Badge>
-        </div>
-      )}
-      
-      {/* Comprobante de Pago */}
-      {payment.paymentProofUrl && (
-        <div className="pt-2 border-t">
-          <Button size="sm" variant="outline" className="w-full" onClick={onViewProof}>
-            <Eye className="h-4 w-4 mr-2" />
-            Ver Comprobante
-          </Button>
-        </div>
-      )}
-      
-      {/* Notas administrativas si existen */}
-      {payment.adminNotes && (
-        <div className="pt-2 border-t">
-          <label className="text-xs text-muted-foreground block mb-1">Notas Admin</label>
-          <p className="text-xs bg-muted/50 p-2 rounded">{payment.adminNotes}</p>
-        </div>
-      )}
-      
-      {/* Razón de rechazo si existe */}
-      {payment.rejectionReason && (
-        <div className="pt-2 border-t">
-          <label className="text-xs text-muted-foreground block mb-1">Razón de Rechazo</label>
-          <p className="text-xs text-red-600 bg-red-50 p-2 rounded">{payment.rejectionReason}</p>
-        </div>
-      )}
-      
-      <Button size="sm" className="w-full mt-2" onClick={onManage}>
-        <Edit className="h-4 w-4 mr-2" />
-        Gestionar Pago
-      </Button>
-    </div>
-  )
-}
-
-function OnboardingSection({ attendance, status, postulacionId }: { attendance: any; status: string; postulacionId: string }) {
-  const getOnboardingStatusBadge = (status: string) => {
-    const config = {
-      ATTENDED: { label: 'Asistió', variant: 'default' as const },
-      CONFIRMED: { label: 'Confirmado', variant: 'secondary' as const },
-      INVITED: { label: 'Invitado', variant: 'outline' as const },
-      NO_SHOW: { label: 'No Asistió', variant: 'destructive' as const },
-      CANCELLED: { label: 'Cancelado', variant: 'destructive' as const },
-      RESCHEDULED: { label: 'Reagendado', variant: 'secondary' as const },
-      // Estados del FormDriver
-      NOT_READY: { label: 'No Listo', variant: 'destructive' as const },
-      READY: { label: 'Listo', variant: 'outline' as const },
-      SCHEDULED: { label: 'Agendado', variant: 'secondary' as const },
-      COMPLETED: { label: 'Completado', variant: 'default' as const },
-      IN_PROGRESS: { label: 'En Curso', variant: 'secondary' as const },
-    }
-    const { label, variant } = config[status as keyof typeof config] || { label: 'N/A', variant: 'outline' as const }
-    return <Badge variant={variant} className="text-xs">{label}</Badge>
-  }
-
-  return (
-    <div className="space-y-3 text-sm">
-      <div>
-        <label className="text-xs text-muted-foreground block mb-1">Estado</label>
-        {getOnboardingStatusBadge(attendance?.status || status || 'NOT_READY')}
-      </div>
-      {attendance?.event ? (
-        <>
-          <InfoField 
-            label="Fecha" 
-            value={new Date(attendance.event.scheduledDate).toLocaleDateString('es-PY')} 
-          />
-          {attendance.event.location && (
-            <InfoField label="Ubicación" value={attendance.event.location} />
-          )}
-          {attendance.event.startTime && (
-            <InfoField label="Hora" value={attendance.event.startTime} />
-          )}
-          {attendance.event.title && (
-            <div className="pt-2 border-t">
-              <InfoField label="Evento" value={attendance.event.title} />
-            </div>
-          )}
-          {attendance.attendeeNotes && (
-            <div className="pt-2 border-t">
-              <InfoField label="Notas" value={attendance.attendeeNotes} />
-            </div>
-          )}
-        </>
-      ) : (
-        <p className="text-xs text-muted-foreground italic">No agendado</p>
-      )}
-      <Button size="sm" variant="outline" className="w-full mt-2">
-        <Calendar className="h-4 w-4 mr-2" />
-        {attendance ? 'Reagendar' : 'Agendar'} Capacitación
-      </Button>
     </div>
   )
 }

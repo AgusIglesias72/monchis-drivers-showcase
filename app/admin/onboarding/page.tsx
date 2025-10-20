@@ -432,7 +432,7 @@ export default function OnBoardingPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar evento?</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Estás seguro de que deseas eliminar el evento "{eventToDelete?.title}"?
+              ¿Estás seguro de que deseas eliminar el evento &quot;{eventToDelete?.title}&quot;?
               Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -1,22 +1,23 @@
 // app/api/postulaciones/documents/[id]/delete/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@clerk/nextjs/server';
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
     const { id } = await params;
 
-    // Soft delete
-    const deletedDoc = await prisma.formDocument.update({
+    // Eliminación hard delete acorde al esquema actual
+    const deletedDoc = await prisma.formDocument.delete({
       where: { id },
-      data: {
-        isDeleted: true,
-        deletedAt: new Date(),
-        deletedBy: 'Admin User', // TODO: Obtener del usuario actual
-      }
     });
 
     return NextResponse.json({
