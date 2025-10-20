@@ -636,6 +636,7 @@ enum OnboardingAttendeeStatus {
   INVITED     // Invitado
   CONFIRMED   // Confirmó asistencia
   ATTENDED    // Asistió
+  SCHEDULED   // Agendado
   NO_SHOW     // No se presentó
   CANCELLED   // Canceló
   RESCHEDULED // Reagendado

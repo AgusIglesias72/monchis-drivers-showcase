@@ -570,13 +570,13 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                 Notas Internas
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 pt-4">
+            <CardContent className="space-y-3 pt-4 jus">
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {notes.map((note: any) => (
                   <div key={note.id} className="bg-muted/50 rounded-lg p-2.5">
                     <p className="text-xs">{note.content}</p>
                     <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-                      <span>{note.createdBy}</span>
+                      <span>{note.createdByUser?.firstName || note.createdByUser?.fullName || note.createdByUser?.email || 'Admin'}</span>
                       <span>•</span>
                       <span>{new Date(note.createdAt).toLocaleString('es-PY')}</span>
                     </div>

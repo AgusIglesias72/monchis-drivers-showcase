@@ -12,6 +12,15 @@ async function getPostulacion(id: string) {
         notes: {
           orderBy: {
             createdAt: 'desc'
+          },
+          include: {
+            createdByUser: {
+              select: {
+                firstName: true,
+                fullName: true,
+                email: true,
+              }
+            }
           }
         },
         documents: {
