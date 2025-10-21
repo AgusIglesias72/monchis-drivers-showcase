@@ -1,35 +1,24 @@
 // app/admin/page.tsx
 
-import { postulacionesStatsService } from "@/lib/services/postulaciones-stats.service"
-import { DashboardPostulaciones } from "@/components/admin/dashboard-postulaciones"
+import { dashboardService } from "@/lib/services/dashboard.service"
+import { DashboardContent } from "@/components/admin/dashboard-content"
 
-export const revalidate = 30 // Revalidar cada 30 segundos
+export const revalidate = 60 // Revalidar cada minuto
 
 export default async function AdminDashboard() {
-  const [
-    stats,
-    funnelData,
-    visitasPorDia,
-    completadosPorDia,
-    abandonoPorStep,
-    edadesPorRango
-  ] = await Promise.all([
-    postulacionesStatsService.getStats(),
-    postulacionesStatsService.getFunnelData(),
-    postulacionesStatsService.getVisitasPorDia(),
-    postulacionesStatsService.getCompletadosPorDia(),
-    postulacionesStatsService.getAbandonoPorStep(),
-    postulacionesStatsService.getEdadesPorRango()
-  ])
+  // Obtener todas las stats en paralelo
+  const allStats = await dashboardService.getAllStats()
   
   return (
-    <DashboardPostulaciones
-      stats={stats}
-      funnelData={funnelData}
-      visitasPorDia={visitasPorDia}
-      completadosPorDia={completadosPorDia}
-      abandonoPorStep={abandonoPorStep}
-      edadesPorRango={edadesPorRango}
+    <DashboardContent
+      mainStats={allStats.mainStats}
+      postulacionesStats={allStats.postulacionesStats}
+      funnelData={allStats.funnelData}
+      visitasPorDia={allStats.visitasPorDia}
+      completadosPorDia={allStats.completadosPorDia}
+      abandonoPorStep={allStats.abandonoPorStep}
+      edadesPorRango={allStats.edadesPorRango}
+      onboardingStats={allStats.onboardingStats}
     />
   )
 }

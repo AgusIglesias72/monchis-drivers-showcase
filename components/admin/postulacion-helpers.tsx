@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Calendar, CreditCard, Edit, Eye, Phone, Plus } from "lucide-react"
+import { Calendar, Clock, Eye, Plus, MapPin, Edit } from "lucide-react"
 
 // ==================== BADGES ====================
 
@@ -168,69 +168,118 @@ export function PaymentSection({
 
 export function OnboardingSection({ 
   attendance, 
-  status, 
-  postulacionId 
+  status,
+  postulacionId,
+  onSchedule, // 🆕 Nueva prop
 }: { 
-  attendance: any; 
-  status: string; 
-  postulacionId: string 
+  attendance?: any
+  status?: string
+  postulacionId: string
+  onSchedule?: () => void // 🆕 Callback para abrir modal
 }) {
-  const getOnboardingStatusBadge = (status: string) => {
-    const config = {
-      ATTENDED: { label: 'Asistió', variant: 'default' as const },
-      CONFIRMED: { label: 'Confirmado', variant: 'secondary' as const },
-      INVITED: { label: 'Invitado', variant: 'outline' as const },
-      NO_SHOW: { label: 'No Asistió', variant: 'destructive' as const },
-      CANCELLED: { label: 'Cancelado', variant: 'destructive' as const },
-      RESCHEDULED: { label: 'Reagendado', variant: 'secondary' as const },
-      NOT_READY: { label: 'No Listo', variant: 'destructive' as const },
-      READY: { label: 'Listo', variant: 'outline' as const },
-      SCHEDULED: { label: 'Agendado', variant: 'secondary' as const },
-      COMPLETED: { label: 'Completado', variant: 'default' as const },
-      IN_PROGRESS: { label: 'En Curso', variant: 'secondary' as const },
-    }
-    const { label, variant } = config[status as keyof typeof config] || { label: 'N/A', variant: 'outline' as const }
-    return <Badge variant={variant} className="text-xs">{label}</Badge>
-  }
-
-  return (
-    <div className="space-y-3 text-sm">
-      <div>
-        <label className="text-xs text-muted-foreground block mb-1">Estado</label>
-        {getOnboardingStatusBadge(attendance?.status || status || 'NOT_READY')}
-      </div>
-      {attendance?.event ? (
-        <>
-          <InfoField 
-            label="Fecha" 
-            value={new Date(attendance.event.scheduledDate).toLocaleDateString('es-PY')} 
-          />
-          {attendance.event.location && (
-            <InfoField label="Ubicación" value={attendance.event.location} />
-          )}
+  if (attendance) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Estado</span>
+          <OnboardingStatusBadge status={attendance.status} />
+        </div>
+        
+        <div className="space-y-2 text-xs">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Calendar className="h-3.5 w-3.5" />
+            <span>
+              {new Date(attendance.event.scheduledDate).toLocaleDateString('es-PY', {
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric'
+              })}
+            </span>
+          </div>
+          
           {attendance.event.startTime && (
-            <InfoField label="Hora" value={attendance.event.startTime} />
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              <span>{attendance.event.startTime}</span>
+            </div>
           )}
+          
+          {attendance.event.location && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5" />
+              <span className="line-clamp-2">{attendance.event.location}</span>
+            </div>
+          )}
+          
           {attendance.event.title && (
             <div className="pt-2 border-t">
-              <InfoField label="Evento" value={attendance.event.title} />
+              <span className="text-xs font-medium block mb-1">Evento</span>
+              <span className="text-xs text-muted-foreground">{attendance.event.title}</span>
             </div>
           )}
-          {attendance.attendeeNotes && (
-            <div className="pt-2 border-t">
-              <InfoField label="Notas" value={attendance.attendeeNotes} />
-            </div>
-          )}
-        </>
-      ) : (
-        <p className="text-xs text-muted-foreground italic">No agendado</p>
-      )}
-      <Button size="sm" variant="outline" className="w-full mt-2">
-        <Calendar className="h-4 w-4 mr-2" />
-        {attendance ? 'Reagendar' : 'Agendar'} Capacitación
-      </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // 🆕 Si no tiene attendance pero puede agendar
+  const canSchedule = !status || ['NOT_READY', 'READY'].includes(status)
+  
+  if (canSchedule && onSchedule) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Estado</span>
+          <OnboardingStatusBadge status={status || 'NOT_READY'} />
+        </div>
+        
+        <Button 
+          onClick={onSchedule}
+          className="w-full gap-2 cursor-pointer bg-green-600 hover:bg-green-700"
+          size="sm"
+        >
+          <Calendar className="h-4 w-4" />
+          Agendar Capacitación
+        </Button>
+        
+        <p className="text-xs text-muted-foreground text-center">
+          No hay onboarding agendado
+        </p>
+      </div>
+    )
+  }
+
+  // Estado por defecto
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">Estado</span>
+        <OnboardingStatusBadge status={status || 'NOT_READY'} />
+      </div>
+      
+      <p className="text-xs text-muted-foreground text-center py-4">
+        No hay onboarding agendado
+      </p>
     </div>
   )
+}
+
+// Badge helper
+function OnboardingStatusBadge({ status }: { status: string }) {
+  const config = {
+    COMPLETED: { label: 'Completado', variant: 'default' as const },
+    ATTENDED: { label: 'Asistió', variant: 'default' as const },
+    SCHEDULED: { label: 'Agendado', variant: 'secondary' as const },
+    CONFIRMED: { label: 'Confirmado', variant: 'secondary' as const },
+    INVITED: { label: 'Invitado', variant: 'outline' as const },
+    IN_PROGRESS: { label: 'En Proceso', variant: 'outline' as const },
+    NOT_READY: { label: 'No Listo', variant: 'destructive' as const },
+    READY: { label: 'Listo', variant: 'outline' as const },
+    NO_SHOW: { label: 'No Asistió', variant: 'destructive' as const },
+    CANCELLED: { label: 'Cancelado', variant: 'destructive' as const },
+  }
+  const { label, variant } = config[status as keyof typeof config] || { label: 'N/A', variant: 'outline' as const }
+  return <Badge variant={variant} className="text-xs">{label}</Badge>
 }
 
 // ==================== FUNCIONES AUXILIARES ====================
