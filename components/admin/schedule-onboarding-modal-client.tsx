@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, Calendar, MapPin, Clock, Users, CheckCircle2 } from "lucide-react"
+import { Loader2, Calendar, MapPin, Clock, Users, Check } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { assignDriverToOnboardingEvent } from "@/lib/actions/onboarding.actions"
@@ -86,22 +86,28 @@ export function ScheduleOnboardingModalClient({
 
   const formatDate = (date: Date) => {
     const d = new Date(date)
-    const day = d.getDate().toString().padStart(2, '0')
-    const month = (d.getMonth() + 1).toString().padStart(2, '0')
-    return `${day}/${month}`
+    return d.toLocaleDateString('es-PY', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    })
   }
 
-  const formatTime = (time: string) => {
-    const [hours, minutes] = time.split(':')
-    const hour = parseInt(hours)
-    const ampm = hour >= 12 ? 'p.m.' : 'a.m.'
-    const hour12 = hour % 12 || 12
-    return `${hour12}:${minutes} ${ampm}`
+  const formatTime = (time: string, endTime?: string | null) => {
+    const format = (t: string) => {
+      const [hours, minutes] = t.split(':')
+      return `${hours}:${minutes}`
+    }
+    
+    if (endTime) {
+      return `${format(time)} - ${format(endTime)}`
+    }
+    return format(time)
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Agendar Onboarding</DialogTitle>
           <DialogDescription>
@@ -110,7 +116,7 @@ export function ScheduleOnboardingModalClient({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Tabla de eventos */}
+          {/* Lista de eventos */}
           <div className="space-y-2">
             <Label>Selecciona un evento</Label>
             
@@ -125,93 +131,85 @@ export function ScheduleOnboardingModalClient({
                 </p>
               </div>
             ) : (
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-muted/50">
-                    <tr className="text-xs font-medium text-muted-foreground">
-                      <th className="text-left p-3 w-12"></th>
-                      <th className="text-left p-3">Título</th>
-                      <th className="text-left p-3">Fecha</th>
-                      <th className="text-left p-3">Hora</th>
-                      <th className="text-left p-3">Ubicación</th>
-                      <th className="text-right p-3">Cupos</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {events.map((event) => {
-                      const isSelected = selectedEventId === event.id
-                      const occupiedSlots = event.currentCapacity || 0
-                      const totalSlots = event.maxCapacity || '∞'
-                      const availableSlots = event.availableSlots !== null ? event.availableSlots : '∞'
-                      
-                      return (
-                        <tr
-                          key={event.id}
-                          onClick={() => setSelectedEventId(event.id)}
-                          className={cn(
-                            "cursor-pointer transition-colors border-b last:border-b-0",
-                            isSelected 
-                              ? "bg-primary/5 hover:bg-primary/10" 
-                              : "hover:bg-muted/50"
-                          )}
-                        >
-                          <td className="p-3">
-                            <div className={cn(
-                              "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
-                              isSelected 
-                                ? "border-primary bg-primary" 
-                                : "border-muted-foreground/30"
-                            )}>
-                              {isSelected && (
-                                <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            <span className="font-medium text-sm">
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {events.map((event) => {
+                  const isSelected = selectedEventId === event.id
+                  const occupiedSlots = event.currentCapacity || 0
+                  const totalSlots = event.maxCapacity || null
+                  const availableSlots = event.availableSlots
+                  const isFull = event.hasCapacity === false
+                  
+                  return (
+                    <div
+                      key={event.id}
+                      onClick={() => !isFull && setSelectedEventId(event.id)}
+                      className={cn(
+                        "relative border rounded-lg p-4 transition-all cursor-pointer",
+                        isFull && "opacity-50 cursor-not-allowed",
+                        isSelected 
+                          ? "border-primary bg-primary/5 shadow-sm" 
+                          : "border-border hover:border-primary/50 hover:bg-muted/50"
+                      )}
+                    >
+                      {/* Checkmark para seleccionado */}
+                      {isSelected && (
+                        <div className="absolute top-3 right-3">
+                          <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                            <Check className="h-4 w-4 text-primary-foreground" />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-2 pr-8">
+                        {/* Título y fecha */}
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-sm mb-1 truncate">
                               {event.title || 'Evento de Onboarding'}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-muted-foreground" />
-                              <span className="font-medium">{formatDate(event.scheduledDate)}</span>
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-muted-foreground" />
-                              <span>{formatTime(event.startTime)}</span>
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            {event.location ? (
-                              <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4 text-muted-foreground" />
-                                <span className="truncate max-w-[200px]">{event.location}</span>
+                            </h4>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="h-3.5 w-3.5" />
+                                <span>{formatDate(event.scheduledDate)}</span>
                               </div>
-                            ) : (
-                              <span className="text-xs text-muted-foreground italic">Sin ubicación</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                              <span className="font-medium">
-                                {occupiedSlots} / {totalSlots}
-                              </span>
-                              {availableSlots !== '∞' && (
-                                <span className="text-xs text-green-600 ml-1">
-                                  ({availableSlots} {availableSlots === 1 ? 'libre' : 'libres'})
-                                </span>
-                              )}
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="h-3.5 w-3.5" />
+                                <span>{formatTime(event.startTime, event.endTime)}</span>
+                              </div>
                             </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                          </div>
+                        </div>
+
+                        {/* Ubicación y cupos */}
+                        <div className="flex items-center gap-4 text-xs">
+                          {event.location && (
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <MapPin className="h-3.5 w-3.5" />
+                              <span className="truncate">{event.location}</span>
+                            </div>
+                          )}
+                          
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="font-medium">
+                              {occupiedSlots}{totalSlots ? ` / ${totalSlots}` : ''}
+                            </span>
+                            {availableSlots !== null && availableSlots > 0 && (
+                              <span className="text-green-600 ml-1">
+                                ({availableSlots} {availableSlots === 1 ? 'libre' : 'libres'})
+                              </span>
+                            )}
+                            {isFull && (
+                              <span className="text-red-600 ml-1 font-medium">
+                                (Lleno)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -235,12 +233,14 @@ export function ScheduleOnboardingModalClient({
             variant="outline" 
             onClick={() => handleOpenChange(false)} 
             disabled={isPending}
+            className="cursor-pointer"
           >
             Cancelar
           </Button>
           <Button 
             onClick={handleSchedule} 
             disabled={!selectedEventId || isPending || events.length === 0}
+            className="cursor-pointer"
           >
             {isPending ? (
               <>

@@ -34,10 +34,12 @@ import {
   Ban,
   MoreVertical,
   Eye,
-  FileText,
-  CreditCard,
   Loader2,
   AlertTriangle,
+  Clock,
+  Check,
+  X,
+  CircleDashed,
 } from 'lucide-react'
 import { checkInAttendee, markAttendeeNoShow, cancelAttendee, confirmAttendee } from '@/lib/actions/onboarding.actions'
 import { toast } from 'sonner'
@@ -96,7 +98,7 @@ export function AttendeesManagementSection({
     setLoading(attendeeId)
     const result = await cancelAttendee(attendeeId)
     if (result.success) {
-      toast.success('Cancelado')
+      toast.success('Asistencia cancelada')
       onRefresh()
     } else {
       toast.error(result.error || 'Error')
@@ -117,6 +119,23 @@ export function AttendeesManagementSection({
     return <Badge variant="outline" className={className}>{label}</Badge>
   }
 
+  // Nuevo: Ícono visual para el estado de asistencia
+  const getAttendanceIcon = (status: string) => {
+    switch (status) {
+      case 'ATTENDED':
+        return <Check className="h-5 w-5 text-green-600" />
+      case 'NO_SHOW':
+        return <X className="h-5 w-5 text-red-600" />
+      case 'CONFIRMED':
+        return <CheckCircle className="h-5 w-5 text-blue-600" />
+      case 'CANCELLED':
+        return <Ban className="h-5 w-5 text-orange-600" />
+      case 'INVITED':
+      default:
+        return <CircleDashed className="h-5 w-5 text-gray-400" />
+    }
+  }
+
   const getDocsStatusBadge = (status: string) => {
     if (status === 'APPROVED') {
       return (
@@ -129,6 +148,41 @@ export function AttendeesManagementSection({
     return (
       <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs gap-1">
         <AlertTriangle className="h-3 w-3" />
+        Pendiente
+      </Badge>
+    )
+  }
+
+  const getPaymentBadge = (driver: any) => {
+    const hasPayment = driver.equipmentPayments?.length > 0
+    const payment = driver.equipmentPayments?.[0]
+    
+    if (!hasPayment) {
+      return (
+        <Badge variant="outline" className="text-xs bg-gray-50 text-gray-700 border-gray-200">
+          Sin pago
+        </Badge>
+      )
+    }
+
+    if (payment.status === 'VERIFIED') {
+      return (
+        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+          Verificado
+        </Badge>
+      )
+    }
+
+    if (payment.status === 'REJECTED') {
+      return (
+        <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
+          Rechazado
+        </Badge>
+      )
+    }
+
+    return (
+      <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
         Pendiente
       </Badge>
     )
@@ -158,6 +212,7 @@ export function AttendeesManagementSection({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12 text-center">Asistencia</TableHead>
                 <TableHead>Driver</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Docs</TableHead>
@@ -168,6 +223,13 @@ export function AttendeesManagementSection({
             <TableBody>
               {attendees.map((attendee) => (
                 <TableRow key={attendee.id}>
+                  {/* Columna de asistencia con ícono visual */}
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-center">
+                      {getAttendanceIcon(attendee.status)}
+                    </div>
+                  </TableCell>
+
                   <TableCell>
                     <div>
                       <div className="font-medium">
@@ -178,73 +240,92 @@ export function AttendeesManagementSection({
                       </div>
                     </div>
                   </TableCell>
+
                   <TableCell>{getStatusBadge(attendee.status)}</TableCell>
+
                   <TableCell>
                     {getDocsStatusBadge(attendee.formDriver.documentsStatus)}
                   </TableCell>
+
                   <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {attendee.formDriver.equipmentPayments?.length > 0
-                        ? 'Registrado'
-                        : 'Sin pago'}
-                    </Badge>
+                    {getPaymentBadge(attendee.formDriver)}
                   </TableCell>
+
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+                    <div className="flex items-center justify-end gap-2">
+                      {/* Botón de Cancelar Asistencia - Fuera del menú */}
+                      {attendee.status !== 'CANCELLED' && attendee.status !== 'ATTENDED' && (
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 cursor-pointer"
+                          onClick={() => handleCancel(attendee.id)}
                           disabled={loading === attendee.id}
                         >
-                          {loading === attendee.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <MoreVertical className="h-4 w-4" />
-                          )}
+                          <Ban className="h-4 w-4 mr-1" />
+                          Cancelar
                         </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => router.push(`/admin/postulaciones/${attendee.formDriverId}`)}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Ver Postulación
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {(attendee.status === 'INVITED' || attendee.status === 'CONFIRMED') && (
-                          <DropdownMenuItem onClick={() => handleCheckIn(attendee.id)}>
-                            <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
-                            Marcar Asistencia
+                      )}
+
+                      {/* Menú de acciones adicionales */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 cursor-pointer"
+                            disabled={loading === attendee.id}
+                          >
+                            {loading === attendee.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <MoreVertical className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={() => router.push(`/admin/postulaciones/${attendee.formDriver.id}`)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Ver Postulación
                           </DropdownMenuItem>
-                        )}
-                        {(attendee.status === 'INVITED' || attendee.status === 'CONFIRMED') && (
-                          <DropdownMenuItem onClick={() => handleMarkNoShow(attendee.id)}>
-                            <XCircle className="h-4 w-4 mr-2 text-red-600" />
-                            No Asistió
-                          </DropdownMenuItem>
-                        )}
-                        {attendee.status === 'INVITED' && (
-                          <DropdownMenuItem onClick={() => handleConfirm(attendee.id)}>
-                            <CheckCircle className="h-4 w-4 mr-2 text-blue-600" />
-                            Confirmar
-                          </DropdownMenuItem>
-                        )}
-                        {(attendee.status === 'INVITED' || attendee.status === 'CONFIRMED') && (
-                          <>
-                            <DropdownMenuSeparator />
+
+                          <DropdownMenuSeparator />
+
+                          {attendee.status !== 'CONFIRMED' && attendee.status !== 'ATTENDED' && (
                             <DropdownMenuItem
-                              onClick={() => handleCancel(attendee.id)}
-                              className="text-destructive"
+                              className="cursor-pointer"
+                              onClick={() => handleConfirm(attendee.id)}
                             >
-                              <Ban className="h-4 w-4 mr-2" />
-                              Cancelar Asistencia
+                              <CheckCircle className="h-4 w-4 mr-2 text-blue-600" />
+                              Confirmar
                             </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                          )}
+
+                          {attendee.status !== 'ATTENDED' && attendee.status !== 'NO_SHOW' && (
+                            <DropdownMenuItem
+                              className="cursor-pointer"
+                              onClick={() => handleCheckIn(attendee.id)}
+                            >
+                              <Check className="h-4 w-4 mr-2 text-green-600" />
+                              Marcar Asistencia
+                            </DropdownMenuItem>
+                          )}
+
+                          {attendee.status !== 'NO_SHOW' && attendee.status !== 'ATTENDED' && (
+                            <DropdownMenuItem
+                              className="cursor-pointer text-red-600"
+                              onClick={() => handleMarkNoShow(attendee.id)}
+                            >
+                              <XCircle className="h-4 w-4 mr-2" />
+                              No Asistió
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

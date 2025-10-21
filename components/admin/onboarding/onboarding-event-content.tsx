@@ -9,9 +9,6 @@ import { Badge } from '@/components/ui/badge'
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -25,16 +22,28 @@ import {
   List,
 } from 'lucide-react'
 import { AdminHeader } from '@/components/admin/admin-header'
-import { AddDriversSection } from '@/components/admin/onboarding/add-drivers-section'
+import { AddDriversWrapper } from '@/components/admin/onboarding/add-drivers-wrapper'
 import { AttendeesManagementSection } from '@/components/admin/onboarding/attendees-management-section'
 import { EventSettingsSection } from '@/components/admin/onboarding/event-settings-section'
 import { getEventStatusLabel } from '@/types/onboarding'
 
 interface OnboardingEventContentProps {
   event: any
+  initialEligibleDrivers: any[]
+  initialPagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasMore: boolean
+  }
 }
 
-export function OnboardingEventContent({ event }: OnboardingEventContentProps) {
+export function OnboardingEventContent({ 
+  event, 
+  initialEligibleDrivers,
+  initialPagination 
+}: OnboardingEventContentProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState('attendees')
 
@@ -123,48 +132,67 @@ export function OnboardingEventContent({ event }: OnboardingEventContentProps) {
           </div>
         </div>
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="attendees" className="gap-2">
-              <List className="h-4 w-4" />
-              Participantes ({event.attendees.length})
-            </TabsTrigger>
-            <TabsTrigger value="add" className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Agregar Drivers
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="gap-2">
-              <Settings className="h-4 w-4" />
-              Configuración
-            </TabsTrigger>
-          </TabsList>
+        {/* Tabs con Card mejorada */}
+        <Card className="border-0 shadow-none">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
+            {/* Tabs elevadas */}
+            <TabsList className="w-full justify-start rounded-b-none border-b bg-transparent p-0 h-auto">
+              <TabsTrigger 
+                value="attendees" 
+                className="gap-2 rounded-b-none rounded-t-lg border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-muted/50 data-[state=active]:shadow-none px-6 py-3"
+              >
+                <List className="h-4 w-4" />
+                Participantes ({event.attendees.length})
+              </TabsTrigger>
+              <TabsTrigger 
+                value="add" 
+                className="gap-2 rounded-b-none rounded-t-lg border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-muted/50 data-[state=active]:shadow-none px-6 py-3"
+              >
+                <UserPlus className="h-4 w-4" />
+                Agregar Drivers
+              </TabsTrigger>
+              <TabsTrigger 
+                value="settings" 
+                className="gap-2 rounded-b-none rounded-t-lg border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-muted/50 data-[state=active]:shadow-none px-6 py-3"
+              >
+                <Settings className="h-4 w-4" />
+                Configuración
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="attendees" className="space-y-4">
-            <AttendeesManagementSection
-              eventId={event.id}
-              attendees={event.attendees}
-              onRefresh={handleRefresh}
-            />
-          </TabsContent>
+            {/* Contenido dentro de Card */}
+            <Card className="rounded-t-none border-t-0">
+              <CardContent className="p-6">
+                <TabsContent value="attendees" className="mt-0">
+                  <AttendeesManagementSection
+                    eventId={event.id}
+                    attendees={event.attendees}
+                    onRefresh={handleRefresh}
+                  />
+                </TabsContent>
 
-          <TabsContent value="add" className="space-y-4">
-            <AddDriversSection
-              eventId={event.id}
-              onSuccess={() => {
-                handleRefresh()
-                setActiveTab('attendees')
-              }}
-            />
-          </TabsContent>
+                <TabsContent value="add" className="mt-0">
+                  <AddDriversWrapper
+                    eventId={event.id}
+                    initialDrivers={initialEligibleDrivers}
+                    initialPagination={initialPagination}
+                    onSuccess={() => {
+                      handleRefresh()
+                      setActiveTab('attendees')
+                    }}
+                  />
+                </TabsContent>
 
-          <TabsContent value="settings" className="space-y-4">
-            <EventSettingsSection
-              event={event}
-              onUpdate={handleRefresh}
-            />
-          </TabsContent>
-        </Tabs>
+                <TabsContent value="settings" className="mt-0">
+                  <EventSettingsSection
+                    event={event}
+                    onUpdate={handleRefresh}
+                  />
+                </TabsContent>
+              </CardContent>
+            </Card>
+          </Tabs>
+        </Card>
       </div>
     </div>
   )

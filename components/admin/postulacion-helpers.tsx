@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Calendar, CheckCircle, XCircle, Clock, Edit, Eye, AlertCircle, FileText } from "lucide-react"
+import { Calendar, CheckCircle, XCircle, Clock, Edit, Eye, AlertCircle, FileText, ExternalLink } from "lucide-react"
 
 // ==================== BADGE DE ESTADO DE DOCUMENTOS ====================
 
@@ -239,6 +239,7 @@ export function OnboardingSection({
   postulacionId: string
   onSchedule: () => void
 }) {
+  // Si no hay attendance ni status relevante
   if (!attendance && status !== 'SCHEDULED' && status !== 'COMPLETED' && status !== 'IN_PROGRESS') {
     return (
       <div className="space-y-4">
@@ -253,7 +254,12 @@ export function OnboardingSection({
             </p>
           </div>
         </div>
-        <Button size="sm" variant="default" className="w-full bg-green-600 hover:bg-green-700" onClick={onSchedule}>
+        <Button 
+          size="sm" 
+          variant="default" 
+          className="w-full bg-green-600 hover:bg-green-700 cursor-pointer" 
+          onClick={onSchedule}
+        >
           <Calendar className="h-4 w-4 mr-2" />
           Agendar Onboarding
         </Button>
@@ -262,6 +268,16 @@ export function OnboardingSection({
   }
 
   const statusConfig = {
+    INVITED: {
+      label: 'Invitado',
+      className: 'bg-blue-50 text-blue-700 border-blue-200',
+      icon: Calendar
+    },
+    CONFIRMED: {
+      label: 'Confirmado',
+      className: 'bg-purple-50 text-purple-700 border-purple-200',
+      icon: CheckCircle
+    },
     SCHEDULED: {
       label: 'Programado',
       className: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -272,6 +288,11 @@ export function OnboardingSection({
       className: 'bg-amber-50 text-amber-700 border-amber-200',
       icon: Clock
     },
+    ATTENDED: {
+      label: 'Asistió',
+      className: 'bg-green-50 text-green-700 border-green-200',
+      icon: CheckCircle
+    },
     COMPLETED: {
       label: 'Completado',
       className: 'bg-green-50 text-green-700 border-green-200',
@@ -281,10 +302,16 @@ export function OnboardingSection({
       label: 'Cancelado',
       className: 'bg-red-50 text-red-700 border-red-200',
       icon: XCircle
+    },
+    NO_SHOW: {
+      label: 'No Asistió',
+      className: 'bg-orange-50 text-orange-700 border-orange-200',
+      icon: XCircle
     }
   }
 
-  const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.SCHEDULED
+  const attendanceStatus = attendance?.status || status
+  const config = statusConfig[attendanceStatus as keyof typeof statusConfig] || statusConfig.SCHEDULED
   const StatusIcon = config.icon
 
   return (
@@ -298,38 +325,73 @@ export function OnboardingSection({
         </Badge>
       </div>
 
-      {/* Información del onboarding */}
-      {attendance && (
+      {/* Información del evento */}
+      {attendance?.event && (
         <div className="space-y-3">
+          {/* Fecha Programada */}
           <InfoField 
             label="Fecha Programada" 
-            value={attendance.scheduledDate ? new Date(attendance.scheduledDate).toLocaleDateString('es-PY', {
+            value={new Date(attendance.event.scheduledDate).toLocaleDateString('es-PY', {
               day: '2-digit',
               month: 'long',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            }) : undefined}
+              year: 'numeric'
+            })}
           />
 
-          {attendance.location && (
-            <InfoField label="Ubicación" value={attendance.location} />
+          {/* Hora */}
+          {attendance.event.startTime && (
+            <InfoField 
+              label="Hora" 
+              value={`${attendance.event.startTime}${attendance.event.endTime ? ` - ${attendance.event.endTime}` : ''}`}
+            />
           )}
 
-          {attendance.notes && (
+          {/* Ubicación */}
+          {attendance.event.location && (
+            <InfoField 
+              label="Ubicación" 
+              value={attendance.event.location}
+            />
+          )}
+
+          {/* Título del evento */}
+          {attendance.event.title && (
+            <InfoField 
+              label="Evento" 
+              value={attendance.event.title}
+            />
+          )}
+
+          {/* Notas del asistente */}
+          {attendance.attendeeNotes && (
             <div className="pt-3 border-t space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground block">Notas</label>
-              <p className="text-xs bg-muted/50 p-2.5 rounded-md">{attendance.notes}</p>
+              <p className="text-xs bg-muted/50 p-2.5 rounded-md">{attendance.attendeeNotes}</p>
             </div>
           )}
 
-          {attendance.completedAt && (
+          {/* Fecha de confirmación */}
+          {attendance.confirmedAt && (
             <div className="pt-3 border-t">
               <InfoField 
-                label="Fecha de Completación" 
-                value={new Date(attendance.completedAt).toLocaleDateString('es-PY', {
+                label="Confirmó el" 
+                value={new Date(attendance.confirmedAt).toLocaleDateString('es-PY', {
                   day: '2-digit',
-                  month: 'long',
+                  month: 'short',
+                  year: 'numeric'
+                })}
+              />
+            </div>
+          )}
+
+          {/* Check-in */}
+          {attendance.checkedInAt && (
+            <div className="pt-3 border-t">
+              <InfoField 
+                label="Check-in" 
+                value={new Date(attendance.checkedInAt).toLocaleDateString('es-PY', {
+                  day: '2-digit',
+                  month: 'short',
                   year: 'numeric',
                   hour: '2-digit',
                   minute: '2-digit'
@@ -340,16 +402,36 @@ export function OnboardingSection({
         </div>
       )}
 
-      {/* Botón de acción */}
-      <div className="pt-3 border-t">
+      {/* Botones de acción */}
+      <div className="pt-3 border-t space-y-2">
+        {/* Botón para ir al evento */}
+        {attendance?.event && (
+          <Button 
+            size="sm" 
+            variant="outline"
+            className="w-full cursor-pointer gap-2"
+            onClick={() => window.open(`/admin/onboarding/${attendance.event.id}`, '_blank')}
+          >
+            <ExternalLink className="h-4 w-4" />
+            Ver Evento de Onboarding
+          </Button>
+        )}
+
+        {/* Botón de reprogramar */}
         <Button 
           size="sm" 
-          variant={status === 'COMPLETED' ? 'outline' : 'default'}
-          className={status === 'COMPLETED' ? 'w-full' : 'w-full bg-green-600 hover:bg-green-700'}
+          variant={attendanceStatus === 'COMPLETED' || attendanceStatus === 'ATTENDED' ? 'outline' : 'default'}
+          className={
+            attendanceStatus === 'COMPLETED' || attendanceStatus === 'ATTENDED'
+              ? 'w-full cursor-pointer' 
+              : 'w-full bg-green-600 hover:bg-green-700 cursor-pointer'
+          }
           onClick={onSchedule}
         >
           <Calendar className="h-4 w-4 mr-2" />
-          {status === 'COMPLETED' ? 'Ver Detalles' : 'Reprogramar'}
+          {attendanceStatus === 'COMPLETED' || attendanceStatus === 'ATTENDED' 
+            ? 'Agendar Nuevo Onboarding' 
+            : 'Reprogramar'}
         </Button>
       </div>
     </div>

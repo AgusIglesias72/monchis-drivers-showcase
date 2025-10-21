@@ -507,79 +507,141 @@ class OnboardingService {
   }
 
 
-  /**
-   * Obtiene drivers elegibles para agregar a un evento
-   */
-  async getEligibleDrivers(params: {
-    eventId?: string
-    search?: string
-    page?: number
-    limit?: number
-  }) {
-    const { eventId, search = '', page = 1, limit = 10 } = params
-    const skip = (page - 1) * limit
+/**
+ * Obtiene drivers elegibles para agregar a un evento
+ */
+async getEligibleDrivers(params: {
+  eventId?: string
+  search?: string
+  page?: number
+  limit?: number
+}) {
+  const { eventId, search = '', page = 1, limit = 10 } = params
+  const skip = (page - 1) * limit
 
-    // Filtro de búsqueda
-    const searchFilter = search ? {
-      OR: [
-        { fullName: { contains: search, mode: 'insensitive' as const } },
-        { email: { contains: search, mode: 'insensitive' as const } },
-        { phoneNumber: { contains: search } },
-        { cedula: { contains: search } },
-      ]
-    } : {}
+  // Filtro de búsqueda
+  const searchFilter = search ? {
+    OR: [
+      { fullName: { contains: search, mode: 'insensitive' as const } },
+      { email: { contains: search, mode: 'insensitive' as const } },
+      { phoneNumber: { contains: search } },
+      { cedula: { contains: search } },
+    ]
+  } : {}
 
-    // Obtener drivers ya asignados a este evento
-    const existingAttendees = eventId ? await prisma.onboardingAttendee.findMany({
-      where: {
-        eventId,
-        status: { in: ['INVITED', 'CONFIRMED', 'ATTENDED', 'SCHEDULED', 'RESCHEDULED'] }
+  // Obtener drivers ya asignados a este evento específico
+  const existingAttendees = eventId ? await prisma.onboardingAttendee.findMany({
+    where: {
+      eventId,
+      status: { in: ['INVITED', 'CONFIRMED', 'ATTENDED', 'SCHEDULED', 'RESCHEDULED'] }
+    },
+    select: { formDriverId: true }
+  }) : []
+
+  const assignedIds = new Set(existingAttendees.map(a => a.formDriverId))
+
+  // Obtener TODOS los drivers (con info de onboarding attendance)
+  const where: any = {
+    ...searchFilter,
+    ...(eventId && assignedIds.size > 0 ? { id: { notIn: Array.from(assignedIds) } } : {})
+  }
+
+  const [rawDrivers, total] = await Promise.all([
+    prisma.formDriver.findMany({
+      where,
+      select: {
+        id: true,
+        fullName: true,
+        phoneNumber: true,
+        email: true,
+        cedula: true,
+        documentsStatus: true,
+        onboardingStatus: true,
+        onboardingScheduledAt: true,
+        status: true,
+        createdAt: true,
+        lastActivityAt: true,
+        // Incluir la asistencia más reciente a onboarding
+        onboardingAttendances: {
+          where: {
+            status: { in: ['INVITED', 'CONFIRMED', 'ATTENDED', 'SCHEDULED'] }
+          },
+          include: {
+            event: {
+              select: {
+                id: true,
+                title: true,
+                scheduledDate: true,
+                status: true,
+              }
+            }
+          },
+          orderBy: {
+            invitedAt: 'desc'
+          },
+          take: 1,
+        }
       },
-      select: { formDriverId: true }
-    }) : []
+      skip,
+      take: limit,
+      orderBy: [
+        { documentsStatus: 'desc' }, // Aprobados primero
+        { onboardingStatus: 'asc' }, // Sin onboarding primero
+        { lastActivityAt: 'desc' }
+      ]
+    }),
+    prisma.formDriver.count({ where })
+  ])
 
-    const assignedIds = new Set(existingAttendees.map(a => a.formDriverId))
+  // Formatear la respuesta con información adicional
+  const drivers = rawDrivers.map(driver => {
+    const currentAttendance = driver.onboardingAttendances[0]
+    const isAssignedToOtherEvent = currentAttendance && 
+      currentAttendance.event.id !== eventId &&
+      ['INVITED', 'CONFIRMED', 'ATTENDED', 'SCHEDULED'].includes(currentAttendance.status)
 
-    // Obtener TODOS los drivers, excluyendo solo los ya asignados a este evento
-    const where: any = {
-      ...searchFilter,
-      ...(eventId && assignedIds.size > 0 ? { id: { notIn: Array.from(assignedIds) } } : {})
-    }
-
-    const [drivers, total] = await Promise.all([
-      prisma.formDriver.findMany({
-        where,
-        select: {
-          id: true,
-          fullName: true,
-          phoneNumber: true,
-          email: true,
-          cedula: true,
-          documentsStatus: true,
-          onboardingStatus: true,
-          onboardingScheduledAt: true,
-        },
-        skip,
-        take: limit,
-        orderBy: [
-          { documentsStatus: 'desc' }, // Aprobados primero
-          { lastActivityAt: 'desc' }
-        ]
-      }),
-      prisma.formDriver.count({ where })
-    ])
+    // Determinar si puede ser seleccionado
+    const canBeSelected = driver.documentsStatus === 'APPROVED' && !isAssignedToOtherEvent
 
     return {
-      drivers,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasMore: skip + limit < total,
-      }
+      id: driver.id,
+      fullName: driver.fullName,
+      phoneNumber: driver.phoneNumber,
+      email: driver.email,
+      cedula: driver.cedula,
+      documentsStatus: driver.documentsStatus,
+      onboardingStatus: driver.onboardingStatus,
+      onboardingScheduledAt: driver.onboardingScheduledAt,
+      status: driver.status,
+      createdAt: driver.createdAt,
+      lastActivityAt: driver.lastActivityAt,
+      // Información adicional sobre asignación
+      isAssignedToOtherEvent,
+      canBeSelected,
+      disabledReason: !canBeSelected 
+        ? (driver.documentsStatus !== 'APPROVED' 
+            ? 'Documentos no aprobados' 
+            : 'Ya asignado a otro evento')
+        : null,
+      assignedEvent: isAssignedToOtherEvent ? {
+        id: currentAttendance.event.id,
+        title: currentAttendance.event.title,
+        scheduledDate: currentAttendance.event.scheduledDate,
+      } : null,
+    }
+  })
+
+  return {
+    drivers,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasMore: skip + limit < total,
     }
   }
+}
 
   /**
    * Asigna múltiples drivers a un evento
