@@ -50,8 +50,8 @@ import {
 import { DocumentPreview } from "@/components/admin/document-preview"
 import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
 import { PersonalInfoCard } from "@/components/admin/personal-info-card"
+import { InternalNotesCard } from "@/components/admin/internal-notes-card"
 import { 
-  DocumentsStatusBadge, 
   PaymentSection, 
   OnboardingSection 
 } from "@/components/admin/postulacion-helpers"
@@ -60,10 +60,11 @@ import {
   updatePostulacion,
   updatePayment,
   createNote,
+  updateNote,
+  deleteNote,
   approveDocument,
   rejectDocument,
   deleteDocument,
-  uploadDocument,
 } from "@/lib/actions/postulacion.actions"
 import { OnboardingStatusBadge } from "./postulaciones-table-expandable"
 
@@ -83,7 +84,6 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   
   const [isEditing, setIsEditing] = useState(false)
   const [editedData, setEditedData] = useState(postulacion)
-  const [newNote, setNewNote] = useState('')
   const [notes, setNotes] = useState(postulacion.notes || [])
   const [documents, setDocuments] = useState(postulacion.documents || [])
   
@@ -106,10 +106,6 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
     adminNotes: postulacion.equipmentPayments?.[0]?.adminNotes || '',
     rejectionReason: postulacion.equipmentPayments?.[0]?.rejectionReason || '',
   })
-  
-  const isAlreadyScheduled = postulacion.onboardingStatus === 'SCHEDULED' || 
-                             postulacion.onboardingStatus === 'COMPLETED' ||
-                             postulacion.onboardingStatus === 'IN_PROGRESS'
 
   // ============ HANDLERS ============
 
@@ -132,18 +128,46 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
     setIsEditing(false)
   }
 
-  const handleAddNote = () => {
-    if (!newNote.trim()) return
-    
+  const handleAddNote = async (content: string) => {
     startNoteTransition(async () => {
-      const result = await createNote(postulacion.id, newNote)
+      const result = await createNote(postulacion.id, content)
       
       if (result.success) {
-        setNotes([...notes, result.note])
-        setNewNote('')
+        setNotes([result.note, ...notes])
         toast.success('Nota añadida')
+        router.refresh()
       } else {
         toast.error(result.error || 'Error al guardar nota')
+      }
+    })
+  }
+
+  const handleEditNote = async (noteId: string, content: string) => {
+    startNoteTransition(async () => {
+      const result = await updateNote(noteId, content)
+      
+      if (result.success) {
+        setNotes(notes.map((note: any) => 
+          note.id === noteId ? result.note : note
+        ))
+        toast.success('Nota actualizada')
+        router.refresh()
+      } else {
+        toast.error(result.error || 'Error al actualizar nota')
+      }
+    })
+  }
+
+  const handleDeleteNote = async (noteId: string) => {
+    startNoteTransition(async () => {
+      const result = await deleteNote(noteId)
+      
+      if (result.success) {
+        setNotes(notes.filter((note: any) => note.id !== noteId))
+        toast.success('Nota eliminada')
+        router.refresh()
+      } else {
+        toast.error(result.error || 'Error al eliminar nota')
       }
     })
   }
@@ -153,8 +177,6 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   }
 
   const handleDocumentDelete = (documentId: string) => {
-    if (!confirm('¿Eliminar este documento?')) return
-    
     startDocumentTransition(async () => {
       const result = await deleteDocument(documentId)
       
@@ -172,20 +194,36 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
     if (!files || files.length === 0) return
     
     const file = files[0]
+    
+    // Validar tamaño en el cliente (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('El archivo no debe superar 5MB')
+      return
+    }
+    
     const formData = new FormData()
     formData.append('file', file)
     formData.append('formDriverId', postulacion.id)
     formData.append('documentType', documentType)
 
     startDocumentTransition(async () => {
-      const result = await uploadDocument(formData)
-      
-      if (result.success) {
-        setDocuments([...documents, result.document])
-        toast.success(`${file.name} subido`)
-        router.refresh()
-      } else {
-        toast.error(result.error || `Error al subir ${file.name}`)
+      try {
+        const response = await fetch('/api/postulaciones/documents/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        const result = await response.json()
+
+        if (result.success) {
+          setDocuments([...documents, result.document])
+          toast.success(`${file.name} subido`)
+          router.refresh()
+        } else {
+          toast.error(result.error || `Error al subir ${file.name}`)
+        }
+      } catch (error: any) {
+        toast.error(error.message || 'Error al subir documento')
       }
     })
   }
@@ -381,13 +419,10 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
 
           <Card>
             <CardHeader className="pb-3 border-b">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
-                  <FileText className="h-4 w-4" />
-                  Documentos Adjuntos
-                </CardTitle>
-                <DocumentsStatusBadge status={postulacion.documentsStatus} />
-              </div>
+              <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
+                <FileText className="h-4 w-4" />
+                Documentos Adjuntos
+              </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
               <DocumentPreview 
@@ -413,56 +448,14 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                 Notas Internas
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 pt-4">
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {notes.map((note: any) => (
-                  <div key={note.id} className="bg-muted/50 rounded-lg p-2.5">
-                    <p className="text-xs">{note.content}</p>
-                    <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-                      <span>{note.createdByUser?.firstName || note.createdByUser?.fullName || 'Admin'}</span>
-                      <span>•</span>
-                      <span>{new Date(note.createdAt).toLocaleDateString('es-PY', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}</span>
-                    </div>
-                  </div>
-                ))}
-                {notes.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center py-8">
-                    No hay notas aún
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Textarea
-                  placeholder="Añadir una nota interna..."
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  rows={3}
-                  className="text-xs"
-                  disabled={isNotePending}
-                />
-                <Button 
-                  onClick={handleAddNote} 
-                  size="sm"   
-                  className="w-full h-8"
-                  disabled={!newNote.trim() || isNotePending}
-                >
-                  {isNotePending ? (
-                    <>
-                      <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    'Añadir Nota'
-                  )}
-                </Button>
-              </div>
+            <CardContent className="pt-4">
+              <InternalNotesCard
+                notes={notes}
+                onAddNote={handleAddNote}
+                onEditNote={handleEditNote}
+                onDeleteNote={handleDeleteNote}
+                isLoading={isNotePending}
+              />
             </CardContent>
           </Card>
 
@@ -570,7 +563,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
 
       {/* Modal de Pago */}
       <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Gestionar Pago de Equipamiento</DialogTitle>
             <DialogDescription>
@@ -579,8 +572,9 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* Estado */}
             <div className="space-y-2">
-              <Label>Estado</Label>
+              <Label className="text-sm font-medium">Estado del Pago</Label>
               <Select 
                 value={paymentData.status} 
                 onValueChange={(value) => setPaymentData({ ...paymentData, status: value })}
@@ -596,26 +590,40 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Método de Pago</Label>
-              <Select 
-                value={paymentData.paymentMethod} 
-                onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar método" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="POS">POS</SelectItem>
-                  <SelectItem value="BANK_TRANSFER">Transferencia Bancaria</SelectItem>
-                  <SelectItem value="CASH">Efectivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
+            {/* Método y Monto en grid */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Número de Comprobante</Label>
+                <Label className="text-sm font-medium">Método de Pago</Label>
+                <Select 
+                  value={paymentData.paymentMethod} 
+                  onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="POS">POS</SelectItem>
+                    <SelectItem value="BANK_TRANSFER">Transferencia</SelectItem>
+                    <SelectItem value="CASH">Efectivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Monto (Gs.)</Label>
+                <Input
+                  type="number"
+                  value={paymentData.amount}
+                  onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
+                  placeholder="150000"
+                />
+              </div>
+            </div>
+
+            {/* Comprobante y Factura en grid */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Nro. Comprobante</Label>
                 <Input
                   value={paymentData.paymentNumber}
                   onChange={(e) => setPaymentData({ ...paymentData, paymentNumber: e.target.value })}
@@ -624,7 +632,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
               </div>
 
               <div className="space-y-2">
-                <Label>Número de Factura</Label>
+                <Label className="text-sm font-medium">Nro. Factura</Label>
                 <Input
                   value={paymentData.invoiceNumber}
                   onChange={(e) => setPaymentData({ ...paymentData, invoiceNumber: e.target.value })}
@@ -633,44 +641,52 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
               </div>
             </div>
 
+            {/* Notas Admin */}
             <div className="space-y-2">
-              <Label>Monto</Label>
-              <Input
-                type="number"
-                value={paymentData.amount}
-                onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
-                placeholder="150000"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Notas Admin (Opcional)</Label>
+              <Label className="text-sm font-medium">Notas Administrativas (Opcional)</Label>
               <Textarea
                 value={paymentData.adminNotes}
                 onChange={(e) => setPaymentData({ ...paymentData, adminNotes: e.target.value })}
                 placeholder="Notas internas sobre el pago..."
                 rows={3}
+                className="resize-none"
               />
             </div>
 
+            {/* Razón de rechazo si está rechazado */}
             {paymentData.status === 'REJECTED' && (
-              <div className="space-y-2">
-                <Label>Razón de Rechazo</Label>
+              <div className="space-y-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <Label className="text-sm font-medium text-red-700">
+                  Razón de Rechazo <span className="text-red-500">*</span>
+                </Label>
                 <Textarea
                   value={paymentData.rejectionReason}
                   onChange={(e) => setPaymentData({ ...paymentData, rejectionReason: e.target.value })}
                   placeholder="Explica por qué se rechazó el pago..."
                   rows={3}
+                  className="resize-none"
                 />
+                <p className="text-xs text-red-600">
+                  Este mensaje será visible para el conductor.
+                </p>
               </div>
             )}
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPaymentModal(false)} disabled={isPaymentPending}>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowPaymentModal(false)} 
+              disabled={isPaymentPending}
+              className="cursor-pointer"
+            >
               Cancelar
             </Button>
-            <Button onClick={handleSavePayment} disabled={isPaymentPending}>
+            <Button 
+              onClick={handleSavePayment} 
+              disabled={isPaymentPending}
+              className="cursor-pointer"
+            >
               {isPaymentPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

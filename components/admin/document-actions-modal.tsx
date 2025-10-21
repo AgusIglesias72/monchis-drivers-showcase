@@ -42,7 +42,9 @@ export function DocumentActionsModal({
   isLoading = false,
 }: DocumentActionsModalProps) {
   const [rejectionReason, setRejectionReason] = useState('')
-  const [action, setAction] = useState<'approve' | 'reject' | null>(null)
+  const [showApproveConfirm, setShowApproveConfirm] = useState(false)
+  const [showRejectForm, setShowRejectForm] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   const handleOpenDocument = () => {
     if (document?.blobUrl) {
@@ -50,34 +52,50 @@ export function DocumentActionsModal({
     }
   }
 
-  const handleApprove = () => {
-    if (confirm('¿Aprobar este documento?')) {
-      onApprove(document.id)
+  const handleConfirmApprove = async () => {
+    setIsProcessing(true)
+    try {
+      await onApprove(document.id)
+      setShowApproveConfirm(false)
       onOpenChange(false)
+    } finally {
+      setIsProcessing(false)
     }
   }
 
-  const handleReject = () => {
+  const handleConfirmReject = async () => {
     if (!rejectionReason.trim()) {
       toast.error('Debes indicar el motivo del rechazo')
       return
     }
     
-    if (confirm('¿Rechazar este documento?')) {
-      onReject(document.id, rejectionReason)
+    setIsProcessing(true)
+    try {
+      await onReject(document.id, rejectionReason)
       setRejectionReason('')
-      setAction(null)
+      setShowRejectForm(false)
       onOpenChange(false)
+    } finally {
+      setIsProcessing(false)
     }
+  }
+
+  const handleCancel = () => {
+    setShowApproveConfirm(false)
+    setShowRejectForm(false)
+    setRejectionReason('')
   }
 
   const getDocumentTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
       CEDULA_FRONT: 'Cédula (Frente)',
-      CEDULA_BACK: 'Cédula (Dorso)',
+      CEDULA_BACK: 'Cédula (Reverso)',
+      LICENCIA_FRONT: 'Licencia (Frente)',
+      LICENCIA_BACK: 'Licencia (Reverso)',
       LICENSE_FRONT: 'Licencia (Frente)',
-      LICENSE_BACK: 'Licencia (Dorso)',
+      LICENSE_BACK: 'Licencia (Reverso)',
       CRIMINAL_RECORD: 'Antecedentes Penales',
+      ANTECEDENTES: 'Antecedentes Penales',
       VEHICLE_INSURANCE: 'Seguro de Vehículo',
       VEHICLE_REGISTRATION: 'Registro de Vehículo',
       VEHICLE_PHOTO_FRONT: 'Foto Vehículo (Frente)',
@@ -85,7 +103,10 @@ export function DocumentActionsModal({
       VEHICLE_PHOTO_SIDE: 'Foto Vehículo (Lateral)',
       TAX_COMPLIANCE: 'Cumplimiento Tributario',
       PAYMENT_PROOF: 'Comprobante de Pago',
-      SELFIE: 'Selfie',
+      SELFIE: 'Selfie con Cédula',
+      COMPROBANTE_DOMICILIO: 'Comprobante de Domicilio',
+      TITULO_VEHICULO: 'Título del Vehículo',
+      CEDULA_VERDE: 'Cédula Verde',
       OTHER: 'Otro',
     }
     return labels[type] || type
@@ -93,17 +114,136 @@ export function DocumentActionsModal({
 
   const getStatusBadge = (status: string) => {
     const config = {
-      PENDING: { label: 'Pendiente', className: 'bg-amber-100 text-amber-700' },
-      IN_REVIEW: { label: 'En Revisión', className: 'bg-blue-100 text-blue-700' },
-      APPROVED: { label: 'Aprobado', className: 'bg-green-100 text-green-700' },
-      REJECTED: { label: 'Rechazado', className: 'bg-red-100 text-red-700' },
+      PENDING: { label: 'Pendiente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+      IN_REVIEW: { label: 'En Revisión', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+      APPROVED: { label: 'Aprobado', className: 'bg-green-50 text-green-700 border-green-200' },
+      REJECTED: { label: 'Rechazado', className: 'bg-red-50 text-red-700 border-red-200' },
     }
     const { label, className } = config[status as keyof typeof config] || config.PENDING
-    return <Badge className={className}>{label}</Badge>
+    return <Badge variant="outline" className={className}>{label}</Badge>
   }
 
   if (!document) return null
 
+  // Si está mostrando confirmación de aprobación
+  if (showApproveConfirm) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-700">
+              <CheckCircle className="h-5 w-5" />
+              Aprobar documento
+            </DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro de que deseas aprobar este documento?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <div className="bg-muted/50 rounded-lg p-3">
+              <p className="text-sm font-medium">{getDocumentTypeLabel(document.documentType)}</p>
+              <p className="text-xs text-muted-foreground mt-1">{document.fileName}</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              disabled={isLoading || isProcessing}
+              className="cursor-pointer"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmApprove}
+              className="bg-green-600 hover:bg-green-700 cursor-pointer"
+              disabled={isLoading || isProcessing}
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Aprobando...
+                </>
+              ) : (
+                'Confirmar Aprobación'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  // Si está mostrando formulario de rechazo
+  if (showRejectForm) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <XCircle className="h-5 w-5" />
+              Rechazar documento
+            </DialogTitle>
+            <DialogDescription>
+              Indica el motivo del rechazo. Este mensaje será visible para el conductor.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="bg-muted/50 rounded-lg p-3">
+              <p className="text-sm font-medium">{getDocumentTypeLabel(document.documentType)}</p>
+              <p className="text-xs text-muted-foreground mt-1">{document.fileName}</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="rejection-reason" className="text-sm font-medium">
+                Motivo del rechazo <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id="rejection-reason"
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Ej: La imagen está borrosa, no se pueden leer los datos claramente."
+                rows={4}
+                disabled={isLoading}
+                className="resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              disabled={isLoading || isProcessing}
+              className="cursor-pointer"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmReject}
+              variant="destructive"
+              className="cursor-pointer"
+              disabled={isLoading || isProcessing || !rejectionReason.trim()}
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Rechazando...
+                </>
+              ) : (
+                'Confirmar Rechazo'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  // Vista principal - selección de acción
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -161,123 +301,6 @@ export function DocumentActionsModal({
             Abrir documento en nueva pestaña
           </Button>
 
-          {/* Selector de acción */}
-          {!action && document.status !== 'APPROVED' && (
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <Button
-                onClick={() => setAction('approve')}
-                className="gap-2 bg-green-600 hover:bg-green-700 cursor-pointer"
-                disabled={isLoading}
-              >
-                <CheckCircle className="h-4 w-4" />
-                Aprobar
-              </Button>
-              <Button
-                onClick={() => setAction('reject')}
-                variant="destructive"
-                className="gap-2 cursor-pointer"
-                disabled={isLoading}
-              >
-                <XCircle className="h-4 w-4" />
-                Rechazar
-              </Button>
-            </div>
-          )}
-
-          {/* Formulario de aprobación */}
-          {action === 'approve' && (
-            <div className="space-y-4 p-4 border border-green-200 bg-green-50/50 rounded-lg">
-              <div className="flex items-center gap-2 text-green-700">
-                <CheckCircle className="h-5 w-5" />
-                <span className="font-semibold">Aprobar documento</span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                ¿Estás seguro de que deseas aprobar este documento?
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleApprove}
-                  className="flex-1 bg-green-600 hover:bg-green-700 cursor-pointer"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Aprobando...
-                    </>
-                  ) : (
-                    'Confirmar Aprobación'
-                  )}
-                </Button>
-                <Button
-                  onClick={() => setAction(null)}
-                  variant="outline"
-                  disabled={isLoading}
-                  className="cursor-pointer"
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Formulario de rechazo */}
-          {action === 'reject' && (
-            <div className="space-y-4 p-4 border border-red-200 bg-red-50/50 rounded-lg">
-              <div className="flex items-center gap-2 text-red-700">
-                <XCircle className="h-5 w-5" />
-                <span className="font-semibold">Rechazar documento</span>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="rejection-reason" className="text-sm font-medium">
-                  Motivo del rechazo <span className="text-red-500">*</span>
-                </Label>
-                <Textarea
-                  id="rejection-reason"
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  placeholder="Ej: La imagen está borrosa, no se pueden leer los datos claramente. Por favor, suba una foto más nítida."
-                  rows={4}
-                  disabled={isLoading}
-                  className="resize-none"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Este mensaje será visible para el usuario. Sé claro y específico sobre qué debe corregir.
-                </p>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleReject}
-                  variant="destructive"
-                  className="flex-1 cursor-pointer"
-                  disabled={isLoading || !rejectionReason.trim()}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Rechazando...
-                    </>
-                  ) : (
-                    'Confirmar Rechazo'
-                  )}
-                </Button>
-                <Button
-                  onClick={() => {
-                    setAction(null)
-                    setRejectionReason('')
-                  }}
-                  variant="outline"
-                  disabled={isLoading}
-                  className="cursor-pointer"
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
-
           {/* Mostrar razón de rechazo anterior si existe */}
           {document.status === 'REJECTED' && document.rejectionReason && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -287,17 +310,36 @@ export function DocumentActionsModal({
               <p className="text-sm text-red-600">{document.rejectionReason}</p>
             </div>
           )}
+
+          {/* Botones de acción */}
+          {document.status !== 'APPROVED' && (
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <Button
+                onClick={() => setShowApproveConfirm(true)}
+                className="gap-2 bg-green-600 hover:bg-green-700 cursor-pointer"
+                disabled={isLoading || isProcessing}
+              >
+                <CheckCircle className="h-4 w-4" />
+                Aprobar
+              </Button>
+              <Button
+                onClick={() => setShowRejectForm(true)}
+                variant="destructive"
+                className="gap-2 cursor-pointer"
+                disabled={isLoading || isProcessing}
+              >
+                <XCircle className="h-4 w-4" />
+                Rechazar
+              </Button>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => {
-              setAction(null)
-              setRejectionReason('')
-              onOpenChange(false)
-            }}
-            disabled={isLoading}
+            onClick={() => onOpenChange(false)}
+            disabled={isLoading || isProcessing}
             className="cursor-pointer"
           >
             Cerrar

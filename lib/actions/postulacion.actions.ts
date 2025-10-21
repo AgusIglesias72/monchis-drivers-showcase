@@ -4,9 +4,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { postulacionService } from '@/lib/services/postulacion.service'
 import { revalidatePath } from 'next/cache'
-import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
-import { DocumentType } from '@prisma/client'
 
 /**
  * Actualiza datos básicos de una postulación
@@ -79,12 +77,26 @@ export async function updatePayment(postulacionId: string, paymentData: any) {
 /**
  * Crea una nota interna
  */
-export async function createNote(formDriverId: string, content: string) {
+export async function createNote(postulacionId: string, content: string) {
   try {
     const { userId } = await auth()
     if (!userId) throw new Error('No autorizado')
 
-    const note = await postulacionService.createNote(formDriverId, content, userId)
+    const note = await prisma.formNote.create({
+      data: {
+        formDriverId: postulacionId,
+        content,
+        createdBy: userId,
+      },
+      include: {
+        createdByUser: {
+          select: {
+            firstName: true,
+            fullName: true,
+          }
+        }
+      }
+    })
 
     // Log de auditoría
     await prisma.auditLog.create({
@@ -93,19 +105,104 @@ export async function createNote(formDriverId: string, content: string) {
         userEmail: 'admin',
         action: 'NOTE_CREATED',
         actionType: 'CREATE',
-        entityType: 'FormNote',
+        entityType: 'InternalNote',
         entityId: note.id,
-        description: `Nota agregada: ${content.substring(0, 50)}...`,
-        metadata: { formDriverId, content }
+        description: 'Nota interna creada',
+        metadata: { content }
       }
     })
 
-    revalidatePath(`/admin/postulaciones/${formDriverId}`)
+    revalidatePath(`/admin/postulaciones/${postulacionId}`)
 
     return { success: true, note }
   } catch (error: any) {
     console.error('Error al crear nota:', error)
     return { success: false, error: error.message || 'Error al crear nota' }
+  }
+}
+
+/**
+ * Actualiza una nota interna
+ */
+export async function updateNote(noteId: string, content: string) {
+  try {
+    const { userId } = await auth()
+    if (!userId) throw new Error('No autorizado')
+
+    const note = await prisma.formNote.update({
+      where: { id: noteId },
+      data: { content },
+      include: {
+        createdByUser: {
+          select: {
+            firstName: true,
+            fullName: true,
+          }
+        }
+      }
+    })
+
+    // Log de auditoría
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        userEmail: 'admin',
+        action: 'NOTE_UPDATED',
+        actionType: 'UPDATE',
+        entityType: 'InternalNote',
+        entityId: noteId,
+        description: 'Nota interna actualizada',
+        metadata: { content }
+      }
+    })
+
+    revalidatePath(`/admin/postulaciones/${note.formDriverId}`)
+
+    return { success: true, note }
+  } catch (error: any) {
+    console.error('Error al actualizar nota:', error)
+    return { success: false, error: error.message || 'Error al actualizar nota' }
+  }
+}
+
+/**
+ * Elimina una nota interna
+ */
+export async function deleteNote(noteId: string) {
+  try {
+    const { userId } = await auth()
+    if (!userId) throw new Error('No autorizado')
+
+    const note = await prisma.formNote.findUnique({
+      where: { id: noteId }
+    })
+
+    if (!note) throw new Error('Nota no encontrada')
+
+    await prisma.formNote.delete({
+      where: { id: noteId }
+    })
+
+    // Log de auditoría
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        userEmail: 'admin',
+        action: 'NOTE_DELETED',
+        actionType: 'DELETE',
+        entityType: 'InternalNote',
+        entityId: noteId,
+        description: 'Nota interna eliminada',
+        metadata: { noteId }
+      }
+    })
+
+    revalidatePath(`/admin/postulaciones/${note.formDriverId}`)
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('Error al eliminar nota:', error)
+    return { success: false, error: error.message || 'Error al eliminar nota' }
   }
 }
 
@@ -117,7 +214,14 @@ export async function approveDocument(documentId: string) {
     const { userId } = await auth()
     if (!userId) throw new Error('No autorizado')
 
-    const document = await postulacionService.approveDocument(documentId, userId)
+    const document = await prisma.formDocument.update({
+      where: { id: documentId },
+      data: {
+        status: 'APPROVED',
+        reviewedBy: userId,
+        reviewedAt: new Date(),
+      }
+    })
 
     // Log de auditoría
     await prisma.auditLog.create({
@@ -129,12 +233,11 @@ export async function approveDocument(documentId: string) {
         entityType: 'FormDocument',
         entityId: documentId,
         description: `Documento aprobado: ${document.documentType}`,
-        metadata: { documentId, documentType: document.documentType }
+        metadata: { documentId }
       }
     })
 
-    revalidatePath(`/admin/postulaciones/${document.formDriverId}`)
-    revalidatePath('/admin/postulaciones')
+    revalidatePath(`/admin/postulaciones`)
 
     return { success: true, document }
   } catch (error: any) {
@@ -151,7 +254,15 @@ export async function rejectDocument(documentId: string, reason: string) {
     const { userId } = await auth()
     if (!userId) throw new Error('No autorizado')
 
-    const document = await postulacionService.rejectDocument(documentId, reason, userId)
+    const document = await prisma.formDocument.update({
+      where: { id: documentId },
+      data: {
+        status: 'REJECTED',
+        rejectionReason: reason,
+        reviewedBy: userId,
+        reviewedAt: new Date(),
+      }
+    })
 
     // Log de auditoría
     await prisma.auditLog.create({
@@ -167,8 +278,7 @@ export async function rejectDocument(documentId: string, reason: string) {
       }
     })
 
-    revalidatePath(`/admin/postulaciones/${document.formDriverId}`)
-    revalidatePath('/admin/postulaciones')
+    revalidatePath(`/admin/postulaciones`)
 
     return { success: true, document }
   } catch (error: any) {
@@ -185,7 +295,9 @@ export async function deleteDocument(documentId: string) {
     const { userId } = await auth()
     if (!userId) throw new Error('No autorizado')
 
-    const document = await postulacionService.deleteDocument(documentId)
+    await prisma.formDocument.delete({
+      where: { id: documentId }
+    })
 
     // Log de auditoría
     await prisma.auditLog.create({
@@ -196,7 +308,7 @@ export async function deleteDocument(documentId: string) {
         actionType: 'DELETE',
         entityType: 'FormDocument',
         entityId: documentId,
-        description: `Documento eliminado`,
+        description: 'Documento eliminado',
         metadata: { documentId }
       }
     })
@@ -210,62 +322,5 @@ export async function deleteDocument(documentId: string) {
   }
 }
 
-/**
- * Sube un documento
- */
-export async function uploadDocument(formData: FormData) {
-  try {
-    const { userId } = await auth()
-    if (!userId) throw new Error('No autorizado')
-
-    const file = formData.get('file') as File
-    const formDriverId = formData.get('formDriverId') as string
-    const documentType = formData.get('documentType') as string
-
-    if (!file || !formDriverId || !documentType) {
-      throw new Error('Faltan datos requeridos')
-    }
-
-    // Subir a Vercel Blob
-    const blob = await put(file.name, file, {
-      access: 'public',
-      addRandomSuffix: true,
-    })
-
-    // Crear documento en BD
-    const document = await prisma.formDocument.create({
-      data: {
-        formDriverId,
-        documentType: documentType as DocumentType,
-        fileName: file.name,
-        blobUrl: blob.url,
-        fileSize: file.size,
-        mimeType: file.type,
-        status: 'PENDING',
-        uploadedBy: userId,
-      }
-    })
-
-    // Log de auditoría
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        userEmail: 'admin',
-        action: 'DOCUMENT_UPLOADED',
-        actionType: 'CREATE',
-        entityType: 'FormDocument',
-        entityId: document.id,
-        description: `Documento subido: ${documentType}`,
-        metadata: { formDriverId, documentType, fileName: file.name }
-      }
-    })
-
-    revalidatePath(`/admin/postulaciones/${formDriverId}`)
-    revalidatePath('/admin/postulaciones')
-
-    return { success: true, document }
-  } catch (error: any) {
-    console.error('Error al subir documento:', error)
-    return { success: false, error: error.message || 'Error al subir documento' }
-  }
-}
+// ✅ NOTA: La función uploadDocument fue ELIMINADA
+// Ahora usamos el API route: /api/postulaciones/documents/upload

@@ -13,17 +13,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { 
   FileText, 
   Upload, 
-  ExternalLink,
+  Download,
   Eye,
   Trash2,
   CheckCircle,
   XCircle,
   Clock,
   Loader2,
-  Download,
 } from "lucide-react"
 import { DocumentActionsModal } from "@/components/admin/document-actions-modal"
 
@@ -71,216 +80,211 @@ export function DocumentPreview({
   const [selectedDocument, setSelectedDocument] = useState<any>(null)
   const [showActionsModal, setShowActionsModal] = useState(false)
   const [uploadType, setUploadType] = useState('')
+  const [deleteDocumentId, setDeleteDocumentId] = useState<string | null>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const files = e.target.files
     if (files && files.length > 0 && onDocumentUpload) {
-      // Solo tomar el primer archivo para evitar el error de body size limit
-      const singleFileList = new DataTransfer()
-      singleFileList.items.add(files[0])
-      onDocumentUpload(type, singleFileList.files)
+      onDocumentUpload(type, files)
       e.target.value = ''
+      setUploadType('')
     }
   }
 
-  const handleOpenDocument = (document: any) => {
-    if (document.blobUrl) {
-      window.open(document.blobUrl, '_blank')
-    }
-  }
-
-  const handleReviewDocument = (document: any) => {
-    // Solo abrir modal, NO abrir en nueva pestaña
-    setSelectedDocument(document)
-    setShowActionsModal(true)
-  }
-
-  const handleDownloadDocument = async (document: any) => {
-    if (!document.blobUrl) return
-    
+  const handleDownload = async (url: string, filename: string) => {
     try {
-      const response = await fetch(document.blobUrl)
+      const response = await fetch(url)
       const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = window.document.createElement('a')
-      a.href = url
-      a.download = document.fileName || 'documento'
-      window.document.body.appendChild(a)
-      a.click()
-      window.document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
+      const blobUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(blobUrl)
     } catch (error) {
       console.error('Error al descargar:', error)
-      // Fallback: abrir en nueva pestaña
-      window.open(document.blobUrl, '_blank')
     }
+  }
+
+  const getDocumentTypeLabel = (type: string) => {
+    return documentTypes.find(dt => dt.value === type)?.label || type
   }
 
   const getStatusBadge = (status: string) => {
-    const config = {
-      PENDING: { label: 'Pendiente', className: 'bg-amber-100 text-amber-700 hover:bg-amber-100', icon: Clock },
-      IN_REVIEW: { label: 'En Revisión', className: 'bg-blue-100 text-blue-700 hover:bg-blue-100', icon: Clock },
-      APPROVED: { label: 'Aprobado', className: 'bg-green-100 text-green-700 hover:bg-green-100', icon: CheckCircle },
-      REJECTED: { label: 'Rechazado', className: 'bg-red-100 text-red-700 hover:bg-red-100', icon: XCircle },
-      RESUBMITTED: { label: 'Reenviado', className: 'bg-purple-100 text-purple-700 hover:bg-purple-100', icon: Clock },
+    const badges = {
+      PENDING: <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-700 border-amber-200"><Clock className="h-3 w-3" />Pendiente</Badge>,
+      IN_REVIEW: <Badge variant="outline" className="gap-1 bg-blue-50 text-blue-700 border-blue-200"><Eye className="h-3 w-3" />En Revisión</Badge>,
+      APPROVED: <Badge variant="outline" className="gap-1 bg-green-50 text-green-700 border-green-200"><CheckCircle className="h-3 w-3" />Aprobado</Badge>,
+      REJECTED: <Badge variant="outline" className="gap-1 bg-red-50 text-red-700 border-red-200"><XCircle className="h-3 w-3" />Rechazado</Badge>,
     }
-    
-    const statusConfig = config[status as keyof typeof config] || config.PENDING
-    const Icon = statusConfig.icon
-    
-    return (
-      <Badge className={`${statusConfig.className} gap-1 text-xs`}>
-        <Icon className="h-3 w-3" />
-        {statusConfig.label}
-      </Badge>
-    )
+    return badges[status as keyof typeof badges] || badges.PENDING
   }
 
-  const getDocumentTypeName = (type: string) => {
-    const found = documentTypes.find(dt => dt.value === type)
-    return found?.label || type
-  }
-
-  // Agrupar documentos por tipo
-  const groupedDocuments = documentTypes.map(docType => {
-    const docsOfType = documents.filter(doc => doc.documentType === docType.value)
-    return {
-      type: docType,
-      documents: docsOfType
+  // Agrupar documentos por tipo base (sin FRONT/BACK)
+  const groupedDocuments: Record<string, { title: string; documents: any[] }> = documents.reduce((acc, doc) => {
+    const baseType = doc.documentType
+      .replace('_FRONT', '')
+      .replace('_BACK', '')
+      .replace('_SIDE', '')
+    
+    if (!acc[baseType]) {
+      acc[baseType] = {
+        title: baseType,
+        documents: []
+      }
     }
-  }).filter(group => group.documents.length > 0)
+    acc[baseType].documents.push(doc)
+    return acc
+  }, {} as Record<string, { title: string; documents: any[] }>)
+
+  const getSectionTitle = (type: string) => {
+    const titles: Record<string, string> = {
+      'CEDULA': 'Cédula',
+      'LICENCIA': 'Licencia de Conducir',
+      'LICENSE': 'Licencia',
+      'CRIMINAL_RECORD': 'Antecedentes Penales',
+      'ANTECEDENTES': 'Antecedentes Penales',
+      'TITULO_VEHICULO': 'Título del Vehículo',
+      'CEDULA_VERDE': 'Cédula Verde',
+      'VEHICLE_INSURANCE': 'Seguro de Vehículo',
+      'VEHICLE_REGISTRATION': 'Registro de Vehículo',
+      'VEHICLE_PHOTO': 'Fotos del Vehículo',
+      'SELFIE': 'Selfie con Cédula',
+      'COMPROBANTE_DOMICILIO': 'Comprobante de Domicilio',
+      'TAX_COMPLIANCE': 'Cumplimiento Tributario',
+    }
+    return titles[type] || type
+  }
 
   return (
-    <div className="space-y-4">
-      {/* Grupos de documentos */}
-      {groupedDocuments.map((group) => {
-        return (
-          <div key={group.type.value}>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-semibold text-foreground">
-                {group.type.label}
+    <div className="space-y-6">
+      {documents.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <FileText className="h-12 w-12 mx-auto mb-3 opacity-20" />
+          <p className="text-sm">No hay documentos adjuntos</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {Object.entries(groupedDocuments).map(([type, group], groupIndex) => (
+            <div key={type}>
+              {/* Línea divisoria entre secciones (excepto la primera) */}
+              {groupIndex > 0 && <div className="border-t border-border mb-6" />}
+              
+              {/* Título de sección */}
+              <h4 className="text-sm font-semibold text-foreground mb-3">
+                {getSectionTitle(type)}
               </h4>
-            </div>
-            
-            <div className="space-y-2">
-              {group.documents.map((doc) => (
-                <div key={doc.id}>
-                  {/* Card principal en una sola línea */}
-                  <div className="flex items-center justify-between gap-3 py-2 px-1">
-                    {/* Lado izquierdo: Icono + Nombre + Badge */}
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+
+              {/* Documentos de esta sección */}
+              <div className="space-y-2">
+                {group.documents.map((doc: any) => (
+                  <div key={doc.id} className="border border-border rounded-lg p-3 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-start gap-3">
+                      {/* Icono */}
+                      <div className="flex-shrink-0 mt-0.5">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                      </div>
+
+                      {/* Info del documento */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium truncate">{getDocumentTypeName(doc.documentType)}</span>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-medium">
+                            {getDocumentTypeLabel(doc.documentType)}
+                          </span>
                           {getStatusBadge(doc.status)}
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{doc.fileName}</p>
-                      </div>
-                    </div>
 
-                    {/* Lado derecho: Botones de acción */}
-                    <div className="flex items-center gap-1">
-                      {isEditing && (
+                        <p className="text-xs text-muted-foreground mb-1">
+                          {doc.fileName}
+                        </p>
+
+                        {doc.status === 'APPROVED' && doc.reviewedBy && (
+                          <p className="text-xs text-green-600 flex items-center gap-1">
+                            <CheckCircle className="h-3 w-3" />
+                            Aprobado por {doc.reviewedByUser?.firstName || 'Admin'} el{' '}
+                            {new Date(doc.reviewedAt).toLocaleDateString('es-PY', {
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        )}
+
+                        {doc.status === 'REJECTED' && doc.rejectionReason && (
+                          <p className="text-xs text-red-600 mt-1">
+                            Motivo: {doc.rejectionReason}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Acciones */}
+                      <div className="flex items-center gap-1">
                         <Button
+                          size="icon"
                           variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 cursor-pointer"
-                          onClick={() => handleReviewDocument(doc)}
-                          title="Revisar documento (aprobar/rechazar)"
+                          onClick={() => window.open(doc.blobUrl, '_blank')}
+                          className="h-8 w-8 cursor-pointer"
+                          title="Ver"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                      )}
 
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 cursor-pointer"
-                        onClick={() => handleDownloadDocument(doc)}
-                        title="Descargar documento"
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 cursor-pointer"
-                        onClick={() => handleOpenDocument(doc)}
-                        title="Abrir documento en nueva pestaña"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-
-                      {isEditing && onDocumentDelete && (
                         <Button
+                          size="icon"
                           variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 cursor-pointer text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => {
-                            if (confirm('¿Eliminar este documento?')) {
-                              onDocumentDelete(doc.id)
-                            }
-                          }}
-                          title="Eliminar documento"
+                          onClick={() => handleDownload(doc.blobUrl, doc.fileName)}
+                          className="h-8 w-8 cursor-pointer"
+                          title="Descargar"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Download className="h-4 w-4" />
                         </Button>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Info de revisión - debajo si existe */}
-                  {doc.reviewedAt && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-8 mb-1">
-                      <CheckCircle className="h-3 w-3 text-green-600" />
-                      <span>
-                        Aprobado por <span className="font-medium">
-                          {doc.reviewedByUser?.firstName || doc.reviewedByUser?.fullName || 'Agustin'}
-                        </span>
-                        {' '}el {new Date(doc.reviewedAt).toLocaleDateString('es-PY', { 
-                          day: '2-digit',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        }).replace(',', '')}
-                      </span>
-                    </div>
-                  )}
+                        {isEditing && (
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                setSelectedDocument(doc)
+                                setShowActionsModal(true)
+                              }}
+                              className="h-8 w-8 cursor-pointer"
+                              title="Revisar"
+                              disabled={isLoading}
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
 
-                  {/* Razón de rechazo si existe */}
-                  {doc.status === 'REJECTED' && doc.rejectionReason && (
-                    <div className="ml-8 mt-1 mb-2 p-2.5 bg-red-50/80 border-l-2 border-red-400 rounded-r text-xs">
-                      <div className="flex items-start gap-2">
-                        <XCircle className="h-3.5 w-3.5 text-red-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-semibold text-red-900 mb-0.5">Motivo del rechazo</p>
-                          <p className="text-red-700 leading-relaxed">{doc.rejectionReason}</p>
-                        </div>
+                            {onDocumentDelete && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setDeleteDocumentId(doc.id)}
+                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer"
+                                title="Eliminar"
+                                disabled={isLoading}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )
-      })}
-
-      {/* Mensaje si no hay documentos */}
-      {documents.length === 0 && !isLoading && (
-        <div className="text-center py-12 text-sm text-muted-foreground">
-          <FileText className="h-16 w-16 mx-auto mb-3 text-muted-foreground/30" />
-          <p className="font-medium">No hay documentos subidos</p>
-          <p className="text-xs mt-1">Los documentos aparecerán aquí cuando sean subidos</p>
+          ))}
         </div>
       )}
 
-      {/* Subir nuevo documento */}
+      {/* Sección de upload */}
       {isEditing && onDocumentUpload && (
         <div className="space-y-3 pt-4 border-t">
-          {/* Indicador de carga cuando isLoading es true */}
           {isLoading && (
             <div className="border border-blue-200 bg-blue-50 rounded-lg p-3 flex items-center gap-3">
               <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
@@ -327,7 +331,7 @@ export function DocumentPreview({
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Formatos aceptados: JPG, PNG, PDF • Tamaño máximo: 10MB
+            Formatos aceptados: JPG, PNG, PDF • Tamaño máximo: 5MB
           </p>
         </div>
       )}
@@ -349,6 +353,33 @@ export function DocumentPreview({
         }}
         isLoading={isLoading}
       />
+
+      {/* Dialog de confirmación de eliminación */}
+      <AlertDialog open={!!deleteDocumentId} onOpenChange={(open) => !open && setDeleteDocumentId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar documento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. El documento será eliminado permanentemente del sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLoading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteDocumentId && onDocumentDelete) {
+                  onDocumentDelete(deleteDocumentId)
+                  setDeleteDocumentId(null)
+                }
+              }}
+              disabled={isLoading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
