@@ -45,6 +45,7 @@ import {
   CreditCard,
   Calendar,
   XCircle,
+  AlertTriangle,
 } from "lucide-react"
 import { DocumentPreview } from "@/components/admin/document-preview"
 import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
@@ -72,7 +73,13 @@ interface PostulacionDetailContentProps {
 
 export function PostulacionDetailContent({ postulacion }: PostulacionDetailContentProps) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  
+  // Estados de carga separados
+  const [isEditingPending, startEditingTransition] = useTransition()
+  const [isNotePending, startNoteTransition] = useTransition()
+  const [isDocumentPending, startDocumentTransition] = useTransition()
+  const [isPaymentPending, startPaymentTransition] = useTransition()
+  const [isRejectPending, startRejectTransition] = useTransition()
   
   const [isEditing, setIsEditing] = useState(false)
   const [editedData, setEditedData] = useState(postulacion)
@@ -83,8 +90,13 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   // Filtrar documentos
   const regularDocuments = documents.filter((doc: any) => doc.documentType !== 'PAYMENT_PROOF')
   
-  // Modal de pago
+  // Modales
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showProofPreview, setShowProofPreview] = useState(false)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
+  
   const [paymentData, setPaymentData] = useState({
     paymentMethod: postulacion.equipmentPayments?.[0]?.paymentMethod || '',
     paymentNumber: postulacion.equipmentPayments?.[0]?.paymentNumber || '',
@@ -95,12 +107,6 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
     rejectionReason: postulacion.equipmentPayments?.[0]?.rejectionReason || '',
   })
   
-  // Preview de comprobante
-  const [showProofPreview, setShowProofPreview] = useState(false)
-  
-  // Modal de onboarding
-  const [showScheduleModal, setShowScheduleModal] = useState(false)
-  
   const isAlreadyScheduled = postulacion.onboardingStatus === 'SCHEDULED' || 
                              postulacion.onboardingStatus === 'COMPLETED' ||
                              postulacion.onboardingStatus === 'IN_PROGRESS'
@@ -108,7 +114,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   // ============ HANDLERS ============
 
   const handleSave = () => {
-    startTransition(async () => {
+    startEditingTransition(async () => {
       const result = await updatePostulacion(postulacion.id, editedData)
       
       if (result.success) {
@@ -129,11 +135,11 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   const handleAddNote = () => {
     if (!newNote.trim()) return
     
-    startTransition(async () => {
+    startNoteTransition(async () => {
       const result = await createNote(postulacion.id, newNote)
       
       if (result.success) {
-        setNotes([result.note, ...notes])
+        setNotes([...notes, result.note])
         setNewNote('')
         toast.success('Nota añadida')
       } else {
@@ -149,7 +155,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   const handleDocumentDelete = (documentId: string) => {
     if (!confirm('¿Eliminar este documento?')) return
     
-    startTransition(async () => {
+    startDocumentTransition(async () => {
       const result = await deleteDocument(documentId)
       
       if (result.success) {
@@ -165,30 +171,27 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   const handleDocumentUpload = async (documentType: string, files: FileList) => {
     if (!files || files.length === 0) return
     
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('formDriverId', postulacion.id)
-      formData.append('documentType', documentType)
+    const file = files[0]
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('formDriverId', postulacion.id)
+    formData.append('documentType', documentType)
 
-      startTransition(async () => {
-        const result = await uploadDocument(formData)
-        
-        if (result.success) {
-          setDocuments([...documents, result.document])
-          toast.success(`${file.name} subido`)
-        } else {
-          toast.error(result.error || `Error al subir ${file.name}`)
-        }
-      })
-    }
-    
-    router.refresh()
+    startDocumentTransition(async () => {
+      const result = await uploadDocument(formData)
+      
+      if (result.success) {
+        setDocuments([...documents, result.document])
+        toast.success(`${file.name} subido`)
+        router.refresh()
+      } else {
+        toast.error(result.error || `Error al subir ${file.name}`)
+      }
+    })
   }
 
   const handleDocumentApprove = (documentId: string) => {
-    startTransition(async () => {
+    startDocumentTransition(async () => {
       const result = await approveDocument(documentId)
       
       if (result.success) {
@@ -204,7 +207,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   }
 
   const handleDocumentReject = (documentId: string, reason: string) => {
-    startTransition(async () => {
+    startDocumentTransition(async () => {
       const result = await rejectDocument(documentId, reason)
       
       if (result.success) {
@@ -220,7 +223,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   }
 
   const handleSavePayment = () => {
-    startTransition(async () => {
+    startPaymentTransition(async () => {
       const result = await updatePayment(postulacion.id, paymentData)
       
       if (result.success) {
@@ -230,6 +233,20 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
       } else {
         toast.error(result.error || 'Error al actualizar pago')
       }
+    })
+  }
+
+  const handleRejectPostulacion = () => {
+    if (!rejectReason.trim()) {
+      toast.error('Debes indicar el motivo del rechazo')
+      return
+    }
+
+    startRejectTransition(async () => {
+      // TODO: Implementar server action de rechazo
+      toast.info('Función de rechazo en desarrollo')
+      setShowRejectModal(false)
+      setRejectReason('')
     })
   }
 
@@ -253,7 +270,6 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
               CI: {postulacion.cedula} • Postulación iniciada el {new Date(postulacion.startedAt).toLocaleDateString('es-PY')}
             </p>
             <div className="flex flex-wrap items-center gap-2 mt-3">
-              {/* Badge de progreso/estado */}
               {postulacion.status === 'COMPLETED' ? (
                 <Badge variant="outline" className="gap-1 bg-green-50 text-green-700 border-green-200">
                   <CheckCircle className="h-3 w-3" />
@@ -266,7 +282,6 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                 </Badge>
               )}
               
-              {/* Badge de Onboarding */}
               {postulacion.onboardingStatus && (
                 <OnboardingStatusBadge status={postulacion.onboardingStatus} />
               )}
@@ -280,7 +295,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                   variant="outline" 
                   onClick={() => setIsEditing(true)} 
                   className="gap-2 flex-1 sm:flex-none cursor-pointer"
-                  disabled={isPending}
+                  disabled={isEditingPending}
                 >
                   <Edit className="h-4 w-4" />
                   <span className="hidden sm:inline">Editar</span>
@@ -302,34 +317,21 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                   </Tooltip>
                 </TooltipProvider>
 
-                {isAlreadyScheduled ? (
-                  <Button 
-                    variant="default" 
-                    className="gap-2 bg-blue-600 hover:bg-blue-700 flex-1 sm:flex-none cursor-pointer"
-                    onClick={() => router.push(`/admin/onboarding/${postulacion.id}`)}
-                    disabled={isPending}
-                  >
-                    <Calendar className="h-4 w-4" />
-                    <span className="hidden sm:inline">Ver Onboarding</span>
-                  </Button>
-                ) : (
-                  <Button 
-                    variant="default" 
-                    className="gap-2 bg-green-600 hover:bg-green-700 flex-1 sm:flex-none cursor-pointer"
-                    onClick={handleScheduleOnboarding}
-                    disabled={isPending}
-                  >
-                    <Calendar className="h-4 w-4" />
-                    <span className="hidden sm:inline">Agendar Onboarding</span>
-                  </Button>
-                )}
+                <Button 
+                  variant="default" 
+                  className="gap-2 bg-green-600 hover:bg-green-700 flex-1 sm:flex-none cursor-pointer"
+                  onClick={handleScheduleOnboarding}
+                  disabled={isEditingPending}
+                >
+                  <Calendar className="h-4 w-4" />
+                  <span className="hidden sm:inline">Agendar Onboarding</span>
+                </Button>
                 
-                {/* Botón Rechazar */}
                 <Button 
                   variant="outline"
                   className="gap-2 flex-1 sm:flex-none cursor-pointer text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                  onClick={() => handleDocumentReject(postulacion.id, 'Rechazado por el administrador')}
-                  disabled={isPending}
+                  onClick={() => setShowRejectModal(true)}
+                  disabled={isEditingPending}
                 >
                   <XCircle className="h-4 w-4" />
                   <span className="hidden sm:inline">Rechazar</span>
@@ -338,21 +340,20 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
             ) : (
               <>
                 <Button 
-                  variant="outline" 
                   onClick={handleCancel} 
-                  className="gap-2 flex-1 sm:flex-none cursor-pointer"
-                  disabled={isPending}
+                  size="sm"
+                  variant="outline"
+                  disabled={isEditingPending}
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4 mr-2" />
                   Cancelar
                 </Button>
                 <Button 
-                  variant="default" 
                   onClick={handleSave} 
-                  className="gap-2 flex-1 sm:flex-none cursor-pointer"
-                  disabled={isPending}
+                  size="sm"
+                  disabled={isEditingPending}
                 >
-                  {isPending ? (
+                  {isEditingPending ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Guardando...
@@ -396,7 +397,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                 onDocumentUpload={handleDocumentUpload}
                 onDocumentApprove={handleDocumentApprove}
                 onDocumentReject={handleDocumentReject}
-                isLoading={isPending}
+                isLoading={isDocumentPending}
               />
             </CardContent>
           </Card>
@@ -420,7 +421,13 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                     <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
                       <span>{note.createdByUser?.firstName || note.createdByUser?.fullName || 'Admin'}</span>
                       <span>•</span>
-                      <span>{new Date(note.createdAt).toLocaleString('es-PY')}</span>
+                      <span>{new Date(note.createdAt).toLocaleDateString('es-PY', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}</span>
                     </div>
                   </div>
                 ))}
@@ -438,15 +445,15 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
                   onChange={(e) => setNewNote(e.target.value)}
                   rows={3}
                   className="text-xs"
-                  disabled={isPending}
+                  disabled={isNotePending}
                 />
                 <Button 
                   onClick={handleAddNote} 
                   size="sm"   
-                  className="w-full h-8 cursor-pointer"
-                  disabled={!newNote.trim() || isPending}
+                  className="w-full h-8"
+                  disabled={!newNote.trim() || isNotePending}
                 >
-                  {isPending ? (
+                  {isNotePending ? (
                     <>
                       <Loader2 className="h-3 w-3 mr-2 animate-spin" />
                       Guardando...
@@ -487,215 +494,184 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
             </CardHeader>
             <CardContent className="pt-4">
               <OnboardingSection 
-                attendance={postulacion.onboardingAttendances?.[0]} 
+                attendance={postulacion.onboardingAttendances?.[0]}
                 status={postulacion.onboardingStatus}
                 postulacionId={postulacion.id}
-                onSchedule={() => setShowScheduleModal(true)}
+                onSchedule={handleScheduleOnboarding}
               />
             </CardContent>
           </Card>
         </div>
-
-        {/* Timeline */}
-        <Card>
-          <CardHeader className="pb-3 border-b">
-            <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
-              <Clock className="h-4 w-4" />
-              Historial del Proceso
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="relative">
-              <div className="hidden md:block absolute top-6 left-0 right-0 h-0.5 bg-muted" />
-              <div 
-                className="hidden md:block absolute top-6 left-0 h-0.5 bg-primary transition-all duration-500"
-                style={{ 
-                  width: `${((postulacion.completedSteps.length - 1) / (postulacion.timeline.length - 1)) * 100}%` 
-                }}
-              />
-              
-              <div className="md:hidden absolute left-6 top-0 bottom-0 w-0.5 bg-muted" />
-              <div 
-                className="md:hidden absolute left-6 top-0 w-0.5 bg-primary transition-all duration-500"
-                style={{ 
-                  height: `${((postulacion.completedSteps.length - 1) / (postulacion.timeline.length - 1)) * 100}%` 
-                }}
-              />
-              
-              <div className="relative grid grid-cols-1 md:grid-cols-6 gap-4 md:gap-2">
-                {postulacion.timeline.map((step: any) => {
-                  const isCompleted = postulacion.completedSteps.includes(step.step)
-                  return (
-                    <div key={step.step} className="flex md:block items-start md:text-center">
-                      <div className={`flex-shrink-0 md:mx-auto w-12 h-12 rounded-full flex items-center justify-center text-sm font-semibold mb-0 md:mb-3 transition-all ${
-                        isCompleted
-                          ? 'bg-primary text-primary-foreground shadow-md'
-                          : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {step.step}
-                      </div>
-                      <div className="ml-4 md:ml-0 flex-1">
-                        <p className="text-xs font-medium text-foreground mb-1">
-                          {step.name}
-                        </p>
-                        {step.completedAt && (
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(step.completedAt).toLocaleTimeString('es-PY', { 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
-                            })}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
-      
-      {/* Modales */}
-      <ScheduleOnboardingModal
-        open={showScheduleModal}
-        onOpenChange={setShowScheduleModal}
-        driverId={postulacion.id}
-        driverName={postulacion.fullName}
-        onSuccess={() => {
-          toast.success('Onboarding agendado exitosamente')
-          router.refresh()
-          router.push(`/admin/onboarding/${postulacion.id}`)
-        }}
-      />
-      
-      {/* Modal de Pago */}
-      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
-        <DialogContent className="max-w-2xl">
+
+      {/* Modal de Rechazo */}
+      <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Gestionar Pago de Equipamiento</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Rechazar Postulación
+            </DialogTitle>
             <DialogDescription>
-              Actualiza la información del pago y cambia su estado
+              Estás a punto de rechazar la postulación de {postulacion.fullName}. Esta acción no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="paymentMethod">Método de Pago</Label>
-                <Select 
-                  value={paymentData.paymentMethod} 
-                  onValueChange={(v) => setPaymentData({...paymentData, paymentMethod: v})}
-                  disabled={isPending}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar método" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
-                    <SelectItem value="POS">POS</SelectItem>
-                    <SelectItem value="EFECTIVO">Efectivo</SelectItem>
-                    <SelectItem value="OTROS">Otros</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="status">Estado</Label>
-                <Select 
-                  value={paymentData.status} 
-                  onValueChange={(v) => setPaymentData({...paymentData, status: v})}
-                  disabled={isPending}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PENDING">Pendiente</SelectItem>
-                    <SelectItem value="VERIFIED">Verificado</SelectItem>
-                    <SelectItem value="REJECTED">Rechazado</SelectItem>
-                    <SelectItem value="PARTIAL">Parcial</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="amount">Monto (Gs)</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  value={paymentData.amount}
-                  onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})}
-                  placeholder="Ej: 150000"
-                  disabled={isPending}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="paymentNumber">Nro. Comprobante</Label>
-                <Input
-                  id="paymentNumber"
-                  value={paymentData.paymentNumber}
-                  onChange={(e) => setPaymentData({...paymentData, paymentNumber: e.target.value})}
-                  placeholder="Últimos 6 dígitos"
-                  disabled={isPending}
-                />
-              </div>
-            </div>
-            
+
+          <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="invoiceNumber">Nro. de Factura</Label>
-              <Input
-                id="invoiceNumber"
-                value={paymentData.invoiceNumber}
-                onChange={(e) => setPaymentData({...paymentData, invoiceNumber: e.target.value})}
-                placeholder="Ej: 001-001-0019089"
-                disabled={isPending}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="adminNotes">Notas Administrativas</Label>
+              <Label htmlFor="reject-reason">
+                Motivo del rechazo <span className="text-red-500">*</span>
+              </Label>
               <Textarea
-                id="adminNotes"
-                value={paymentData.adminNotes}
-                onChange={(e) => setPaymentData({...paymentData, adminNotes: e.target.value})}
-                placeholder="Notas internas sobre el pago..."
-                rows={3}
-                disabled={isPending}
+                id="reject-reason"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Ej: Documentación incompleta, no cumple con los requisitos mínimos, etc."
+                rows={4}
+                disabled={isRejectPending}
               />
+              <p className="text-xs text-muted-foreground">
+                Este motivo será visible para el conductor y quedará registrado en el sistema.
+              </p>
             </div>
-            
-            {paymentData.status === 'REJECTED' && (
-              <div className="space-y-2">
-                <Label htmlFor="rejectionReason">Razón de Rechazo</Label>
-                <Textarea
-                  id="rejectionReason"
-                  value={paymentData.rejectionReason}
-                  onChange={(e) => setPaymentData({...paymentData, rejectionReason: e.target.value})}
-                  placeholder="Explica por qué se rechaza el pago..."
-                  rows={2}
-                  disabled={isPending}
-                />
-              </div>
-            )}
           </div>
-          
+
           <DialogFooter>
             <Button 
               variant="outline" 
-              onClick={() => setShowPaymentModal(false)}
-              disabled={isPending}
+              onClick={() => {
+                setShowRejectModal(false)
+                setRejectReason('')
+              }}
+              disabled={isRejectPending}
             >
               Cancelar
             </Button>
             <Button 
-              onClick={handleSavePayment} 
-              disabled={isPending}
+              variant="destructive"
+              onClick={handleRejectPostulacion}
+              disabled={isRejectPending || !rejectReason.trim()}
             >
-              {isPending ? (
+              {isRejectPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Rechazando...
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Confirmar Rechazo
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Pago */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gestionar Pago de Equipamiento</DialogTitle>
+            <DialogDescription>
+              Actualiza la información del pago del conductor
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Estado</Label>
+              <Select 
+                value={paymentData.status} 
+                onValueChange={(value) => setPaymentData({ ...paymentData, status: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">Pendiente</SelectItem>
+                  <SelectItem value="VERIFIED">Verificado</SelectItem>
+                  <SelectItem value="REJECTED">Rechazado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Método de Pago</Label>
+              <Select 
+                value={paymentData.paymentMethod} 
+                onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar método" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="POS">POS</SelectItem>
+                  <SelectItem value="BANK_TRANSFER">Transferencia Bancaria</SelectItem>
+                  <SelectItem value="CASH">Efectivo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Número de Comprobante</Label>
+                <Input
+                  value={paymentData.paymentNumber}
+                  onChange={(e) => setPaymentData({ ...paymentData, paymentNumber: e.target.value })}
+                  placeholder="123456"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Número de Factura</Label>
+                <Input
+                  value={paymentData.invoiceNumber}
+                  onChange={(e) => setPaymentData({ ...paymentData, invoiceNumber: e.target.value })}
+                  placeholder="001-001-0000123"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Monto</Label>
+              <Input
+                type="number"
+                value={paymentData.amount}
+                onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
+                placeholder="150000"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Notas Admin (Opcional)</Label>
+              <Textarea
+                value={paymentData.adminNotes}
+                onChange={(e) => setPaymentData({ ...paymentData, adminNotes: e.target.value })}
+                placeholder="Notas internas sobre el pago..."
+                rows={3}
+              />
+            </div>
+
+            {paymentData.status === 'REJECTED' && (
+              <div className="space-y-2">
+                <Label>Razón de Rechazo</Label>
+                <Textarea
+                  value={paymentData.rejectionReason}
+                  onChange={(e) => setPaymentData({ ...paymentData, rejectionReason: e.target.value })}
+                  placeholder="Explica por qué se rechazó el pago..."
+                  rows={3}
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPaymentModal(false)} disabled={isPaymentPending}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSavePayment} disabled={isPaymentPending}>
+              {isPaymentPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Guardando...
@@ -707,26 +683,36 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
-      {/* Modal de Comprobante */}
+
+      {/* Modal de Comprobante de Pago */}
       <Dialog open={showProofPreview} onOpenChange={setShowProofPreview}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Comprobante de Pago</DialogTitle>
           </DialogHeader>
-          <div className="flex items-center justify-center p-4 bg-muted/50 rounded-lg min-h-[60vh]">
-            {postulacion.equipmentPayments?.[0]?.paymentProofUrl ? (
-              <iframe
-                src={postulacion.equipmentPayments[0].paymentProofUrl}
-                className="w-full h-[70vh] rounded border"
-                title="Comprobante de Pago"
+          {postulacion.equipmentPayments?.[0]?.paymentProofUrl && (
+            <div className="relative aspect-video">
+              <img 
+                src={postulacion.equipmentPayments[0].paymentProofUrl} 
+                alt="Comprobante de pago"
+                className="w-full h-full object-contain rounded-lg"
               />
-            ) : (
-              <p className="text-sm text-muted-foreground">No hay comprobante disponible</p>
-            )}
-          </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Onboarding */}
+      <ScheduleOnboardingModal
+        open={showScheduleModal}
+        onOpenChange={setShowScheduleModal}
+        driverId={postulacion.id}
+        driverName={postulacion.fullName}
+        onSuccess={() => {
+          setShowScheduleModal(false)
+          router.refresh()
+        }}
+      />
     </div>
   )
 }

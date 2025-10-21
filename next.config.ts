@@ -9,6 +9,11 @@ const imagesConfig = {
 const nextConfig: NextConfig = {
   /* config options here */
   images: imagesConfig,
+  
+  // Aumentar el límite de tamaño del body para Server Actions
+  serverActions: {
+    bodySizeLimit: '5mb',
+  },
 };
 
 export default nextConfig;

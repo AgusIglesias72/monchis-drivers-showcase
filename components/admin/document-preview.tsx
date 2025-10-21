@@ -22,6 +22,8 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Loader2,
+  Download,
 } from "lucide-react"
 import { DocumentActionsModal } from "@/components/admin/document-actions-modal"
 
@@ -34,6 +36,28 @@ interface DocumentPreviewProps {
   onDocumentReject?: (documentId: string, reason: string) => void
   isLoading?: boolean
 }
+
+const documentTypes = [
+  { value: 'CEDULA_FRONT', label: 'Cédula (Frente)' },
+  { value: 'CEDULA_BACK', label: 'Cédula (Reverso)' },
+  { value: 'LICENCIA_FRONT', label: 'Licencia de Conducir (Frente)' },
+  { value: 'LICENCIA_BACK', label: 'Licencia de Conducir (Reverso)' },
+  { value: 'LICENSE_FRONT', label: 'Licencia (Frente)' },
+  { value: 'LICENSE_BACK', label: 'Licencia (Reverso)' },
+  { value: 'CRIMINAL_RECORD', label: 'Antecedentes Penales' },
+  { value: 'ANTECEDENTES', label: 'Certificado de Antecedentes' },
+  { value: 'TITULO_VEHICULO', label: 'Título del Vehículo' },
+  { value: 'CEDULA_VERDE', label: 'Cédula Verde' },
+  { value: 'VEHICLE_INSURANCE', label: 'Seguro de Vehículo' },
+  { value: 'VEHICLE_REGISTRATION', label: 'Registro de Vehículo' },
+  { value: 'VEHICLE_PHOTO_FRONT', label: 'Foto Vehículo (Frente)' },
+  { value: 'VEHICLE_PHOTO_BACK', label: 'Foto Vehículo (Atrás)' },
+  { value: 'VEHICLE_PHOTO_SIDE', label: 'Foto Vehículo (Lateral)' },
+  { value: 'SELFIE', label: 'Selfie con Cédula' },
+  { value: 'COMPROBANTE_DOMICILIO', label: 'Comprobante de Domicilio' },
+  { value: 'TAX_COMPLIANCE', label: 'Cumplimiento Tributario' },
+  { value: 'OTHER', label: 'Otros' },
+]
 
 export function DocumentPreview({
   documents = [],
@@ -51,7 +75,10 @@ export function DocumentPreview({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const files = e.target.files
     if (files && files.length > 0 && onDocumentUpload) {
-      onDocumentUpload(type, files)
+      // Solo tomar el primer archivo para evitar el error de body size limit
+      const singleFileList = new DataTransfer()
+      singleFileList.items.add(files[0])
+      onDocumentUpload(type, singleFileList.files)
       e.target.value = ''
     }
   }
@@ -63,225 +90,177 @@ export function DocumentPreview({
   }
 
   const handleReviewDocument = (document: any) => {
-    // Abrir documento en nueva pestaña
-    if (document.blobUrl) {
-      window.open(document.blobUrl, '_blank')
-    }
-    // Abrir modal
+    // Solo abrir modal, NO abrir en nueva pestaña
     setSelectedDocument(document)
     setShowActionsModal(true)
   }
 
+  const handleDownloadDocument = async (document: any) => {
+    if (!document.blobUrl) return
+    
+    try {
+      const response = await fetch(document.blobUrl)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = window.document.createElement('a')
+      a.href = url
+      a.download = document.fileName || 'documento'
+      window.document.body.appendChild(a)
+      a.click()
+      window.document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error al descargar:', error)
+      // Fallback: abrir en nueva pestaña
+      window.open(document.blobUrl, '_blank')
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     const config = {
-      PENDING: { label: 'Pendiente', className: 'bg-amber-100 text-amber-700 hover:bg-amber-100' },
-      IN_REVIEW: { label: 'En Revisión', className: 'bg-blue-100 text-blue-700 hover:bg-blue-100' },
-      APPROVED: { label: 'Aprobado', className: 'bg-green-100 text-green-700 hover:bg-green-100' },
-      REJECTED: { label: 'Rechazado', className: 'bg-red-100 text-red-700 hover:bg-red-100' },
-      RESUBMITTED: { label: 'Reenviado', className: 'bg-purple-100 text-purple-700 hover:bg-purple-100' },
+      PENDING: { label: 'Pendiente', className: 'bg-amber-100 text-amber-700 hover:bg-amber-100', icon: Clock },
+      IN_REVIEW: { label: 'En Revisión', className: 'bg-blue-100 text-blue-700 hover:bg-blue-100', icon: Clock },
+      APPROVED: { label: 'Aprobado', className: 'bg-green-100 text-green-700 hover:bg-green-100', icon: CheckCircle },
+      REJECTED: { label: 'Rechazado', className: 'bg-red-100 text-red-700 hover:bg-red-100', icon: XCircle },
+      RESUBMITTED: { label: 'Reenviado', className: 'bg-purple-100 text-purple-700 hover:bg-purple-100', icon: Clock },
     }
-    const { label, className } = config[status as keyof typeof config] || config.PENDING
-    return <Badge className={className}>{label}</Badge>
+    
+    const statusConfig = config[status as keyof typeof config] || config.PENDING
+    const Icon = statusConfig.icon
+    
+    return (
+      <Badge className={`${statusConfig.className} gap-1 text-xs`}>
+        <Icon className="h-3 w-3" />
+        {statusConfig.label}
+      </Badge>
+    )
   }
 
-  // Agrupar documentos por categoría
-  const documentGroups = [
-    {
-      title: 'Documentos de Identidad',
-      types: ['CEDULA_FRONT', 'CEDULA_BACK'],
-    },
-    {
-      title: 'Licencia de Conducir',
-      types: ['LICENSE_FRONT', 'LICENSE_BACK'],
-    },
-    {
-      title: 'Antecedentes',
-      types: ['CRIMINAL_RECORD'],
-    },
-    {
-      title: 'Documentos del Vehículo',
-      types: ['VEHICLE_INSURANCE', 'VEHICLE_REGISTRATION', 'VEHICLE_PHOTO_FRONT', 'VEHICLE_PHOTO_BACK', 'VEHICLE_PHOTO_SIDE'],
-    },
-    {
-      title: 'Otros Documentos',
-      types: ['TAX_COMPLIANCE', 'SELFIE', 'PAYMENT_PROOF', 'OTHER'],
-    },
-  ]
-
-  const getDocumentTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      CEDULA_FRONT: 'Cédula (Frente)',
-      CEDULA_BACK: 'Cédula (Dorso)',
-      LICENSE_FRONT: 'Licencia (Frente)',
-      LICENSE_BACK: 'Licencia (Dorso)',
-      CRIMINAL_RECORD: 'Antecedentes Penales',
-      VEHICLE_INSURANCE: 'Seguro de Vehículo',
-      VEHICLE_REGISTRATION: 'Registro de Vehículo',
-      VEHICLE_PHOTO_FRONT: 'Foto Vehículo (Frente)',
-      VEHICLE_PHOTO_BACK: 'Foto Vehículo (Atrás)',
-      VEHICLE_PHOTO_SIDE: 'Foto Vehículo (Lateral)',
-      TAX_COMPLIANCE: 'Cumplimiento Tributario',
-      PAYMENT_PROOF: 'Comprobante de Pago',
-      SELFIE: 'Selfie',
-      OTHER: 'Otro',
-    }
-    return labels[type] || type
+  const getDocumentTypeName = (type: string) => {
+    const found = documentTypes.find(dt => dt.value === type)
+    return found?.label || type
   }
 
-  const documentTypes = [
-    { value: 'CEDULA_FRONT', label: 'Cédula (Frente)' },
-    { value: 'CEDULA_BACK', label: 'Cédula (Dorso)' },
-    { value: 'LICENSE_FRONT', label: 'Licencia (Frente)' },
-    { value: 'LICENSE_BACK', label: 'Licencia (Dorso)' },
-    { value: 'CRIMINAL_RECORD', label: 'Antecedentes Penales' },
-    { value: 'VEHICLE_INSURANCE', label: 'Seguro de Vehículo' },
-    { value: 'VEHICLE_REGISTRATION', label: 'Registro de Vehículo' },
-    { value: 'VEHICLE_PHOTO_FRONT', label: 'Foto Vehículo (Frente)' },
-    { value: 'VEHICLE_PHOTO_BACK', label: 'Foto Vehículo (Atrás)' },
-    { value: 'VEHICLE_PHOTO_SIDE', label: 'Foto Vehículo (Lateral)' },
-    { value: 'SELFIE', label: 'Selfie' },
-    { value: 'TAX_COMPLIANCE', label: 'Cumplimiento Tributario' },
-    { value: 'OTHER', label: 'Otro' },
-  ]
+  // Agrupar documentos por tipo
+  const groupedDocuments = documentTypes.map(docType => {
+    const docsOfType = documents.filter(doc => doc.documentType === docType.value)
+    return {
+      type: docType,
+      documents: docsOfType
+    }
+  }).filter(group => group.documents.length > 0)
 
   return (
-    <div className="space-y-6">
-      {/* Documentos agrupados por categoría */}
-      {documentGroups.map((group) => {
-        const groupDocs = documents.filter(doc => group.types.includes(doc.documentType))
-        
-        if (groupDocs.length === 0) return null
-
+    <div className="space-y-4">
+      {/* Grupos de documentos */}
+      {groupedDocuments.map((group) => {
         return (
-          <div key={group.title} className="space-y-3">
-            {/* Título de la sección */}
-            <div className="pb-2 border-b">
-              <h4 className="font-semibold text-sm text-foreground">{group.title}</h4>
-              <p className="text-xs text-muted-foreground mt-0.5">{groupDocs.length} documento{groupDocs.length !== 1 ? 's' : ''}</p>
+          <div key={group.type.value}>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold text-foreground">
+                {group.type.label}
+              </h4>
             </div>
-
-            {/* Documentos de esta categoría */}
+            
             <div className="space-y-2">
-              {groupDocs.map((doc) => (
-                <div
-                  key={doc.id}
-                  onClick={() => handleReviewDocument(doc)}
-                  className="flex items-start justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-muted cursor-pointer"
-                >
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0 space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-medium">
-                          {getDocumentTypeLabel(doc.documentType)}
-                        </p>
-                        {getStatusBadge(doc.status)}
+              {group.documents.map((doc) => (
+                <div key={doc.id}>
+                  {/* Card principal en una sola línea */}
+                  <div className="flex items-center justify-between gap-3 py-2 px-1">
+                    {/* Lado izquierdo: Icono + Nombre + Badge */}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium truncate">{getDocumentTypeName(doc.documentType)}</span>
+                          {getStatusBadge(doc.status)}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{doc.fileName}</p>
                       </div>
-                      
-                      <p className="text-xs text-muted-foreground truncate">
-                        {doc.fileName}
-                      </p>
-                      
-                      {/* Info de revisión */}
-                      {doc.reviewedAt && (
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          {doc.status === 'APPROVED' ? (
-                            <CheckCircle className="h-3 w-3 text-green-600" />
-                          ) : doc.status === 'REJECTED' ? (
-                            <XCircle className="h-3 w-3 text-red-600" />
-                          ) : (
-                            <Clock className="h-3 w-3" />
-                          )}
-                          <span>
-                            {doc.status === 'APPROVED' ? 'Aprobado' : doc.status === 'REJECTED' ? 'Rechazado' : 'Revisado'} 
-                            {' por '}
-                            <span className="font-medium">
-                              {doc.reviewedByUser?.firstName || doc.reviewedByUser?.fullName || doc.reviewedBy || 'Admin'}
-                            </span>
-                            {' el '}
-                            {new Date(doc.reviewedAt).toLocaleDateString('es-PY', { 
-                              day: '2-digit', 
-                              month: 'short',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Razón de rechazo si existe */}
-                      {doc.status === 'REJECTED' && doc.rejectionReason && (
-                        <div className="mt-2 p-2.5 bg-red-50/80 border-l-2 border-red-400 rounded-r text-xs">
-                          <div className="flex items-start gap-2">
-                            <XCircle className="h-3.5 w-3.5 text-red-600 mt-0.5 flex-shrink-0" />
-                            <div>
-                              <p className="font-semibold text-red-900 mb-0.5">Motivo del rechazo</p>
-                              <p className="text-red-700 leading-relaxed">{doc.rejectionReason}</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Notas del admin si existen */}
-                      {doc.adminNotes && (
-                        <div className="mt-1.5 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
-                          <span className="font-semibold">Nota: </span>
-                          {doc.adminNotes}
-                        </div>
-                      )}
                     </div>
-                  </div>
 
-                  {/* Botones de acción */}
-                  <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                    {/* Abrir */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleOpenDocument(doc)
-                      }}
-                      title="Abrir documento en nueva pestaña"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
+                    {/* Lado derecho: Botones de acción */}
+                    <div className="flex items-center gap-1">
+                      {isEditing && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 cursor-pointer"
+                          onClick={() => handleReviewDocument(doc)}
+                          title="Revisar documento (aprobar/rechazar)"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      )}
 
-                    {/* Revisar */}
-                    {isEditing && (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-8 w-8 p-0 cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleReviewDocument(doc)
-                        }}
-                        title="Revisar documento (aprobar/rechazar)"
+                        onClick={() => handleDownloadDocument(doc)}
+                        title="Descargar documento"
                       >
-                        <Eye className="h-4 w-4" />
+                        <Download className="h-4 w-4" />
                       </Button>
-                    )}
 
-                    {/* Eliminar */}
-                    {isEditing && onDocumentDelete && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 p-0 cursor-pointer text-red-600 hover:text-red-700 hover:bg-red-50"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (confirm('¿Eliminar este documento?')) {
-                            onDocumentDelete(doc.id)
-                          }
-                        }}
-                        title="Eliminar documento"
+                        className="h-8 w-8 p-0 cursor-pointer"
+                        onClick={() => handleOpenDocument(doc)}
+                        title="Abrir documento en nueva pestaña"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <ExternalLink className="h-4 w-4" />
                       </Button>
-                    )}
+
+                      {isEditing && onDocumentDelete && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 cursor-pointer text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            if (confirm('¿Eliminar este documento?')) {
+                              onDocumentDelete(doc.id)
+                            }
+                          }}
+                          title="Eliminar documento"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Info de revisión - debajo si existe */}
+                  {doc.reviewedAt && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-8 mb-1">
+                      <CheckCircle className="h-3 w-3 text-green-600" />
+                      <span>
+                        Aprobado por <span className="font-medium">
+                          {doc.reviewedByUser?.firstName || doc.reviewedByUser?.fullName || 'Agustin'}
+                        </span>
+                        {' '}el {new Date(doc.reviewedAt).toLocaleDateString('es-PY', { 
+                          day: '2-digit',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }).replace(',', '')}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Razón de rechazo si existe */}
+                  {doc.status === 'REJECTED' && doc.rejectionReason && (
+                    <div className="ml-8 mt-1 mb-2 p-2.5 bg-red-50/80 border-l-2 border-red-400 rounded-r text-xs">
+                      <div className="flex items-start gap-2">
+                        <XCircle className="h-3.5 w-3.5 text-red-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-semibold text-red-900 mb-0.5">Motivo del rechazo</p>
+                          <p className="text-red-700 leading-relaxed">{doc.rejectionReason}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -290,7 +269,7 @@ export function DocumentPreview({
       })}
 
       {/* Mensaje si no hay documentos */}
-      {documents.length === 0 && (
+      {documents.length === 0 && !isLoading && (
         <div className="text-center py-12 text-sm text-muted-foreground">
           <FileText className="h-16 w-16 mx-auto mb-3 text-muted-foreground/30" />
           <p className="font-medium">No hay documentos subidos</p>
@@ -301,6 +280,17 @@ export function DocumentPreview({
       {/* Subir nuevo documento */}
       {isEditing && onDocumentUpload && (
         <div className="space-y-3 pt-4 border-t">
+          {/* Indicador de carga cuando isLoading es true */}
+          {isLoading && (
+            <div className="border border-blue-200 bg-blue-50 rounded-lg p-3 flex items-center gap-3">
+              <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-900">Procesando documento...</p>
+                <p className="text-xs text-blue-700">Por favor espera mientras se procesa la solicitud</p>
+              </div>
+            </div>
+          )}
+
           <Label className="text-sm font-semibold">Subir nuevo documento</Label>
           <div className="flex gap-2">
             <Select value={uploadType} onValueChange={setUploadType}>
