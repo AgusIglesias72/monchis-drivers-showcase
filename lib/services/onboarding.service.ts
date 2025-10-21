@@ -1,66 +1,227 @@
 // lib/services/onboarding.service.ts
 
 import { prisma } from '@/lib/prisma'
+import type { 
+  OnboardingEventStatus,
+  OnboardingAttendeeStatus,
+  CreateEventRequest,
+  UpdateEventRequest
+} from '@/types/onboarding'
 
-export class OnboardingService {
-  
+class OnboardingService {
   /**
-   * Obtiene eventos de onboarding disponibles (upcoming)
+   * Obtiene todos los eventos con sus relaciones
    */
-  async getAvailableEvents() {
-    const now = new Date()
+  async getAllEvents(filters?: {
+    status?: OnboardingEventStatus
+    upcoming?: boolean
+    past?: boolean
+  }) {
+    const where: any = {}
     
-    const events = await prisma.onboardingEvent.findMany({
-      where: {
-        scheduledDate: {
-          gte: now
+    if (filters?.status) {
+      where.status = filters.status
+    }
+    
+    if (filters?.upcoming) {
+      where.scheduledDate = {
+        gte: new Date()
+      }
+      where.status = {
+        in: ['DRAFT', 'SCHEDULED', 'IN_PROGRESS']
+      }
+    }
+    
+    if (filters?.past) {
+      where.OR = [
+        {
+          scheduledDate: {
+            lt: new Date()
+          }
         },
-        status: {
-          in: ['SCHEDULED', 'IN_PROGRESS']
-        }
-      },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        scheduledDate: true,
-        startTime: true,
-        endTime: true,
-        location: true,
-        locationAddress: true,
-        meetingLink: true,
-        maxCapacity: true,
-        currentCapacity: true,
-        status: true,
-        _count: {
-          select: {
-            attendees: {
-              where: {
-                status: {
-                  in: ['INVITED', 'CONFIRMED', 'SCHEDULED', 'ATTENDED']
-                }
-              }
-            }
+        {
+          status: {
+            in: ['COMPLETED', 'CANCELLED']
           }
         }
+      ]
+    }
+
+    return await prisma.onboardingEvent.findMany({
+      where,
+      include: {
+        organizerUser: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true
+          }
+        },
+        attendees: true
       },
       orderBy: {
         scheduledDate: 'asc'
       }
     })
-    
-    // Calcular slots disponibles
-    return events.map(event => ({
-      ...event,
-      availableSlots: event.maxCapacity 
-        ? event.maxCapacity - (event.currentCapacity || 0)
-        : null, // null = sin límite
-      hasCapacity: !event.maxCapacity || (event.currentCapacity || 0) < event.maxCapacity
-    }))
   }
-  
+
   /**
-   * Asigna un driver a un evento de onboarding
+   * Obtiene un evento por ID con todas sus relaciones
+   */
+  async getEventById(eventId: string) {
+    return await prisma.onboardingEvent.findUnique({
+      where: { id: eventId },
+      include: {
+        organizerUser: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true
+          }
+        },
+        attendees: {
+          include: {
+            formDriver: {
+              select: {
+                id: true,
+                fullName: true,
+                firstName: true,
+                lastName: true,
+                phoneNumber: true,
+                email: true,
+                cedula: true,
+                status: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
+      }
+    })
+  }
+
+  /**
+   * Crea un nuevo evento
+   */
+  async createEvent(organizerId: string, data: CreateEventRequest) {
+    // Calcular capacidad actual inicial
+    const currentCapacity = 0
+
+    return await prisma.onboardingEvent.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        scheduledDate: new Date(data.scheduledDate),
+        startTime: data.startTime,
+        endTime: data.endTime,
+        location: data.location,
+        locationAddress: data.locationAddress,
+        meetingLink: data.meetingLink,
+        maxCapacity: data.maxCapacity,
+        currentCapacity,
+        reminderHoursBefore: data.reminderHoursBefore || 24,
+        status: data.status || 'DRAFT',
+        notes: data.notes,
+        organizer: organizerId  
+      },
+      include: {
+        organizerUser: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true
+          }
+        },
+        attendees: true
+      }
+    })
+  }
+
+  /**
+   * Actualiza un evento existente
+   */
+  async updateEvent(eventId: string, data: UpdateEventRequest) {
+    const updateData: any = {}
+    
+    if (data.title !== undefined) updateData.title = data.title
+    if (data.description !== undefined) updateData.description = data.description
+    if (data.scheduledDate !== undefined) updateData.scheduledDate = new Date(data.scheduledDate)
+    if (data.startTime !== undefined) updateData.startTime = data.startTime
+    if (data.endTime !== undefined) updateData.endTime = data.endTime
+    if (data.location !== undefined) updateData.location = data.location
+    if (data.locationAddress !== undefined) updateData.locationAddress = data.locationAddress
+    if (data.meetingLink !== undefined) updateData.meetingLink = data.meetingLink
+    if (data.maxCapacity !== undefined) updateData.maxCapacity = data.maxCapacity
+    if (data.reminderHoursBefore !== undefined) updateData.reminderHoursBefore = data.reminderHoursBefore
+    if (data.status !== undefined) updateData.status = data.status
+    if (data.notes !== undefined) updateData.notes = data.notes
+
+    return await prisma.onboardingEvent.update({
+      where: { id: eventId },
+      data: updateData,
+      include: {
+        organizerUser: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true
+          }
+        },
+        attendees: true
+      }
+    })
+  }
+
+  /**
+   * Elimina un evento
+   */
+  async deleteEvent(eventId: string) {
+    // Primero eliminar todos los attendees relacionados
+    await prisma.onboardingAttendee.deleteMany({
+      where: { eventId }
+    })
+
+    // Luego eliminar el evento
+    await prisma.onboardingEvent.delete({
+      where: { id: eventId }
+    })
+
+    return { success: true }
+  }
+
+  /**
+   * Obtiene eventos disponibles para asignar drivers
+   */
+  async getAvailableEvents() {
+    return await prisma.onboardingEvent.findMany({
+      where: {
+        status: {
+          in: ['DRAFT', 'SCHEDULED']
+        },
+        scheduledDate: {
+          gte: new Date()
+        }
+      },
+      include: {
+        organizerUser: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true
+          }
+        },
+        attendees: true
+      },
+      orderBy: {
+        scheduledDate: 'asc'
+      }
+    })
+  }
+
+  /**
+   * Asigna un driver a un evento
    */
   async assignDriverToEvent({
     eventId,
@@ -70,104 +231,37 @@ export class OnboardingService {
   }: {
     eventId: string
     driverId: string
-    assignedBy: string // clerkId del admin
+    assignedBy: string
     notes?: string
   }) {
-    // Verificar que el evento existe y tiene capacidad
+    // Verificar capacidad del evento
     const event = await prisma.onboardingEvent.findUnique({
       where: { id: eventId },
       select: {
-        id: true,
-        title: true,
-        scheduledDate: true,
-        maxCapacity: true,
         currentCapacity: true,
-        status: true
+        maxCapacity: true
       }
     })
-    
+
     if (!event) {
       throw new Error('Evento no encontrado')
     }
-    
-    if (event.status !== 'SCHEDULED' && event.status !== 'IN_PROGRESS') {
-      throw new Error('El evento no está disponible para asignación')
-    }
-    
+
     if (event.maxCapacity && event.currentCapacity >= event.maxCapacity) {
-      throw new Error('El evento no tiene cupos disponibles')
+      throw new Error('El evento ha alcanzado su capacidad máxima')
     }
-    
-    // Verificar que el driver existe
-    const driver = await prisma.formDriver.findUnique({
-      where: { id: driverId },
-      select: {
-        id: true,
-        fullName: true,
-        phoneNumber: true,
-        email: true
-      }
-    })
-    
-    if (!driver) {
-      throw new Error('Driver no encontrado')
-    }
-    
-    // Verificar si ya está asignado a este evento
-    const existingAttendance = await prisma.onboardingAttendee.findFirst({
-      where: {
-        eventId,
-        formDriverId: driverId,
-        status: {
-          in: ['INVITED', 'CONFIRMED', 'SCHEDULED', 'ATTENDED']
-        }
-      }
-    })
-    
-    if (existingAttendance) {
-      throw new Error('El driver ya está asignado a este evento')
-    }
-    
-    // Crear la asistencia
+
+    // Crear attendee
     const attendee = await prisma.onboardingAttendee.create({
       data: {
         eventId,
         formDriverId: driverId,
-        status: 'SCHEDULED',
+        status: 'INVITED',
         invitedBy: assignedBy,
-        attendeeNotes: notes,
-        // Generar token de confirmación
-        confirmationToken: `${driverId}-${eventId}-${Date.now()}`
-      },
-      include: {
-        formDriver: {
-          select: {
-            id: true,
-            fullName: true,
-            phoneNumber: true,
-            email: true
-          }
-        },
-        event: {
-          select: {
-            title: true,
-            scheduledDate: true,
-            startTime: true,
-            location: true
-          }
-        }
+        attendeeNotes: notes
       }
     })
-    
-    // Actualizar estado del driver
-    await prisma.formDriver.update({
-      where: { id: driverId },
-      data: {
-        onboardingStatus: 'SCHEDULED',
-        onboardingScheduledAt: event.scheduledDate
-      }
-    })
-    
+
     // Incrementar capacidad del evento
     await prisma.onboardingEvent.update({
       where: { id: eventId },
@@ -177,39 +271,58 @@ export class OnboardingService {
         }
       }
     })
-    
-    // Log de auditoría
-    await prisma.auditLog.create({
+
+    // Actualizar estado del driver
+    await prisma.formDriver.update({
+      where: { id: driverId },
       data: {
-        userId: assignedBy,
-        userEmail: 'system', // Se actualizará con el email del admin
-        action: 'ONBOARDING_ATTENDEE_INVITED',
-        actionType: 'CREATE',
-        entityType: 'OnboardingAttendee',
-        entityId: attendee.id,
-        description: `Driver ${driver.fullName} asignado al evento ${event.title}`,
-        metadata: {
-          eventId,
-          formDriverId: driverId,
-          eventDate: event.scheduledDate
-        }
+        onboardingStatus: 'SCHEDULED',
+        onboardingScheduledAt: new Date()
       }
     })
-    
+
     return attendee
   }
-  
+
   /**
    * Obtiene el estado de onboarding de un driver
    */
   async getDriverOnboardingStatus(driverId: string) {
-    const attendance = await prisma.onboardingAttendee.findFirst({
-      where: {
-        formDriverId: driverId,
-        status: {
-          in: ['INVITED', 'CONFIRMED', 'SCHEDULED', 'ATTENDED']
+    const driver = await prisma.formDriver.findUnique({
+      where: { id: driverId },
+      select: {
+        onboardingStatus: true,
+        onboardingScheduledAt: true,
+        onboardingCompletedAt: true,
+        onboardingAttendances: {
+          include: {
+            event: {
+              select: {
+                id: true,
+                title: true,
+                scheduledDate: true,
+                startTime: true,
+                location: true,
+                status: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
         }
-      },
+      }
+    })
+
+    return driver
+  }
+
+  /**
+   * Obtiene asistentes de un evento
+   */
+  async getEventAttendees(eventId: string) {
+    return await prisma.onboardingAttendee.findMany({
+      where: { eventId },
       include: {
         event: {
           select: {
@@ -217,8 +330,24 @@ export class OnboardingService {
             title: true,
             scheduledDate: true,
             startTime: true,
-            location: true,
-            status: true
+            location: true
+          }
+        },
+        formDriver: {
+          select: {
+            id: true,
+            fullName: true,
+            phoneNumber: true,
+            email: true,
+            documentsStatus: true,
+            onboardingStatus: true
+          }
+        },
+        invitedByUser: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true
           }
         }
       },
@@ -226,8 +355,335 @@ export class OnboardingService {
         createdAt: 'desc'
       }
     })
+  }
+
+  /**
+   * Actualiza el estado de un asistente
+   */
+  async updateAttendeeStatus(
+    attendeeId: string,
+    status: OnboardingAttendeeStatus,
+    notes?: string
+  ) {
+    const updateData: any = { status }
     
-    return attendance
+    if (notes) {
+      updateData.attendeeNotes = notes
+    }
+
+    if (status === 'CONFIRMED') {
+      updateData.confirmedAt = new Date()
+    }
+
+    if (status === 'ATTENDED') {
+      updateData.attendedAt = new Date()
+    }
+
+    return await prisma.onboardingAttendee.update({
+      where: { id: attendeeId },
+      data: updateData,
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            scheduledDate: true,
+            startTime: true,
+            location: true
+          }
+        },
+        formDriver: {
+          select: {
+            id: true,
+            fullName: true,
+            phoneNumber: true,
+            email: true,
+            documentsStatus: true,
+            onboardingStatus: true
+          }
+        },
+        invitedByUser: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true
+          }
+        }
+      }
+    })
+  }
+
+  /**
+   * Cancela la asistencia de un driver
+   */
+  async cancelAttendee(attendeeId: string, reason?: string) {
+    const attendee = await prisma.onboardingAttendee.findUnique({
+      where: { id: attendeeId },
+      select: {
+        eventId: true,
+        formDriverId: true
+      }
+    })
+
+    if (!attendee) {
+      throw new Error('Asistente no encontrado')
+    }
+
+    // Actualizar estado del attendee
+    await prisma.onboardingAttendee.update({
+      where: { id: attendeeId },
+      data: {
+        status: 'CANCELLED',
+        attendeeNotes: reason
+      }
+    })
+
+    // Decrementar capacidad del evento
+    await prisma.onboardingEvent.update({
+      where: { id: attendee.eventId },
+      data: {
+        currentCapacity: {
+          decrement: 1
+        }
+      }
+    })
+
+    // Actualizar estado del driver si no tiene otros eventos pendientes
+    const otherAttendances = await prisma.onboardingAttendee.count({
+      where: {
+        formDriverId: attendee.formDriverId,
+        status: {
+          in: ['INVITED', 'CONFIRMED', 'ATTENDED']
+        },
+        id: {
+          not: attendeeId
+        }
+      }
+    })
+
+    if (otherAttendances === 0) {
+      await prisma.formDriver.update({
+        where: { id: attendee.formDriverId },
+        data: {
+          onboardingStatus: null,
+          onboardingScheduledAt: null
+        }
+      })
+    }
+
+    return { success: true }
+  }
+
+  /**
+   * Marca un asistente como check-in
+   */
+  async checkInAttendee(attendeeId: string, notes?: string) {
+    const attendee = await this.updateAttendeeStatus(attendeeId, 'ATTENDED', notes)
+
+    // Actualizar estado del driver
+    await prisma.formDriver.update({
+      where: { id: attendee.formDriver.id },
+      data: {
+        onboardingStatus: 'COMPLETED',
+        onboardingCompletedAt: new Date()
+      }
+    })
+
+    return attendee
+  }
+
+  /**
+   * Marca un asistente como no show
+   */
+  async markNoShow(attendeeId: string) {
+    return await this.updateAttendeeStatus(attendeeId, 'NO_SHOW')
+  }
+
+  /**
+   * Confirma la asistencia de un driver
+   */
+  async confirmAttendee(attendeeId: string) {
+    return await this.updateAttendeeStatus(attendeeId, 'CONFIRMED')
+  }
+
+
+  /**
+   * Obtiene drivers elegibles para agregar a un evento
+   */
+  async getEligibleDrivers(params: {
+    eventId?: string
+    search?: string
+    page?: number
+    limit?: number
+  }) {
+    const { eventId, search = '', page = 1, limit = 10 } = params
+    const skip = (page - 1) * limit
+
+    // Filtro de búsqueda
+    const searchFilter = search ? {
+      OR: [
+        { fullName: { contains: search, mode: 'insensitive' as const } },
+        { email: { contains: search, mode: 'insensitive' as const } },
+        { phoneNumber: { contains: search } },
+        { cedula: { contains: search } },
+      ]
+    } : {}
+
+    // Obtener drivers ya asignados a este evento
+    const existingAttendees = eventId ? await prisma.onboardingAttendee.findMany({
+      where: {
+        eventId,
+        status: { in: ['INVITED', 'CONFIRMED', 'ATTENDED', 'SCHEDULED', 'RESCHEDULED'] }
+      },
+      select: { formDriverId: true }
+    }) : []
+
+    const assignedIds = new Set(existingAttendees.map(a => a.formDriverId))
+
+    // Obtener TODOS los drivers, excluyendo solo los ya asignados a este evento
+    const where: any = {
+      ...searchFilter,
+      ...(eventId && assignedIds.size > 0 ? { id: { notIn: Array.from(assignedIds) } } : {})
+    }
+
+    const [drivers, total] = await Promise.all([
+      prisma.formDriver.findMany({
+        where,
+        select: {
+          id: true,
+          fullName: true,
+          phoneNumber: true,
+          email: true,
+          cedula: true,
+          documentsStatus: true,
+          onboardingStatus: true,
+          onboardingScheduledAt: true,
+        },
+        skip,
+        take: limit,
+        orderBy: [
+          { documentsStatus: 'desc' }, // Aprobados primero
+          { lastActivityAt: 'desc' }
+        ]
+      }),
+      prisma.formDriver.count({ where })
+    ])
+
+    return {
+      drivers,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: skip + limit < total,
+      }
+    }
+  }
+
+  /**
+   * Asigna múltiples drivers a un evento
+   */
+  async assignDriversToEvent({
+    eventId,
+    driverIds,
+    assignedBy,
+    notes
+  }: {
+    eventId: string
+    driverIds: string[]
+    assignedBy: string
+    notes?: string
+  }) {
+    // Verificar capacidad del evento
+    const event = await prisma.onboardingEvent.findUnique({
+      where: { id: eventId },
+      select: {
+        currentCapacity: true,
+        maxCapacity: true
+      }
+    })
+
+    if (!event) {
+      throw new Error('Evento no encontrado')
+    }
+
+    const newDriversCount = driverIds.length
+    const newTotalCapacity = event.currentCapacity + newDriversCount
+
+    if (event.maxCapacity && newTotalCapacity > event.maxCapacity) {
+      throw new Error(`La capacidad máxima del evento es ${event.maxCapacity}. Actualmente hay ${event.currentCapacity} asistentes. No puedes agregar ${newDriversCount} drivers.`)
+    }
+
+    // Crear attendees en batch
+    const attendees = await prisma.$transaction(async (tx) => {
+      const created = await tx.onboardingAttendee.createMany({
+        data: driverIds.map(driverId => ({
+          eventId,
+          formDriverId: driverId,
+          status: 'INVITED' as const,
+          invitedBy: assignedBy,
+          attendeeNotes: notes
+        }))
+      })
+
+      // Incrementar capacidad
+      await tx.onboardingEvent.update({
+        where: { id: eventId },
+        data: {
+          currentCapacity: {
+            increment: newDriversCount
+          }
+        }
+      })
+
+      // Actualizar estado de drivers
+      await tx.formDriver.updateMany({
+        where: { id: { in: driverIds } },
+        data: {
+          onboardingStatus: 'SCHEDULED',
+          onboardingScheduledAt: new Date()
+        }
+      })
+
+      // Obtener los attendees creados con sus relaciones
+      return await tx.onboardingAttendee.findMany({
+        where: {
+          eventId,
+          formDriverId: { in: driverIds }
+        },
+        include: {
+          event: {
+            select: {
+              id: true,
+              title: true,
+              scheduledDate: true,
+              startTime: true,
+              location: true
+            }
+          },
+          formDriver: {
+            select: {
+              id: true,
+              fullName: true,
+              phoneNumber: true,
+              email: true,
+              documentsStatus: true,
+              onboardingStatus: true
+            }
+          },
+          invitedByUser: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true
+            }
+          }
+        }
+      })
+    })
+
+    return attendees
   }
 }
 

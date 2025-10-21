@@ -17,37 +17,21 @@ export type AttendeeAction =
 
 // ==================== PRISMA PAYLOAD TYPES ====================
 
+// Tipo para eventos con relaciones básicas (usado en listas)
 export type OnboardingEventWithRelations = Prisma.OnboardingEventGetPayload<{
   include: {
     organizerUser: {
       select: {
         id: true
         email: true
-        firstName: true
-        lastName: true
         fullName: true
       }
     }
-    attendees: {
-      include: {
-        formDriver: {
-          select: {
-            id: true
-            fullName: true
-            phoneNumber: true
-            email: true
-          }
-        }
-      }
-    }
-    _count: {
-      select: {
-        attendees: true
-      }
-    }
+    attendees: true
   }
 }>
 
+// Tipo para asistentes con relaciones completas
 export type OnboardingAttendeeWithRelations = Prisma.OnboardingAttendeeGetPayload<{
   include: {
     event: {
@@ -219,6 +203,8 @@ export interface PublicConfirmResponse {
 }
 
 // ==================== API CLIENT HELPER ====================
+// NOTA: Esta clase todavía se usa en algunos componentes legacy
+// Eventualmente migraremos todo a Server Actions
 
 export class OnBoardingAPI {
   private baseUrl: string
@@ -297,20 +283,7 @@ export class OnBoardingAPI {
     return response.json()
   }
 
-  async assignDrivers(data: AssignDriversRequest): Promise<AssignDriversResponse> {
-    const response = await fetch(`${this.baseUrl}/onboarding/attendees`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    })
-    if (!response.ok) throw new Error('Failed to assign drivers')
-    return response.json()
-  }
-
-  async updateAttendee(
-    attendeeId: string, 
-    data: UpdateAttendeeRequest
-  ): Promise<OnboardingAttendeeWithRelations> {
+  async updateAttendee(attendeeId: string, data: UpdateAttendeeRequest): Promise<OnboardingAttendeeWithRelations> {
     const response = await fetch(`${this.baseUrl}/onboarding/attendees?id=${attendeeId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -322,8 +295,18 @@ export class OnBoardingAPI {
 
   // ==================== ACTIONS ====================
 
+  async assignDrivers(data: AssignDriversRequest): Promise<AssignDriversResponse> {
+    const response = await fetch(`${this.baseUrl}/onboarding/actions/assign-drivers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    if (!response.ok) throw new Error('Failed to assign drivers')
+    return response.json()
+  }
+
   async getEligibleDrivers(params: {
-    eventId?: string
+    eventId: string
     page?: number
     limit?: number
     search?: string

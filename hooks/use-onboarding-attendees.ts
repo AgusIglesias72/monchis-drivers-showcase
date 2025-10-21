@@ -1,19 +1,22 @@
 // hooks/use-onboarding-attendees.ts
 
+'use client'
+
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { OnBoardingAPI } from '@/types/onboarding'
-import type { 
-  OnboardingAttendeeWithRelations, 
-  AttendeeAction,
-} from '@/types/onboarding'
+import {
+  getEventAttendees,
+  checkInAttendee,
+  markAttendeeNoShow,
+  cancelAttendee,
+  confirmAttendee
+} from '@/lib/actions/onboarding.actions'
+import type { OnboardingAttendeeWithRelations } from '@/types/onboarding'
 
 export function useOnboardingAttendees(eventId?: string) {
   const [attendees, setAttendees] = useState<OnboardingAttendeeWithRelations[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Ref para mantener la misma instancia del API
-  const apiRef = useRef(new OnBoardingAPI())
   // Ref para saber si ya se ejecutó el fetch inicial
   const initialFetchDone = useRef(false)
 
@@ -23,8 +26,14 @@ export function useOnboardingAttendees(eventId?: string) {
     try {
       setLoading(true)
       setError(null)
-      const data = await apiRef.current.getAttendees({ eventId })
-      setAttendees(data)
+      
+      const result = await getEventAttendees(eventId)
+      
+      if (result.success) {
+        setAttendees((result.attendees || []) as OnboardingAttendeeWithRelations[])
+      } else {
+        setError(result.error || 'Error al cargar asistentes')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar asistentes')
       console.error('Error fetching attendees:', err)
@@ -33,7 +42,7 @@ export function useOnboardingAttendees(eventId?: string) {
     }
   }, [eventId])
 
-  // ✅ SOLO cargar attendees una vez al montar
+  // Solo cargar attendees una vez al montar
   useEffect(() => {
     if (eventId && !initialFetchDone.current) {
       initialFetchDone.current = true
@@ -41,52 +50,95 @@ export function useOnboardingAttendees(eventId?: string) {
     }
   }, [eventId, fetchAttendees])
 
-  const updateAttendee = async (
-    attendeeId: string, 
-    action: AttendeeAction,
-    data?: { attendeeNotes?: string; newEventId?: string }
-  ) => {
+  const checkIn = async (attendeeId: string, notes?: string) => {
     try {
-      const updatedAttendee = await apiRef.current.updateAttendee(attendeeId, {
-        action,
-        ...data,
-      })
+      const result = await checkInAttendee(attendeeId, notes)
       
-      // Actualizar en la lista
-      setAttendees(prev => 
-        prev.map(a => a.id === attendeeId ? updatedAttendee : a)
-      )
-      
-      return { success: true, data: updatedAttendee }
+      if (result.success && result.attendee) {
+        setAttendees(prev => 
+          prev.map(a => a.id === attendeeId ? result.attendee! as unknown as OnboardingAttendeeWithRelations : a)
+        )
+        return { success: true, data: result.attendee }
+      } else {
+        return { 
+          success: false, 
+          error: result.error || 'Error en check-in' 
+        }
+      }
     } catch (err) {
       return { 
         success: false, 
-        error: err instanceof Error ? err.message : 'Error al actualizar asistente' 
+        error: err instanceof Error ? err.message : 'Error en check-in' 
       }
     }
   }
 
-  const checkIn = async (attendeeId: string, notes?: string) => {
-    return updateAttendee(attendeeId, 'CHECK_IN', { attendeeNotes: notes })
-  }
-
   const markNoShow = async (attendeeId: string) => {
-    return updateAttendee(attendeeId, 'MARK_NO_SHOW')
+    try {
+      const result = await markAttendeeNoShow(attendeeId)
+      
+      if (result.success && result.attendee) {
+        setAttendees(prev => 
+          prev.map(a => a.id === attendeeId ? result.attendee! as unknown as OnboardingAttendeeWithRelations : a)
+        )
+        return { success: true, data: result.attendee }
+      } else {
+        return { 
+          success: false, 
+          error: result.error || 'Error al marcar no show' 
+        }
+      }
+    } catch (err) {
+      return { 
+        success: false, 
+        error: err instanceof Error ? err.message : 'Error al marcar no show' 
+      }
+    }
   }
 
-  const cancelAttendee = async (attendeeId: string, reason?: string) => {
-    return updateAttendee(attendeeId, 'CANCEL', { attendeeNotes: reason })
+  const cancel = async (attendeeId: string, reason?: string) => {
+    try {
+      const result = await cancelAttendee(attendeeId, reason)
+      
+      if (result.success) {
+        // Refrescar la lista de asistentes
+        await fetchAttendees()
+        return { success: true }
+      } else {
+        return { 
+          success: false, 
+          error: result.error || 'Error al cancelar' 
+        }
+      }
+    } catch (err) {
+      return { 
+        success: false, 
+        error: err instanceof Error ? err.message : 'Error al cancelar' 
+      }
+    }
   }
 
-  const confirmAttendee = async (attendeeId: string) => {
-    return updateAttendee(attendeeId, 'CONFIRM')
-  }
-
-  const rescheduleAttendee = async (attendeeId: string, newEventId: string, notes?: string) => {
-    return updateAttendee(attendeeId, 'RESCHEDULE', { 
-      newEventId, 
-      attendeeNotes: notes 
-    })
+  const confirm = async (attendeeId: string) => {
+    try {
+      const result = await confirmAttendee(attendeeId)
+      
+      if (result.success && result.attendee) {
+        setAttendees(prev => 
+          prev.map(a => a.id === attendeeId ? result.attendee! as unknown as OnboardingAttendeeWithRelations : a)
+        )
+        return { success: true, data: result.attendee }
+      } else {
+        return { 
+          success: false, 
+          error: result.error || 'Error al confirmar' 
+        }
+      }
+    } catch (err) {
+      return { 
+        success: false, 
+        error: err instanceof Error ? err.message : 'Error al confirmar' 
+      }
+    }
   }
 
   return {
@@ -96,8 +148,7 @@ export function useOnboardingAttendees(eventId?: string) {
     fetchAttendees,
     checkIn,
     markNoShow,
-    cancelAttendee,
-    confirmAttendee,
-    rescheduleAttendee,
+    cancelAttendee: cancel,
+    confirmAttendee: confirm,
   }
 }
