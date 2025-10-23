@@ -1,7 +1,7 @@
 // components/admin/postulacion-detail-content.tsx
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,7 +47,7 @@ import {
   AlertTriangle,
 } from "lucide-react"
 import { DocumentPreview } from "@/components/admin/document-preview"
-import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
+import { ManageOnboardingModal } from "@/components/admin/manage-onboarding-modal"
 import { PersonalInfoCard } from "@/components/admin/personal-info-card"
 import { InternalNotesCard } from "@/components/admin/internal-notes-card"
 import { 
@@ -65,7 +65,6 @@ import {
   rejectDocument,
   deleteDocument,
 } from "@/lib/actions/postulacion.actions"
-import { OnboardingStatusBadge } from "./postulaciones-table-expandable"
 
 interface PostulacionDetailContentProps {
   postulacion: any
@@ -74,10 +73,16 @@ interface PostulacionDetailContentProps {
 export function PostulacionDetailContent({ postulacion: initialPostulacion }: PostulacionDetailContentProps) {
   const router = useRouter()
   
-  // ✅ Estado local que se actualiza INMEDIATAMENTE
+  // ✅ Usar un key basado en los datos de onboarding para forzar re-render
+  const onboardingKey = JSON.stringify(initialPostulacion.onboardingAttendances)
+  
   const [postulacion, setPostulacion] = useState(initialPostulacion)
   
-  // Estados de carga separados
+  // ✅ Sincronizar cuando cambian los datos de onboarding
+  useEffect(() => {
+    setPostulacion(initialPostulacion)
+  }, [onboardingKey])
+  
   const [isEditingPending, startEditingTransition] = useTransition()
   const [isNotePending, startNoteTransition] = useTransition()
   const [isDocumentPending, startDocumentTransition] = useTransition()
@@ -89,10 +94,8 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   const [notes, setNotes] = useState(postulacion.notes || [])
   const [documents, setDocuments] = useState(postulacion.documents || [])
   
-  // Filtrar documentos
   const regularDocuments = documents.filter((doc: any) => doc.documentType !== 'PAYMENT_PROOF')
   
-  // Modales
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showProofPreview, setShowProofPreview] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
@@ -109,16 +112,24 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
     rejectionReason: postulacion.equipmentPayments?.[0]?.rejectionReason || '',
   })
 
-  // ============ HANDLERS CON ACTUALIZACIÓN INMEDIATA ============
+  const hasScheduledOnboarding = postulacion.onboardingAttendances?.some(
+    (attendance: any) => ['INVITED', 'CONFIRMED', 'SCHEDULED'].includes(attendance.status)
+  )
+
+  // ✅ Calcular el onboarding actual y eventos disponibles
+  const currentOnboarding = postulacion.onboardingAttendances?.find(
+    (attendance: any) => ['INVITED', 'CONFIRMED', 'SCHEDULED'].includes(attendance.status)
+  ) || null
+
+  // Los eventos disponibles vendrán desde el servidor en la página
+  const availableEvents = postulacion.availableOnboardingEvents || []
 
   const handleSave = () => {
-    // ✅ 1. Actualizar UI inmediatamente
     const updatedPostulacion = { ...postulacion, ...editedData }
     setPostulacion(updatedPostulacion)
     setIsEditing(false)
     toast.success('Guardando cambios...')
     
-    // ✅ 2. Guardar en servidor en segundo plano
     startEditingTransition(async () => {
       const result = await updatePostulacion(postulacion.id, editedData)
       
@@ -126,7 +137,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         toast.success(result.message)
         setTimeout(() => router.refresh(), 800)
       } else {
-        // ❌ Si falla, revertir cambios
         setPostulacion(postulacion)
         setEditedData(postulacion)
         setIsEditing(true)
@@ -141,7 +151,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   }
 
   const handleAddNote = async (content: string) => {
-    // ✅ Crear nota temporal
     const tempNote = {
       id: `temp-${Date.now()}`,
       content,
@@ -153,7 +162,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
       }
     }
     
-    // ✅ Agregar inmediatamente a la UI
     setNotes([tempNote, ...notes])
     toast.success('Añadiendo nota...')
     
@@ -161,12 +169,10 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
       const result = await createNote(postulacion.id, content)
       
       if (result.success) {
-        // ✅ Reemplazar nota temporal con la real
         setNotes([result.note, ...notes])
         toast.success('Nota añadida')
         setTimeout(() => router.refresh(), 800)
       } else {
-        // ❌ Remover nota temporal si falla
         setNotes(notes)
         toast.error(result.error || 'Error al guardar nota')
       }
@@ -174,7 +180,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   }
 
   const handleEditNote = async (noteId: string, content: string) => {
-    // ✅ Actualizar inmediatamente en UI
     const previousNotes = [...notes]
     setNotes(notes.map((note: any) => 
       note.id === noteId ? { ...note, content } : note
@@ -187,7 +192,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         toast.success('Nota actualizada')
         setTimeout(() => router.refresh(), 800)
       } else {
-        // ❌ Revertir si falla
         setNotes(previousNotes)
         toast.error(result.error || 'Error al actualizar nota')
       }
@@ -195,7 +199,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   }
 
   const handleDeleteNote = async (noteId: string) => {
-    // ✅ Remover inmediatamente de UI
     const previousNotes = [...notes]
     setNotes(notes.filter((note: any) => note.id !== noteId))
     
@@ -206,7 +209,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         toast.success('Nota eliminada')
         setTimeout(() => router.refresh(), 800)
       } else {
-        // ❌ Restaurar si falla
         setNotes(previousNotes)
         toast.error(result.error || 'Error al eliminar nota')
       }
@@ -217,8 +219,25 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
     setShowScheduleModal(true)
   }
 
+  const handleModalSuccess = (action?: 'cancel' | 'assign' | 'reassign') => {
+    // ✅ NO mostrar toast aquí, el modal ya lo mostró
+    
+    if (action === 'cancel') {
+      // Si se canceló, limpiar el onboarding inmediatamente
+      setPostulacion({
+        ...postulacion,
+        onboardingAttendances: [],
+        onboardingStatus: null,
+        onboardingScheduledAt: null
+      })
+    }
+    
+    // Siempre hacer refresh para sincronizar con el servidor
+    // El useEffect se encargará de actualizar el estado cuando lleguen los nuevos datos
+    setTimeout(() => router.refresh(), 100)
+  }
+
   const handleDocumentDelete = (documentId: string) => {
-    // ✅ Remover inmediatamente de UI
     const previousDocs = [...documents]
     setDocuments(documents.filter((doc: any) => doc.id !== documentId))
     
@@ -229,7 +248,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         toast.success('Documento eliminado')
         setTimeout(() => router.refresh(), 800)
       } else {
-        // ❌ Restaurar si falla
         setDocuments(previousDocs)
         toast.error(result.error || 'Error al eliminar')
       }
@@ -251,7 +269,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
     formData.append('formDriverId', postulacion.id)
     formData.append('documentType', documentType)
 
-    // ✅ Crear documento temporal
     const tempDoc = {
       id: `temp-${Date.now()}`,
       documentType,
@@ -273,12 +290,10 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         const result = await response.json()
 
         if (result.success) {
-          // ✅ Reemplazar temporal con el real
           setDocuments([...documents.filter((d: { id: string }) => d.id !== tempDoc.id), result.document])
           toast.success(`${file.name} subido`)
           setTimeout(() => router.refresh(), 800)
         } else {
-          // ❌ Remover temporal si falla
           setDocuments(documents)
           toast.error(result.error || `Error al subir ${file.name}`)
         }
@@ -290,7 +305,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   }
 
   const handleDocumentApprove = (documentId: string) => {
-    // ✅ Actualizar estado inmediatamente
     const previousDocs = [...documents]
     setDocuments(documents.map((doc: any) => 
       doc.id === documentId 
@@ -305,7 +319,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         toast.success('Documento aprobado')
         setTimeout(() => router.refresh(), 800)
       } else {
-        // ❌ Revertir si falla
         setDocuments(previousDocs)
         toast.error(result.error || 'Error al aprobar')
       }
@@ -313,7 +326,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   }
 
   const handleDocumentReject = (documentId: string, reason: string) => {
-    // ✅ Actualizar estado inmediatamente
     const previousDocs = [...documents]
     setDocuments(documents.map((doc: any) => 
       doc.id === documentId 
@@ -333,7 +345,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         toast.success('Documento rechazado')
         setTimeout(() => router.refresh(), 800)
       } else {
-        // ❌ Revertir si falla
         setDocuments(previousDocs)
         toast.error(result.error || 'Error al rechazar')
       }
@@ -341,7 +352,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   }
 
   const handleSavePayment = () => {
-    // ✅ Actualizar UI inmediatamente
     const previousPayment = postulacion.equipmentPayments?.[0]
     
     setPostulacion({
@@ -350,43 +360,54 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         ...previousPayment,
         ...paymentData,
         verifiedAt: paymentData.status === 'VERIFIED' 
-          ? new Date().toISOString() 
-          : previousPayment?.verifiedAt
+          ? new Date().toISOString()
+          : null
       }]
     })
     
     setShowPaymentModal(false)
-    toast.success('Actualizando pago...')
+    toast.success('Guardando pago...')
     
     startPaymentTransition(async () => {
       const result = await updatePayment(postulacion.id, paymentData)
       
       if (result.success) {
-        toast.success(result.message)
+        toast.success('Pago actualizado')
         setTimeout(() => router.refresh(), 800)
       } else {
-        // ❌ Revertir si falla
-        setPostulacion({
-          ...postulacion,
-          equipmentPayments: [previousPayment]
-        })
-        setShowPaymentModal(true)
-        toast.error(result.error || 'Error al actualizar pago')
+        setPostulacion(postulacion)
+        toast.error(result.error || 'Error al guardar')
       }
     })
   }
 
-  const handleRejectPostulacion = () => {
+  const handleReject = () => {
     if (!rejectReason.trim()) {
       toast.error('Debes indicar el motivo del rechazo')
       return
     }
     
+    setPostulacion({
+      ...postulacion,
+      status: 'REJECTED'
+    })
+    
+    setShowRejectModal(false)
+    toast.success('Rechazando postulación...')
+    
     startRejectTransition(async () => {
-      // TODO: Implementar server action de rechazo
-      toast.info('Función de rechazo en desarrollo')
-      setShowRejectModal(false)
-      setRejectReason('')
+      const result = await updatePostulacion(postulacion.id, {
+        status: 'REJECTED',
+        rejectionReason: rejectReason
+      })
+      
+      if (result.success) {
+        toast.success('Postulación rechazada')
+        setTimeout(() => router.refresh(), 800)
+      } else {
+        setPostulacion(postulacion)
+        toast.error(result.error || 'Error al rechazar')
+      }
     })
   }
 
@@ -398,99 +419,74 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           { label: postulacion.fullName }
         ]}
       />
-      
-      <div className="flex-1 p-4 md:p-8 space-y-4 md:space-y-6">
-        {/* Header con acciones y badges */}
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{postulacion.fullName}</h1>
-            </div>
-            <p className="text-sm md:text-base text-muted-foreground">
-              CI: {postulacion.cedula} • Postulación iniciada el {new Date(postulacion.startedAt).toLocaleDateString('es-PY')}
-            </p>
-            <div className="flex flex-wrap items-center gap-2 mt-3">
-              {postulacion.status === 'COMPLETED' ? (
-                <Badge variant="outline" className="gap-1 bg-green-50 text-green-700 border-green-200">
-                  <CheckCircle className="h-3 w-3" />
-                  Completada
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="gap-1">
-                  <Clock className="h-3 w-3" />
-                  {postulacion.currentStep}/6 pasos
-                </Badge>
-              )}
-              
-              {postulacion.onboardingStatus && (
-                <OnboardingStatusBadge status={postulacion.onboardingStatus} />
-              )}
+
+      <div className="space-y-4 md:space-y-6 p-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold tracking-tight">
+              {postulacion.fullName}
+            </h1>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span>CI: {postulacion.cedula}</span>
+              <span>•</span>
+              <span>Postulación iniciada el {new Date(postulacion.startedAt).toLocaleDateString('es-PY')}</span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {!isEditing ? (
-              <>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setIsEditing(true)} 
-                  className="gap-2 flex-1 sm:flex-none cursor-pointer"
-                  disabled={isEditingPending}
-                >
-                  <Edit className="h-4 w-4" />
-                  <span className="hidden sm:inline">Editar</span>
-                </Button>
-                
-                <TooltipProvider>
-                  <Tooltip delayDuration={200}>
-                    <TooltipTrigger asChild>
-                      <span className="inline-block flex-1 sm:flex-none">
-                        <Button variant="outline" className="gap-2 w-full" disabled title="Verificar con IA">
-                          <Bot className="h-4 w-4" />
-                          <span className="hidden sm:inline">Verificar con IA</span>
-                        </Button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-xs">
-                      <p className="text-sm">Función en desarrollo - Próximamente disponible</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+            {!isEditing && (
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled
+              >
+                <Bot className="h-4 w-4" />
+                Verificar con IA
+              </Button>
+            )}
 
-                <Button 
-                  variant="default" 
-                  className="gap-2 bg-green-600 hover:bg-green-700 flex-1 sm:flex-none cursor-pointer"
-                  onClick={handleScheduleOnboarding}
-                  disabled={isEditingPending}
-                >
-                  <Calendar className="h-4 w-4" />
-                  <span className="hidden sm:inline">Agendar Onboarding</span>
-                </Button>
-                
-                <Button 
-                  variant="outline"
-                  className="gap-2 flex-1 sm:flex-none cursor-pointer text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                  onClick={() => setShowRejectModal(true)}
-                  disabled={isEditingPending}
-                >
-                  <XCircle className="h-4 w-4" />
-                  <span className="hidden sm:inline">Rechazar</span>
-                </Button>
-              </>
+            {!isEditing && hasScheduledOnboarding ? (
+              <Button
+                onClick={handleScheduleOnboarding}
+                className="gap-2 cursor-pointer"
+                variant="outline"
+              >
+                <Calendar className="h-4 w-4" />
+                Gestionar Onboarding
+              </Button>
+            ) : !isEditing ? (
+              <Button
+                onClick={handleScheduleOnboarding}
+                className="gap-2 cursor-pointer"
+              >
+                <Calendar className="h-4 w-4" />
+                Agendar Onboarding
+              </Button>
+            ) : null}
+
+            {!isEditing ? (
+              <Button
+                onClick={() => setIsEditing(true)}
+                variant="outline"
+                className="gap-2 cursor-pointer"
+              >
+                <Edit className="h-4 w-4" />
+                Editar
+              </Button>
             ) : (
               <>
-                <Button 
-                  onClick={handleCancel} 
-                  size="sm"
+                <Button
+                  onClick={handleCancel}
                   variant="outline"
+                  className="gap-2 cursor-pointer"
                   disabled={isEditingPending}
                 >
-                  <X className="h-4 w-4 mr-2" />
+                  <X className="h-4 w-4" />
                   Cancelar
                 </Button>
-                <Button 
-                  onClick={handleSave} 
-                  size="sm"
+                <Button
+                  onClick={handleSave}
+                  className="gap-2 cursor-pointer"
                   disabled={isEditingPending}
                 >
                   {isEditingPending ? (
@@ -507,10 +503,20 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                 </Button>
               </>
             )}
+
+            {!isEditing && postulacion.status !== 'REJECTED' && (
+              <Button
+                onClick={() => setShowRejectModal(true)}
+                variant="destructive"
+                className="gap-2 cursor-pointer"
+              >
+                <XCircle className="h-4 w-4" />
+                Rechazar
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* FILA 1: Info Personal + Documentos */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
           <PersonalInfoCard 
             postulacion={postulacion}
@@ -540,9 +546,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </Card>
         </div>
 
-        {/* FILA 2: Notas + Pago + Onboarding */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-          {/* Notas */}
           <Card>
             <CardHeader className="pb-3 border-b">
               <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
@@ -561,7 +565,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
             </CardContent>
           </Card>
 
-          {/* Pago */}
           <Card>
             <CardHeader className="pb-3 border-b">
               <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
@@ -571,7 +574,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
             </CardHeader>
             <CardContent className="pt-4">
               <PaymentSection 
-                payment={postulacion.equipmentPayments?.[0]} 
+                payment={postulacion.equipmentPayments?.[0]}
                 postulacionId={postulacion.id}
                 onManage={() => setShowPaymentModal(true)}
                 onViewProof={() => setShowProofPreview(true)}
@@ -579,12 +582,11 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
             </CardContent>
           </Card>
 
-          {/* Onboarding */}
           <Card>
             <CardHeader className="pb-3 border-b">
               <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
                 <Calendar className="h-4 w-4" />
-                On Boarding
+                Onboarding
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
@@ -599,53 +601,51 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         </div>
       </div>
 
-      {/* Modal de Rechazo */}
+      <ManageOnboardingModal
+        open={showScheduleModal}
+        onOpenChange={setShowScheduleModal}
+        driverId={postulacion.id}
+        driverName={postulacion.fullName || 'Driver'}
+        currentOnboarding={currentOnboarding}
+        availableEvents={availableEvents}
+        onSuccess={handleModalSuccess}
+      />
+
       <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
-        <DialogContent className="max-w-md">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-600" />
-              Rechazar Postulación
-            </DialogTitle>
+            <DialogTitle>Rechazar Postulación</DialogTitle>
             <DialogDescription>
-              Estás a punto de rechazar la postulación de {postulacion.fullName}. Esta acción no se puede deshacer.
+              Indica el motivo del rechazo. Esta acción no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
-
+          
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="reject-reason">
-                Motivo del rechazo <span className="text-red-500">*</span>
-              </Label>
+              <Label htmlFor="reject-reason">Motivo del rechazo</Label>
               <Textarea
                 id="reject-reason"
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Ej: Documentación incompleta, no cumple con los requisitos mínimos, etc."
+                placeholder="Ej: Documentos no cumplen con los requisitos"
                 rows={4}
-                disabled={isRejectPending}
               />
-              <p className="text-xs text-muted-foreground">
-                Este motivo será visible para el conductor y quedará registrado en el sistema.
-              </p>
             </div>
           </div>
 
           <DialogFooter>
             <Button 
               variant="outline" 
-              onClick={() => {
-                setShowRejectModal(false)
-                setRejectReason('')
-              }}
-              disabled={isRejectPending}
+              onClick={() => setShowRejectModal(false)}
+              className="cursor-pointer"
             >
               Cancelar
             </Button>
             <Button 
               variant="destructive"
-              onClick={handleRejectPostulacion}
-              disabled={isRejectPending || !rejectReason.trim()}
+              onClick={handleReject}
+              disabled={!rejectReason.trim() || isRejectPending}
+              className="cursor-pointer"
             >
               {isRejectPending ? (
                 <>
@@ -663,9 +663,8 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Pago */}
       <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Gestionar Pago de Equipamiento</DialogTitle>
             <DialogDescription>
@@ -674,14 +673,65 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {/* Estado */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="paymentMethod">Método de Pago</Label>
+                <Select
+                  value={paymentData.paymentMethod}
+                  onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
+                >
+                  <SelectTrigger id="paymentMethod">
+                    <SelectValue placeholder="Seleccionar método" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BANK_TRANSFER">Transferencia Bancaria</SelectItem>
+                    <SelectItem value="POS">POS</SelectItem>
+                    <SelectItem value="CASH">Efectivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="amount">Monto (Gs.)</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  value={paymentData.amount}
+                  onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
+                  placeholder="350000"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="paymentNumber">Nro. de Comprobante</Label>
+                <Input
+                  id="paymentNumber"
+                  value={paymentData.paymentNumber}
+                  onChange={(e) => setPaymentData({ ...paymentData, paymentNumber: e.target.value })}
+                  placeholder="Últimos 6 dígitos"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="invoiceNumber">Nro. de Factura</Label>
+                <Input
+                  id="invoiceNumber"
+                  value={paymentData.invoiceNumber}
+                  onChange={(e) => setPaymentData({ ...paymentData, invoiceNumber: e.target.value })}
+                  placeholder="001-001-0000000"
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Estado del Pago</Label>
-              <Select 
-                value={paymentData.status} 
+              <Label htmlFor="paymentStatus">Estado del Pago</Label>
+              <Select
+                value={paymentData.status}
                 onValueChange={(value) => setPaymentData({ ...paymentData, status: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="paymentStatus">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -692,100 +742,42 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
               </Select>
             </div>
 
-            {/* Método y Monto en grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Método de Pago</Label>
-                <Select 
-                  value={paymentData.paymentMethod} 
-                  onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="POS">POS</SelectItem>
-                    <SelectItem value="BANK_TRANSFER">Transferencia</SelectItem>
-                    <SelectItem value="CASH">Efectivo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Monto (Gs.)</Label>
-                <Input
-                  type="number"
-                  value={paymentData.amount}
-                  onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
-                  placeholder="150000"
-                />
-              </div>
-            </div>
-
-            {/* Comprobante y Factura en grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Nro. Comprobante</Label>
-                <Input
-                  value={paymentData.paymentNumber}
-                  onChange={(e) => setPaymentData({ ...paymentData, paymentNumber: e.target.value })}
-                  placeholder="123456"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Nro. Factura</Label>
-                <Input
-                  value={paymentData.invoiceNumber}
-                  onChange={(e) => setPaymentData({ ...paymentData, invoiceNumber: e.target.value })}
-                  placeholder="001-001-0000123"
-                />
-              </div>
-            </div>
-
-            {/* Notas Admin */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Notas Administrativas (Opcional)</Label>
-              <Textarea
-                value={paymentData.adminNotes}
-                onChange={(e) => setPaymentData({ ...paymentData, adminNotes: e.target.value })}
-                placeholder="Notas internas sobre el pago..."
-                rows={3}
-                className="resize-none"
-              />
-            </div>
-
-            {/* Razón de rechazo si está rechazado */}
             {paymentData.status === 'REJECTED' && (
-              <div className="space-y-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <Label className="text-sm font-medium text-red-700">
-                  Razón de Rechazo <span className="text-red-500">*</span>
-                </Label>
+              <div className="space-y-2">
+                <Label htmlFor="rejectionReason">Razón de Rechazo</Label>
                 <Textarea
+                  id="rejectionReason"
                   value={paymentData.rejectionReason}
                   onChange={(e) => setPaymentData({ ...paymentData, rejectionReason: e.target.value })}
-                  placeholder="Explica por qué se rechazó el pago..."
+                  placeholder="Indica por qué se rechazó el pago"
                   rows={3}
-                  className="resize-none"
                 />
-                <p className="text-xs text-red-600">
-                  Este mensaje será visible para el conductor.
-                </p>
               </div>
             )}
+
+            <div className="space-y-2">
+              <Label htmlFor="adminNotes">Notas Administrativas (opcional)</Label>
+              <Textarea
+                id="adminNotes"
+                value={paymentData.adminNotes}
+                onChange={(e) => setPaymentData({ ...paymentData, adminNotes: e.target.value })}
+                placeholder="Observaciones internas sobre el pago"
+                rows={3}
+              />
+            </div>
           </div>
 
           <DialogFooter>
             <Button 
               variant="outline" 
-              onClick={() => setShowPaymentModal(false)} 
+              onClick={() => setShowPaymentModal(false)}
               disabled={isPaymentPending}
               className="cursor-pointer"
             >
               Cancelar
             </Button>
             <Button 
-              onClick={handleSavePayment} 
+              onClick={handleSavePayment}
               disabled={isPaymentPending}
               className="cursor-pointer"
             >
@@ -802,7 +794,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Comprobante de Pago */}
       <Dialog open={showProofPreview} onOpenChange={setShowProofPreview}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -819,18 +810,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Modal de Onboarding */}
-      <ScheduleOnboardingModal
-        open={showScheduleModal}
-        onOpenChange={setShowScheduleModal}
-        driverId={postulacion.id}
-        driverName={postulacion.fullName}
-        onSuccess={() => {
-          setShowScheduleModal(false)
-          router.refresh()
-        }}
-      />
     </div>
   )
 }

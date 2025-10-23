@@ -2,6 +2,7 @@
 
 import { notFound } from 'next/navigation'
 import { postulacionService } from '@/lib/services/postulacion.service'
+import { onboardingService } from '@/lib/services/onboarding.service'
 import { PostulacionDetailContent } from '@/components/admin/postulacion-detail-content'
 
 export const revalidate = 0 // Siempre fresh data
@@ -13,6 +14,9 @@ async function getPostulacion(id: string) {
     if (!postulacion) {
       return null
     }
+
+    // ✅ Cargar eventos disponibles en paralelo
+    const availableEvents = await onboardingService.getAvailableEvents()
 
     // Transformar para serialización (convertir Dates, etc)
     return {
@@ -63,6 +67,15 @@ async function getPostulacion(id: string) {
       timeline: postulacion.timeline.map(step => ({
         ...step,
         completedAt: step.completedAt?.toISOString() || null,
+      })),
+
+      // ✅ Agregar eventos disponibles con fechas transformadas
+      availableOnboardingEvents: availableEvents.map(event => ({
+        ...event,
+        scheduledDate: event.scheduledDate.toISOString(),
+        createdAt: event.createdAt.toISOString(),
+        updatedAt: event.updatedAt.toISOString(),
+        completedAt: event.completedAt?.toISOString() || null,
       })),
     }
   } catch (error) {

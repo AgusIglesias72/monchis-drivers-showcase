@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { User } from "lucide-react"
+import { formatBirthDateWithAge, formatDateOnly } from "@/lib/utils"
 
 interface PersonalInfoCardProps {
   postulacion: any
@@ -62,7 +63,9 @@ export function PersonalInfoCard({
               {postulacion.birthDate && (
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Fecha de Nacimiento</Label>
-                  <p className="text-sm">{postulacion.birthDate}</p>
+                  <p className="text-sm">
+                    {formatBirthDateWithAge(postulacion.birthDate) || formatDateOnly(postulacion.birthDate) || postulacion.birthDate}
+                  </p>
                 </div>
               )}
             </div>

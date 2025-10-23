@@ -80,8 +80,12 @@ export async function createOnboardingEvent(data: CreateEventRequest) {
         actionType: 'CREATE',
         entityType: 'OnboardingEvent',
         entityId: event.id,
-        description: `Evento creado: ${event.title}`,
-        metadata: { eventId: event.id, title: event.title }
+        description: `Evento de onboarding creado: ${event.title}`,
+        metadata: {
+          title: data.title,
+          scheduledDate: data.scheduledDate,
+          location: data.location
+        }
       }
     })
 
@@ -115,9 +119,13 @@ export async function updateOnboardingEvent(eventId: string, data: UpdateEventRe
         action: 'ONBOARDING_EVENT_UPDATED',
         actionType: 'UPDATE',
         entityType: 'OnboardingEvent',
-        entityId: event.id,
+        entityId: eventId,
         description: `Evento actualizado: ${event.title}`,
-        metadata: { eventId: event.id, changes: data }
+        metadata: {
+          title: data.title,
+          scheduledDate: data.scheduledDate,
+          status: data.status
+        }
       }
     })
 
@@ -149,7 +157,7 @@ export async function deleteOnboardingEvent(eventId: string) {
       data: {
         userId,
         userEmail: 'admin',
-        action: 'ONBOARDING_EVENT_CANCELLED', // Usamos CANCELLED en lugar de DELETED
+        action: 'ONBOARDING_EVENT_CANCELLED',
         actionType: 'DELETE',
         entityType: 'OnboardingEvent',
         entityId: eventId,
@@ -205,14 +213,10 @@ export async function assignDriverToOnboardingEvent({
       throw new Error('No autorizado')
     }
 
-    if (!eventId || !driverId) {
-      throw new Error('eventId y driverId son requeridos')
-    }
-
-    const attendee = await onboardingService.assignDriverToEvent({
+    const result = await onboardingService.assignDriver({
       eventId,
       driverId,
-      assignedBy: userId,
+      invitedBy: userId,
       notes
     })
 
@@ -221,37 +225,152 @@ export async function assignDriverToOnboardingEvent({
       data: {
         userId,
         userEmail: 'admin',
-        action: 'ONBOARDING_ATTENDEE_INVITED', // Cambio a INVITED
+        action: 'ONBOARDING_ATTENDEE_INVITED',
         actionType: 'CREATE',
         entityType: 'OnboardingAttendee',
-        entityId: attendee.id,
+        entityId: result.id,
         description: `Driver asignado a evento de onboarding`,
-        metadata: { eventId, driverId, attendeeId: attendee.id }
+        metadata: { eventId, driverId, notes }
+      }
+    })
+
+    revalidatePath('/admin/onboarding')
+    revalidatePath(`/admin/onboarding/${eventId}`)
+    revalidatePath(`/admin/postulaciones/${driverId}`)
+
+    return { success: true, attendee: result, message: 'Driver asignado exitosamente' }
+  } catch (error: any) {
+    console.error('Error al asignar driver:', error)
+    return { success: false, error: error.message || 'Error al asignar driver' }
+  }
+}
+
+/**
+ * Remueve completamente un driver de un evento de onboarding
+ * ELIMINA el registro en lugar de marcarlo como cancelado
+ */
+export async function removeDriverFromOnboardingEvent({
+  attendeeId,
+  reason
+}: {
+  attendeeId: string
+  reason?: string
+}) {
+  try {
+    const { userId } = await auth()
+    
+    if (!userId) {
+      throw new Error('No autorizado')
+    }
+
+    // Verificar que el admin user existe
+    const adminUser = await prisma.adminUser.findUnique({
+      where: { clerkId: userId }
+    })
+
+    if (!adminUser) {
+      throw new Error('Usuario administrador no encontrado')
+    }
+
+    // Obtener info del attendee antes de eliminar
+    const attendee = await prisma.onboardingAttendee.findUnique({
+      where: { id: attendeeId },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true
+          }
+        },
+        formDriver: {
+          select: {
+            id: true,
+            fullName: true
+          }
+        }
+      }
+    })
+
+    if (!attendee) {
+      throw new Error('Asistente no encontrado')
+    }
+
+    // ELIMINAR el registro completamente
+    await prisma.onboardingAttendee.delete({
+      where: { id: attendeeId }
+    })
+
+    // Decrementar la capacidad del evento
+    await prisma.onboardingEvent.update({
+      where: { id: attendee.eventId },
+      data: {
+        currentCapacity: {
+          decrement: 1
+        }
+      }
+    })
+
+    // Verificar si el driver tiene otros onboardings activos
+    const otherAttendances = await prisma.onboardingAttendee.count({
+      where: {
+        formDriverId: attendee.formDriverId,
+        status: {
+          in: ['INVITED', 'CONFIRMED', 'SCHEDULED']
+        }
+      }
+    })
+
+    // Si no tiene otros onboardings, limpiar el estado
+    if (otherAttendances === 0) {
+      await prisma.formDriver.update({
+        where: { id: attendee.formDriverId },
+        data: {
+          onboardingStatus: null,
+          onboardingScheduledAt: null
+        }
+      })
+    }
+
+    // Log de auditoría
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        userEmail: adminUser.email,
+        action: 'OTHER',
+        actionType: 'DELETE',
+        entityType: 'OnboardingAttendee',
+        entityId: attendeeId,
+        description: `Driver ${attendee.formDriver.fullName} removido del evento ${attendee.event.title}`,
+        metadata: { 
+          eventId: attendee.eventId, 
+          driverId: attendee.formDriverId,
+          reason: reason || 'Sin razón especificada',
+          actionDetail: 'ATTENDEE_REMOVED'
+        }
       }
     })
 
     // Revalidar las páginas relevantes
     revalidatePath('/admin/postulaciones')
-    revalidatePath(`/admin/postulaciones/${driverId}`)
+    revalidatePath(`/admin/postulaciones/${attendee.formDriverId}`)
     revalidatePath('/admin/onboarding')
-    revalidatePath(`/admin/onboarding/${eventId}`)
+    revalidatePath(`/admin/onboarding/${attendee.eventId}`)
 
     return { 
       success: true, 
-      attendee,
-      message: 'Driver asignado exitosamente al evento'
+      message: 'Driver removido del onboarding exitosamente'
     }
   } catch (error: any) {
-    console.error('Error al asignar driver:', error)
+    console.error('Error al remover driver:', error)
     return { 
       success: false, 
-      error: error.message || 'Error al asignar driver al evento' 
+      error: error.message || 'Error al remover driver del evento' 
     }
   }
 }
 
 /**
- * Obtiene el estado de onboarding de un driver
+ * Obtiene el estado de onboarding de un driver (mejorado)
  */
 export async function getDriverOnboardingStatus(driverId: string) {
   try {
@@ -265,105 +384,13 @@ export async function getDriverOnboardingStatus(driverId: string) {
     return { success: true, status }
   } catch (error: any) {
     console.error('Error al obtener estado:', error)
-    return { success: false, error: error.message || 'Error al obtener estado' }
+    return { success: false, error: error.message || 'Error al obtener estado', status: null }
   }
 }
 
 /**
- * Obtiene asistentes de un evento
- */
-export async function getEventAttendees(eventId: string) {
-  try {
-    const { userId } = await auth()
-    
-    if (!userId) {
-      throw new Error('No autorizado')
-    }
-
-    const attendees = await onboardingService.getEventAttendees(eventId)
-    return { success: true, attendees }
-  } catch (error: any) {
-    console.error('Error al obtener asistentes:', error)
-    return { success: false, error: error.message || 'Error al cargar asistentes', attendees: [] }
-  }
-}
-
-/**
- * Check-in de un asistente
- */
-export async function checkInAttendee(attendeeId: string, notes?: string) {
-  try {
-    const { userId } = await auth()
-    
-    if (!userId) {
-      throw new Error('No autorizado')
-    }
-
-    const attendee = await onboardingService.checkInAttendee(attendeeId, notes)
-
-    // Log de auditoría
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        userEmail: 'admin',
-        action: 'ONBOARDING_ATTENDEE_CHECKED_IN',
-        actionType: 'UPDATE',
-        entityType: 'OnboardingAttendee',
-        entityId: attendeeId,
-        description: `Check-in realizado`,
-        metadata: { attendeeId, notes }
-      }
-    })
-
-    revalidatePath('/admin/onboarding')
-    revalidatePath(`/admin/postulaciones/${attendee.formDriver.id}`)
-
-    return { success: true, attendee, message: 'Check-in realizado exitosamente' }
-  } catch (error: any) {
-    console.error('Error en check-in:', error)
-    return { success: false, error: error.message || 'Error en check-in' }
-  }
-}
-
-/**
- * Marca un asistente como no show
- */
-export async function markAttendeeNoShow(attendeeId: string) {
-  try {
-    const { userId } = await auth()
-    
-    if (!userId) {
-      throw new Error('No autorizado')
-    }
-
-    const attendee = await onboardingService.markNoShow(attendeeId)
-
-    // Log de auditoría
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        userEmail: 'admin',
-        action: 'ONBOARDING_ATTENDEE_NO_SHOW',
-        actionType: 'UPDATE',
-        entityType: 'OnboardingAttendee',
-        entityId: attendeeId,
-        description: `Asistente marcado como no show`,
-        metadata: { attendeeId }
-      }
-    })
-
-    revalidatePath('/admin/onboarding')
-    revalidatePath(`/admin/postulaciones/${attendee.formDriver.id}`)
-
-    return { success: true, attendee, message: 'Marcado como no show' }
-  } catch (error: any) {
-    console.error('Error al marcar no show:', error)
-    return { success: false, error: error.message || 'Error al marcar no show' }
-  }
-}
-
-/**
- * Cancela la asistencia de un driver
+ * Cancela la asistencia de un driver (marca como cancelado, no elimina)
+ * Usar solo cuando queremos mantener el historial (ej: no-show)
  */
 export async function cancelAttendee(attendeeId: string, reason?: string) {
   try {
@@ -489,50 +516,116 @@ export async function assignDriversToEvent({
       throw new Error('No autorizado')
     }
 
-    if (!eventId || !driverIds || driverIds.length === 0) {
-      throw new Error('eventId y driverIds son requeridos')
-    }
-
-    const attendees = await onboardingService.assignDriversToEvent({
-      eventId,
-      driverIds,
-      assignedBy: userId,
-      notes
-    })
+    const results = await Promise.all(
+      driverIds.map(driverId =>
+        onboardingService.assignDriver({
+          eventId,
+          driverId,
+          invitedBy: userId,
+          notes
+        })
+      )
+    )
 
     // Log de auditoría
     await prisma.auditLog.create({
       data: {
         userId,
         userEmail: 'admin',
-        action: 'ONBOARDING_ATTENDEE_INVITED',
+        action: 'OTHER',
         actionType: 'CREATE',
         entityType: 'OnboardingAttendee',
         entityId: eventId,
-        description: `${driverIds.length} driver(s) asignados al evento`,
-        metadata: { eventId, driverIds, count: driverIds.length }
+        description: `${driverIds.length} drivers asignados a evento`,
+        metadata: { 
+          eventId, 
+          driverIds, 
+          notes,
+          actionDetail: 'BULK_DRIVERS_ASSIGNED'
+        }
       }
     })
 
-    // Revalidar las páginas relevantes
     revalidatePath('/admin/onboarding')
     revalidatePath(`/admin/onboarding/${eventId}`)
-    
-    // Revalidar cada postulación de driver
-    driverIds.forEach(driverId => {
-      revalidatePath(`/admin/postulaciones/${driverId}`)
-    })
 
-    return { 
-      success: true, 
-      attendees,
-      message: `${driverIds.length} driver(s) agregados exitosamente`
-    }
+    return { success: true, attendees: results, message: `${driverIds.length} drivers asignados exitosamente` }
   } catch (error: any) {
     console.error('Error al asignar drivers:', error)
-    return { 
-      success: false, 
-      error: error.message || 'Error al asignar drivers' 
+    return { success: false, error: error.message || 'Error al asignar drivers' }
+  }
+}
+
+/**
+ * Realiza check-in de un asistente
+ */
+export async function checkInAttendee(attendeeId: string, notes?: string) {
+  try {
+    const { userId } = await auth()
+    
+    if (!userId) {
+      throw new Error('No autorizado')
     }
+
+    const attendee = await onboardingService.checkInAttendee(attendeeId, notes)
+
+    // Log de auditoría
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        userEmail: 'admin',
+        action: 'ONBOARDING_ATTENDEE_CHECKED_IN',
+        actionType: 'UPDATE',
+        entityType: 'OnboardingAttendee',
+        entityId: attendeeId,
+        description: `Check-in realizado`,
+        metadata: { attendeeId, notes }
+      }
+    })
+
+    revalidatePath('/admin/onboarding')
+    revalidatePath(`/admin/postulaciones/${attendee.formDriver.id}`)
+
+    return { success: true, attendee, message: 'Check-in realizado exitosamente' }
+  } catch (error: any) {
+    console.error('Error en check-in:', error)
+    return { success: false, error: error.message || 'Error en check-in' }
+  }
+}
+
+/**
+ * Marca un asistente como no show
+ */
+export async function markAttendeeNoShow(attendeeId: string) {
+  try {
+    const { userId } = await auth()
+    
+    if (!userId) {
+      throw new Error('No autorizado')
+    }
+
+    const attendee = await onboardingService.markNoShow(attendeeId)
+
+    // Log de auditoría
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        userEmail: 'admin',
+        action: 'ONBOARDING_ATTENDEE_NO_SHOW',
+        actionType: 'UPDATE',
+        entityType: 'OnboardingAttendee',
+        entityId: attendeeId,
+        description: `Asistente marcado como no show`,
+        metadata: { attendeeId }
+      }
+    })
+
+    revalidatePath('/admin/onboarding')
+    revalidatePath(`/admin/postulaciones/${attendee.formDriver.id}`)
+
+    return { success: true, attendee, message: 'Marcado como no show' }
+  } catch (error: any) {
+    console.error('Error al marcar no show:', error)
+    return { success: false, error: error.message || 'Error al marcar no show' }
   }
 }

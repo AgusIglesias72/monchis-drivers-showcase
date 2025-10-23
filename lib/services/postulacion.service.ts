@@ -1,6 +1,7 @@
 // lib/services/postulacion.service.ts
 
 import { prisma } from '@/lib/prisma'
+import { formatDateOnly } from '@/lib/utils'
 
 export class PostulacionService {
   
@@ -66,7 +67,7 @@ export class PostulacionService {
       timeline,
       // Formatear fechas para serialización
       birthDate: formDriver.birthDate 
-        ? new Date(formDriver.birthDate).toLocaleDateString('es-PY') 
+        ? formatDateOnly(formDriver.birthDate)
         : null,
     }
   }

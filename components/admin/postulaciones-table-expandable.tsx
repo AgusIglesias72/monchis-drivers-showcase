@@ -37,6 +37,7 @@ import {
 } from "lucide-react"
 import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
 import { useRouter } from "next/navigation"
+import { formatBirthDateWithAge } from "@/lib/utils"
 
 type SortField = 'fullName' | 'city' | 'status' | 'startedAt'
 type SortOrder = 'asc' | 'desc' | null
@@ -394,7 +395,7 @@ export function PostulacionesTableExpandable({
                                       {postulacion.birthDate && (
                                         <InfoRow 
                                           label="F. Nacimiento" 
-                                          value={new Date(postulacion.birthDate).toLocaleDateString('es-PY')} 
+                                          value={formatBirthDateWithAge(postulacion.birthDate)} 
                                         />
                                       )}
                                       <InfoRow label="Teléfono" value={postulacion.phoneNumber} />
