@@ -1,3 +1,4 @@
+/* 
 "use client"
 
 import React, { useState, useEffect } from 'react';
@@ -15,13 +16,6 @@ import { getFormSteps } from './formSteps';
 const SKIP_VALIDATION = false;
 const MONCHIS_RED = '#e7243f';
 
-interface FileItem {
-  url: string;
-  name: string;
-  uploading?: boolean;
-  tempId?: string;
-}
-
 const generateUUID = () => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = Math.random() * 16 | 0;
@@ -36,8 +30,7 @@ const getStepName = (stepNumber: number): string => {
     2: 'personal_data',
     3: 'work_vehicle',
     4: 'documents',
-    5: 'additional_info',
-    6: 'equipment_payment'
+    5: 'additional_info'
   };
   return stepNames[stepNumber] || 'unknown';
 };
@@ -51,9 +44,6 @@ const FormularioMonchis: React.FC = () => {
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [showLoading, setShowLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'form' | 'info'>('form');
-  
-  // Estado para archivos que se están subiendo (preview optimista)
-  const [uploadingFiles, setUploadingFiles] = useState<Record<string, FileItem[]>>({});
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -74,7 +64,7 @@ const FormularioMonchis: React.FC = () => {
     cedulaPhotoUrl: '',
     licensePhotoUrl: '',
     vehiclePhotoUrl: '',
-    taxCompliancePhotoUrl: '',
+    taxCompliancePhotoUrl: '', // ✅ NUEVO CAMPO
     emergencyName: '',
     emergencyRelationship: '',
     emergencyPhone: '',
@@ -87,9 +77,9 @@ const FormularioMonchis: React.FC = () => {
     hasUenoAccount: '',
     uenoAccountNumber: '',
     canInvoice: '',
-    interestedInConto: '',
-    paymentMethod: '',
-    paymentProofUrl: '',
+    interestedInConto: '', // 'si' o 'no'
+    paymentMethod: '', // 'TRANSFERENCIA', 'POS'
+    paymentProofUrl: '', // URL del comprobante (solo para transferencia)
   });
 
   useEffect(() => {
@@ -113,59 +103,58 @@ const FormularioMonchis: React.FC = () => {
             
             trackFormResumed(data.submission.currentStep);
             
-            toast.success('¡Bienvenido de vuelta! Continuá desde donde lo dejaste.');
+            toast.success('¡Bienvenido de vuelta!', {
+              description: 'Continuamos donde lo dejaste'
+            });
           }
         }
       } catch (error) {
-        console.error('Error al recuperar sesión:', error);
+        const saved = localStorage.getItem('monchis_form_data');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            setFormData(parsed.formData);
+            setStep(parsed.step || 0);
+          } catch (e) {
+            console.error('Error al cargar datos guardados');
+          }
+        }
       }
-      
-      setTimeout(() => {
-        setShowLoading(false);
-      }, 1500);
-    };
 
+      setTimeout(() => setShowLoading(false), 1500);
+    };
+    
     initSession();
   }, []);
 
+  useEffect(() => {
+    if (sessionId) {
+      localStorage.setItem('monchis_form_data', JSON.stringify({
+        formData,
+        step,
+        sessionId
+      }));
+    }
+  }, [formData, step, sessionId]);
+
   const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleFileUpload = async (files: FileList, field: string) => {
+  const handleFileUpload = async (field: string, files: FileList) => {
     if (!files || files.length === 0) return;
     
     setUploadingDoc(field);
     
-    // Crear archivos temporales para preview optimista
-    const tempFiles: FileItem[] = Array.from(files).map(file => ({
-      url: URL.createObjectURL(file),
-      name: file.name,
-      uploading: true,
-      tempId: generateUUID()
-    }));
-    
-    // Agregar archivos temporales al estado
-    setUploadingFiles(prev => ({
-      ...prev,
-      [field]: [...(prev[field] || []), ...tempFiles]
-    }));
-    
     try {
       const uploadedUrls: string[] = [];
-      const uploadedNames: string[] = [];
       
-      // Subir archivos uno por uno
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const uploadFormData = new FormData();
         uploadFormData.append('file', file);
         uploadFormData.append('sessionId', sessionId);
         uploadFormData.append('documentType', field.replace('PhotoUrl', ''));
-        uploadFormData.append('originalFileName', file.name); // Enviar nombre original
         
         const response = await fetch('/api/form/upload-document', {
           method: 'POST',
@@ -174,24 +163,10 @@ const FormularioMonchis: React.FC = () => {
         
         const data = await response.json();
         
-        if (data.success && data.url) {
+        if (data.success) {
           uploadedUrls.push(data.url);
-          uploadedNames.push(file.name);
-          
-          // Remover el archivo temporal correspondiente
-          setUploadingFiles(prev => ({
-            ...prev,
-            [field]: (prev[field] || []).filter(f => f.tempId !== tempFiles[i].tempId)
-          }));
         } else {
-          console.error(`Error al subir ${file.name}:`, data.error);
-          toast.error(`Error al subir ${file.name}`);
-          
-          // Remover archivo temporal si falla
-          setUploadingFiles(prev => ({
-            ...prev,
-            [field]: (prev[field] || []).filter(f => f.tempId !== tempFiles[i].tempId)
-          }));
+          toast.error(`Error al subir ${file.name}: ${data.error}`);
         }
       }
       
@@ -208,12 +183,6 @@ const FormularioMonchis: React.FC = () => {
     } catch (error) {
       console.error('Error:', error);
       toast.error('Error al subir los archivos');
-      
-      // Limpiar todos los archivos temporales en caso de error
-      setUploadingFiles(prev => ({
-        ...prev,
-        [field]: []
-      }));
     } finally {
       setUploadingDoc(null);
     }
@@ -266,9 +235,9 @@ const FormularioMonchis: React.FC = () => {
           uenoAccountNumber: formData.uenoAccountNumber,
           canInvoice: formData.canInvoice,
           taxCompliancePhotoUrl: formData.taxCompliancePhotoUrl,
-          interestedInConto: formData.interestedInConto
+          interestedInConto: formData.interestedInConto // ✅ NUEVO
         };
-      case 6:
+      case 6: // ✅ NUEVO STEP
         return {
           paymentMethod: formData.paymentMethod,
           paymentProofUrl: formData.paymentProofUrl
@@ -300,37 +269,38 @@ const validateCurrentStep = (): boolean => {
         toast.error('Por favor completa tu cédula');
         return false;
       }
-      if (!formData.birthDate) {
-        toast.error('Por favor ingresa tu fecha de nacimiento');
-        return false;
-      }
       if (!formData.phoneNumber.trim()) {
-        toast.error('Por favor ingresa tu número de teléfono');
+        toast.error('Por favor completa tu teléfono');
         return false;
       }
       if (!formData.email.trim()) {
-        toast.error('Por favor ingresa tu email');
+        toast.error('Por favor completa tu email');
         return false;
       }
       break;
-
+      
     case 2:
-      if (!formData.address.trim()) {
-        toast.error('Por favor completa tu dirección');
+      if (!formData.department) {
+        toast.error('Por favor selecciona tu departamento');
         return false;
       }
       if (!formData.city.trim()) {
         toast.error('Por favor completa tu ciudad');
         return false;
       }
-      if (!formData.department) {
-        toast.error('Por favor selecciona tu departamento');
+      if (!formData.address.trim()) {
+        toast.error('Por favor completa tu dirección');
         return false;
       }
       break;
-
+      
     case 3:
-      if (!formData.workZone || formData.workZone.split(',').filter(z => z).length === 0) {
+      if (!formData.workZone || formData.workZone.trim() === '') {
+        toast.error('Por favor selecciona al menos una zona de trabajo');
+        return false;
+      }
+      const zones = formData.workZone.split(',').filter((z: string) => z.trim());
+      if (zones.length === 0) {
         toast.error('Por favor selecciona al menos una zona de trabajo');
         return false;
       }
@@ -342,41 +312,13 @@ const validateCurrentStep = (): boolean => {
         toast.error('Por favor indica si tenés vehículo');
         return false;
       }
-      if (formData.hasVehicle === 'si') {
-        if (!formData.vehicleBrand.trim()) {
-          toast.error('Por favor ingresa la marca del vehículo');
-          return false;
-        }
-        if (!formData.vehicleModel.trim()) {
-          toast.error('Por favor ingresa el modelo del vehículo');
-          return false;
-        }
-        if (!formData.vehicleYear) {
-          toast.error('Por favor selecciona el año del vehículo');
-          return false;
-        }
-        if (!formData.vehiclePlate.trim()) {
-          toast.error('Por favor ingresa la chapa del vehículo');
-          return false;
-        }
-      }
       break;
-
+      
     case 4:
-      // Validación de documentos obligatorios
-      if (!formData.cedulaPhotoUrl || formData.cedulaPhotoUrl.trim() === '') {
-        toast.error('Por favor sube tu Cédula de Identidad para continuar');
-        return false;
-      }
-      if (!formData.licensePhotoUrl || formData.licensePhotoUrl.trim() === '') {
-        toast.error('Por favor sube tu Certificado de Antecedentes Policiales para continuar');
-        return false;
-      }
+      // Documentos son opcionales en el formulario
       break;
-
+      
     case 5:
-      // ========== VALIDACIONES COMENTADAS - NO BORRAR ==========
-      /*
       if (!formData.experience) {
         toast.error('Por favor indica tu experiencia');
         return false;
@@ -389,36 +331,28 @@ const validateCurrentStep = (): boolean => {
         toast.error('Por favor indica cuándo podés empezar');
         return false;
       }
-      */
-      // ========== FIN VALIDACIONES COMENTADAS ==========
-      
       if (!formData.hasUenoAccount) {
-        toast.error('Por favor indica si tenés cuenta en ueno bank');
-        return false;
-      }
-      // Validar número de cuenta si tiene cuenta ueno
-      if (formData.hasUenoAccount === 'si' && (!formData.uenoAccountNumber || formData.uenoAccountNumber.trim() === '')) {
-        toast.error('Por favor ingresa tu número de cuenta ueno bank');
+        toast.error('Por favor indica si tenés cuenta en ueno');
         return false;
       }
       if (!formData.canInvoice) {
         toast.error('Por favor indica si podés emitir facturas');
         return false;
       }
+      // ✅ ACTUALIZADO: interestedInConto ahora es obligatorio siempre
       if (!formData.interestedInConto) {
         toast.error('Por favor indica si te interesa el servicio de Conto');
         return false;
       }
       break;
       
-    case 6:
+    case 6: // ✅ NUEVA VALIDACIÓN
       if (!formData.paymentMethod) {
         toast.error('Por favor selecciona un método de pago');
         return false;
       }
-      // Validación obligatoria de comprobante si es transferencia
-      if (formData.paymentMethod === 'TRANSFERENCIA' && (!formData.paymentProofUrl || formData.paymentProofUrl.trim() === '')) {
-        toast.error('Por favor sube el comprobante de transferencia para continuar');
+      if (formData.paymentMethod === 'TRANSFERENCIA' && !formData.paymentProofUrl) {
+        toast.error('Por favor sube el comprobante de transferencia');
         return false;
       }
       break;
@@ -517,12 +451,13 @@ const validateCurrentStep = (): boolean => {
     window.open(`https://wa.me/?text=${message}`, '_blank');
   };
 
-  const steps = getFormSteps(formData, handleInputChange, handleFileUpload, uploadingDoc, uploadingFiles);
+  const steps = getFormSteps(formData, handleInputChange, handleFileUpload, uploadingDoc);
 
   if (showLoading) {
     return <LoadingScreen />;
   }
 
+  // Validar que steps existe y tiene contenido
   if (!steps || steps.length === 0) {
     return <LoadingScreen />;
   }
@@ -560,7 +495,7 @@ const validateCurrentStep = (): boolean => {
           <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] bg-white/10 rounded-full blur-3xl"></div>
         </div>
         
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center relative z-10">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center relative z-10 animate-in zoom-in duration-500">
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Check className="w-10 h-10 text-green-600" />
           </div>
@@ -619,7 +554,7 @@ const validateCurrentStep = (): boolean => {
         </div>
 
         {SKIP_VALIDATION && (
-          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-top duration-300">
             <div className="bg-yellow-400 text-yellow-900 px-6 py-2 rounded-full shadow-lg flex items-center gap-2">
               <span className="text-lg">⚡</span>
               <span className="font-semibold">Modo Testing - Validaciones OFF</span>
@@ -637,7 +572,7 @@ const validateCurrentStep = (): boolean => {
         <TopNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
         {activeTab === 'form' ? (
-          <div className="relative max-w-2xl mx-auto px-4 pb-6">
+          <div className="relative max-w-2xl mx-auto px-4 pb-6 animate-in fade-in zoom-in-95 duration-700">
             <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${MONCHIS_RED}20` }}>
@@ -717,3 +652,5 @@ const validateCurrentStep = (): boolean => {
 };
 
 export default FormularioMonchis;
+
+  */

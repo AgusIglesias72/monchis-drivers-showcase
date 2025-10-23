@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
     const sessionId = formData.get("sessionId") as string;
     const documentType = formData.get("documentType") as string;
+    const originalFileName = formData.get("originalFileName") as string; // 🆕 Recibir nombre original
 
     if (!file || !sessionId || !documentType) {
       return NextResponse.json(
@@ -53,9 +54,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Subir a Vercel Blob
+    // 🆕 Usar nombre original si está disponible, si no usar el del file
+    const fileName = originalFileName || file.name;
+
+    // Subir a Vercel Blob con el nombre original preservado
     const blob = await put(
-      `form-documents/${sessionId}/${documentType}-${Date.now()}.${file.name
+      `form-documents/${sessionId}/${documentType}-${Date.now()}.${fileName
         .split(".")
         .pop()}`,
       file,
@@ -71,7 +75,7 @@ export async function POST(request: NextRequest) {
       license: "CRIMINAL_RECORD",
       vehicle: "VEHICLE_PHOTO_FRONT",
       taxCompliance: "TAX_COMPLIANCE",
-      paymentProof: "PAYMENT_PROOF", // ✅ NUEVO
+      paymentProof: "PAYMENT_PROOF",
     };
 
     const enumDocType = docTypeMap[documentType] || "OTHER";
@@ -81,7 +85,7 @@ export async function POST(request: NextRequest) {
         formDriverId: submission.formDriverId,
         documentType: enumDocType,
         blobUrl: blob.url,
-        fileName: file.name,
+        fileName: fileName, // 🆕 Guardar nombre original
         mimeType: file.type,
         fileSize: file.size,
         status: "PENDING",
@@ -89,6 +93,7 @@ export async function POST(request: NextRequest) {
           sessionId,
           uploadedFrom: "web_form",
           originalDocType: documentType,
+          originalFileName: fileName, // 🆕 También en metadata
           ...(documentType === "taxCompliance" && {
             isTaxCompliance: true,
             documentLabel: "Certificado de Cumplimiento Tributario",
@@ -103,6 +108,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       url: blob.url,
+      fileName: fileName, // 🆕 Devolver nombre original
       documentId: formDocument.id,
       documentType: enumDocType,
     });
@@ -117,11 +123,9 @@ export async function POST(request: NextRequest) {
 
 // Helper para recalcular el estado de documentos
 async function recalculateDocumentsStatus(formDriverId: string) {
-  // ✅ CORREGIDO: Ya no usamos isDeleted, solo traemos todos los documentos del FormDriver
   const documents = await prisma.formDocument.findMany({
     where: {
       formDriverId,
-      // isDeleted eliminado - no existe en el schema
     },
   });
 
