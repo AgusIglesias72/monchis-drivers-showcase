@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { postulacionService } from '@/lib/services/postulacion.service'
 import { PostulacionDetailContent } from '@/components/admin/postulacion-detail-content'
 
-export const revalidate = 30 // Siempre fresh data
+export const revalidate = 0 // Siempre fresh data
 
 async function getPostulacion(id: string) {
   try {

@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma'
 
 /**
  * Actualiza datos básicos de una postulación
+ * ✅ Solo revalida la LISTA, no el detalle (actualización optimista en cliente)
  */
 export async function updatePostulacion(id: string, data: any) {
   try {
@@ -30,7 +31,7 @@ export async function updatePostulacion(id: string, data: any) {
       }
     })
 
-    revalidatePath(`/admin/postulaciones/${id}`)
+    // ✅ Solo revalidar la lista, NO el detalle
     revalidatePath('/admin/postulaciones')
 
     return { success: true, message: 'Postulación actualizada exitosamente' }
@@ -42,6 +43,7 @@ export async function updatePostulacion(id: string, data: any) {
 
 /**
  * Actualiza información de pago
+ * ✅ Solo revalida la LISTA, no el detalle
  */
 export async function updatePayment(postulacionId: string, paymentData: any) {
   try {
@@ -64,7 +66,7 @@ export async function updatePayment(postulacionId: string, paymentData: any) {
       }
     })
 
-    revalidatePath(`/admin/postulaciones/${postulacionId}`)
+    // ✅ Solo revalidar la lista
     revalidatePath('/admin/postulaciones')
 
     return { success: true, message: 'Pago actualizado exitosamente' }
@@ -76,6 +78,7 @@ export async function updatePayment(postulacionId: string, paymentData: any) {
 
 /**
  * Crea una nota interna
+ * ✅ No revalida nada (actualización optimista)
  */
 export async function createNote(postulacionId: string, content: string) {
   try {
@@ -112,7 +115,8 @@ export async function createNote(postulacionId: string, content: string) {
       }
     })
 
-    revalidatePath(`/admin/postulaciones/${postulacionId}`)
+    // ✅ No revalidar - el cliente ya actualizó optimísticamente
+    // El router.refresh() con delay en el cliente sincronizará después
 
     return { success: true, note }
   } catch (error: any) {
@@ -123,6 +127,7 @@ export async function createNote(postulacionId: string, content: string) {
 
 /**
  * Actualiza una nota interna
+ * ✅ No revalida nada (actualización optimista)
  */
 export async function updateNote(noteId: string, content: string) {
   try {
@@ -156,7 +161,7 @@ export async function updateNote(noteId: string, content: string) {
       }
     })
 
-    revalidatePath(`/admin/postulaciones/${note.formDriverId}`)
+    // ✅ No revalidar - actualización optimista
 
     return { success: true, note }
   } catch (error: any) {
@@ -167,6 +172,7 @@ export async function updateNote(noteId: string, content: string) {
 
 /**
  * Elimina una nota interna
+ * ✅ No revalida nada (actualización optimista)
  */
 export async function deleteNote(noteId: string) {
   try {
@@ -197,7 +203,7 @@ export async function deleteNote(noteId: string) {
       }
     })
 
-    revalidatePath(`/admin/postulaciones/${note.formDriverId}`)
+    // ✅ No revalidar - actualización optimista
 
     return { success: true }
   } catch (error: any) {
@@ -208,6 +214,7 @@ export async function deleteNote(noteId: string) {
 
 /**
  * Aprueba un documento
+ * ✅ Solo revalida la lista
  */
 export async function approveDocument(documentId: string) {
   try {
@@ -237,7 +244,8 @@ export async function approveDocument(documentId: string) {
       }
     })
 
-    revalidatePath(`/admin/postulaciones`)
+    // ✅ Solo revalidar la lista para que se actualicen badges/contadores
+    revalidatePath('/admin/postulaciones')
 
     return { success: true, document }
   } catch (error: any) {
@@ -248,6 +256,7 @@ export async function approveDocument(documentId: string) {
 
 /**
  * Rechaza un documento
+ * ✅ Solo revalida la lista
  */
 export async function rejectDocument(documentId: string, reason: string) {
   try {
@@ -278,7 +287,8 @@ export async function rejectDocument(documentId: string, reason: string) {
       }
     })
 
-    revalidatePath(`/admin/postulaciones`)
+    // ✅ Solo revalidar la lista
+    revalidatePath('/admin/postulaciones')
 
     return { success: true, document }
   } catch (error: any) {
@@ -289,6 +299,7 @@ export async function rejectDocument(documentId: string, reason: string) {
 
 /**
  * Elimina un documento
+ * ✅ Solo revalida la lista
  */
 export async function deleteDocument(documentId: string) {
   try {
@@ -313,7 +324,8 @@ export async function deleteDocument(documentId: string) {
       }
     })
 
-    revalidatePath(`/admin/postulaciones`)
+    // ✅ Solo revalidar la lista
+    revalidatePath('/admin/postulaciones')
 
     return { success: true }
   } catch (error: any) {

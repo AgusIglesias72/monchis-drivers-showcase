@@ -1,5 +1,4 @@
 // components/admin/postulacion-detail-content.tsx
-
 "use client"
 
 import { useState, useTransition } from "react"
@@ -72,8 +71,11 @@ interface PostulacionDetailContentProps {
   postulacion: any
 }
 
-export function PostulacionDetailContent({ postulacion }: PostulacionDetailContentProps) {
+export function PostulacionDetailContent({ postulacion: initialPostulacion }: PostulacionDetailContentProps) {
   const router = useRouter()
+  
+  // ✅ Estado local que se actualiza INMEDIATAMENTE
+  const [postulacion, setPostulacion] = useState(initialPostulacion)
   
   // Estados de carga separados
   const [isEditingPending, startEditingTransition] = useTransition()
@@ -107,17 +109,27 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
     rejectionReason: postulacion.equipmentPayments?.[0]?.rejectionReason || '',
   })
 
-  // ============ HANDLERS ============
+  // ============ HANDLERS CON ACTUALIZACIÓN INMEDIATA ============
 
   const handleSave = () => {
+    // ✅ 1. Actualizar UI inmediatamente
+    const updatedPostulacion = { ...postulacion, ...editedData }
+    setPostulacion(updatedPostulacion)
+    setIsEditing(false)
+    toast.success('Guardando cambios...')
+    
+    // ✅ 2. Guardar en servidor en segundo plano
     startEditingTransition(async () => {
       const result = await updatePostulacion(postulacion.id, editedData)
       
       if (result.success) {
         toast.success(result.message)
-        setIsEditing(false)
-        router.refresh()
+        setTimeout(() => router.refresh(), 800)
       } else {
+        // ❌ Si falla, revertir cambios
+        setPostulacion(postulacion)
+        setEditedData(postulacion)
+        setIsEditing(true)
         toast.error(result.error || 'Error al guardar')
       }
     })
@@ -129,44 +141,73 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   }
 
   const handleAddNote = async (content: string) => {
+    // ✅ Crear nota temporal
+    const tempNote = {
+      id: `temp-${Date.now()}`,
+      content,
+      createdAt: new Date().toISOString(),
+      formDriverId: postulacion.id,
+      createdByUser: {
+        fullName: 'Tú',
+        email: ''
+      }
+    }
+    
+    // ✅ Agregar inmediatamente a la UI
+    setNotes([tempNote, ...notes])
+    toast.success('Añadiendo nota...')
+    
     startNoteTransition(async () => {
       const result = await createNote(postulacion.id, content)
       
       if (result.success) {
+        // ✅ Reemplazar nota temporal con la real
         setNotes([result.note, ...notes])
         toast.success('Nota añadida')
-        router.refresh()
+        setTimeout(() => router.refresh(), 800)
       } else {
+        // ❌ Remover nota temporal si falla
+        setNotes(notes)
         toast.error(result.error || 'Error al guardar nota')
       }
     })
   }
 
   const handleEditNote = async (noteId: string, content: string) => {
+    // ✅ Actualizar inmediatamente en UI
+    const previousNotes = [...notes]
+    setNotes(notes.map((note: any) => 
+      note.id === noteId ? { ...note, content } : note
+    ))
+    
     startNoteTransition(async () => {
       const result = await updateNote(noteId, content)
       
       if (result.success) {
-        setNotes(notes.map((note: any) => 
-          note.id === noteId ? result.note : note
-        ))
         toast.success('Nota actualizada')
-        router.refresh()
+        setTimeout(() => router.refresh(), 800)
       } else {
+        // ❌ Revertir si falla
+        setNotes(previousNotes)
         toast.error(result.error || 'Error al actualizar nota')
       }
     })
   }
 
   const handleDeleteNote = async (noteId: string) => {
+    // ✅ Remover inmediatamente de UI
+    const previousNotes = [...notes]
+    setNotes(notes.filter((note: any) => note.id !== noteId))
+    
     startNoteTransition(async () => {
       const result = await deleteNote(noteId)
       
       if (result.success) {
-        setNotes(notes.filter((note: any) => note.id !== noteId))
         toast.success('Nota eliminada')
-        router.refresh()
+        setTimeout(() => router.refresh(), 800)
       } else {
+        // ❌ Restaurar si falla
+        setNotes(previousNotes)
         toast.error(result.error || 'Error al eliminar nota')
       }
     })
@@ -177,14 +218,19 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
   }
 
   const handleDocumentDelete = (documentId: string) => {
+    // ✅ Remover inmediatamente de UI
+    const previousDocs = [...documents]
+    setDocuments(documents.filter((doc: any) => doc.id !== documentId))
+    
     startDocumentTransition(async () => {
       const result = await deleteDocument(documentId)
       
       if (result.success) {
-        setDocuments(documents.filter((doc: any) => doc.id !== documentId))
         toast.success('Documento eliminado')
-        router.refresh()
+        setTimeout(() => router.refresh(), 800)
       } else {
+        // ❌ Restaurar si falla
+        setDocuments(previousDocs)
         toast.error(result.error || 'Error al eliminar')
       }
     })
@@ -195,7 +241,6 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
     
     const file = files[0]
     
-    // Validar tamaño en el cliente (5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error('El archivo no debe superar 5MB')
       return
@@ -205,6 +250,18 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
     formData.append('file', file)
     formData.append('formDriverId', postulacion.id)
     formData.append('documentType', documentType)
+
+    // ✅ Crear documento temporal
+    const tempDoc = {
+      id: `temp-${Date.now()}`,
+      documentType,
+      fileName: file.name,
+      status: 'PENDING',
+      uploadedAt: new Date().toISOString(),
+    }
+    
+    setDocuments([...documents, tempDoc])
+    toast.success('Subiendo documento...')
 
     startDocumentTransition(async () => {
       try {
@@ -216,59 +273,104 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
         const result = await response.json()
 
         if (result.success) {
-          setDocuments([...documents, result.document])
+          // ✅ Reemplazar temporal con el real
+          setDocuments([...documents.filter((d: { id: string }) => d.id !== tempDoc.id), result.document])
           toast.success(`${file.name} subido`)
-          router.refresh()
+          setTimeout(() => router.refresh(), 800)
         } else {
+          // ❌ Remover temporal si falla
+          setDocuments(documents)
           toast.error(result.error || `Error al subir ${file.name}`)
         }
       } catch (error: any) {
+        setDocuments(documents)
         toast.error(error.message || 'Error al subir documento')
       }
     })
   }
 
   const handleDocumentApprove = (documentId: string) => {
+    // ✅ Actualizar estado inmediatamente
+    const previousDocs = [...documents]
+    setDocuments(documents.map((doc: any) => 
+      doc.id === documentId 
+        ? { ...doc, status: 'APPROVED', reviewedAt: new Date().toISOString() }
+        : doc
+    ))
+    
     startDocumentTransition(async () => {
       const result = await approveDocument(documentId)
       
       if (result.success) {
-        setDocuments(documents.map((doc: any) => 
-          doc.id === documentId ? result.document : doc
-        ))
         toast.success('Documento aprobado')
-        router.refresh()
+        setTimeout(() => router.refresh(), 800)
       } else {
+        // ❌ Revertir si falla
+        setDocuments(previousDocs)
         toast.error(result.error || 'Error al aprobar')
       }
     })
   }
 
   const handleDocumentReject = (documentId: string, reason: string) => {
+    // ✅ Actualizar estado inmediatamente
+    const previousDocs = [...documents]
+    setDocuments(documents.map((doc: any) => 
+      doc.id === documentId 
+        ? { 
+            ...doc, 
+            status: 'REJECTED', 
+            rejectionReason: reason,
+            reviewedAt: new Date().toISOString() 
+          }
+        : doc
+    ))
+    
     startDocumentTransition(async () => {
       const result = await rejectDocument(documentId, reason)
       
       if (result.success) {
-        setDocuments(documents.map((doc: any) => 
-          doc.id === documentId ? result.document : doc
-        ))
         toast.success('Documento rechazado')
-        router.refresh()
+        setTimeout(() => router.refresh(), 800)
       } else {
+        // ❌ Revertir si falla
+        setDocuments(previousDocs)
         toast.error(result.error || 'Error al rechazar')
       }
     })
   }
 
   const handleSavePayment = () => {
+    // ✅ Actualizar UI inmediatamente
+    const previousPayment = postulacion.equipmentPayments?.[0]
+    
+    setPostulacion({
+      ...postulacion,
+      equipmentPayments: [{
+        ...previousPayment,
+        ...paymentData,
+        verifiedAt: paymentData.status === 'VERIFIED' 
+          ? new Date().toISOString() 
+          : previousPayment?.verifiedAt
+      }]
+    })
+    
+    setShowPaymentModal(false)
+    toast.success('Actualizando pago...')
+    
     startPaymentTransition(async () => {
       const result = await updatePayment(postulacion.id, paymentData)
       
       if (result.success) {
         toast.success(result.message)
-        setShowPaymentModal(false)
-        router.refresh()
+        setTimeout(() => router.refresh(), 800)
       } else {
+        // ❌ Revertir si falla
+        setPostulacion({
+          ...postulacion,
+          equipmentPayments: [previousPayment]
+        })
+        setShowPaymentModal(true)
         toast.error(result.error || 'Error al actualizar pago')
       }
     })
@@ -279,7 +381,7 @@ export function PostulacionDetailContent({ postulacion }: PostulacionDetailConte
       toast.error('Debes indicar el motivo del rechazo')
       return
     }
-
+    
     startRejectTransition(async () => {
       // TODO: Implementar server action de rechazo
       toast.info('Función de rechazo en desarrollo')

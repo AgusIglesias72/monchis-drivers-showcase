@@ -316,54 +316,63 @@ export function PostulacionesTableExpandable({
                           </td>
                           
                           <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="h-8 w-8 p-0 cursor-pointer"
-                                >
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem 
-                                  onClick={(e) => handleViewDetails(postulacion.id, e)}
-                                  className="cursor-pointer"
-                                >
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  Ver detalles
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={(e) => handleContact(postulacion, e)}
-                                  className="cursor-pointer"
-                                >
-                                  <Phone className="h-4 w-4 mr-2" />
-                                  Contactar
-                                </DropdownMenuItem>
-                                {canSchedule && (
-                                  <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem 
-                                      onClick={(e) => handleScheduleOnboarding(postulacion, e)}
-                                      className="cursor-pointer text-green-600"
-                                    >
-                                      <CheckCircle className="h-4 w-4 mr-2" />
-                                      Agendar Onboarding
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  onClick={(e) => handleReject(postulacion, e)}
-                                  className="cursor-pointer text-red-600"
-                                >
-                                  <XCircle className="h-4 w-4 mr-2" />
-                                  Rechazar
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </td>
+  <div className="flex items-center justify-end gap-2">
+    {/* ✅ Botón Ver Detalles - Solo ícono */}
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={(e) => handleViewDetails(postulacion.id, e)}
+      className="h-8 w-8 p-0 cursor-pointer hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950"
+      title="Ver detalles"
+    >
+      <Eye className="h-4 w-4" />
+    </Button>
+
+    {/* ✅ Dropdown con acciones */}
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0 cursor-pointer"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem
+          onClick={(e) => handleContact(postulacion, e)}
+          className="cursor-pointer"
+        >
+          <Phone className="h-4 w-4 mr-2" />
+          Contactar
+        </DropdownMenuItem>
+        
+        {canSchedule && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={(e) => handleScheduleOnboarding(postulacion, e)}
+              className="cursor-pointer text-green-600"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Agendar Onboarding
+            </DropdownMenuItem>
+          </>
+        )}
+        
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={(e) => handleReject(postulacion, e)}
+          className="cursor-pointer text-red-600"
+        >
+          <XCircle className="h-4 w-4 mr-2" />
+          Rechazar
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>
+</td>
                         </tr>
 
                         {/* Fila expandida */}
