@@ -2,11 +2,12 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 import { PostulacionesKPIs } from "@/components/admin/postulaciones-kpis"
 import { PostulacionesTableExpandable } from "@/components/admin/postulaciones-table-expandable"
 import {
@@ -19,42 +20,74 @@ import {
 import {
   Search,
   Download,
-  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
 } from "lucide-react"
 import { toast } from "sonner"
+import { useRouter } from "next/navigation"
 
 interface PostulacionesPageContentProps {
   stats: any
   postulaciones: any[]
   total: number
-  currentStatus?: string
-  currentSearch?: string
+  currentPage: number
+  totalPages: number
+  hasMore: boolean
+  currentFilters: {
+    status?: string
+    search?: string
+    onboardingStatus?: string
+    hasVehicle?: string
+    startDate?: string
+    endDate?: string
+  }
 }
 
 export function PostulacionesPageContent({
   stats,
   postulaciones,
   total,
-  currentStatus,
-  currentSearch
+  currentPage,
+  totalPages,
+  hasMore,
+  currentFilters
 }: PostulacionesPageContentProps) {
-  const [searchTerm, setSearchTerm] = useState(currentSearch || '')
-  const [statusFilter, setStatusFilter] = useState(currentStatus || 'all')
+  const router = useRouter()
+  
+  // Estados locales para los filtros
+  const [searchTerm, setSearchTerm] = useState(currentFilters.search || '')
+  const [statusFilter, setStatusFilter] = useState(currentFilters.status || 'all')
+  const [onboardingStatusFilter, setOnboardingStatusFilter] = useState(currentFilters.onboardingStatus || 'all')
+  const [startDate, setStartDate] = useState(currentFilters.startDate || '')
+  const [endDate, setEndDate] = useState(currentFilters.endDate || '')
   const [isExporting, setIsExporting] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
 
-  const handleSearch = () => {
+  const applyFilters = (page: number = 1) => {
     const params = new URLSearchParams()
+    
     if (searchTerm) params.set('search', searchTerm)
     if (statusFilter !== 'all') params.set('status', statusFilter)
+    if (onboardingStatusFilter !== 'all') params.set('onboardingStatus', onboardingStatusFilter)
+    if (startDate) params.set('startDate', startDate)
+    if (endDate) params.set('endDate', endDate)
+    if (page > 1) params.set('page', page.toString())
     
     const queryString = params.toString()
-    window.location.href = `/admin/postulaciones${queryString ? `?${queryString}` : ''}`
+    router.push(`/admin/postulaciones${queryString ? `?${queryString}` : ''}`, { scroll: false })
   }
 
-  const handleResetFilters = () => {
-    setSearchTerm('')
-    setStatusFilter('all')
-    window.location.href = '/admin/postulaciones'
+  const handleSearch = () => {
+    setIsSearching(true)
+    // Pequeño delay para mostrar el loading
+    setTimeout(() => {
+      applyFilters(1)
+    }, 100)
+  }
+
+  const handlePageChange = (newPage: number) => {
+    applyFilters(newPage)
   }
 
   const handleExport = async () => {
@@ -69,14 +102,14 @@ export function PostulacionesPageContent({
         body: JSON.stringify({
           status: statusFilter !== 'all' ? statusFilter : undefined,
           searchTerm: searchTerm || undefined,
+          onboardingStatus: onboardingStatusFilter !== 'all' ? onboardingStatusFilter : undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
         }),
       })
 
-      if (!response.ok) {
-        throw new Error('Error al exportar')
-      }
+      if (!response.ok) throw new Error('Error al exportar')
 
-      // Descargar el archivo
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -96,85 +129,218 @@ export function PostulacionesPageContent({
     }
   }
 
+  // Resetear loading cuando los datos cambian
+  useEffect(() => {
+    setIsSearching(false)
+  }, [postulaciones])
+
   return (
-    <div className="flex flex-1 flex-col">
-      <AdminHeader 
-        breadcrumbs={[
-          { label: "Postulaciones" }
-        ]}
-      />
+    <div className="min-h-screen bg-background">
+      <AdminHeader />
       
-      <div className="flex-1 p-8 space-y-6">
+      <div className="p-8 space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Postulaciones de Drivers</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Postulaciones</h1>
           <p className="text-muted-foreground mt-1">
-            Gestión completa de las postulaciones del formulario
+            Gestiona y revisa todas las postulaciones de drivers
           </p>
         </div>
 
         {/* KPIs */}
         <PostulacionesKPIs stats={stats} />
 
-        {/* Filtros compactos */}
+        {/* Filtros */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex flex-wrap items-end gap-3">
               {/* Búsqueda */}
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div className="space-y-1.5 flex-1 min-w-[240px]">
+                <Label htmlFor="search" className="text-xs text-muted-foreground">Buscar</Label>
                 <Input
-                  type="text"
-                  placeholder="Buscar por nombre, cédula o teléfono..."
+                  id="search"
+                  placeholder="Nombre, cédula, teléfono o email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  className="pl-10"
+                  className="h-9"
                 />
               </div>
 
               {/* Filtro de estado */}
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="COMPLETED">Completadas</SelectItem>
-                  <SelectItem value="IN_PROGRESS">En Progreso</SelectItem>
-                  <SelectItem value="ABANDONED">Abandonadas</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="space-y-1.5">
+                <Label htmlFor="status" className="text-xs text-muted-foreground">Estado</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger id="status" className="w-[130px] h-9">
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="COMPLETED">Completadas</SelectItem>
+                    <SelectItem value="IN_PROGRESS">En Progreso</SelectItem>
+                    <SelectItem value="ABANDONED">Abandonadas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-              {/* Botón buscar */}
-              <Button onClick={handleSearch} className="cursor-pointer">
-                <Search className="h-4 w-4 mr-2" />
-                Buscar
-              </Button>
+              {/* Filtro de onboarding */}
+              <div className="space-y-1.5">
+                <Label htmlFor="onboarding" className="text-xs text-muted-foreground">Onboarding</Label>
+                <Select value={onboardingStatusFilter} onValueChange={setOnboardingStatusFilter}>
+                  <SelectTrigger id="onboarding" className="w-[130px] h-9">
+                    <SelectValue placeholder="Onboarding" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="pending">Pendiente</SelectItem>
+                    <SelectItem value="scheduled">Agendado</SelectItem>
+                    <SelectItem value="completed">Realizado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-              {/* Botón reset */}
-              <Button variant="outline" onClick={handleResetFilters} size="icon" className="cursor-pointer">
-                <RotateCcw className="h-4 w-4" />
-              </Button>
+              {/* Fecha desde */}
+              <div className="space-y-1.5">
+                <Label htmlFor="startDate" className="text-xs text-muted-foreground">Desde</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-[140px] h-9"
+                />
+              </div>
 
-              {/* Botón exportar */}
+              {/* Fecha hasta */}
+              <div className="space-y-1.5">
+                <Label htmlFor="endDate" className="text-xs text-muted-foreground">Hasta</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-[140px] h-9"
+                />
+              </div>
+
+              {/* Botones de acción */}
+              <div className="flex items-end gap-2">
+                <Button 
+                  onClick={handleSearch} 
+                  size="sm" 
+                  className="h-9 cursor-pointer"
+                  disabled={isSearching}
+                >
+                  {isSearching ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Buscando...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="h-4 w-4 mr-2" />
+                      Buscar
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Barra de acciones inferior */}
+            <div className="flex items-center justify-between pt-2 border-t">
               <Button 
                 variant="outline" 
                 onClick={handleExport} 
-                className="gap-2 cursor-pointer"
+                size="sm"
+                className="h-9 cursor-pointer"
                 disabled={isExporting}
               >
-                <Download className="h-4 w-4" />
-                {isExporting ? 'Exportando...' : 'Exportar'}
+                <Download className="h-4 w-4 mr-2" />
+                {isExporting ? 'Exportando...' : 'Exportar lista'}
               </Button>
+
+              <div className="text-sm text-muted-foreground">
+                Mostrando {postulaciones.length} de {total} postulaciones
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Tabla de postulaciones */}
-        <PostulacionesTableExpandable 
-          postulaciones={postulaciones}
-        />
+        <div className="relative">
+          {isSearching && (
+            <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Cargando postulaciones...</p>
+              </div>
+            </div>
+          )}
+          <PostulacionesTableExpandable 
+            postulaciones={postulaciones}
+          />
+        </div>
+
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Página {currentPage} de {totalPages}
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="cursor-pointer"
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Anterior
+                  </Button>
+                  
+                  {/* Botones de páginas */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                      let page = i + 1
+                      if (totalPages > 5) {
+                        if (currentPage > 3) {
+                          page = currentPage - 2 + i
+                        }
+                        if (page > totalPages) return null
+                      }
+                      return (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handlePageChange(page)}
+                          className="w-9 h-9 p-0 cursor-pointer"
+                        >
+                          {page}
+                        </Button>
+                      )
+                    }).filter(Boolean)}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="cursor-pointer"
+                  >
+                    Siguiente
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

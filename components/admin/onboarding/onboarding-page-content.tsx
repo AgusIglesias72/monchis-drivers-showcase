@@ -74,85 +74,91 @@ interface OnboardingPageContentProps {
 }
 
 export function OnboardingPageContent({ 
-  initialEvents,
-  currentStatus
+  initialEvents, 
+  currentStatus 
 }: OnboardingPageContentProps) {
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   
-  // Estado local de eventos (inicializado con datos del servidor)
   const [events, setEvents] = useState<OnboardingEventWithRelations[]>(initialEvents)
-  
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>(currentStatus || 'all')
   const [sortField, setSortField] = useState<SortField>('date')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-  
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [showEventForm, setShowEventForm] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<OnboardingEventWithRelations | null>(null)
   const [eventToDelete, setEventToDelete] = useState<OnboardingEventWithRelations | null>(null)
-  
-  const [isPending, startTransition] = useTransition()
 
-  // Actualizar eventos cuando cambian los datos iniciales
+  // Sync with initialEvents when they change
   useEffect(() => {
     setEvents(initialEvents)
   }, [initialEvents])
 
-  // Calcular currentCapacity dinámicamente a partir de attendees
-  const eventsWithCapacity = events.map(event => ({
-    ...event,
-    currentCapacity: event.attendees?.length || 0
-  }))
+  // Filtrado y ordenamiento
+  const filteredAndSortedEvents = (() => {
+    let filtered = events
 
-  // Función para manejar el ordenamiento
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(event =>
+        event.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.organizer?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    }
+
+    // Filter by status
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(event => event.status === filterStatus)
+    }
+
+    // Sort
+    const sorted = [...filtered].sort((a, b) => {
+      let aValue: any
+      let bValue: any
+
+      switch (sortField) {
+        case 'date':
+          aValue = new Date(a.scheduledDate).getTime()
+          bValue = new Date(b.scheduledDate).getTime()
+          break
+        case 'location':
+          aValue = a.location || ''
+          bValue = b.location || ''
+          break
+        case 'organizer':
+          aValue = a.organizer || ''
+          bValue = b.organizer || ''
+          break
+        case 'capacity':
+          aValue = a.currentCapacity
+          bValue = b.currentCapacity
+          break
+        case 'status':
+          aValue = a.status
+          bValue = b.status
+          break
+        default:
+          return 0
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+
+    return sorted
+  })()
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
     } else {
       setSortField(field)
-      setSortDirection('asc')
+      setSortDirection('desc')
     }
   }
 
-  // Filtrar y ordenar eventos
-  const filteredAndSortedEvents = eventsWithCapacity
-    .filter(event => {
-      const matchesSearch = 
-        (event.location?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-        (event.organizerUser.fullName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-        (event.title?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-      
-      const matchesFilter = filterStatus === 'all' || event.status === filterStatus
-
-      return matchesSearch && matchesFilter
-    })
-    .sort((a, b) => {
-      let comparison = 0
-      
-      switch (sortField) {
-        case 'date':
-          comparison = new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
-          break
-        case 'location':
-          comparison = (a.location || '').localeCompare(b.location || '')
-          break
-        case 'organizer':
-          comparison = (a.organizerUser.fullName || '').localeCompare(b.organizerUser.fullName || '')
-          break
-        case 'capacity':
-          const aPercent = a.maxCapacity ? a.currentCapacity / a.maxCapacity : 0
-          const bPercent = b.maxCapacity ? b.currentCapacity / b.maxCapacity : 0
-          comparison = aPercent - bPercent
-          break
-        case 'status':
-          comparison = a.status.localeCompare(b.status)
-          break
-      }
-      
-      return sortDirection === 'asc' ? comparison : -comparison
-    })
-
-  // Componente para el header de tabla ordenable
   const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => {
     const isActive = sortField === field
     
@@ -165,7 +171,7 @@ export function OnboardingPageContent({
           {children}
           <div className="flex flex-col">
             <svg
-              className={`h-3 w-3 transition-colors ${isActive && sortDirection === 'asc' ? 'text-foreground' : 'text-muted-foreground/30'}`}
+              className={`h-3 w-3 -mb-1 transition-colors ${isActive && sortDirection === 'asc' ? 'text-foreground' : 'text-muted-foreground/30'}`}
               fill="currentColor"
               viewBox="0 0 24 24"
             >
@@ -229,6 +235,14 @@ export function OnboardingPageContent({
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const year = d.getFullYear()
     return `${day}/${month}/${year}`
+  }
+
+  // Formato de hora: HH:MM
+  const formatTime = (date: Date) => {
+    const d = new Date(date)
+    const hours = String(d.getHours()).padStart(2, '0')
+    const minutes = String(d.getMinutes()).padStart(2, '0')
+    return `${hours}:${minutes}`
   }
 
   const handleCreateEvent = () => {
@@ -364,200 +378,182 @@ export function OnboardingPageContent({
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <SortableHeader field="date">Fecha y Hora</SortableHeader>
-                      <SortableHeader field="location">Ubicación</SortableHeader>
-                      <SortableHeader field="organizer">Organizador</SortableHeader>
-                      <SortableHeader field="capacity">Capacidad</SortableHeader>
-                      <SortableHeader field="status">Estado</SortableHeader>
-                      <TableHead className="text-right pr-6">Acciones</TableHead>
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <SortableHeader field="date">Fecha y Hora</SortableHeader>
+                    <SortableHeader field="location">Ubicación</SortableHeader>
+                    <SortableHeader field="organizer">Organizador</SortableHeader>
+                    <SortableHeader field="capacity">Capacidad</SortableHeader>
+                    <SortableHeader field="status">Estado</SortableHeader>
+                    <TableHead className="text-right pr-6">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAndSortedEvents.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                        {searchTerm || filterStatus !== 'all' 
+                          ? 'No se encontraron eventos con los filtros aplicados'
+                          : 'No hay eventos creados. Crea tu primer evento de on boarding.'
+                        }
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredAndSortedEvents.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                          {searchTerm || filterStatus !== 'all' 
-                            ? 'No se encontraron eventos con los filtros aplicados' 
-                            : 'No hay eventos creados aún'}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredAndSortedEvents.map((event) => (
-                        <TableRow 
-                          key={event.id} 
-                          className="group hover:bg-muted/30 transition-colors border-b"
+                  ) : (
+                    filteredAndSortedEvents.map((event) => (
+                      <TableRow 
+                        key={event.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleViewEvent(event)}
+                      >
+                        {/* Fecha y Hora */}
+                        <TableCell 
+                          onClick={() => handleViewEvent(event)}
+                          className="font-medium"
                         >
-                          {/* Fecha y Hora */}
-                          <TableCell 
-                            onClick={() => handleViewEvent(event)}
-                            className="cursor-pointer"
-                          >
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-muted-foreground" />
-                                <span className="font-medium text-sm">
-                                  {formatDate(event.scheduledDate)}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <Clock className="h-3.5 w-3.5" />
-                                <span className="text-xs">
-                                  {event.startTime}
-                                  {event.endTime && ` - ${event.endTime}`}
-                                </span>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <div>{formatDate(event.scheduledDate)}</div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatTime(event.scheduledDate)}
                               </div>
                             </div>
-                          </TableCell>
+                          </div>
+                        </TableCell>
 
-                          {/* Ubicación */}
-                          <TableCell 
-                            onClick={() => handleViewEvent(event)}
-                            className="cursor-pointer"
-                          >
-                            {event.location ? (
-                              <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-medium">{event.location}</span>
-                                  {event.locationAddress && (
-                                    <span className="text-xs text-muted-foreground">
-                                      {event.locationAddress}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">Sin ubicación</span>
-                            )}
-                          </TableCell>
+                        {/* Ubicación */}
+                        <TableCell 
+                          onClick={() => handleViewEvent(event)}
+                          className="cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <span className="line-clamp-1">
+                              {event.location || '-'}
+                            </span>
+                          </div>
+                        </TableCell>
 
-                          {/* Organizador */}
-                          <TableCell 
-                            onClick={() => handleViewEvent(event)}
-                            className="cursor-pointer"
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                <span className="text-xs font-semibold text-primary">
-                                  {(event.organizerUser.fullName || event.organizerUser.email || 'N/A').charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                              <span className="text-sm font-medium">
-                                {event.organizerUser.fullName || event.organizerUser.email}
+                        {/* Organizador */}
+                        <TableCell 
+                          onClick={() => handleViewEvent(event)}
+                          className="cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <span className="line-clamp-1">
+                              {event.organizer || '-'}
+                            </span>
+                          </div>
+                        </TableCell>
+
+                        {/* Capacidad */}
+                        <TableCell 
+                          onClick={() => handleViewEvent(event)}
+                          className="cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1">
+                              <Users className="h-4 w-4 text-muted-foreground" />
+                              <span className={`font-medium ${
+                                event.maxCapacity && event.currentCapacity >= event.maxCapacity 
+                                  ? 'text-red-600' 
+                                  : 'text-foreground'
+                              }`}>
+                                {event.currentCapacity}
+                                {event.maxCapacity ? `/${event.maxCapacity}` : ''}
                               </span>
                             </div>
-                          </TableCell>
-
-                          {/* Capacidad */}
-                          <TableCell 
-                            onClick={() => handleViewEvent(event)}
-                            className="cursor-pointer"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4 text-muted-foreground" />
-                                <span className={`text-sm font-semibold ${
-                                  event.maxCapacity && event.currentCapacity >= event.maxCapacity 
-                                    ? 'text-red-600' 
-                                    : 'text-foreground'
-                                }`}>
-                                  {event.currentCapacity}
-                                  {event.maxCapacity ? `/${event.maxCapacity}` : ''}
-                                </span>
-                              </div>
-                              {/* Progress bar */}
-                              {event.maxCapacity && (
-                                <div className="flex-1 max-w-[100px]">
-                                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                    <div 
-                                      className={`h-full transition-all ${
-                                        event.currentCapacity >= event.maxCapacity
-                                          ? 'bg-red-500'
-                                          : event.currentCapacity / event.maxCapacity > 0.8
-                                          ? 'bg-amber-500'
-                                          : 'bg-green-500'
-                                      }`}
-                                      style={{ 
-                                        width: `${Math.min((event.currentCapacity / event.maxCapacity) * 100, 100)}%` 
-                                      }}
-                                    />
-                                  </div>
+                            {/* Progress bar */}
+                            {event.maxCapacity && (
+                              <div className="flex-1 max-w-[100px]">
+                                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full transition-all ${
+                                      event.currentCapacity >= event.maxCapacity
+                                        ? 'bg-red-500'
+                                        : event.currentCapacity / event.maxCapacity > 0.8
+                                        ? 'bg-amber-500'
+                                        : 'bg-green-500'
+                                    }`}
+                                    style={{ 
+                                      width: `${Math.min((event.currentCapacity / event.maxCapacity) * 100, 100)}%` 
+                                    }}
+                                  />
                                 </div>
-                              )}
-                            </div>
-                          </TableCell>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
 
-                          {/* Estado */}
-                          <TableCell 
-                            onClick={() => handleViewEvent(event)}
-                            className="cursor-pointer"
-                          >
-                            {getStatusBadge(event.status)}
-                          </TableCell>
+                        {/* Estado */}
+                        <TableCell 
+                          onClick={() => handleViewEvent(event)}
+                          className="cursor-pointer"
+                        >
+                          {getStatusBadge(event.status)}
+                        </TableCell>
 
-                          {/* Acciones */}
-                          <TableCell className="text-right pr-4">
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleViewEvent(event)
-                                }}
-                                title="Ver detalles"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  router.push(`/admin/onboarding/${event.id}`)
-                                }}
-                                title="Agregar drivers"
-                              >
-                                <UserPlus className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleEditEvent(event)
-                                }}
-                                title="Editar"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setEventToDelete(event)
-                                }}
-                                title="Eliminar"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                        {/* Acciones */}
+                        <TableCell className="text-right pr-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleViewEvent(event)
+                              }}
+                              title="Ver detalles"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                router.push(`/admin/onboarding/${event.id}`)
+                              }}
+                              title="Agregar drivers"
+                            >
+                              <UserPlus className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEditEvent(event)
+                              }}
+                              title="Editar"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setEventToDelete(event)
+                              }}
+                              title="Eliminar"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>
@@ -578,17 +574,15 @@ export function OnboardingPageContent({
             <AlertDialogTitle>¿Eliminar evento?</AlertDialogTitle>
             <AlertDialogDescription>
               ¿Estás seguro de que deseas eliminar este evento del {eventToDelete && formatDate(eventToDelete.scheduledDate)}?
-              Esta acción no se puede deshacer.
+              Esta acción no se puede deshacer y se eliminarán todos los asistentes asociados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteEvent}
-              disabled={isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>

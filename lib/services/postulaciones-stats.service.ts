@@ -1,7 +1,7 @@
 // lib/services/postulaciones-stats.service.ts
 
 import { prisma } from '@/lib/prisma';
-import { subDays, format, startOfDay, endOfDay, differenceInYears } from 'date-fns';
+import { subDays, format, startOfDay, endOfDay } from 'date-fns';
 
 export class PostulacionesStatsService {
   
@@ -54,161 +54,98 @@ export class PostulacionesStatsService {
   }
   
   /**
-   * Obtiene datos del funnel de conversión por step
-   */
-  async getFunnelData() {
-    const funnelData = await Promise.all(
-      [1, 2, 3, 4, 5, 6].map(async (step) => {
-        const count = await prisma.formDriver.count({
-          where: {
-            completedSteps: {
-              has: step
-            }
-          }
-        });
-        return { step, count };
-      })
-    );
-    
-    return funnelData;
-  }
-  
-  /**
-   * Obtiene visitas al formulario por día (últimos 7 días)
-   */
-  async getVisitasPorDia() {
-    const dias = [];
-    for (let i = 6; i >= 0; i--) {
-      const fecha = subDays(new Date(), i);
-      const count = await prisma.formSubmission.count({
-        where: {
-          startedAt: {
-            gte: startOfDay(fecha),
-            lte: endOfDay(fecha)
-          }
-        }
-      });
-      
-      dias.push({
-        fecha: format(fecha, 'dd/MM'),
-        visitas: count
-      });
-    }
-    
-    return dias;
-  }
-  
-  /**
-   * Obtiene completados por día (últimos 7 días)
-   */
-  async getCompletadosPorDia() {
-    const dias = [];
-    for (let i = 6; i >= 0; i--) {
-      const fecha = subDays(new Date(), i);
-      const count = await prisma.formDriver.count({
-        where: {
-          completedAt: {
-            gte: startOfDay(fecha),
-            lte: endOfDay(fecha)
-          },
-          status: 'COMPLETED'
-        }
-      });
-      
-      dias.push({
-        fecha: format(fecha, 'dd/MM'),
-        completados: count
-      });
-    }
-    
-    return dias;
-  }
-  
-  /**
-   * Obtiene tasa de abandono por step
-   */
-  async getAbandonoPorStep() {
-    const abandonos = await prisma.formSubmission.groupBy({
-      by: ['abandonedAtStep'],
-      where: {
-        isAbandoned: true,
-        abandonedAtStep: { not: null }
-      },
-      _count: {
-        id: true
-      }
-    });
-    
-    return abandonos.map(item => ({
-      step: item.abandonedAtStep || 0,
-      abandonos: item._count.id
-    }));
-  }
-  
-  /**
-   * Genera el timeline de una postulación basado en sus steps completados
-   */
-  private generateTimeline(completedSteps: number[], startedAt: Date, completedAt: Date | null) {
-    const stepNames = [
-      'Contacto Básico',
-      'Datos Personales',
-      'Trabajo y Vehículo',
-      'Documentos',
-      'Información Adicional',
-      'Pago de Equipamiento' // ✅ NUEVO STEP
-    ];
-
-    return stepNames.map((name, index) => {
-      const step = index + 1;
-      const isCompleted = completedSteps.includes(step);
-      
-      // Estimación de fechas de completado
-      let completedAtEstimate = null;
-      if (isCompleted) {
-        if (step === completedSteps.length && completedAt) {
-          // Último step usa la fecha de completado real
-          completedAtEstimate = completedAt;
-        } else {
-          // Estimar basado en progreso
-          const progressRatio = step / completedSteps.length;
-          const totalTime = completedAt 
-            ? completedAt.getTime() - startedAt.getTime()
-            : Date.now() - startedAt.getTime();
-          completedAtEstimate = new Date(startedAt.getTime() + (totalTime * progressRatio));
-        }
-      }
-
-      return {
-        step,
-        name,
-        completedAt: completedAtEstimate
-      };
-    });
-  }
-  
-  /**
-   * Obtiene todas las postulaciones con filtros opcionales
+   * Obtiene todas las postulaciones con filtros opcionales y paginación
    */
   async getPostulaciones(filters?: {
     status?: string;
     searchTerm?: string;
+    onboardingStatus?: string;
+    hasVehicle?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
     limit?: number;
-    offset?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   }) {
     const where: any = {};
     
+    // Filtro de estado general
     if (filters?.status && filters.status !== 'all') {
       where.status = filters.status;
     }
     
+    // Filtro de búsqueda
     if (filters?.searchTerm) {
       where.OR = [
         { firstName: { contains: filters.searchTerm, mode: 'insensitive' } },
         { lastName: { contains: filters.searchTerm, mode: 'insensitive' } },
+        { fullName: { contains: filters.searchTerm, mode: 'insensitive' } },
         { cedula: { contains: filters.searchTerm } },
         { phoneNumber: { contains: filters.searchTerm } },
         { email: { contains: filters.searchTerm, mode: 'insensitive' } },
       ];
+    }
+    
+    // Filtro de estado de onboarding (simplificado)
+    if (filters?.onboardingStatus && filters.onboardingStatus !== 'all') {
+      if (filters.onboardingStatus === 'pending') {
+        // Pendiente: NOT_READY, READY, o null
+        where.OR = [
+          { onboardingStatus: 'NOT_READY' },
+          { onboardingStatus: 'READY' },
+          { onboardingStatus: null },
+        ];
+      } else if (filters.onboardingStatus === 'scheduled') {
+        // Agendado: SCHEDULED
+        where.onboardingStatus = 'SCHEDULED';
+      } else if (filters.onboardingStatus === 'completed') {
+        // Realizado: COMPLETED
+        where.onboardingStatus = 'COMPLETED';
+      }
+    }
+    
+    // Filtro de tiene vehículo
+    if (filters?.hasVehicle && filters.hasVehicle !== 'all') {
+      where.hasVehicle = filters.hasVehicle === 'yes';
+    }
+    
+    // Filtro de rango de fechas
+    if (filters?.startDate || filters?.endDate) {
+      where.startedAt = {};
+      if (filters.startDate) {
+        where.startedAt.gte = new Date(filters.startDate);
+      }
+      if (filters.endDate) {
+        // Agregar 1 día para incluir todo el día final
+        const endDate = new Date(filters.endDate);
+        endDate.setDate(endDate.getDate() + 1);
+        where.startedAt.lt = endDate;
+      }
+    }
+    
+    // Paginación
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const skip = (page - 1) * limit;
+    
+    // Ordenamiento
+    const sortBy = filters?.sortBy || 'startedAt';
+    const sortOrder = filters?.sortOrder || 'desc';
+    
+    // Mapeo de campos de ordenamiento
+    const orderByField: any = {};
+    if (sortBy === 'name') {
+      orderByField.fullName = sortOrder;
+    } else if (sortBy === 'status') {
+      // Ordenar por progreso (currentStep) en lugar de status textual
+      orderByField.currentStep = sortOrder;
+    } else if (sortBy === 'startedAt') {
+      orderByField.startedAt = sortOrder;
+    } else if (sortBy === 'progress') {
+      orderByField.currentStep = sortOrder;
+    } else {
+      orderByField.startedAt = sortOrder;
     }
     
     const [formDrivers, total] = await Promise.all([
@@ -222,7 +159,7 @@ export class PostulacionesStatsService {
           fullName: true,
           phoneNumber: true,
           email: true,
-          birthDate: true, // ✅ AGREGADO
+          birthDate: true,
           department: true,
           city: true,
           neighborhood: true,
@@ -242,119 +179,61 @@ export class PostulacionesStatsService {
           emergencyName: true,
           emergencyPhone: true,
           emergencyRelationship: true,
-          experience: true,
-          availability: true,
-          whenCanStart: true,
-          onboardingStatus: true, // ✅ AGREGADO
-          
-          // ✅ NUEVO: Incluir relaciones
-          equipmentPayments: {
-            orderBy: {
-              createdAt: 'desc'
-            },
-            take: 1, // Solo el más reciente
-            select: {
-              id: true,
-              paymentMethod: true,
-              paymentNumber: true,
-              invoiceNumber: true,
-              amount: true,
-              paymentDate: true,
-              paymentProofUrl: true,
-              status: true,
-              createdAt: true,
-            }
-          },
+          onboardingStatus: true,
+          onboardingScheduledAt: true,
           onboardingAttendances: {
-            orderBy: {
-              createdAt: 'desc'
-            },
-            take: 1, // Solo el más reciente
-            select: {
-              id: true,
-              status: true,
-              confirmedAt: true,
-              checkedInAt: true,
+            include: {
               event: {
                 select: {
-                  id: true,
-                  title: true,
                   scheduledDate: true,
                   startTime: true,
+                  endTime: true,
                   location: true,
                   status: true,
                 }
               }
-            }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1
+          },
+          equipmentPayments: {
+            select: {
+              id: true,
+              paymentMethod: true,
+              amount: true,
+              status: true,
+              paymentNumber: true,
+              invoiceNumber: true,
+              paymentProofUrl: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1
           }
         },
-        orderBy: {
-          lastActivityAt: 'desc'
-        },
-        take: filters?.limit || 50,
-        skip: filters?.offset || 0,
+        orderBy: orderByField,
+        skip,
+        take: limit,
       }),
-      prisma.formDriver.count({ where })
+      prisma.formDriver.count({ where }),
     ]);
     
-    // ✅ Agregar timeline a cada postulación
-    const postulaciones = formDrivers.map(driver => ({
+    const postulaciones = formDrivers.map((driver: any) => ({
       ...driver,
-      timeline: this.generateTimeline(driver.completedSteps, driver.startedAt, driver.completedAt)
+      timeline: this.generateTimeline(
+        driver.completedSteps,
+        driver.startedAt,
+        driver.completedAt
+      )
     }));
     
     return {
       postulaciones,
       total,
-      hasMore: (filters?.offset || 0) + (filters?.limit || 50) < total
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasMore: skip + limit < total,
     };
-  }
-
-  async getEdadesPorRango() {
-    const formDrivers = await prisma.formDriver.findMany({
-      where: {
-        birthDate: { not: null }
-      },
-      select: {
-        birthDate: true
-      }
-    });
-  
-    const rangos = {
-      '18-24': 0,
-      '25-34': 0,
-      '35-44': 0,
-      '45-54': 0,
-      '55+': 0
-    };
-  
-    formDrivers.forEach(driver => {
-      if (!driver.birthDate) return;
-      
-      const edad = differenceInYears(new Date(), driver.birthDate);
-      
-      if (edad >= 18 && edad <= 24) {
-        rangos['18-24']++;
-      } else if (edad >= 25 && edad <= 34) {
-        rangos['25-34']++;
-      } else if (edad >= 35 && edad <= 44) {
-        rangos['35-44']++;
-      } else if (edad >= 45 && edad <= 54) {
-        rangos['45-54']++;
-      } else if (edad >= 55) {
-        rangos['55+']++;
-      }
-    });
-  
-    const total = formDrivers.length;
-    const colores = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca'];
-  
-    return Object.entries(rangos).map(([rango, cantidad], index) => ({
-      rango,
-      cantidad,
-      porcentaje: total > 0 ? (cantidad / total) * 100 : 0,
-      fill: colores[index]
-    }));
   }
   
   /**
@@ -396,6 +275,44 @@ export class PostulacionesStatsService {
           orderBy: { createdAt: 'desc' }
         }
       }
+    });
+  }
+  
+  /**
+   * Genera el timeline de una postulación basado en sus steps completados
+   */
+  private generateTimeline(completedSteps: number[], startedAt: Date, completedAt: Date | null) {
+    const stepNames = [
+      'Contacto Básico',
+      'Datos Personales',
+      'Trabajo y Vehículo',
+      'Documentos',
+      'Información Adicional',
+      'Pago de Equipamiento'
+    ];
+
+    return stepNames.map((name, index) => {
+      const step = index + 1;
+      const isCompleted = completedSteps.includes(step);
+      
+      let completedAtEstimate = null;
+      if (isCompleted) {
+        if (step === completedSteps.length && completedAt) {
+          completedAtEstimate = completedAt;
+        } else {
+          const progressRatio = step / completedSteps.length;
+          const totalTime = completedAt 
+            ? completedAt.getTime() - startedAt.getTime()
+            : Date.now() - startedAt.getTime();
+          completedAtEstimate = new Date(startedAt.getTime() + (totalTime * progressRatio));
+        }
+      }
+
+      return {
+        step,
+        name,
+        completedAt: completedAtEstimate
+      };
     });
   }
 }
