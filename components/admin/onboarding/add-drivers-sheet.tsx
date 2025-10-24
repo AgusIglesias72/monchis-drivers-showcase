@@ -163,8 +163,8 @@ export function AddDriversSheet({
     startTransition(async () => {
       const result = await assignDriversToEvent({
         eventId,
-        driverIds: Array.from(selectedDriverIds),
-        notes: notes || undefined
+        formDriverIds: Array.from(selectedDriverIds),
+        attendeeNotes: notes || undefined
       })
 
       if (result.success) {

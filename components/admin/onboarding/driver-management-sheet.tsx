@@ -1,7 +1,7 @@
 // components/admin/onboarding/driver-management-sheet.tsx
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -85,16 +85,7 @@ export function DriverManagementSheet({
   })
 
   // Cargar datos completos del driver cuando se abre el sheet
-  useEffect(() => {
-    if (open && driverId) {
-      loadDriverData()
-    } else if (!open) {
-      // Limpiar datos cuando se cierra
-      setDriver(null)
-      setActiveTab('info')
-      setDocumentLoading(null)
-    }
-  }, [open, driverId])
+
 
   // Actualizar paymentData cuando cambia el driver
   useEffect(() => {
@@ -112,7 +103,7 @@ export function DriverManagementSheet({
     }
   }, [driver])
 
-  const loadDriverData = async () => {
+  const loadDriverData = useCallback(async () => {
     if (!driverId) return
     
     setLoading(true)
@@ -130,7 +121,18 @@ export function DriverManagementSheet({
     } finally {
       setLoading(false)
     }
-  }
+  }, [driverId])
+
+  useEffect(() => {
+    if (open && driverId) {
+      loadDriverData()
+    } else if (!open) {
+      // Limpiar datos cuando se cierra
+      setDriver(null)
+      setActiveTab('info')
+      setDocumentLoading(null)
+    }
+  }, [open, driverId, loadDriverData])
 
   const formatDate = (date: string | Date | null | undefined) => {
     if (!date) return 'No especificado'

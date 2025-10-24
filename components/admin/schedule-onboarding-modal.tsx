@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react'
 import { ScheduleOnboardingModalClient } from './schedule-onboarding-modal-client'
-import { getAvailableOnboardingEvents } from '@/lib/actions/onboarding.actions'
+import { getAvailableEvents } from '@/lib/actions/onboarding.actions'
 import { Loader2 } from 'lucide-react'
 
 interface ScheduleOnboardingModalProps {
@@ -33,7 +33,7 @@ export function ScheduleOnboardingModal({
   const loadEvents = async () => {
     setIsLoading(true)
     try {
-      const result = await getAvailableOnboardingEvents()
+      const result = await getAvailableEvents()
       if (result.success) {
         setEvents(result.events || [])
       } else {

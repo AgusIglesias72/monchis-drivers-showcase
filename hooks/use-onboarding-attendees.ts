@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  getEventAttendees,
+  getOnboardingEventById,
   checkInAttendee,
   markAttendeeNoShow,
   cancelAttendee,
@@ -12,8 +12,23 @@ import {
 } from '@/lib/actions/onboarding.actions'
 import type { OnboardingAttendeeWithRelations } from '@/types/onboarding'
 
+type EventAttendee = {
+  id: string
+  status: string
+  formDriver: {
+    id: string
+    fullName: string | null
+    phoneNumber: string
+    email: string | null
+    cedula: string
+    documentsStatus: string
+    equipmentPayments: any[]
+  }
+  [key: string]: any
+}
+
 export function useOnboardingAttendees(eventId?: string) {
-  const [attendees, setAttendees] = useState<OnboardingAttendeeWithRelations[]>([])
+  const [attendees, setAttendees] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,10 +42,10 @@ export function useOnboardingAttendees(eventId?: string) {
       setLoading(true)
       setError(null)
       
-      const result = await getEventAttendees(eventId)
+      const result = await getOnboardingEventById(eventId)
       
-      if (result.success) {
-        setAttendees((result.attendees || []) as OnboardingAttendeeWithRelations[])
+      if (result.success && result.event) {
+        setAttendees((result.event.attendees || []) as any[])
       } else {
         setError(result.error || 'Error al cargar asistentes')
       }
