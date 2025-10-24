@@ -3,11 +3,12 @@
 
 "use client"
 
-import { useState, useEffect, useTransition, useCallback } from 'react'
+import { useState, useEffect, useTransition, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -30,10 +31,14 @@ import {
   ArrowDown,
   Filter,
   X,
-  ExternalLink
+  ExternalLink,
+  Clock,
+  XCircle,
+  Eye
 } from 'lucide-react'
 import { getEligibleDrivers, assignDriversToEvent } from '@/lib/actions/onboarding.actions'
 import { toast } from 'sonner'
+import { DriverManagementSheet } from '@/components/admin/onboarding/driver-management-sheet'
 
 interface Driver {
   id: string
@@ -80,9 +85,14 @@ export function AddDriversSectionClient({
   const [submitting, setSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedDriverIds, setSelectedDriverIds] = useState<string[]>([])
+  const [selectedDriverForDetails, setSelectedDriverForDetails] = useState<string | null>(null)
   
-  const [drivers, setDrivers] = useState<Driver[]>(initialDrivers)
-  const [pagination, setPagination] = useState(initialPagination)
+  // Todos los drivers del servidor (sin paginación del servidor)
+  const [allDrivers] = useState<Driver[]>(initialDrivers)
+  
+  // Paginación del lado del cliente
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   // Filtros y ordenamiento
   const [filters, setFilters] = useState({
@@ -95,107 +105,145 @@ export function AddDriversSectionClient({
     order: 'asc' | 'desc'
   }>({ field: null, order: 'asc' })
 
-  // Fetch drivers
-  const fetchDrivers = useCallback(async (page: number, search: string) => {
-    startTransition(async () => {
-      const result = await getEligibleDrivers({
-        eventId,
-        page,
-        limit: 20,
-        search
-      })
-      
-      if (result.success) {
-        setDrivers(result.drivers as Driver[] || [])
-        setPagination(result.pagination)
-      } else {
-        toast.error(result.error || 'Error al cargar drivers')
-        setDrivers([])
-      }
-    })
-  }, [eventId])
+  // Filtrado y búsqueda del lado del cliente
+  const filteredAndSortedDrivers = useMemo(() => {
+    let result = [...allDrivers]
 
-  // Debounce search
-  useEffect(() => {
-    if (searchTerm === '') {
-      // Si limpia la búsqueda, volver a los datos iniciales
-      setDrivers(initialDrivers)
-      setPagination(initialPagination)
-      setSelectedDriverIds([])
-      return
+    // Búsqueda
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase()
+      result = result.filter(driver => 
+        driver.fullName?.toLowerCase().includes(search) ||
+        driver.phoneNumber?.includes(search) ||
+        driver.email?.toLowerCase().includes(search) ||
+        driver.cedula?.includes(search)
+      )
     }
 
-    const timer = setTimeout(() => {
-      fetchDrivers(1, searchTerm)
-      setSelectedDriverIds([])
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [searchTerm, fetchDrivers, initialDrivers, initialPagination])
+    // Filtros
+    if (filters.documentsStatus) {
+      result = result.filter(d => d.documentsStatus === filters.documentsStatus)
+    }
+    if (filters.applicationStatus) {
+      result = result.filter(d => d.status === filters.applicationStatus)
+    }
+    if (filters.onboardingStatus) {
+      if (filters.onboardingStatus === 'NONE') {
+        result = result.filter(d => !d.onboardingStatus)
+      } else {
+        result = result.filter(d => d.onboardingStatus === filters.onboardingStatus)
+      }
+    }
+
+    // Ordenamiento
+    if (sortBy.field) {
+      result.sort((a, b) => {
+        let aVal, bVal
+        
+        switch (sortBy.field) {
+          case 'name':
+            aVal = a.fullName || ''
+            bVal = b.fullName || ''
+            break
+          case 'documentsStatus':
+            aVal = a.documentsStatus
+            bVal = b.documentsStatus
+            break
+          case 'status':
+            aVal = a.status
+            bVal = b.status
+            break
+          case 'onboardingStatus':
+            aVal = a.onboardingStatus || ''
+            bVal = b.onboardingStatus || ''
+            break
+          case 'createdAt':
+            aVal = new Date(a.createdAt).getTime()
+            bVal = new Date(b.createdAt).getTime()
+            break
+          default:
+            return 0
+        }
+        
+        if (aVal < bVal) return sortBy.order === 'asc' ? -1 : 1
+        if (aVal > bVal) return sortBy.order === 'asc' ? 1 : -1
+        return 0
+      })
+    }
+
+    return result
+  }, [allDrivers, searchTerm, filters, sortBy])
+
+  // Paginación del lado del cliente
+  const totalFiltered = filteredAndSortedDrivers.length
+  const totalPages = Math.ceil(totalFiltered / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedDrivers = filteredAndSortedDrivers.slice(startIndex, endIndex)
+
+  // Resetear página cuando cambian filtros o búsqueda
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, filters])
 
   const handleToggleDriver = (driverId: string) => {
-    setSelectedDriverIds(prev => {
-      if (prev.includes(driverId)) {
-        return prev.filter(id => id !== driverId)
-      } else {
-        return [...prev, driverId]
-      }
-    })
+    if (selectedDriverIds.includes(driverId)) {
+      setSelectedDriverIds(selectedDriverIds.filter(id => id !== driverId))
+    } else {
+      setSelectedDriverIds([...selectedDriverIds, driverId])
+    }
+  }
+
+  const handleToggleAll = () => {
+    if (selectedDriverIds.length === filteredAndSortedDrivers.length) {
+      setSelectedDriverIds([])
+    } else {
+      setSelectedDriverIds(filteredAndSortedDrivers.filter(d => d.canBeSelected).map(d => d.id))
+    }
   }
 
   const handleSubmit = async () => {
-    if (selectedDriverIds.length === 0) {
-      toast.error('Selecciona al menos un driver')
-      return
-    }
+    if (selectedDriverIds.length === 0) return
 
     setSubmitting(true)
-    const result = await assignDriversToEvent({
-      eventId,
-      driverIds: selectedDriverIds,
-    })
+    try {
+      const result = await assignDriversToEvent({
+        eventId,
+        formDriverIds: selectedDriverIds,
+        attendeeNotes: ''
+      })
 
-    if (result.success) {
-      toast.success(result.message || 'Drivers agregados exitosamente')
-      setSelectedDriverIds([])
-      setSearchTerm('')
-      // Refetch inicial
-      fetchDrivers(1, '')
-      onSuccess()
-    } else {
-      toast.error(result.error || 'Error al agregar drivers')
+      if (result.success) {
+        toast.success(`${selectedDriverIds.length} driver(s) agregado(s) exitosamente`)
+        setSelectedDriverIds([])
+        onSuccess()
+      } else {
+        toast.error(result.error || 'Error al agregar drivers')
+      }
+    } catch (error) {
+      toast.error('Error al agregar drivers')
+    } finally {
+      setSubmitting(false)
     }
-    
-    setSubmitting(false)
   }
 
-  const formatDate = (dateStr: string | Date | null | undefined) => {
-    if (!dateStr) return '-'
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('es-PY', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
-
-  const getOnboardingStatusBadge = (status: string | null) => {
+  const getDocsStatusBadge = (status: string) => {
     if (!status) return (
       <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
-        Pendiente
+        Sin documentos
       </Badge>
     )
     
-    const config = {
-      NOT_READY: { label: 'No Listo', className: 'bg-gray-50 text-gray-700 border-gray-200' },
-      READY: { label: 'Listo', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-      SCHEDULED: { label: 'Programado', className: 'bg-purple-50 text-purple-700 border-purple-200' },
-      IN_PROGRESS: { label: 'En Curso', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-      COMPLETED: { label: 'Completado', className: 'bg-green-50 text-green-700 border-green-200' },
-      CANCELLED: { label: 'Cancelado', className: 'bg-red-50 text-red-700 border-red-200' },
-      NO_SHOW: { label: 'No Asistió', className: 'bg-orange-50 text-orange-700 border-orange-200' },
+    const config: Record<string, { label: string; className: string }> = {
+      APPROVED: { label: 'Aprobados', className: 'bg-green-50 text-green-700 border-green-200' },
+      PENDING: { label: 'Pendiente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+      IN_REVIEW: { label: 'En Revisión', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+      CORRECTIONS: { label: 'Correcciones', className: 'bg-orange-50 text-orange-700 border-orange-200' },
+      INCOMPLETE: { label: 'Incompleto', className: 'bg-gray-50 text-gray-700 border-gray-200' },
+      REJECTED: { label: 'Rechazado', className: 'bg-red-50 text-red-700 border-red-200' },
     }
     
-    const statusConfig = config[status as keyof typeof config]
+    const statusConfig = config[status]
     if (!statusConfig) return (
       <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
         {status}
@@ -209,41 +257,69 @@ export function AddDriversSectionClient({
     )
   }
 
-  const loading = isPending
+  const getApplicationStatusBadge = (status: string) => {
+    if (!status) return (
+      <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
+        Sin estado
+      </Badge>
+    )
+    
+    const config: Record<string, { label: string; className: string }> = {
+      PENDING: { label: 'Pendiente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+      UNDER_REVIEW: { label: 'En Revisión', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+      APPROVED: { label: 'Aprobado', className: 'bg-green-50 text-green-700 border-green-200' },
+      REJECTED: { label: 'Rechazado', className: 'bg-red-50 text-red-700 border-red-200' },
+      IN_PROGRESS: { label: 'En Progreso', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+      SUBMITTED: { label: 'Enviado', className: 'bg-purple-50 text-purple-700 border-purple-200' },
+      ACTIVE: { label: 'Activo', className: 'bg-green-50 text-green-700 border-green-200' },
+      COMPLETED: { label: 'Completado', className: 'bg-green-50 text-green-700 border-green-200' },
+      INACTIVE: { label: 'Inactivo', className: 'bg-gray-50 text-gray-700 border-gray-200' },
+    }
+    
+    const statusConfig = config[status]
+    if (!statusConfig) return (
+      <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
+        {status}
+      </Badge>
+    )
+    
+    return (
+      <Badge variant="outline" className={`text-xs h-5 ${statusConfig.className}`}>
+        {statusConfig.label}
+      </Badge>
+    )
+  }
 
-  // Aplicar filtros y ordenamiento localmente
-  const filteredAndSortedDrivers = drivers
-    .filter(driver => {
-      if (filters.documentsStatus && driver.documentsStatus !== filters.documentsStatus) return false
-      if (filters.applicationStatus && driver.status !== filters.applicationStatus) return false
-      if (filters.onboardingStatus && driver.onboardingStatus !== filters.onboardingStatus) return false
-      return true
-    })
-    .sort((a, b) => {
-      if (!sortBy.field) return 0
-      
-      let aVal: any
-      let bVal: any
-      
-      if (sortBy.field === 'name') {
-        aVal = a.fullName || ''
-        bVal = b.fullName || ''
-      } else {
-        aVal = a[sortBy.field]
-        bVal = b[sortBy.field]
-      }
-      
-      if (aVal === null || aVal === undefined) return 1
-      if (bVal === null || bVal === undefined) return -1
-      
-      if (typeof aVal === 'string') {
-        return sortBy.order === 'asc' 
-          ? aVal.localeCompare(bVal)
-          : bVal.localeCompare(aVal)
-      }
-      
-      return sortBy.order === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1)
-    })
+  const getOnboardingStatusBadge = (status: string | null) => {
+    if (!status) return (
+      <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
+        Sin onboarding
+      </Badge>
+    )
+    
+    const config: Record<string, { label: string; className: string }> = {
+      SCHEDULED: { label: 'Programado', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+      IN_PROGRESS: { label: 'En Curso', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+      COMPLETED: { label: 'Completado', className: 'bg-green-50 text-green-700 border-green-200' },
+      CANCELLED: { label: 'Cancelado', className: 'bg-red-50 text-red-700 border-red-200' },
+      NO_SHOW: { label: 'No Asistió', className: 'bg-orange-50 text-orange-700 border-orange-200' },
+    }
+    
+    const statusConfig = config[status]
+    if (!statusConfig) return (
+      <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
+        {status}
+      </Badge>
+    )
+    
+    return (
+      <Badge variant="outline" className={`text-xs h-5 ${statusConfig.className}`}>
+        {statusConfig.label}
+      </Badge>
+    )
+  }
+
+  const loading = false // Ya no hay loading porque todo está en el cliente
 
   const handleSort = (field: typeof sortBy.field) => {
     setSortBy(prev => ({
@@ -264,12 +340,9 @@ export function AddDriversSectionClient({
     })
   }
 
-  const handleToggleAll = () => {
-    if (selectedDriverIds.length === filteredAndSortedDrivers.length) {
-      setSelectedDriverIds([])
-    } else {
-      setSelectedDriverIds(filteredAndSortedDrivers.map(d => d.id))
-    }
+  const getSortIcon = (field: typeof sortBy.field) => {
+    if (sortBy.field !== field) return <ArrowUpDown className="h-3 w-3" />
+    return sortBy.order === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
   }
 
   return (
@@ -300,7 +373,7 @@ export function AddDriversSectionClient({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nombre o cédula..."
+            placeholder="Buscar por nombre, cédula, teléfono o email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-9"
@@ -309,51 +382,63 @@ export function AddDriversSectionClient({
         </div>
 
         {/* Filtros en línea */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Filter className="h-4 w-4" />
             <span>Filtros:</span>
           </div>
           
-          <Select value={filters.documentsStatus} onValueChange={(val) => handleFilterChange('documentsStatus', val)}>
-            <SelectTrigger className="w-[160px] h-8">
-              <SelectValue placeholder="Estado Docs" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="APPROVED">Aprobados</SelectItem>
-              <SelectItem value="PENDING">Pendiente</SelectItem>
-              <SelectItem value="IN_REVIEW">En Revisión</SelectItem>
-              <SelectItem value="CORRECTIONS">Correcciones</SelectItem>
-              <SelectItem value="INCOMPLETE">Incompleto</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Label className="text-sm text-muted-foreground whitespace-nowrap">Estado Docs:</Label>
+            <Select value={filters.documentsStatus || 'all'} onValueChange={(val) => handleFilterChange('documentsStatus', val === 'all' ? '' : val)}>
+              <SelectTrigger className="w-[140px] h-9">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="APPROVED">Aprobados</SelectItem>
+                <SelectItem value="PENDING">Pendiente</SelectItem>
+                <SelectItem value="IN_REVIEW">En Revisión</SelectItem>
+                <SelectItem value="CORRECTIONS">Correcciones</SelectItem>
+                <SelectItem value="INCOMPLETE">Incompleto</SelectItem>
+                <SelectItem value="REJECTED">Rechazado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          <Select value={filters.applicationStatus} onValueChange={(val) => handleFilterChange('applicationStatus', val)}>
-            <SelectTrigger className="w-[160px] h-8">
-              <SelectValue placeholder="Postulación" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="APPROVED">Aprobado</SelectItem>
-              <SelectItem value="READY_ONBOARDING">Listo OB</SelectItem>
-              <SelectItem value="UNDER_REVIEW">En Revisión</SelectItem>
-              <SelectItem value="IN_PROGRESS">En Progreso</SelectItem>
-              <SelectItem value="SUBMITTED">Enviado</SelectItem>
-              <SelectItem value="DOCS_PENDING">Docs Pendientes</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Label className="text-sm text-muted-foreground whitespace-nowrap">Estado:</Label>
+            <Select value={filters.applicationStatus || 'all'} onValueChange={(val) => handleFilterChange('applicationStatus', val === 'all' ? '' : val)}>
+              <SelectTrigger className="w-[140px] h-9">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="ACTIVE">Activo</SelectItem>
+                <SelectItem value="APPROVED">Aprobado</SelectItem>
+                <SelectItem value="PENDING">Pendiente</SelectItem>
+                <SelectItem value="UNDER_REVIEW">En Revisión</SelectItem>
+                <SelectItem value="IN_PROGRESS">En Progreso</SelectItem>
+                <SelectItem value="SUBMITTED">Enviado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          <Select value={filters.onboardingStatus || ''} onValueChange={(val) => handleFilterChange('onboardingStatus', val)}>
-            <SelectTrigger className="w-[160px] h-8">
-              <SelectValue placeholder="Onboarding" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="COMPLETED">Completado</SelectItem>
-              <SelectItem value="SCHEDULED">Programado</SelectItem>
-              <SelectItem value="IN_PROGRESS">En Curso</SelectItem>
-              <SelectItem value="READY">Listo</SelectItem>
-              <SelectItem value="NOT_READY">No Listo</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Label className="text-sm text-muted-foreground whitespace-nowrap">Onboarding:</Label>
+            <Select value={filters.onboardingStatus || 'all'} onValueChange={(val) => handleFilterChange('onboardingStatus', val === 'all' ? '' : val)}>
+              <SelectTrigger className="w-[140px] h-9">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="NONE">Sin onboarding</SelectItem>
+                <SelectItem value="SCHEDULED">Programado</SelectItem>
+                <SelectItem value="IN_PROGRESS">En Curso</SelectItem>
+                <SelectItem value="COMPLETED">Completado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           {(filters.documentsStatus || filters.applicationStatus || filters.onboardingStatus) && (
             <Button
@@ -372,7 +457,7 @@ export function AddDriversSectionClient({
       {/* Stats */}
       <div className="flex items-center justify-between text-sm bg-muted/50 rounded-lg px-4 py-2">
         <span className="text-muted-foreground">
-          {pagination.total} disponible{pagination.total !== 1 ? 's' : ''}
+          {totalFiltered} de {allDrivers.length} disponible{allDrivers.length !== 1 ? 's' : ''}
         </span>
         <span className="font-semibold text-primary">
           {selectedDriverIds.length} seleccionado{selectedDriverIds.length !== 1 ? 's' : ''}
@@ -385,213 +470,152 @@ export function AddDriversSectionClient({
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        ) : filteredAndSortedDrivers.length === 0 ? (
+        ) : paginatedDrivers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <AlertTriangle className="h-10 w-10 mb-2 opacity-50" />
             <p className="text-sm">
               {searchTerm || filters.documentsStatus || filters.applicationStatus || filters.onboardingStatus
-                ? 'No se encontraron drivers con los filtros aplicados' 
+                ? 'No se encontraron drivers con estos filtros'
                 : 'No hay drivers disponibles'}
             </p>
+            {(searchTerm || filters.documentsStatus || filters.applicationStatus || filters.onboardingStatus) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchTerm('')
+                  clearFilters()
+                }}
+                className="mt-2"
+              >
+                Limpiar búsqueda y filtros
+              </Button>
+            )}
           </div>
         ) : (
           <>
-            {/* Header con Select All y ordenamiento */}
+            {/* Header con Select All */}
             <div className="bg-muted/30 border-b">
-              <div className="grid grid-cols-12 gap-4 px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                <div className="col-span-3 flex items-center gap-3">
+              <div className="grid grid-cols-[auto_1fr_140px_140px_140px_120px_80px] gap-4 px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <div className="flex items-center gap-3">
                   <Checkbox
-                    checked={filteredAndSortedDrivers.length > 0 && selectedDriverIds.length === filteredAndSortedDrivers.length}
+                    checked={
+                      filteredAndSortedDrivers.filter(d => d.canBeSelected).length > 0 && 
+                      selectedDriverIds.length === filteredAndSortedDrivers.filter(d => d.canBeSelected).length
+                    }
                     onCheckedChange={handleToggleAll}
+                    disabled={filteredAndSortedDrivers.filter(d => d.canBeSelected).length === 0}
                   />
                   <button 
                     onClick={() => handleSort('name')}
-                    className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
+                    className="flex items-center gap-1 hover:text-foreground transition-colors whitespace-nowrap"
                   >
-                    <span>Driver</span>
-                    {sortBy.field === 'name' ? (
-                      sortBy.order === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 opacity-50" />
-                    )}
+                    Driver {getSortIcon('name')}
                   </button>
                 </div>
-                <div className="col-span-2">
+                <div className="flex items-center">
                   <button 
                     onClick={() => handleSort('documentsStatus')}
-                    className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
+                    className="flex items-center gap-1 hover:text-foreground transition-colors"
                   >
-                    <span>Estado Docs</span>
-                    {sortBy.field === 'documentsStatus' ? (
-                      sortBy.order === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 opacity-50" />
-                    )}
+                    Estado Docs {getSortIcon('documentsStatus')}
                   </button>
                 </div>
-                <div className="col-span-2">
+                <div className="flex items-center">
                   <button 
                     onClick={() => handleSort('status')}
-                    className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
+                    className="flex items-center gap-1 hover:text-foreground transition-colors"
                   >
-                    <span>Postulación</span>
-                    {sortBy.field === 'status' ? (
-                      sortBy.order === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 opacity-50" />
-                    )}
+                    Estado {getSortIcon('status')}
                   </button>
                 </div>
-                <div className="col-span-2">
+                <div className="flex items-center">
                   <button 
                     onClick={() => handleSort('onboardingStatus')}
-                    className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
+                    className="flex items-center gap-1 hover:text-foreground transition-colors"
                   >
-                    <span>Onboarding</span>
-                    {sortBy.field === 'onboardingStatus' ? (
-                      sortBy.order === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 opacity-50" />
-                    )}
+                    Onboarding {getSortIcon('onboardingStatus')}
                   </button>
                 </div>
-                <div className="col-span-2">
+                <div className="flex items-center">
                   <button 
                     onClick={() => handleSort('createdAt')}
-                    className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
+                    className="flex items-center gap-1 hover:text-foreground transition-colors"
                   >
-                    <span>Fecha Registro</span>
-                    {sortBy.field === 'createdAt' ? (
-                      sortBy.order === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 opacity-50" />
-                    )}
+                    Creado {getSortIcon('createdAt')}
                   </button>
                 </div>
-                <div className="col-span-1 text-center">Acciones</div>
+                <div className="flex items-center">
+                  Acciones
+                </div>
               </div>
             </div>
 
             {/* Driver Rows */}
             <div className="divide-y max-h-[500px] overflow-y-auto">
-              {filteredAndSortedDrivers.map((driver) => {
+              {paginatedDrivers.map((driver) => {
                 const isSelected = selectedDriverIds.includes(driver.id)
                 const docsApproved = driver.documentsStatus === 'APPROVED'
                 
                 return (
                   <div 
                     key={driver.id}
-                    className={`grid grid-cols-12 gap-4 px-4 py-3 transition-colors ${
-                      isSelected 
-                        ? 'bg-primary/10 cursor-pointer' 
-                        : 'cursor-pointer hover:bg-muted/20'
-                    }`}
-                    onClick={() => handleToggleDriver(driver.id)}
+                    className={`grid grid-cols-[auto_1fr_140px_140px_140px_120px_80px] gap-4 px-4 py-3 hover:bg-muted/30 transition-colors ${
+                      isSelected ? 'bg-blue-50' : ''
+                    } ${!driver.canBeSelected ? 'opacity-50' : ''}`}
                   >
-                    {/* Driver Info */}
-                    <div className="col-span-3 flex items-start gap-3">
+                    <div className="flex items-center gap-3">
                       <Checkbox
                         checked={isSelected}
-                        onCheckedChange={() => handleToggleDriver(driver.id)}
+                        disabled={!driver.canBeSelected}
                         onClick={(e) => e.stopPropagation()}
-                        className="mt-0.5"
+                        onCheckedChange={() => handleToggleDriver(driver.id)}
                       />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold truncate">
-                          {driver.fullName || 'Sin nombre'}
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{driver.fullName || 'Sin nombre'}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-muted-foreground truncate">{driver.phoneNumber}</p>
+                          {driver.isAssignedToOtherEvent && (
+                            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              Asignado
+                            </Badge>
+                          )}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          CI: {driver.cedula}
-                        </div>
+                        {driver.disabledReason && (
+                          <p className="text-xs text-red-600 mt-1">{driver.disabledReason}</p>
+                        )}
                       </div>
                     </div>
-
-                    {/* Document Status */}
-                    <div className="col-span-2 flex items-center">
-                      {docsApproved ? (
-                        <Badge variant="outline" className="text-xs h-5 bg-green-50 text-green-700 border-green-200 gap-1">
-                          <CheckCircle className="h-3 w-3" />
-                          Aprobados
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs h-5 bg-amber-50 text-amber-700 border-amber-200 gap-1">
-                          <AlertTriangle className="h-3 w-3" />
-                          {driver.documentsStatus === 'PENDING' ? 'Pendiente' : 
-                           driver.documentsStatus === 'IN_REVIEW' ? 'Revisión' : 
-                           driver.documentsStatus === 'CORRECTIONS' ? 'Correcciones' :
-                           'Incompleto'}
-                        </Badge>
-                      )}
+                    
+                    <div className="flex items-center">
+                      {getDocsStatusBadge(driver.documentsStatus)}
                     </div>
-
-                    {/* Application Status */}
-                    <div className="col-span-2 flex items-center">
-                      {driver.status === 'APPROVED' ? (
-                        <Badge variant="outline" className="text-xs h-5 bg-green-50 text-green-700 border-green-200">
-                          Aprobado
-                        </Badge>
-                      ) : driver.status === 'UNDER_REVIEW' ? (
-                        <Badge variant="outline" className="text-xs h-5 bg-blue-50 text-blue-700 border-blue-200">
-                          En Revisión
-                        </Badge>
-                      ) : driver.status === 'READY_ONBOARDING' ? (
-                        <Badge variant="outline" className="text-xs h-5 bg-purple-50 text-purple-700 border-purple-200">
-                          Listo OB
-                        </Badge>
-                      ) : driver.status === 'COMPLETED' ? (
-                        <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
-                          Completado
-                        </Badge>
-                      ) : driver.status === 'SUBMITTED' ? (
-                        <Badge variant="outline" className="text-xs h-5 bg-cyan-50 text-cyan-700 border-cyan-200">
-                          Enviado
-                        </Badge>
-                      ) : driver.status === 'IN_PROGRESS' ? (
-                        <Badge variant="outline" className="text-xs h-5 bg-amber-50 text-amber-700 border-amber-200">
-                          En Progreso
-                        </Badge>
-                      ) : driver.status === 'DOCS_PENDING' ? (
-                        <Badge variant="outline" className="text-xs h-5 bg-orange-50 text-orange-700 border-orange-200">
-                          Docs Pend
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">{driver.status || '-'}</span>
-                      )}
+                    
+                    <div className="flex items-center">
+                      {getApplicationStatusBadge(driver.status)}
                     </div>
-
-                    {/* Onboarding Status */}
-                    <div className="col-span-2 flex items-center">
+                    
+                    <div className="flex items-center">
                       {getOnboardingStatusBadge(driver.onboardingStatus)}
                     </div>
-
-                    {/* Registration Date */}
-                    <div className="col-span-2 flex items-center text-sm text-muted-foreground gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {formatDate(driver.createdAt)}
+                    
+                    <div className="flex items-center text-xs text-muted-foreground">
+                      {new Date(driver.createdAt).toLocaleDateString('es-PY')}
                     </div>
-
-                    {/* Actions */}
-                    <div className="col-span-1 flex items-center justify-center gap-2">
-                      {driver.isAssignedToOtherEvent && driver.assignedEvent && (
-                        <Badge 
-                          variant="outline" 
-                          className="text-xs h-5 bg-red-50 text-red-700 border-red-200"
-                          title={`Asignado a: ${driver.assignedEvent.title || 'Evento'} - ${formatDate(driver.assignedEvent.scheduledDate)}`}
-                        >
-                          Asignado
-                        </Badge>
-                      )}
+                    
+                    <div className="flex items-center">
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 cursor-pointer"
+                        size="sm"
                         onClick={(e) => {
                           e.stopPropagation()
-                          window.open(`/admin/postulaciones/${driver.id}`, '_blank')
+                          setSelectedDriverForDetails(driver.id)
                         }}
-                        title="Ver postulación"
+                        className="h-8 px-2 text-xs"
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
+                        <Eye className="h-3.5 w-3.5 mr-1" />
+                        Ver
                       </Button>
                     </div>
                   </div>
@@ -603,17 +627,17 @@ export function AddDriversSectionClient({
       </div>
 
       {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between pt-2">
-          <p className="text-sm text-muted-foreground">
-            Página {pagination.page} de {pagination.totalPages}
-          </p>
-          <div className="flex gap-2">
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Página {currentPage} de {totalPages}
+          </div>
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => fetchDrivers(pagination.page - 1, searchTerm)}
-              disabled={pagination.page === 1 || loading || submitting}
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
             >
               <ChevronLeft className="h-4 w-4" />
               Anterior
@@ -621,14 +645,28 @@ export function AddDriversSectionClient({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => fetchDrivers(pagination.page + 1, searchTerm)}
-              disabled={!pagination.hasMore || loading || submitting}
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
             >
               Siguiente
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Modal de detalles del driver */}
+      {selectedDriverForDetails && (
+        <DriverManagementSheet
+          open={!!selectedDriverForDetails}
+          onOpenChange={(open) => !open && setSelectedDriverForDetails(null)}
+          driverId={selectedDriverForDetails}
+          onSuccess={() => {
+            setSelectedDriverForDetails(null)
+            // Los datos se recargan desde el servidor por onSuccess del padre
+            onSuccess()
+          }}
+        />
       )}
     </div>
   )

@@ -124,7 +124,8 @@ export function AddDriversSection({ eventId, onSuccess }: AddDriversSectionProps
     setSubmitting(true)
     const result = await assignDriversToEvent({
       eventId,
-      driverIds: selectedDriverIds,
+      formDriverIds: selectedDriverIds,
+      attendeeNotes: ''
     })
 
     if (result.success) {

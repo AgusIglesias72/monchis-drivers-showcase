@@ -71,7 +71,7 @@ interface ManageOnboardingModalClientProps {
   driverName: string
   currentOnboarding: CurrentOnboarding | null
   availableEvents: Event[]
-  onSuccess: (action?: 'cancel' | 'assign' | 'reassign') => void
+  onSuccess: () => void
 }
 
 export function ManageOnboardingModalClient({
@@ -116,7 +116,7 @@ export function ManageOnboardingModalClient({
 
       if (result.success) {
         toast.success(result.message || 'Onboarding agendado exitosamente')
-        onSuccess('assign')  // ✅ Indicar que se asignó
+        onSuccess()
         handleOpenChange(false)
       } else {
         toast.error(result.error || 'Error al agendar onboarding')
@@ -151,7 +151,7 @@ export function ManageOnboardingModalClient({
 
       if (scheduleResult.success) {
         toast.success('Onboarding reagendado exitosamente')
-        onSuccess('reassign')  // ✅ Indicar que se reagendó
+        onSuccess()
         handleOpenChange(false)
       } else {
         toast.error(scheduleResult.error || 'Error al reagendar onboarding')
@@ -165,12 +165,12 @@ export function ManageOnboardingModalClient({
     startTransition(async () => {
       const result = await removeDriverFromOnboardingEvent({
         attendeeId: currentOnboarding.id,
-        reason: notes.trim() || undefined
+        reason: notes.trim() || 'Cancelado por el administrador'
       })
 
       if (result.success) {
         toast.success('Onboarding cancelado exitosamente')
-        onSuccess('cancel')  // ✅ Indicar que se canceló
+        onSuccess()
         handleOpenChange(false)
       } else {
         toast.error(result.error || 'Error al cancelar onboarding')
@@ -321,9 +321,21 @@ export function ManageOnboardingModalClient({
                 <div className="flex-1 text-sm">
                   <p className="font-medium text-red-900 mb-1">¿Cancelar este onboarding?</p>
                   <p className="text-red-700">
-                    El driver será removido del evento y podrás asignarlo a otro onboarding más adelante.
+                    El driver será removido del evento. Esta acción no se puede deshacer.
                   </p>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="cancel-notes">Razón de cancelación (opcional)</Label>
+                <Textarea
+                  id="cancel-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Ej: El driver no puede asistir en esa fecha"
+                  rows={3}
+                  disabled={isPending}
+                />
               </div>
             </div>
           )}

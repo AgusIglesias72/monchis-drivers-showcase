@@ -780,9 +780,9 @@ export function DriverManagementSheet({
                     <SelectValue placeholder="Selecciona método" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="CASH">Efectivo</SelectItem>
                     <SelectItem value="BANK_TRANSFER">Transferencia Bancaria</SelectItem>
-                    <SelectItem value="PAYMENT_APP">App de Pago</SelectItem>
+                    <SelectItem value="POS">POS</SelectItem>
+                    <SelectItem value="CASH">Efectivo</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
