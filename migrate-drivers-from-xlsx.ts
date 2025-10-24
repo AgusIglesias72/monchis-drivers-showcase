@@ -631,7 +631,7 @@ async function main() {
   
   try {
     // Leer archivo XLSX
-    const xlsxPath = '/mnt/user-data/uploads/POSTULACIÓN_DIGITAL_-_MONCHIS_DRIVER___1_.xlsx';
+    const xlsxPath = './postulacion.xlsx';
     console.log(`📖 Leyendo archivo: ${xlsxPath}`);
     
     const fileBuffer = await fs.readFile(xlsxPath);

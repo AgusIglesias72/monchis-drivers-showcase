@@ -11,7 +11,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 var _a;
-import 'dotenv/config'; // 👈 AGREGAR ESTA LÍNEA AL INICIO
 import { PrismaClient } from '@prisma/client';
 import { google } from 'googleapis';
 import { put } from '@vercel/blob';
@@ -325,26 +324,17 @@ function saveDriver(driverData, sessionId) {
                 return;
             }
             const { firstName, lastName } = splitFullName(driverData.fullName);
-            // Determinar status correcto según el schema
-            let driverStatus = 'COMPLETED';
-            if (driverData.confirmed && driverData.trained) {
-                driverStatus = 'COMPLETED';
-            }
-            else if (driverData.confirmed) {
-                driverStatus = 'READY_ONBOARDING';
-            }
-            else {
-                driverStatus = 'SUBMITTED';
-            }
+            // Todos los drivers migrados están completos (tienen los 6 pasos)
+            const driverStatus = 'COMPLETED';
             // Crear FormSubmission (sin completedSteps - ese campo NO existe en FormSubmission)
             const submission = yield prisma.formSubmission.create({
                 data: {
                     sessionId,
                     currentStep: 6,
                     totalSteps: 6,
-                    isComplete: true,
+                    isComplete: true, // ✅ Marcado como completo
                     lastActivityAt: new Date(),
-                    completedAt: new Date(),
+                    completedAt: new Date(), // ✅ Con fecha de completado
                     formData: {
                         firstName,
                         lastName,
@@ -406,13 +396,13 @@ function saveDriver(driverData, sessionId) {
                     hasUenoAccount: driverData.hasUenoAccount,
                     uenoAccountNumber: driverData.uenoAccountNumber,
                     canInvoice: driverData.canInvoice,
-                    // Estados correctos según enum
-                    status: driverStatus,
+                    // Estados correctos según enum - SIEMPRE COMPLETED para migración
+                    status: 'COMPLETED', // ✅ Todos los drivers migrados están completos
                     currentStep: 6,
                     completedSteps: [1, 2, 3, 4, 5, 6],
                     documentsStatus: 'PENDING',
-                    // Timestamps
-                    completedAt: new Date(),
+                    // Timestamps - SIEMPRE con fecha de completado
+                    completedAt: new Date(), // ✅ Marcado como completado
                 }
             });
             console.log(`  ✅ FormDriver creado: ${formDriver.id}`);

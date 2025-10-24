@@ -414,7 +414,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-[1600px] mx-auto">
+    <div className="flex flex-1 flex-col">
       <AdminHeader 
         breadcrumbs={[
           { label: "Postulaciones" },
@@ -422,8 +422,8 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         ]}
       />
 
-<div className="space-y-4 md:space-y-6 p-8">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+<div className="flex-1 p-4 md:p-8 space-y-6">
+<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="space-y-3">
             <h1 className="text-2xl font-bold tracking-tight">
               {postulacion.fullName}
