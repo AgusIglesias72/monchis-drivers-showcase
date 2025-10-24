@@ -1,53 +1,86 @@
 // components/admin/postulacion-helpers.tsx
+"use client"
 
+import * as React from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Calendar, CheckCircle, XCircle, Clock, Edit, Eye, AlertCircle, FileText, ExternalLink } from "lucide-react"
+import { 
+  Clock, 
+  CheckCircle, 
+  XCircle, 
+  AlertCircle, 
+  Edit, 
+  FileText,
+  Calendar as CalendarIcon,
+} from "lucide-react"
 
-// ==================== BADGE DE ESTADO DE DOCUMENTOS ====================
-
-export function DocumentsStatusBadge({ status }: { status?: string }) {
-  const config = {
-    PENDING: { 
-      label: 'Pendiente', 
-      className: 'bg-amber-100 text-amber-700 border-amber-200',
-      icon: Clock 
-    },
-    IN_REVIEW: { 
-      label: 'En Revisión', 
-      className: 'bg-blue-100 text-blue-700 border-blue-200',
-      icon: Clock 
-    },
-    APPROVED: { 
-      label: 'Aprobado', 
-      className: 'bg-green-100 text-green-700 border-green-200',
-      icon: CheckCircle 
-    },
-    CORRECTIONS: { 
-      label: 'Correcciones', 
-      className: 'bg-red-100 text-red-700 border-red-200',
-      icon: XCircle 
-    },
-  }
-  
-  const statusConfig = config[status as keyof typeof config] || config.PENDING
-  const Icon = statusConfig.icon
-  
-  return (
-    <Badge variant="outline" className={`${statusConfig.className} gap-1 text-xs`}>
-      <Icon className="h-3 w-3" />
-      {statusConfig.label}
-    </Badge>
-  )
-}
-
-// ==================== COMPONENTE DE INFO FIELD ====================
+// ==================== HELPER FUNCTIONS ====================
 
 function InfoField({ label, value, className }: { label: string; value?: string | null; className?: string }) {
   return (
     <div className={className}>
       <label className="text-xs font-medium text-muted-foreground block mb-1">{label}</label>
       <p className="text-sm">{value || <span className="text-muted-foreground">-</span>}</p>
+    </div>
+  )
+}
+
+// ==================== STATUS BADGES COMPONENT ====================
+
+export function StatusBadges({ 
+  formStatus, 
+  paymentStatus, 
+  onboardingStatus 
+}: { 
+  formStatus: string
+  paymentStatus?: string
+  onboardingStatus?: string
+}) {
+  // Determinar si cada badge está activo
+  const isCompleted = formStatus === 'COMPLETED'
+  const isPaymentVerified = paymentStatus === 'VERIFIED'
+  const isOnboardingConfirmed = ['CONFIRMED', 'ATTENDED', 'CHECKED_IN'].includes(onboardingStatus || '')
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {/* Badge 1: Completada */}
+      <Badge 
+        variant="outline" 
+        className={`gap-1.5 ${
+          isCompleted 
+            ? 'bg-green-50 text-green-700 border-green-200' 
+            : 'bg-gray-50 text-gray-500 border-gray-200'
+        }`}
+      >
+        <CheckCircle className="h-3.5 w-3.5" />
+        Completada
+      </Badge>
+
+      {/* Badge 2: Pago Verificado */}
+      <Badge 
+        variant="outline" 
+        className={`gap-1.5 ${
+          isPaymentVerified 
+            ? 'bg-green-50 text-green-700 border-green-200' 
+            : 'bg-gray-50 text-gray-500 border-gray-200'
+        }`}
+      >
+        <CheckCircle className="h-3.5 w-3.5" />
+        Pago Verificado
+      </Badge>
+
+      {/* Badge 3: Onboarding Confirmado */}
+      <Badge 
+        variant="outline" 
+        className={`gap-1.5 ${
+          isOnboardingConfirmed 
+            ? 'bg-blue-50 text-blue-700 border-blue-200' 
+            : 'bg-gray-50 text-gray-500 border-gray-200'
+        }`}
+      >
+        <CheckCircle className="h-3.5 w-3.5" />
+        Onboarding Confirmado
+      </Badge>
     </div>
   )
 }
@@ -128,7 +161,7 @@ export function PaymentSection({
         </Badge>
       </div>
 
-      {/* Información del pago - SIEMPRE MOSTRAR TODOS LOS CAMPOS */}
+      {/* Información del pago */}
       <div className="space-y-3">
         {/* Método y Monto */}
         <div className="grid grid-cols-2 gap-3">
@@ -142,7 +175,7 @@ export function PaymentSection({
           />
         </div>
 
-        {/* Comprobante y Factura - SIEMPRE MOSTRAR */}
+        {/* Comprobante y Factura */}
         <div className="grid grid-cols-2 gap-3">
           <InfoField 
             label="Nro. Comprobante" 
@@ -166,14 +199,14 @@ export function PaymentSection({
           />
         )}
 
-        {/* Verificado por */}
+        {/* Verificado por - CON NOMBRE COMPLETO DEL USUARIO */}
         {payment.verifiedAt && payment.verifiedBy && (
           <InfoField 
             label="Verificado" 
             value={`${new Date(payment.verifiedAt).toLocaleDateString('es-PY', {
               day: '2-digit',
               month: 'short'
-            })} por ${payment.verifiedByUser?.firstName || 'Admin'}`}
+            })} por ${payment.verifiedByUser?.fullName || payment.verifiedByUser?.firstName || 'Admin'}`}
           />
         )}
       </div>
@@ -210,7 +243,7 @@ export function PaymentSection({
         </div>
       )}
       
-      {/* Botón de gestionar - SIEMPRE AL FINAL */}
+      {/* Botón de gestionar */}
       <div className="pt-3 border-t">
         <Button 
           size="sm" 
@@ -239,79 +272,79 @@ export function OnboardingSection({
   postulacionId: string
   onSchedule: () => void
 }) {
-  // Si no hay attendance ni status relevante
-  if (!attendance && status !== 'SCHEDULED' && status !== 'COMPLETED' && status !== 'IN_PROGRESS') {
+  if (!attendance) {
     return (
       <div className="space-y-4">
         <div className="text-center py-8 space-y-2">
           <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-            <Calendar className="h-6 w-6 text-muted-foreground" />
+            <CalendarIcon className="h-6 w-6 text-muted-foreground" />
           </div>
           <div>
-            <p className="text-sm font-medium">Sin onboarding programado</p>
+            <p className="text-sm font-medium">Sin onboarding agendado</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Aún no se ha agendado el onboarding
+              {status === 'READY' 
+                ? 'El conductor está listo para agendar'
+                : 'El conductor aún no está listo'}
             </p>
           </div>
         </div>
-        <Button 
-          size="sm" 
-          variant="default" 
-          className="w-full bg-green-600 hover:bg-green-700 cursor-pointer" 
-          onClick={onSchedule}
-        >
-          <Calendar className="h-4 w-4 mr-2" />
-          Agendar Onboarding
-        </Button>
+        
+        {status === 'READY' && (
+          <Button 
+            size="sm" 
+            variant="default" 
+            className="w-full cursor-pointer" 
+            onClick={onSchedule}
+          >
+            <CalendarIcon className="h-4 w-4 mr-2" />
+            Agendar Onboarding
+          </Button>
+        )}
+        
+        {status !== 'READY' && (
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="w-full" 
+            disabled
+          >
+            <AlertCircle className="h-4 w-4 mr-2" />
+            No Listo para Agendar
+          </Button>
+        )}
       </div>
     )
   }
 
-  const statusConfig = {
-    INVITED: {
-      label: 'Invitado',
-      className: 'bg-blue-50 text-blue-700 border-blue-200',
-      icon: Calendar
-    },
-    CONFIRMED: {
-      label: 'Confirmado',
+  const statusConfig: Record<string, { label: string; className: string; icon: any }> = {
+    INVITED: { 
+      label: 'Invitado', 
       className: 'bg-purple-50 text-purple-700 border-purple-200',
-      icon: CheckCircle
+      icon: CalendarIcon 
     },
-    SCHEDULED: {
-      label: 'Programado',
+    CONFIRMED: { 
+      label: 'Confirmado', 
       className: 'bg-blue-50 text-blue-700 border-blue-200',
-      icon: Calendar
+      icon: CheckCircle 
     },
-    IN_PROGRESS: {
-      label: 'En Progreso',
-      className: 'bg-amber-50 text-amber-700 border-amber-200',
-      icon: Clock
-    },
-    ATTENDED: {
-      label: 'Asistió',
+    ATTENDED: { 
+      label: 'Asistió', 
       className: 'bg-green-50 text-green-700 border-green-200',
-      icon: CheckCircle
+      icon: CheckCircle 
     },
-    COMPLETED: {
-      label: 'Completado',
-      className: 'bg-green-50 text-green-700 border-green-200',
-      icon: CheckCircle
-    },
-    CANCELLED: {
-      label: 'Cancelado',
+    NO_SHOW: { 
+      label: 'No Asistió', 
       className: 'bg-red-50 text-red-700 border-red-200',
-      icon: XCircle
+      icon: XCircle 
     },
-    NO_SHOW: {
-      label: 'No Asistió',
-      className: 'bg-orange-50 text-orange-700 border-orange-200',
-      icon: XCircle
-    }
+    CANCELLED: { 
+      label: 'Cancelado', 
+      className: 'bg-gray-50 text-gray-700 border-gray-200',
+      icon: XCircle 
+    },
   }
 
-  const attendanceStatus = attendance?.status || status
-  const config = statusConfig[attendanceStatus as keyof typeof statusConfig] || statusConfig.SCHEDULED
+  const config = statusConfig[attendance.status] || statusConfig.INVITED
   const StatusIcon = config.icon
 
   return (
@@ -326,112 +359,40 @@ export function OnboardingSection({
       </div>
 
       {/* Información del evento */}
-      {attendance?.event && (
-        <div className="space-y-3">
-          {/* Fecha Programada */}
+      <div className="space-y-3">
+        <InfoField 
+          label="Fecha" 
+          value={new Date(attendance.event.scheduledDate).toLocaleDateString('es-PY', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
+            weekday: 'long'
+          })}
+        />
+        
+        <InfoField 
+          label="Horario" 
+          value={`${attendance.event.startTime} - ${attendance.event.endTime}`}
+        />
+
+        {attendance.event.location && (
           <InfoField 
-            label="Fecha Programada" 
-            value={new Date(attendance.event.scheduledDate).toLocaleDateString('es-PY', {
-              day: '2-digit',
-              month: 'long',
-              year: 'numeric'
-            })}
+            label="Ubicación" 
+            value={attendance.event.location}
           />
-
-          {/* Hora */}
-          {attendance.event.startTime && (
-            <InfoField 
-              label="Hora" 
-              value={`${attendance.event.startTime}${attendance.event.endTime ? ` - ${attendance.event.endTime}` : ''}`}
-            />
-          )}
-
-          {/* Ubicación */}
-          {attendance.event.location && (
-            <InfoField 
-              label="Ubicación" 
-              value={attendance.event.location}
-            />
-          )}
-
-          {/* Título del evento */}
-          {attendance.event.title && (
-            <InfoField 
-              label="Evento" 
-              value={attendance.event.title}
-            />
-          )}
-
-          {/* Notas del asistente */}
-          {attendance.attendeeNotes && (
-            <div className="pt-3 border-t space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground block">Notas</label>
-              <p className="text-xs bg-muted/50 p-2.5 rounded-md">{attendance.attendeeNotes}</p>
-            </div>
-          )}
-
-          {/* Fecha de confirmación */}
-          {attendance.confirmedAt && (
-            <div className="pt-3 border-t">
-              <InfoField 
-                label="Confirmó el" 
-                value={new Date(attendance.confirmedAt).toLocaleDateString('es-PY', {
-                  day: '2-digit',
-                  month: 'short',
-                  year: 'numeric'
-                })}
-              />
-            </div>
-          )}
-
-          {/* Check-in */}
-          {attendance.checkedInAt && (
-            <div className="pt-3 border-t">
-              <InfoField 
-                label="Check-in" 
-                value={new Date(attendance.checkedInAt).toLocaleDateString('es-PY', {
-                  day: '2-digit',
-                  month: 'short',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Botones de acción */}
-      <div className="pt-3 border-t space-y-2">
-        {/* Botón para ir al evento */}
-        {attendance?.event && (
-          <Button 
-            size="sm" 
-            variant="outline"
-            className="w-full cursor-pointer gap-2"
-            onClick={() => window.open(`/admin/onboarding/${attendance.event.id}`, '_blank')}
-          >
-            <ExternalLink className="h-4 w-4" />
-            Ver Evento de Onboarding
-          </Button>
         )}
+      </div>
 
-        {/* Botón de reprogramar */}
+      {/* Botón de gestionar */}
+      <div className="pt-3 border-t">
         <Button 
           size="sm" 
-          variant={attendanceStatus === 'COMPLETED' || attendanceStatus === 'ATTENDED' ? 'outline' : 'default'}
-          className={
-            attendanceStatus === 'COMPLETED' || attendanceStatus === 'ATTENDED'
-              ? 'w-full cursor-pointer' 
-              : 'w-full bg-green-600 hover:bg-green-700 cursor-pointer'
-          }
+          variant="default" 
+          className="w-full cursor-pointer" 
           onClick={onSchedule}
         >
-          <Calendar className="h-4 w-4 mr-2" />
-          {attendanceStatus === 'COMPLETED' || attendanceStatus === 'ATTENDED' 
-            ? 'Agendar Nuevo Onboarding' 
-            : 'Reprogramar'}
+          <Edit className="h-4 w-4 mr-2" />
+          Gestionar Onboarding
         </Button>
       </div>
     </div>

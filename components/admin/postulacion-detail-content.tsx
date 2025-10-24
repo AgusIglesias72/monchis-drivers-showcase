@@ -52,7 +52,8 @@ import { PersonalInfoCard } from "@/components/admin/personal-info-card"
 import { InternalNotesCard } from "@/components/admin/internal-notes-card"
 import { 
   PaymentSection, 
-  OnboardingSection 
+  OnboardingSection,
+  StatusBadges
 } from "@/components/admin/postulacion-helpers"
 import { toast } from "sonner"
 import {
@@ -412,17 +413,17 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   }
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-[1600px] mx-auto">
       <AdminHeader 
         breadcrumbs={[
-          { label: "Postulaciones", href: "/admin/postulaciones" },
+          { label: "Postulaciones" },
           { label: postulacion.fullName }
         ]}
       />
 
-      <div className="space-y-4 md:space-y-6 p-8">
+<div className="space-y-4 md:space-y-6 p-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="space-y-1">
+          <div className="space-y-3">
             <h1 className="text-2xl font-bold tracking-tight">
               {postulacion.fullName}
             </h1>
@@ -431,6 +432,13 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
               <span>•</span>
               <span>Postulación iniciada el {new Date(postulacion.startedAt).toLocaleDateString('es-PY')}</span>
             </div>
+            
+            {/* Badges de estado */}
+            <StatusBadges 
+              formStatus={postulacion.status}
+              paymentStatus={postulacion.equipmentPayments?.[0]?.status}
+              onboardingStatus={postulacion.onboardingAttendances?.[0]?.status}
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

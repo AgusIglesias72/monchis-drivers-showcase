@@ -1,4 +1,4 @@
-// components/admin/postulaciones-kpis.tsx
+// components/admin/postulaciones-kpis-subtle.tsx
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,27 +19,12 @@ interface PostulacionesStats {
   tasaCompletado: number
 }
 
-export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
+export function PostulacionesKPIsSubtle({ stats }: { stats: PostulacionesStats }) {
   const cardVariants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0, y: 10 },
     visible: {
       opacity: 1,
       y: 0,
-    }
-  }
-
-  const glowAnimation = {
-    animate: {
-      boxShadow: [
-        "0 0 8px rgba(59, 130, 246, 0.1)",
-        "0 0 12px rgba(59, 130, 246, 0.15)",
-        "0 0 8px rgba(59, 130, 246, 0.1)",
-      ]
-    },
-    transition: {
-      duration: 3,
-      repeat: Infinity,
-      ease: "easeInOut"
     }
   }
 
@@ -50,7 +35,8 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
       value: stats.nuevasUltimos30Dias,
       icon: Users,
       iconColor: "text-blue-500",
-      glowColor: "rgba(59, 130, 246, 0.1)",
+      glowColor: "rgba(59, 130, 246, 0.04)",
+      borderColor: "hover:border-blue-200/50",
     },
     {
       title: "Completadas",
@@ -58,7 +44,8 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
       value: stats.completadas,
       icon: CheckCircle,
       iconColor: "text-green-500",
-      glowColor: "rgba(34, 197, 94, 0.1)",
+      glowColor: "rgba(34, 197, 94, 0.04)",
+      borderColor: "hover:border-green-200/50",
     },
     {
       title: "En Progreso",
@@ -66,7 +53,8 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
       value: stats.enProgreso,
       icon: Clock,
       iconColor: "text-amber-500",
-      glowColor: "rgba(245, 158, 11, 0.1)",
+      glowColor: "rgba(245, 158, 11, 0.04)",
+      borderColor: "hover:border-amber-200/50",
     },
     {
       title: "Abandonadas",
@@ -74,7 +62,8 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
       value: stats.abandonadas,
       icon: XCircle,
       iconColor: "text-red-500",
-      glowColor: "rgba(239, 68, 68, 0.1)",
+      glowColor: "rgba(239, 68, 68, 0.04)",
+      borderColor: "hover:border-red-200/50",
     },
   ]
 
@@ -87,29 +76,40 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
           animate="visible"
           variants={cardVariants}
           transition={{
-            delay: index * 0.1,
-            duration: 0.5,
+            delay: index * 0.08,
+            duration: 0.4,
             ease: [0.25, 0.46, 0.45, 0.94]
           }}
         >
           <motion.div
+            whileHover={{ 
+              y: -2,
+              transition: { duration: 0.2 }
+            }}
             animate={{
               boxShadow: [
-                `0 0 8px ${card.glowColor}`,
-                `0 0 12px ${card.glowColor}`,
-                `0 0 8px ${card.glowColor}`,
+                `0 0 0px ${card.glowColor}`,
+                `0 0 15px ${card.glowColor}`,
+                `0 0 0px ${card.glowColor}`,
               ]
             }}
             transition={{
-              duration: 3,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: index * 0.3
+              boxShadow: {
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: index * 0.5
+              }
             }}
           >
-            <Card className="relative overflow-hidden">
-              {/* Subtle gradient overlay */}
-              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-background/5 pointer-events-none" />
+            <Card className={`relative overflow-hidden transition-all duration-300 ${card.borderColor}`}>
+              {/* Gradient overlay muy sutil */}
+              <div 
+                className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                style={{
+                  background: `radial-gradient(circle at 50% 0%, ${card.glowColor}, transparent 70%)`
+                }}
+              />
               
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -117,13 +117,14 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
                 </CardTitle>
                 <motion.div
                   animate={{
-                    scale: [1, 1.1, 1],
+                    scale: [1, 1.05, 1],
+                    opacity: [1, 0.9, 1],
                   }}
                   transition={{
-                    duration: 2,
+                    duration: 3,
                     repeat: Infinity,
                     ease: "easeInOut",
-                    delay: index * 0.2
+                    delay: index * 0.3
                   }}
                 >
                   <card.icon className={`h-4 w-4 ${card.iconColor}`} />
@@ -133,13 +134,12 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
               <CardContent>
                 <motion.div
                   className="text-2xl font-bold"
-                  initial={{ scale: 0.5, opacity: 0 }}
+                  initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{
-                    delay: index * 0.1 + 0.3,
-                    duration: 0.5,
-                    type: "spring",
-                    stiffness: 200
+                    delay: index * 0.08 + 0.2,
+                    duration: 0.4,
+                    ease: "easeOut"
                   }}
                 >
                   {card.value.toLocaleString()}

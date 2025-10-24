@@ -33,14 +33,11 @@ interface EventFormDialogProps {
 }
 
 interface FormData {
-  title: string
-  organizer: string
   scheduledDate: string
   startTime: string
   endTime: string
   location: string
   locationAddress: string
-  meetingLink: string
   maxCapacity: string
   status: OnboardingEventStatus
   notes: string
@@ -54,14 +51,11 @@ const FULL_ADDRESS = 'Mexico N° 850 e/ F.R. Moreno y Manuel Domínguez, Asunci�
 export function EventFormDialog({ open, onOpenChange, event, onSave }: EventFormDialogProps) {
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState<FormData>({
-    title: '',
-    organizer: '',
     scheduledDate: '',
     startTime: '',
     endTime: '',
     location: DEFAULT_LOCATION,
     locationAddress: DEFAULT_ADDRESS,
-    meetingLink: '',
     maxCapacity: '20',
     status: 'SCHEDULED',
     notes: '',
@@ -80,14 +74,11 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
       const dateString = `${year}-${month}-${day}`
 
       setFormData({
-        title: event.title || '',
-        organizer: event.organizer || '',
         scheduledDate: dateString,
         startTime: event.startTime || '09:00',
         endTime: event.endTime || '12:00',
         location: event.location || DEFAULT_LOCATION,
         locationAddress: event.locationAddress || DEFAULT_ADDRESS,
-        meetingLink: event.meetingLink || '',
         maxCapacity: event.maxCapacity?.toString() || '20',
         status: event.status,
         notes: event.notes || '',
@@ -95,14 +86,11 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
     } else {
       // Reset form para nuevo evento con valores por defecto
       setFormData({
-        title: '',
-        organizer: '',
         scheduledDate: '',
         startTime: '09:00',
         endTime: '12:00',
         location: DEFAULT_LOCATION,
         locationAddress: DEFAULT_ADDRESS,
-        meetingLink: '',
         maxCapacity: '20',
         status: 'SCHEDULED',
         notes: '',
@@ -120,14 +108,11 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
       const localDate = new Date(year, month - 1, day, 12, 0, 0) // Noon para evitar cambios de día
 
       const dataToSend = {
-        title: formData.title || undefined,
-        organizer: formData.organizer || undefined,
         scheduledDate: localDate.toISOString(),
         startTime: formData.startTime,
         endTime: formData.endTime || undefined,
         location: formData.location || undefined,
         locationAddress: formData.locationAddress || undefined,
-        meetingLink: formData.meetingLink || undefined,
         maxCapacity: formData.maxCapacity ? parseInt(formData.maxCapacity) : undefined,
         status: formData.status,
         notes: formData.notes || undefined,
@@ -150,7 +135,7 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto [&>button]:hidden">
         <DialogHeader>
           <DialogTitle className="text-2xl">
             {event ? 'Editar Evento' : 'Nuevo Evento de OnBoarding'}
@@ -163,54 +148,42 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Información General */}
+          {/* Estado y Capacidad */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-foreground">Información General</h3>
             
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="title">Título del Evento</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="Ej: OnBoarding Octubre - Zona Norte"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Opcional - Si no se especifica, se generará automáticamente
-                </p>
+                <Label htmlFor="status">Estado</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value: any) => setFormData({ ...formData, status: value })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SCHEDULED">Programado</SelectItem>
+                    <SelectItem value="IN_PROGRESS">En Curso</SelectItem>
+                    <SelectItem value="COMPLETED">Completado</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelado</SelectItem>
+                    <SelectItem value="POSTPONED">Pospuesto</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="organizer">Organizador *</Label>
+                <Label htmlFor="maxCapacity">Capacidad Máxima</Label>
                 <Input
-                  id="organizer"
-                  value={formData.organizer}
-                  onChange={(e) => setFormData({ ...formData, organizer: e.target.value })}
-                  placeholder="Ej: Juan Pérez"
-                  required
+                  id="maxCapacity"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={formData.maxCapacity}
+                  onChange={(e) => setFormData({ ...formData, maxCapacity: e.target.value })}
+                  placeholder="20"
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="status">Estado</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value: any) => setFormData({ ...formData, status: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DRAFT">Borrador</SelectItem>
-                  <SelectItem value="SCHEDULED">Programado</SelectItem>
-                  <SelectItem value="IN_PROGRESS">En Curso</SelectItem>
-                  <SelectItem value="COMPLETED">Completado</SelectItem>
-                  <SelectItem value="CANCELLED">Cancelado</SelectItem>
-                  <SelectItem value="POSTPONED">Pospuesto</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </div>
 
@@ -293,37 +266,10 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
                 </p>
               </div>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="meetingLink">Link de Reunión Virtual (opcional)</Label>
-              <Input
-                id="meetingLink"
-                type="url"
-                value={formData.meetingLink}
-                onChange={(e) => setFormData({ ...formData, meetingLink: e.target.value })}
-                placeholder="https://meet.google.com/xxx-xxxx-xxx"
-              />
-            </div>
           </div>
 
-          {/* Capacidad y Notas */}
+          {/* Notas */}
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="maxCapacity">Capacidad Máxima</Label>
-              <Input
-                id="maxCapacity"
-                type="number"
-                min="1"
-                max="100"
-                value={formData.maxCapacity}
-                onChange={(e) => setFormData({ ...formData, maxCapacity: e.target.value })}
-                placeholder="20"
-              />
-              <p className="text-xs text-muted-foreground">
-                Número máximo de drivers que pueden asistir al evento
-              </p>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="notes">Notas e Instrucciones</Label>
               <Textarea
@@ -331,7 +277,7 @@ export function EventFormDialog({ open, onOpenChange, event, onSave }: EventForm
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 placeholder="Ej: Traer cédula y licencia original. Vestimenta casual."
-                rows={4}
+                rows={3}
               />
             </div>
           </div>

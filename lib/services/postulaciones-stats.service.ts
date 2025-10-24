@@ -6,16 +6,19 @@ import { subDays, format, startOfDay, endOfDay } from 'date-fns';
 export class PostulacionesStatsService {
   
   /**
-   * Obtiene estadísticas generales de postulaciones
+   * Obtiene estadísticas generales de postulaciones (últimos 30 días por defecto)
    */
   async getStats() {
+    const now = new Date()
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    
     const [
       totalPostulaciones,
       completadas,
       enProgreso,
       abandonadas,
-      nuevasUltimaSemana,
-      completadasUltimaSemana,
+      nuevasUltimos30Dias,
+      completadasUltimos30Dias,
     ] = await Promise.all([
       prisma.formDriver.count(),
       prisma.formDriver.count({ where: { status: 'COMPLETED' } }),
@@ -24,7 +27,7 @@ export class PostulacionesStatsService {
       prisma.formDriver.count({
         where: {
           startedAt: {
-            gte: subDays(new Date(), 7)
+            gte: thirtyDaysAgo
           }
         }
       }),
@@ -32,7 +35,7 @@ export class PostulacionesStatsService {
         where: {
           status: 'COMPLETED',
           completedAt: {
-            gte: subDays(new Date(), 7)
+            gte: thirtyDaysAgo
           }
         }
       }),
@@ -47,8 +50,8 @@ export class PostulacionesStatsService {
       completadas,
       enProgreso,
       abandonadas,
-      nuevasUltimaSemana,
-      completadasUltimaSemana,
+      nuevasUltimos30Dias,
+      completadasUltimos30Dias,
       tasaCompletado,
     };
   }
@@ -117,59 +120,51 @@ export class PostulacionesStatsService {
         where.startedAt.gte = new Date(filters.startDate);
       }
       if (filters.endDate) {
-        // Agregar 1 día para incluir todo el día final
-        const endDate = new Date(filters.endDate);
-        endDate.setDate(endDate.getDate() + 1);
-        where.startedAt.lt = endDate;
+        where.startedAt.lte = new Date(filters.endDate);
       }
     }
     
-    // Paginación
     const page = filters?.page || 1;
     const limit = filters?.limit || 20;
     const skip = (page - 1) * limit;
     
-    // Ordenamiento
+    // Configurar ordenamiento
     const sortBy = filters?.sortBy || 'startedAt';
     const sortOrder = filters?.sortOrder || 'desc';
-    
-    // Mapeo de campos de ordenamiento
     const orderByField: any = {};
-    if (sortBy === 'name') {
-      orderByField.fullName = sortOrder;
-    } else if (sortBy === 'status') {
-      // Ordenar por progreso (currentStep) en lugar de status textual
-      orderByField.currentStep = sortOrder;
-    } else if (sortBy === 'startedAt') {
-      orderByField.startedAt = sortOrder;
-    } else if (sortBy === 'progress') {
-      orderByField.currentStep = sortOrder;
-    } else {
-      orderByField.startedAt = sortOrder;
-    }
+    orderByField[sortBy] = sortOrder;
     
     const [formDrivers, total] = await Promise.all([
       prisma.formDriver.findMany({
         where,
         select: {
           id: true,
-          cedula: true,
           firstName: true,
           lastName: true,
           fullName: true,
+          cedula: true,
           phoneNumber: true,
           email: true,
           birthDate: true,
-          department: true,
-          city: true,
-          neighborhood: true,
           address: true,
+          city: true,
+          department: true,
+          neighborhood: true,
           hasVehicle: true,
           vehicleBrand: true,
           vehicleModel: true,
           vehicleYear: true,
           vehiclePlate: true,
           workZone: true,
+          howHeardAboutUs: true,
+          referredBy: true,
+          experience: true,
+          availability: true,
+          whenCanStart: true,
+          hasUenoAccount: true,
+          uenoAccountNumber: true,
+          canInvoice: true,
+          documentsStatus: true,
           status: true,
           currentStep: true,
           completedSteps: true,
