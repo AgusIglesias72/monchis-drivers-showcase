@@ -1,7 +1,7 @@
 // components/admin/onboarding/driver-management-sheet.tsx
 "use client"
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -84,7 +84,35 @@ export function DriverManagementSheet({
     rejectionReason: '',
   })
 
-  const loadDriverData = useCallback(async () => {
+  // Cargar datos completos del driver cuando se abre el sheet
+  useEffect(() => {
+    if (open && driverId) {
+      loadDriverData()
+    } else if (!open) {
+      // Limpiar datos cuando se cierra
+      setDriver(null)
+      setActiveTab('info')
+      setDocumentLoading(null)
+    }
+  }, [open, driverId])
+
+  // Actualizar paymentData cuando cambia el driver
+  useEffect(() => {
+    if (driver?.equipmentPayments?.[0]) {
+      const payment = driver.equipmentPayments[0]
+      setPaymentData({
+        paymentMethod: payment.paymentMethod || '',
+        paymentNumber: payment.paymentNumber || '',
+        invoiceNumber: payment.invoiceNumber || '',
+        amount: payment.amount?.toString() || '',
+        status: payment.status || 'PENDING',
+        adminNotes: payment.adminNotes || '',
+        rejectionReason: payment.rejectionReason || '',
+      })
+    }
+  }, [driver])
+
+  const loadDriverData = async () => {
     if (!driverId) return
     
     setLoading(true)
@@ -102,35 +130,7 @@ export function DriverManagementSheet({
     } finally {
       setLoading(false)
     }
-  }, [driverId])
-
-  // Cargar datos completos del driver cuando se abre el sheet
-  useEffect(() => {
-    if (open && driverId) {
-      loadDriverData()
-    } else if (!open) {
-      // Limpiar datos cuando se cierra
-      setDriver(null)
-      setActiveTab('info')
-      setDocumentLoading(null)
-    }
-  }, [open, driverId, loadDriverData])
-
-  // Actualizar paymentData cuando cambia el driver
-  useEffect(() => {
-    if (driver?.equipmentPayments?.[0]) {
-      const payment = driver.equipmentPayments[0]
-      setPaymentData({
-        paymentMethod: payment.paymentMethod || '',
-        paymentNumber: payment.paymentNumber || '',
-        invoiceNumber: payment.invoiceNumber || '',
-        amount: payment.amount?.toString() || '',
-        status: payment.status || 'PENDING',
-        adminNotes: payment.adminNotes || '',
-        rejectionReason: payment.rejectionReason || '',
-      })
-    }
-  }, [driver])
+  }
 
   const formatDate = (date: string | Date | null | undefined) => {
     if (!date) return 'No especificado'
@@ -201,15 +201,15 @@ export function DriverManagementSheet({
       
       if (result.success) {
         toast.success('Documento rechazado')
-        await loadDriverData() // Recargar para estar seguros
+        await loadDriverData()
       } else {
         toast.error(result.error || 'Error al rechazar documento')
-        await loadDriverData() // Revertir cambios
+        await loadDriverData()
       }
     } catch (error) {
       console.error('Error:', error)
       toast.error('Error al rechazar documento')
-      await loadDriverData() // Revertir cambios
+      await loadDriverData()
     } finally {
       setDocumentLoading(null)
     }
@@ -230,14 +230,15 @@ export function DriverManagementSheet({
       
       if (result.success) {
         toast.success('Documento eliminado')
+        await loadDriverData()
       } else {
         toast.error(result.error || 'Error al eliminar documento')
-        await loadDriverData() // Revertir cambios
+        await loadDriverData()
       }
     } catch (error) {
       console.error('Error:', error)
       toast.error('Error al eliminar documento')
-      await loadDriverData() // Revertir cambios
+      await loadDriverData()
     } finally {
       setDocumentLoading(null)
     }
@@ -259,12 +260,13 @@ export function DriverManagementSheet({
         body: formData,
       })
 
-      if (response.ok) {
-        toast.success('Documento subido exitosamente')
-        await loadDriverData() // Recargar datos
+      const result = await response.json()
+
+      if (result.success) {
+        toast.success('Documento subido correctamente')
+        await loadDriverData()
       } else {
-        const data = await response.json()
-        toast.error(data.error || 'Error al subir documento')
+        toast.error(result.error || 'Error al subir documento')
       }
     } catch (error) {
       console.error('Error:', error)
@@ -274,38 +276,60 @@ export function DriverManagementSheet({
     }
   }
 
-  const handleSavePayment = async () => {
+  const handlePaymentSubmit = async () => {
     if (!driver?.id) return
 
+    // Validaciones básicas
+    if (!paymentData.paymentMethod) {
+      toast.error('Selecciona un método de pago')
+      return
+    }
+    if (!paymentData.amount || parseFloat(paymentData.amount) <= 0) {
+      toast.error('Ingresa un monto válido')
+      return
+    }
+
     setPaymentLoading(true)
+
     try {
       const { updatePayment } = await import('@/lib/actions/postulacion.actions')
-      const result = await updatePayment(driver.id, paymentData)
       
+      const result = await updatePayment(driver.id, {
+        paymentMethod: paymentData.paymentMethod,
+        paymentNumber: paymentData.paymentNumber || undefined,
+        invoiceNumber: paymentData.invoiceNumber || undefined,
+        amount: parseFloat(paymentData.amount),
+        status: paymentData.status as any,
+        adminNotes: paymentData.adminNotes || undefined,
+        rejectionReason: paymentData.rejectionReason || undefined,
+      })
+
       if (result.success) {
-        toast.success('Pago actualizado exitosamente')
+        toast.success('Pago registrado exitosamente')
         setShowPaymentModal(false)
-        await loadDriverData() // Recargar datos
-        onSuccess() // Notificar al padre
+        await loadDriverData()
+        onSuccess()
       } else {
-        toast.error(result.error || 'Error al actualizar pago')
+        toast.error(result.error || 'Error al registrar el pago')
       }
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Error al actualizar pago')
+      toast.error('Error al registrar el pago')
     } finally {
       setPaymentLoading(false)
     }
   }
 
   const getStatusBadge = (status: string) => {
-    const config: Record<string, { label: string; className: string; icon: any }> = {
-      PENDING: { label: 'Pendiente', className: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
-      IN_REVIEW: { label: 'En Revisión', className: 'bg-blue-100 text-blue-800 border-blue-200', icon: Eye },
-      APPROVED: { label: 'Aprobado', className: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
-      REJECTED: { label: 'Rechazado', className: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
+    const config = {
+      PENDING: { className: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock, label: 'Pendiente' },
+      APPROVED: { className: 'bg-green-50 text-green-700 border-green-200', icon: CheckCircle, label: 'Aprobado' },
+      REJECTED: { className: 'bg-red-50 text-red-700 border-red-200', icon: XCircle, label: 'Rechazado' },
+      INTERVIEW_SCHEDULED: { className: 'bg-blue-50 text-blue-700 border-blue-200', icon: Users, label: 'Entrevista' },
     }
-    const { label, className, icon: Icon } = config[status] || config.PENDING
+
+    const { className, icon: Icon, label } = config[status as keyof typeof config] || config.PENDING
+
     return (
       <Badge variant="outline" className={cn(className, "gap-1")}>
         <Icon className="h-3 w-3" />
@@ -408,21 +432,23 @@ export function DriverManagementSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col">
-        {/* Header fijo */}
-        <SheetHeader className="px-6 py-4 border-b bg-muted/30">
+        {/* Header fijo - MEJORADO */}
+        <SheetHeader className="px-6 py-4 border-b bg-background">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-2 min-w-0 flex-1">
-              <SheetTitle className="text-2xl truncate">{driver.fullName || 'Driver'}</SheetTitle>
-              <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+              <SheetTitle className="text-xl font-semibold">
+                {driver.fullName || 'Driver'}
+              </SheetTitle>
+              <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
                 {driver.phoneNumber && (
                   <div className="flex items-center gap-2">
-                    <Phone className="h-3 w-3 flex-shrink-0" />
+                    <Phone className="h-3.5 w-3.5 flex-shrink-0" />
                     <span className="truncate">{driver.phoneNumber}</span>
                   </div>
                 )}
                 {driver.email && (
                   <div className="flex items-center gap-2">
-                    <Mail className="h-3 w-3 flex-shrink-0" />
+                    <Mail className="h-3.5 w-3.5 flex-shrink-0" />
                     <span className="truncate">{driver.email}</span>
                   </div>
                 )}
@@ -434,7 +460,7 @@ export function DriverManagementSheet({
                 variant="outline"
                 size="sm"
                 onClick={() => window.open(`/admin/postulaciones/${driver.id}`, '_blank')}
-                className="gap-2 whitespace-nowrap"
+                className="gap-2 whitespace-nowrap text-xs h-8"
               >
                 <ExternalLink className="h-3 w-3" />
                 Ver completo
@@ -485,58 +511,70 @@ export function DriverManagementSheet({
                         <p className="text-xs font-medium text-muted-foreground mb-1">Fecha de Nacimiento</p>
                         <p className="text-sm">
                           {driver.birthDate 
-                            ? (formatBirthDateWithAge(driver.birthDate) || formatDateOnly(driver.birthDate) || driver.birthDate)
-                            : 'No especificado'
-                          }
+                            ? formatBirthDateWithAge(driver.birthDate)
+                            : 'No especificado'}
                         </p>
                       </div>
                     </div>
-
+                    
                     <Separator />
-
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-1">Dirección</p>
-                        <p className="text-sm">{driver.address || 'No especificado'}</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Ciudad</p>
-                          <p className="text-sm">{driver.city || 'No especificado'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Barrio</p>
-                          <p className="text-sm">{driver.neighborhood || 'No especificado'}</p>
-                        </div>
-                      </div>
+                    
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Dirección</p>
+                      <p className="text-sm">{driver.address || 'No especificado'}</p>
                     </div>
+
+                    {driver.emergencyContactName && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-foreground">Contacto de Emergencia</p>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">Nombre</p>
+                              <p className="text-sm">{driver.emergencyContactName}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">Teléfono</p>
+                              <p className="text-sm">{driver.emergencyContactPhone || 'No especificado'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
 
-                {/* Contacto de emergencia */}
-                {(driver.emergencyName || driver.emergencyPhone) && (
+                {/* Referencias */}
+                {driver.references && driver.references.length > 0 && (
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
                         <Users className="h-4 w-4" />
-                        Contacto de Emergencia
+                        Referencias
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-1">Nombre</p>
-                        <p className="text-sm">{driver.emergencyName || 'No especificado'}</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Relación</p>
-                          <p className="text-sm">{driver.emergencyRelationship || 'No especificado'}</p>
+                    <CardContent className="space-y-4">
+                      {driver.references.map((ref: any, idx: number) => (
+                        <div key={idx} className="space-y-2">
+                          {idx > 0 && <Separator />}
+                          <p className="text-xs font-semibold text-foreground">Referencia {idx + 1}</p>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">Nombre</p>
+                              <p className="text-sm">{ref.name}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">Relación</p>
+                              <p className="text-sm">{ref.relationship || 'No especificado'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">Teléfono</p>
+                              <p className="text-sm">{ref.phoneNumber}</p>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Teléfono</p>
-                          <p className="text-sm">{driver.emergencyPhone || 'No especificado'}</p>
-                        </div>
-                      </div>
+                      ))}
                     </CardContent>
                   </Card>
                 )}
@@ -585,81 +623,89 @@ export function DriverManagementSheet({
                   </CardHeader>
                   <CardContent>
                     {!driver.equipmentPayments || driver.equipmentPayments.length === 0 ? (
-                      <div className="space-y-4">
-                        <div className="text-center py-12 text-muted-foreground">
-                          <DollarSign className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                          <p className="text-sm">No hay pagos registrados</p>
-                        </div>
+                      <div className="text-center py-8">
+                        <DollarSign className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                        <p className="text-sm text-muted-foreground mb-4">
+                          No hay pagos registrados
+                        </p>
                         <Button
+                          variant="outline"
                           onClick={() => setShowPaymentModal(true)}
-                          className="w-full cursor-pointer"
+                          className="gap-2"
                         >
-                          <DollarSign className="h-4 w-4 mr-2" />
+                          <DollarSign className="h-4 w-4" />
                           Registrar Pago
                         </Button>
                       </div>
                     ) : (
                       <div className="space-y-4">
                         {driver.equipmentPayments.map((payment: any) => (
-                          <div key={payment.id} className="space-y-4">
+                          <div key={payment.id} className="border rounded-lg p-4 space-y-3">
                             <div className="grid grid-cols-2 gap-4">
                               <div>
                                 <p className="text-xs font-medium text-muted-foreground mb-1">Método de Pago</p>
-                                <p className="text-sm">{payment.paymentMethod || 'No especificado'}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs font-medium text-muted-foreground mb-1">Nº Comprobante</p>
-                                <p className="text-sm">{payment.paymentNumber || 'No especificado'}</p>
+                                <p className="text-sm font-medium">{payment.paymentMethod}</p>
                               </div>
                               <div>
                                 <p className="text-xs font-medium text-muted-foreground mb-1">Monto</p>
-                                <p className="text-sm font-semibold">
+                                <p className="text-sm font-medium">
                                   {payment.amount ? `₲ ${payment.amount.toLocaleString('es-PY')}` : 'No especificado'}
                                 </p>
                               </div>
-                              <div>
-                                <p className="text-xs font-medium text-muted-foreground mb-1">Fecha de Pago</p>
-                                <p className="text-sm">{formatDate(payment.paymentDate)}</p>
-                              </div>
+                              {payment.paymentNumber && (
+                                <div>
+                                  <p className="text-xs font-medium text-muted-foreground mb-1">Número de Pago</p>
+                                  <p className="text-sm">{payment.paymentNumber}</p>
+                                </div>
+                              )}
+                              {payment.invoiceNumber && (
+                                <div>
+                                  <p className="text-xs font-medium text-muted-foreground mb-1">Número de Factura</p>
+                                  <p className="text-sm">{payment.invoiceNumber}</p>
+                                </div>
+                              )}
                             </div>
 
-                            {payment.proofDriveId && (
-                              <div className="pt-3 border-t">
-                                <p className="text-xs font-medium text-muted-foreground mb-2">Comprobante</p>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => window.open(payment.proofUrl || `https://drive.google.com/file/d/${payment.proofDriveId}/view`, '_blank')}
-                                  className="gap-2"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                  Ver comprobante
-                                </Button>
-                              </div>
+                            {payment.adminNotes && (
+                              <>
+                                <Separator />
+                                <div>
+                                  <p className="text-xs font-medium text-muted-foreground mb-1">Notas del Admin</p>
+                                  <p className="text-sm">{payment.adminNotes}</p>
+                                </div>
+                              </>
                             )}
 
                             {payment.rejectionReason && (
-                              <div className="pt-3 border-t bg-red-50 p-3 rounded-lg">
-                                <p className="text-xs font-medium text-red-700 mb-1">Motivo de rechazo:</p>
-                                <p className="text-sm text-red-600">{payment.rejectionReason}</p>
-                              </div>
+                              <>
+                                <Separator />
+                                <div className="bg-red-50 p-3 rounded-md">
+                                  <p className="text-xs font-medium text-red-700 mb-1">Motivo de Rechazo</p>
+                                  <p className="text-sm text-red-600">{payment.rejectionReason}</p>
+                                </div>
+                              </>
                             )}
 
-                            {payment.adminNotes && (
-                              <div className="pt-3 border-t bg-muted/50 p-3 rounded-lg">
-                                <p className="text-xs font-medium text-muted-foreground mb-1">Notas administrativas:</p>
-                                <p className="text-sm">{payment.adminNotes}</p>
-                              </div>
-                            )}
+                            <Separator />
 
-                            <div className="pt-3 border-t">
+                            <div className="flex items-center gap-2">
                               <Button
-                                onClick={() => setShowPaymentModal(true)}
-                                variant="default"
-                                className="w-full cursor-pointer"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setPaymentData({
+                                    paymentMethod: payment.paymentMethod || '',
+                                    paymentNumber: payment.paymentNumber || '',
+                                    invoiceNumber: payment.invoiceNumber || '',
+                                    amount: payment.amount?.toString() || '',
+                                    status: payment.status || 'PENDING',
+                                    adminNotes: payment.adminNotes || '',
+                                    rejectionReason: payment.rejectionReason || '',
+                                  })
+                                  setShowPaymentModal(true)
+                                }}
                               >
-                                <DollarSign className="h-4 w-4 mr-2" />
-                                Gestionar Pago
+                                Editar
                               </Button>
                             </div>
                           </div>
@@ -680,33 +726,31 @@ export function DriverManagementSheet({
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {!driver.vehicleBrand && !driver.vehicleModel ? (
-                      <div className="text-center py-12 text-muted-foreground">
-                        <Car className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No hay información del vehículo</p>
+                    {driver.vehicleBrand || driver.vehicleModel || driver.vehicleYear || driver.vehiclePlate ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Marca</p>
+                            <p className="text-sm">{driver.vehicleBrand || 'No especificado'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Modelo</p>
+                            <p className="text-sm">{driver.vehicleModel || 'No especificado'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Año</p>
+                            <p className="text-sm">{driver.vehicleYear || 'No especificado'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Matrícula</p>
+                            <p className="text-sm">{driver.vehiclePlate || 'No especificado'}</p>
+                          </div>
+                        </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Marca</p>
-                          <p className="text-sm">{driver.vehicleBrand || 'No especificado'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Modelo</p>
-                          <p className="text-sm">{driver.vehicleModel || 'No especificado'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Año</p>
-                          <p className="text-sm">{driver.vehicleYear || 'No especificado'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Placa</p>
-                          <p className="text-sm font-semibold">{driver.vehiclePlate || 'No especificado'}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Color</p>
-                          <p className="text-sm">{driver.vehicleColor || 'No especificado'}</p>
-                        </div>
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Car className="h-12 w-12 mx-auto opacity-50 mb-3" />
+                        <p className="text-sm">No hay información del vehículo</p>
                       </div>
                     )}
                   </CardContent>
@@ -716,124 +760,118 @@ export function DriverManagementSheet({
           </div>
         </div>
 
-        {/* Dialog de Gestión de Pago */}
+        {/* Modal de Pago */}
         <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Gestionar Pago de Equipamiento</DialogTitle>
               <DialogDescription>
-                Actualiza la información del pago del conductor
+                Registra o actualiza la información del pago
               </DialogDescription>
             </DialogHeader>
-
             <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="paymentMethod">Método de Pago</Label>
-                  <Select
-                    value={paymentData.paymentMethod}
-                    onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
-                  >
-                    <SelectTrigger id="paymentMethod">
-                      <SelectValue placeholder="Seleccionar método" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="BANK_TRANSFER">Transferencia Bancaria</SelectItem>
-                      <SelectItem value="POS">POS</SelectItem>
-                      <SelectItem value="CASH">Efectivo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Monto (Gs.)</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    value={paymentData.amount}
-                    onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
-                    placeholder="350000"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="paymentNumber">Nro. de Comprobante</Label>
-                  <Input
-                    id="paymentNumber"
-                    value={paymentData.paymentNumber}
-                    onChange={(e) => setPaymentData({ ...paymentData, paymentNumber: e.target.value })}
-                    placeholder="Últimos 6 dígitos"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="invoiceNumber">Nro. de Factura</Label>
-                  <Input
-                    id="invoiceNumber"
-                    value={paymentData.invoiceNumber}
-                    onChange={(e) => setPaymentData({ ...paymentData, invoiceNumber: e.target.value })}
-                    placeholder="001-001-0000000"
-                  />
-                </div>
-              </div>
-
               <div className="space-y-2">
-                <Label htmlFor="paymentStatus">Estado del Pago</Label>
+                <Label htmlFor="paymentMethod">Método de Pago *</Label>
                 <Select
-                  value={paymentData.status}
-                  onValueChange={(value) => setPaymentData({ ...paymentData, status: value })}
+                  value={paymentData.paymentMethod}
+                  onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
                 >
-                  <SelectTrigger id="paymentStatus">
-                    <SelectValue />
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona método" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PENDING">Pendiente</SelectItem>
-                    <SelectItem value="VERIFIED">Verificado</SelectItem>
-                    <SelectItem value="REJECTED">Rechazado</SelectItem>
+                    <SelectItem value="CASH">Efectivo</SelectItem>
+                    <SelectItem value="BANK_TRANSFER">Transferencia Bancaria</SelectItem>
+                    <SelectItem value="PAYMENT_APP">App de Pago</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="amount">Monto *</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    placeholder="0"
+                    value={paymentData.amount}
+                    onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="status">Estado</Label>
+                  <Select
+                    value={paymentData.status}
+                    onValueChange={(value) => setPaymentData({ ...paymentData, status: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PENDING">Pendiente</SelectItem>
+                      <SelectItem value="VERIFIED">Verificado</SelectItem>
+                      <SelectItem value="REJECTED">Rechazado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="paymentNumber">Número de Pago (opcional)</Label>
+                <Input
+                  id="paymentNumber"
+                  placeholder="Ej: 123456"
+                  value={paymentData.paymentNumber}
+                  onChange={(e) => setPaymentData({ ...paymentData, paymentNumber: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="invoiceNumber">Número de Factura (opcional)</Label>
+                <Input
+                  id="invoiceNumber"
+                  placeholder="Ej: FAC-001"
+                  value={paymentData.invoiceNumber}
+                  onChange={(e) => setPaymentData({ ...paymentData, invoiceNumber: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="adminNotes">Notas del Admin (opcional)</Label>
+                <Textarea
+                  id="adminNotes"
+                  placeholder="Agregar notas..."
+                  value={paymentData.adminNotes}
+                  onChange={(e) => setPaymentData({ ...paymentData, adminNotes: e.target.value })}
+                  rows={3}
+                />
+              </div>
+
               {paymentData.status === 'REJECTED' && (
                 <div className="space-y-2">
-                  <Label htmlFor="rejectionReason">Razón de Rechazo</Label>
+                  <Label htmlFor="rejectionReason">Motivo de Rechazo *</Label>
                   <Textarea
                     id="rejectionReason"
+                    placeholder="Explica por qué se rechaza el pago..."
                     value={paymentData.rejectionReason}
                     onChange={(e) => setPaymentData({ ...paymentData, rejectionReason: e.target.value })}
-                    placeholder="Indica por qué se rechazó el pago"
                     rows={3}
                   />
                 </div>
               )}
-
-              <div className="space-y-2">
-                <Label htmlFor="adminNotes">Notas Administrativas (opcional)</Label>
-                <Textarea
-                  id="adminNotes"
-                  value={paymentData.adminNotes}
-                  onChange={(e) => setPaymentData({ ...paymentData, adminNotes: e.target.value })}
-                  placeholder="Observaciones internas sobre el pago"
-                  rows={3}
-                />
-              </div>
             </div>
-
             <DialogFooter>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setShowPaymentModal(false)}
                 disabled={paymentLoading}
-                className="cursor-pointer"
               >
                 Cancelar
               </Button>
-              <Button 
-                onClick={handleSavePayment}
+              <Button
+                onClick={handlePaymentSubmit}
                 disabled={paymentLoading}
-                className="cursor-pointer"
               >
                 {paymentLoading ? (
                   <>
