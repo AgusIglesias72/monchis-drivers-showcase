@@ -2,7 +2,7 @@
 
 "use client"
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect, useTransition, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -61,7 +61,7 @@ export function AddDriversDialog({
   })
 
   // Fetch drivers usando Server Action
-  const fetchDrivers = async (page = 1, search = '') => {
+  const fetchDrivers = useCallback(async (page = 1, search = '') => {
     setLoading(true)
     
     const result = await getEligibleDrivers({
@@ -80,14 +80,14 @@ export function AddDriversDialog({
     }
     
     setLoading(false)
-  }
+  }, [eventId])
 
   // Fetch inicial cuando se abre el modal
   useEffect(() => {
     if (open) {
       fetchDrivers(1, '')
     }
-  }, [open, eventId])
+  }, [open, eventId, fetchDrivers])
 
   // Debounce search
   useEffect(() => {
@@ -98,7 +98,7 @@ export function AddDriversDialog({
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [searchTerm, open])
+  }, [searchTerm, open, fetchDrivers])
 
   // Reset cuando se cierra
   useEffect(() => {

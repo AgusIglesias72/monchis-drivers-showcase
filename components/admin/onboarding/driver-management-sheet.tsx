@@ -1,7 +1,7 @@
 // components/admin/onboarding/driver-management-sheet.tsx
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -84,35 +84,7 @@ export function DriverManagementSheet({
     rejectionReason: '',
   })
 
-  // Cargar datos completos del driver cuando se abre el sheet
-  useEffect(() => {
-    if (open && driverId) {
-      loadDriverData()
-    } else if (!open) {
-      // Limpiar datos cuando se cierra
-      setDriver(null)
-      setActiveTab('info')
-      setDocumentLoading(null)
-    }
-  }, [open, driverId])
-
-  // Actualizar paymentData cuando cambia el driver
-  useEffect(() => {
-    if (driver?.equipmentPayments?.[0]) {
-      const payment = driver.equipmentPayments[0]
-      setPaymentData({
-        paymentMethod: payment.paymentMethod || '',
-        paymentNumber: payment.paymentNumber || '',
-        invoiceNumber: payment.invoiceNumber || '',
-        amount: payment.amount?.toString() || '',
-        status: payment.status || 'PENDING',
-        adminNotes: payment.adminNotes || '',
-        rejectionReason: payment.rejectionReason || '',
-      })
-    }
-  }, [driver])
-
-  const loadDriverData = async () => {
+  const loadDriverData = useCallback(async () => {
     if (!driverId) return
     
     setLoading(true)
@@ -130,7 +102,35 @@ export function DriverManagementSheet({
     } finally {
       setLoading(false)
     }
-  }
+  }, [driverId])
+
+  // Cargar datos completos del driver cuando se abre el sheet
+  useEffect(() => {
+    if (open && driverId) {
+      loadDriverData()
+    } else if (!open) {
+      // Limpiar datos cuando se cierra
+      setDriver(null)
+      setActiveTab('info')
+      setDocumentLoading(null)
+    }
+  }, [open, driverId, loadDriverData])
+
+  // Actualizar paymentData cuando cambia el driver
+  useEffect(() => {
+    if (driver?.equipmentPayments?.[0]) {
+      const payment = driver.equipmentPayments[0]
+      setPaymentData({
+        paymentMethod: payment.paymentMethod || '',
+        paymentNumber: payment.paymentNumber || '',
+        invoiceNumber: payment.invoiceNumber || '',
+        amount: payment.amount?.toString() || '',
+        status: payment.status || 'PENDING',
+        adminNotes: payment.adminNotes || '',
+        rejectionReason: payment.rejectionReason || '',
+      })
+    }
+  }, [driver])
 
   const formatDate = (date: string | Date | null | undefined) => {
     if (!date) return 'No especificado'

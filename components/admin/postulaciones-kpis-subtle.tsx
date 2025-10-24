@@ -142,7 +142,7 @@ export function PostulacionesKPIsSubtle({ stats }: { stats: PostulacionesStats }
                     ease: "easeOut"
                   }}
                 >
-                  {card.value.toLocaleString()}
+                  {card.value?.toLocaleString() || '0'}
                 </motion.div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {card.subtitle}

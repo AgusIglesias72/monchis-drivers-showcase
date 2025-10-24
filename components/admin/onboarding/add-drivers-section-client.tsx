@@ -3,7 +3,7 @@
 
 "use client"
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect, useTransition, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -96,7 +96,7 @@ export function AddDriversSectionClient({
   }>({ field: null, order: 'asc' })
 
   // Fetch drivers
-  const fetchDrivers = async (page: number, search: string) => {
+  const fetchDrivers = useCallback(async (page: number, search: string) => {
     startTransition(async () => {
       const result = await getEligibleDrivers({
         eventId,
@@ -113,7 +113,7 @@ export function AddDriversSectionClient({
         setDrivers([])
       }
     })
-  }
+  }, [eventId])
 
   // Debounce search
   useEffect(() => {
@@ -130,7 +130,7 @@ export function AddDriversSectionClient({
       setSelectedDriverIds([])
     }, 300)
     return () => clearTimeout(timer)
-  }, [searchTerm])
+  }, [searchTerm, fetchDrivers, initialDrivers, initialPagination])
 
   const handleToggleDriver = (driverId: string) => {
     setSelectedDriverIds(prev => {

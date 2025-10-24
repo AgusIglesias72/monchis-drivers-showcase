@@ -166,6 +166,7 @@ export function OnboardingEventContent({
                 <TabsContent value="attendees" className="mt-0">
                   <AttendeesManagementSection
                     eventId={event.id}
+                    event={event}
                     attendees={event.attendees}
                     onRefresh={handleRefresh}
                   />

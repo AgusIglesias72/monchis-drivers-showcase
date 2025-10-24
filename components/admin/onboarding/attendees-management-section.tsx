@@ -170,23 +170,6 @@ export function AttendeesManagementSection({
     }
   }
 
-  const getDocsStatusBadge = (status: string) => {
-    if (status === 'APPROVED') {
-      return (
-        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs gap-1">
-          <CheckCircle className="h-3 w-3" />
-          OK
-        </Badge>
-      )
-    }
-    return (
-      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs gap-1">
-        <AlertTriangle className="h-3 w-3" />
-        Pendiente
-      </Badge>
-    )
-  }
-
   const getPaymentBadge = (driver: any) => {
     const hasPayment = driver.equipmentPayments?.length > 0
     const payment = driver.equipmentPayments?.[0]
@@ -293,7 +276,7 @@ export function AttendeesManagementSection({
                 )}
               </CardTitle>
               <CardDescription>
-                Gestiona la asistencia, documentos y pagos de cada driver
+                Gestiona la asistencia y pagos de cada driver
               </CardDescription>
             </div>
             <Badge variant="outline" className="gap-1">
@@ -302,12 +285,13 @@ export function AttendeesManagementSection({
             </Badge>
           </div>
         </CardHeader>
+
         <CardContent className="space-y-4">
           {/* Filtros */}
-          <div className="flex flex-col gap-3">
-            {/* Buscador */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <div className="space-y-3">
+            {/* Búsqueda */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por nombre, teléfono o email..."
                 value={searchQuery}
@@ -316,53 +300,32 @@ export function AttendeesManagementSection({
               />
             </div>
 
-            {/* Filtros en una sola línea con labels */}
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* Ícono de filtro */}
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <Filter className="h-4 w-4" />
-                Filtros:
-              </div>
-              
+            {/* Filtros en una línea */}
+            <div className="flex flex-wrap items-center gap-2">
               {/* Filtro de Estado */}
               <div className="flex items-center gap-2">
-                <Label className="text-sm text-muted-foreground whitespace-nowrap">Estado:</Label>
+                <Label className="text-xs text-muted-foreground whitespace-nowrap">Estado:</Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[160px] h-9">
-                    <SelectValue placeholder="Todos" />
+                  <SelectTrigger className="h-9 w-[140px]">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="INVITED">Invitado</SelectItem>
-                    <SelectItem value="CONFIRMED">Confirmado</SelectItem>
-                    <SelectItem value="ATTENDED">Asistió</SelectItem>
-                    <SelectItem value="NO_SHOW">No Asistió</SelectItem>
-                    <SelectItem value="CANCELLED">Cancelado</SelectItem>
+                    <SelectItem value="INVITED">Invitados</SelectItem>
+                    <SelectItem value="CONFIRMED">Confirmados</SelectItem>
+                    <SelectItem value="ATTENDED">Asistieron</SelectItem>
+                    <SelectItem value="NO_SHOW">No Show</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelados</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Filtro de Documentos */}
+              {/* Filtro de Pago */}
               <div className="flex items-center gap-2">
-                <Label className="text-sm text-muted-foreground whitespace-nowrap">Docs:</Label>
-                <Select value={docsFilter} onValueChange={setDocsFilter}>
-                  <SelectTrigger className="w-[140px] h-9">
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="APPROVED">Aprobados</SelectItem>
-                    <SelectItem value="PENDING">Pendientes</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Filtro de Pagos */}
-              <div className="flex items-center gap-2">
-                <Label className="text-sm text-muted-foreground whitespace-nowrap">Pagos:</Label>
+                <Label className="text-xs text-muted-foreground whitespace-nowrap">Pago:</Label>
                 <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                  <SelectTrigger className="w-[140px] h-9">
-                    <SelectValue placeholder="Todos" />
+                  <SelectTrigger className="h-9 w-[140px]">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
@@ -393,7 +356,7 @@ export function AttendeesManagementSection({
             </div>
           </div>
 
-          {/* Tabla */}
+          {/* Tabla - SIN COLUMNA DE DOCUMENTOS */}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -401,7 +364,6 @@ export function AttendeesManagementSection({
                   <TableHead className="w-12 text-center">Asistencia</TableHead>
                   <TableHead>Driver</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Docs</TableHead>
                   <TableHead>Pago</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -409,7 +371,7 @@ export function AttendeesManagementSection({
               <TableBody>
                 {filteredAttendees.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       No se encontraron resultados
                     </TableCell>
                   </TableRow>
@@ -437,10 +399,6 @@ export function AttendeesManagementSection({
                       <TableCell>{getStatusBadge(attendee.status)}</TableCell>
 
                       <TableCell>
-                        {getDocsStatusBadge(attendee.formDriver.documentsStatus)}
-                      </TableCell>
-
-                      <TableCell>
                         {getPaymentBadge(attendee.formDriver)}
                       </TableCell>
 
@@ -464,8 +422,8 @@ export function AttendeesManagementSection({
                             </Button>
                           )}
 
-                          {/* Botón de Check-in (solo ícono verde) */}
-                          {attendee.status === 'CONFIRMED' && (
+                          {/* Botón de Check-in (solo ícono) */}
+                          {(attendee.status === 'INVITED' || attendee.status === 'CONFIRMED') && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -482,75 +440,70 @@ export function AttendeesManagementSection({
                             </Button>
                           )}
 
-                          {/* Botón "Asistió" con texto (cuando ya asistió) */}
-                          {attendee.status === 'ATTENDED' && (
+                          {/* Botón No Show (solo ícono) */}
+                          {(attendee.status === 'INVITED' || attendee.status === 'CONFIRMED') && (
                             <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-green-600 border-green-200 hover:bg-green-50 pointer-events-none"
-                              disabled
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleMarkNoShow(attendee.id)}
+                              disabled={loading === attendee.id}
+                              title="Marcar no asistió"
                             >
-                              <Check className="h-4 w-4 mr-1" />
-                              Asistió
+                              {loading === attendee.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <X className="h-4 w-4" />
+                              )}
                             </Button>
                           )}
 
-                          {/* Botón Ver Driver */}
+                          {/* Botón Ver Detalles */}
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={() => router.push(`/admin/postulaciones/${attendee.formDriver.id}`)}
-                            title="Ver perfil del driver"
+                            onClick={() => {
+                              setSelectedDriverId(attendee.formDriver.id)
+                              setDriverManagementOpen(true)
+                            }}
+                            title="Ver detalles del driver"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
 
-                          {/* Menú de tres puntos - SOLO para modales */}
+                          {/* Menú de más opciones */}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 cursor-pointer"
-                                disabled={loading === attendee.id}
-                              >
-                                {loading === attendee.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <MoreVertical className="h-4 w-4" />
-                                )}
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem
-                                className="cursor-pointer"
                                 onClick={() => {
                                   setSelectedDriverId(attendee.formDriver.id)
                                   setDriverManagementOpen(true)
                                 }}
                               >
-                                <UserCog className="mr-2 h-4 w-4" />
-                                Gestionar Driver
+                                <Eye className="h-4 w-4 mr-2" />
+                                Ver detalles
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => router.push(`/admin/postulaciones/${attendee.formDriver.id}`)}
+                              >
+                                <FileText className="h-4 w-4 mr-2" />
+                                Ver postulación
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleCancelClick(attendee)}
+                                className="text-red-600"
+                              >
+                                <Ban className="h-4 w-4 mr-2" />
+                                Cancelar asistencia
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-
-                          {/* Botón de Cancelar (fuera del menú, cuando aplique) */}
-                          {attendee.status !== 'CANCELLED' && 
-                           attendee.status !== 'ATTENDED' && 
-                           attendee.status !== 'NO_SHOW' && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => handleCancelClick(attendee)}
-                              disabled={loading === attendee.id}
-                              title="Cancelar o reagendar"
-                            >
-                              <Ban className="h-4 w-4" />
-                            </Button>
-                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -562,7 +515,7 @@ export function AttendeesManagementSection({
         </CardContent>
       </Card>
 
-      {/* Dialog de Cancelar/Reagendar */}
+      {/* Dialog de cancelación */}
       <CancelAttendeeDialog
         open={cancelDialogOpen}
         onOpenChange={setCancelDialogOpen}
@@ -570,7 +523,7 @@ export function AttendeesManagementSection({
         onSuccess={handleCancelSuccess}
       />
 
-      {/* Sheet de Gestión del Driver */}
+      {/* Sheet de gestión del driver */}
       <DriverManagementSheet
         open={driverManagementOpen}
         onOpenChange={setDriverManagementOpen}

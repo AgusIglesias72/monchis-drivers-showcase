@@ -452,7 +452,7 @@ export function PostulacionesTableExpandable({
                                         <InfoRow 
                                           label="Monto" 
                                           value={postulacion.equipmentPayments[0].amount 
-                                            ? `${postulacion.equipmentPayments[0].amount.toLocaleString()} Gs`
+                                            ? `${postulacion.equipmentPayments[0].amount?.toLocaleString() || '0'} Gs`
                                             : ""} 
                                         />
                                         <div>

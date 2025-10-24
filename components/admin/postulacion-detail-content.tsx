@@ -3,6 +3,7 @@
 
 import { useState, useTransition, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -82,7 +83,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   // ✅ Sincronizar cuando cambian los datos de onboarding
   useEffect(() => {
     setPostulacion(initialPostulacion)
-  }, [onboardingKey])
+  }, [onboardingKey, initialPostulacion])
   
   const [isEditingPending, startEditingTransition] = useTransition()
   const [isNotePending, startNoteTransition] = useTransition()
@@ -809,9 +810,11 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </DialogHeader>
           {postulacion.equipmentPayments?.[0]?.paymentProofUrl && (
             <div className="relative aspect-video">
-              <img 
+              <Image 
                 src={postulacion.equipmentPayments[0].paymentProofUrl} 
                 alt="Comprobante de pago"
+                width={800}
+                height={600}
                 className="w-full h-full object-contain rounded-lg"
               />
             </div>

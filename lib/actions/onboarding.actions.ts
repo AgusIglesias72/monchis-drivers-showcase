@@ -629,3 +629,27 @@ export async function markAttendeeNoShow(attendeeId: string) {
     return { success: false, error: error.message || 'Error al marcar no show' }
   }
 }
+
+/**
+ * Obtiene los attendees de un evento de onboarding
+ */
+export async function getEventAttendees(eventId: string) {
+  try {
+    const { userId } = await auth()
+    
+    if (!userId) {
+      throw new Error('No autorizado')
+    }
+
+    const event = await onboardingService.getEventById(eventId)
+    
+    if (!event) {
+      throw new Error('Evento no encontrado')
+    }
+
+    return { success: true, attendees: event.attendees || [] }
+  } catch (error: any) {
+    console.error('Error al obtener attendees:', error)
+    return { success: false, error: error.message || 'Error al cargar attendees', attendees: [] }
+  }
+}

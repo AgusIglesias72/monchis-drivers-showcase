@@ -270,18 +270,28 @@ export class DashboardService {
     formDrivers.forEach(driver => {
       if (!driver.birthDate) return
       
-      const edad = differenceInYears(new Date(), driver.birthDate)
-      
-      if (edad >= 18 && edad <= 24) {
-        rangos['18-24']++
-      } else if (edad >= 25 && edad <= 34) {
-        rangos['25-34']++
-      } else if (edad >= 35 && edad <= 44) {
-        rangos['35-44']++
-      } else if (edad >= 45 && edad <= 54) {
-        rangos['45-54']++
-      } else if (edad >= 55) {
-        rangos['55+']++
+      try {
+        const birthDate = new Date(driver.birthDate)
+        // Verificar que la fecha es válida
+        if (isNaN(birthDate.getTime())) return
+        
+        const edad = differenceInYears(new Date(), birthDate)
+        
+        if (edad >= 18 && edad <= 24) {
+          rangos['18-24']++
+        } else if (edad >= 25 && edad <= 34) {
+          rangos['25-34']++
+        } else if (edad >= 35 && edad <= 44) {
+          rangos['35-44']++
+        } else if (edad >= 45 && edad <= 54) {
+          rangos['45-54']++
+        } else if (edad >= 55) {
+          rangos['55+']++
+        }
+      } catch (error) {
+        // Si hay error al procesar la fecha, simplemente saltar este driver
+        console.warn('Error procesando fecha de nacimiento:', error)
+        return
       }
     })
   

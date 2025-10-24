@@ -2,7 +2,7 @@
 
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -62,7 +62,7 @@ export function AddDriversSection({ eventId, onSuccess }: AddDriversSectionProps
   })
 
   // Fetch drivers
-  const fetchDrivers = async (page: number, search: string) => {
+  const fetchDrivers = useCallback(async (page: number, search: string) => {
     setLoading(true)
     
     const result = await getEligibleDrivers({
@@ -81,12 +81,12 @@ export function AddDriversSection({ eventId, onSuccess }: AddDriversSectionProps
     }
     
     setLoading(false)
-  }
+  }, [eventId])
 
   // Fetch inicial
   useEffect(() => {
     fetchDrivers(1, '')
-  }, [])
+  }, [fetchDrivers])
 
   // Debounce search
   useEffect(() => {
@@ -95,7 +95,7 @@ export function AddDriversSection({ eventId, onSuccess }: AddDriversSectionProps
       setSelectedDriverIds([])
     }, 300)
     return () => clearTimeout(timer)
-  }, [searchTerm])
+  }, [searchTerm, fetchDrivers])
 
   const handleToggleDriver = (driverId: string) => {
     setSelectedDriverIds(prev => {

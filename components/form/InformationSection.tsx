@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Check, Info, Calendar, TrendingUp } from 'lucide-react';
+import Image from 'next/image';
 
 const MONCHIS_RED = '#e7243f';
 const UENO_GREEN = '#7af5c0';
@@ -96,9 +97,11 @@ export const InformationSection: React.FC = () => {
               {/* Información de ueno bank */}
               <div className="rounded-xl p-4 border-2" style={{ backgroundColor: `${UENO_GREEN}15`, borderColor: UENO_GREEN }}>
                 <div className="flex items-start gap-3">
-                  <img 
+                  <Image 
                     src="https://www.ueno.com.py/wp-content/uploads/2024/07/Brand.svg" 
                     alt="ueno bank" 
+                    width={120}
+                    height={30}
                     className="h-8 flex-shrink-0 mt-1"
                   />
                   <div className="flex-1">
@@ -180,9 +183,11 @@ export const InformationSection: React.FC = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <p className="font-bold text-gray-800">Días de cobro en</p>
-                        <img 
+                        <Image 
                           src="https://www.ueno.com.py/wp-content/uploads/2024/07/Brand.svg" 
                           alt="ueno bank" 
+                          width={80}
+                          height={20}
                           className="h-5"
                         />
                       </div>

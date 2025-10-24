@@ -237,9 +237,11 @@ export const MultiFileUpload: React.FC<MultiFileUploadProps> = ({
                   </div>
                 ) : (
                   <div className="flex justify-center">
-                    <img
+                    <Image
                       src={previewUrl}
                       alt="Preview"
+                      width={400}
+                      height={300}
                       className="max-w-full h-auto rounded-lg"
                     />
                   </div>
@@ -814,9 +816,11 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
           <div className="space-y-3">
             <Label className="flex items-center gap-2">
               ¿Tenés cuenta en 
-              <img 
+              <Image 
                 src="https://www.ueno.com.py/wp-content/uploads/2024/07/Brand.svg" 
                 alt="ueno bank" 
+                width={80}
+                height={20}
                 className="h-5"
               />
               ? <span style={{ color: MONCHIS_RED }}>*</span>
@@ -861,9 +865,11 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
           {formData.hasUenoAccount === 'no' && (
             <div className="rounded-lg p-4 border-2" style={{ backgroundColor: '#7af5c020', borderColor: '#7af5c0' }}>
               <div className="flex items-start gap-3">
-                <img 
+                <Image 
                   src="https://www.ueno.com.py/wp-content/uploads/2024/07/Brand.svg" 
                   alt="ueno bank" 
+                  width={120}
+                  height={30}
                   className="h-8 flex-shrink-0 mt-1"
                 />
                 <div className="flex-1">
@@ -967,18 +973,22 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
           <div className="space-y-3">
             <Label className="flex items-center gap-2">
               ¿Te interesa usar 
-              <img 
+              <Image 
                 src="https://contoapp.com/img/main-logov2.png" 
                 alt="Conto" 
+                width={60}
+                height={24}
                 className="h-6"
               />
               para gestionar tu contabilidad? <span style={{ color: MONCHIS_RED }}>*</span>
             </Label>
             <div className="rounded-lg p-4 border-2" style={{ backgroundColor: '#f5ef6920', borderColor: '#f5ef69' }}>
               <div className="flex items-start gap-3">
-                <img 
+                <Image 
                   src="https://contoapp.com/img/main-logov2.png" 
                   alt="Conto" 
+                  width={80}
+                  height={32}
                   className="h-8 flex-shrink-0 mt-1"
                 />
                 <div className="flex-1">
