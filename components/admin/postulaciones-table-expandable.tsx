@@ -14,10 +14,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   ChevronDown,
   ChevronRight,
   Eye,
-  Mail,
   Phone,
   MapPin,
   User,
@@ -31,13 +36,13 @@ import {
   Calendar,
   CheckCircle,
   MoreVertical,
-  CalendarCheck,
-  CalendarX,
   XCircle,
+  Receipt,
 } from "lucide-react"
 import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
 import { useRouter } from "next/navigation"
 import { formatBirthDateWithAge } from "@/lib/utils"
+import { calculatePostulacionBadges } from "@/lib/utils/postulacion-badges.utils"
 
 type SortField = 'fullName' | 'city' | 'status' | 'startedAt'
 type SortOrder = 'asc' | 'desc' | null
@@ -46,7 +51,7 @@ interface PostulacionesTableProps {
   postulaciones: any[]
 }
 
-export function PostulacionesTableExpandable({ 
+export function PostulacionesTableExpandable({
   postulaciones = []
 }: PostulacionesTableProps) {
   const router = useRouter()
@@ -113,7 +118,6 @@ export function PostulacionesTableExpandable({
 
   const handleContact = (postulacion: any, e: React.MouseEvent) => {
     e.stopPropagation()
-    // Abrir WhatsApp o copiar número
     const phone = postulacion.phoneNumber.replace(/\D/g, '')
     window.open(`https://wa.me/595${phone}`, '_blank')
   }
@@ -129,9 +133,7 @@ export function PostulacionesTableExpandable({
   const handleReject = (postulacion: any, e: React.MouseEvent) => {
     e.stopPropagation()
     if (confirm(`¿Estás seguro de rechazar la postulación de ${postulacion.fullName}?`)) {
-      // TODO: Implementar server action de rechazo
       console.log('Rechazar postulación:', postulacion.id)
-      // Placeholder para mostrar que la función existe
       alert('Función de rechazo en desarrollo')
     }
   }
@@ -154,7 +156,7 @@ export function PostulacionesTableExpandable({
                   <tr>
                     <th className="px-4 py-3 text-left w-10"></th>
                     
-                    <th 
+                    <th
                       className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
                       onClick={() => handleSort('fullName')}
                     >
@@ -164,11 +166,7 @@ export function PostulacionesTableExpandable({
                       </div>
                     </th>
                     
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                      Contacto
-                    </th>
-                    
-                    <th 
+                    <th
                       className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
                       onClick={() => handleSort('city')}
                     >
@@ -178,23 +176,26 @@ export function PostulacionesTableExpandable({
                       </div>
                     </th>
                     
-                    {/* Columna unificada: Progreso/Estado */}
-                    <th 
+                    <th
                       className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center gap-2">
-                        Estado
+                        Postulación
                         <SortIcon field="status" currentField={sortField} order={sortOrder} />
                       </div>
                     </th>
                     
-                    {/* Nueva columna: Onboarding */}
+                    {/* ✅ COLUMNA: Estados (máximo 3 iconos) */}
+                    <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">
+                      Estados
+                    </th>
+                    
                     <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">
                       Onboarding
                     </th>
                     
-                    <th 
+                    <th
                       className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
                       onClick={() => handleSort('startedAt')}
                     >
@@ -217,11 +218,13 @@ export function PostulacionesTableExpandable({
                     const onboardingStatus = postulacion.onboardingStatus
                     const canSchedule = isCompleted && (!onboardingStatus || ['NOT_READY', 'READY'].includes(onboardingStatus))
                     
+                    // 🎯 Calcular badges
+                    const { badges } = calculatePostulacionBadges(postulacion)
+                    
                     return (
                       <>
-                        {/* Fila principal - CLICKEABLE */}
-                        <tr 
-                          key={postulacion.id} 
+                        <tr
+                          key={postulacion.id}
                           className="hover:bg-muted/50 transition-colors cursor-pointer"
                           onClick={() => toggleRow(postulacion.id)}
                         >
@@ -236,24 +239,14 @@ export function PostulacionesTableExpandable({
                               <div className="font-medium text-foreground text-sm">
                                 {postulacion.fullName}
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                CI: {postulacion.cedula}
+                              <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                <span>CI: {postulacion.cedula}</span>
+                                <span>•</span>
+                                <span className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  {postulacion.phoneNumber}
+                                </span>
                               </div>
-                            </div>
-                          </td>
-                          
-                          <td className="px-4 py-3">
-                            <div className="text-sm space-y-1">
-                              <div className="flex items-center gap-1 text-foreground">
-                                <Phone className="h-3 w-3" />
-                                <span className="text-xs">{postulacion.phoneNumber}</span>
-                              </div>
-                              {postulacion.email && (
-                                <div className="flex items-center gap-1 text-muted-foreground">
-                                  <Mail className="h-3 w-3" />
-                                  <span className="text-xs truncate max-w-[180px]">{postulacion.email}</span>
-                                </div>
-                              )}
                             </div>
                           </td>
                           
@@ -264,126 +257,125 @@ export function PostulacionesTableExpandable({
                             </div>
                           </td>
                           
-                          {/* Columna Estado/Progreso unificada */}
                           <td className="px-4 py-3">
                             {isCompleted ? (
-                              <StatusBadge status={postulacion.status} />
+                              <StatusBadge status="COMPLETED" />
                             ) : (
                               <div className="flex items-center gap-2">
-                                <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden max-w-[100px]">
-                                  <div
-                                    className="bg-primary h-full transition-all"
-                                    style={{ width: `${(postulacion.currentStep / 6) * 100}%` }}
-                                  />
-                                </div>
-                                <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                                  {postulacion.currentStep}/6
+                                <StatusBadge status="IN_PROGRESS" />
+                                <span className="text-xs text-muted-foreground">
+                                  {postulacion.currentStep || 1}/6
                                 </span>
                               </div>
                             )}
                           </td>
                           
-                          {/* Nueva columna Onboarding con acción */}
-                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-center">
-                              {hasOnboarding ? (
-                                <div className="flex flex-col items-center gap-1">
-                                  <OnboardingStatusBadge status={hasOnboarding.status} />
-                                  <span className="text-xs text-muted-foreground">
-                                    {new Date(hasOnboarding.event.scheduledDate).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit' })}
-                                  </span>
-                                </div>
-                              ) : canSchedule ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 gap-1.5 cursor-pointer hover:bg-green-50 hover:text-green-700 hover:border-green-300"
-                                  onClick={(e) => handleScheduleOnboarding(postulacion, e)}
-                                >
-                                  <CalendarCheck className="h-3.5 w-3.5" />
-                                  <span className="text-xs">Agendar</span>
-                                </Button>
-                              ) : (
-                                <div className="flex items-center gap-1.5 text-muted-foreground">
-                                  <CalendarX className="h-4 w-4" />
-                                  <span className="text-xs">N/A</span>
-                                </div>
-                              )}
+                          {/* ✅ COLUMNA ESTADOS CON 3 ICONOS ÚNICOS */}
+                          <td className="px-4 py-3">
+                            <TooltipProvider>
+                              <div className="flex items-center justify-center gap-2">
+                                {badges.length > 0 ? (
+                                  badges.map((badge) => <StatusIcon key={badge} type={badge} />)
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </div>
+                            </TooltipProvider>
+                          </td>
+                          
+                          <td className="px-4 py-3 text-center">
+                            {hasOnboarding ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <OnboardingStatusBadge status={hasOnboarding.status} />
+                                {hasOnboarding.event?.scheduledDate && (
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Calendar className="h-3 w-3" />
+                                    <span>
+                                      {new Date(hasOnboarding.event.scheduledDate).toLocaleDateString('es-PY', {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                      })}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : onboardingStatus ? (
+                              <OnboardingStatusBadge status={onboardingStatus} />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Sin agendar</span>
+                            )}
+                          </td>
+                          
+                          <td className="px-4 py-3">
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(postulacion.startedAt).toLocaleDateString('es-PY')}
                             </div>
                           </td>
                           
-                          <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
-                            {new Date(postulacion.startedAt).toLocaleDateString('es-PY')}
-                          </td>
-                          
-                          <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-  <div className="flex items-center justify-end gap-2">
-    {/* ✅ Botón Ver Detalles - Solo ícono */}
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={(e) => handleViewDetails(postulacion.id, e)}
-      className="h-8 w-8 p-0 cursor-pointer hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950"
-      title="Ver detalles"
-    >
-      <Eye className="h-4 w-4" />
-    </Button>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => handleViewDetails(postulacion.id, e)}
+                                className="h-8 w-8 p-0 cursor-pointer hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950"
+                                title="Ver detalles"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
 
-    {/* ✅ Dropdown con acciones */}
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0 cursor-pointer"
-        >
-          <MoreVertical className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem
-          onClick={(e) => handleContact(postulacion, e)}
-          className="cursor-pointer"
-        >
-          <Phone className="h-4 w-4 mr-2" />
-          Contactar
-        </DropdownMenuItem>
-        
-        {canSchedule && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={(e) => handleScheduleOnboarding(postulacion, e)}
-              className="cursor-pointer text-green-600"
-            >
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Agendar Onboarding
-            </DropdownMenuItem>
-          </>
-        )}
-        
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={(e) => handleReject(postulacion, e)}
-          className="cursor-pointer text-red-600"
-        >
-          <XCircle className="h-4 w-4 mr-2" />
-          Rechazar
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  </div>
-</td>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 cursor-pointer"
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={(e) => handleContact(postulacion, e)}
+                                    className="cursor-pointer"
+                                  >
+                                    <Phone className="h-4 w-4 mr-2" />
+                                    Contactar
+                                  </DropdownMenuItem>
+                                  
+                                  {canSchedule && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onClick={(e) => handleScheduleOnboarding(postulacion, e)}
+                                        className="cursor-pointer text-green-600"
+                                      >
+                                        <CheckCircle className="h-4 w-4 mr-2" />
+                                        Agendar Onboarding
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                  
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={(e) => handleReject(postulacion, e)}
+                                    className="cursor-pointer text-red-600"
+                                  >
+                                    <XCircle className="h-4 w-4 mr-2" />
+                                    Rechazar
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </td>
                         </tr>
 
-                        {/* Fila expandida */}
+                        {/* ✅ Expandable (colSpan=8) */}
                         {isExpanded && (
                           <tr>
                             <td colSpan={8} className="px-6 py-4 bg-muted/20">
                               <div className="space-y-4">
-                                {/* Grid de 4 columnas */}
                                 <div className="grid grid-cols-4 gap-6">
-                                  {/* Info Personal */}
                                   <div className="space-y-2">
                                     <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                                       <User className="h-3.5 w-3.5" />
@@ -393,12 +385,15 @@ export function PostulacionesTableExpandable({
                                       <InfoRow label="Nombre" value={postulacion.fullName} />
                                       <InfoRow label="Cédula" value={postulacion.cedula} />
                                       {postulacion.birthDate && (
-                                        <InfoRow 
-                                          label="F. Nacimiento" 
-                                          value={formatBirthDateWithAge(postulacion.birthDate)} 
+                                        <InfoRow
+                                          label="F. Nacimiento"
+                                          value={formatBirthDateWithAge(postulacion.birthDate)}
                                         />
                                       )}
                                       <InfoRow label="Teléfono" value={postulacion.phoneNumber} />
+                                      {postulacion.email && (
+                                        <InfoRow label="Email" value={postulacion.email} />
+                                      )}
                                       {postulacion.emergencyName && (
                                         <div className="pt-1.5 border-t">
                                           <InfoRow label="Emergencia" value={postulacion.emergencyName} />
@@ -408,7 +403,6 @@ export function PostulacionesTableExpandable({
                                     </div>
                                   </div>
 
-                                  {/* Vehículo */}
                                   <div className="space-y-2">
                                     <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                                       <Bike className="h-3.5 w-3.5" />
@@ -416,28 +410,18 @@ export function PostulacionesTableExpandable({
                                     </h5>
                                     {postulacion.hasVehicle ? (
                                       <div className="space-y-1.5">
-                                        <InfoRow label="Marca" value={postulacion.vehicleBrand} />
-                                        <InfoRow label="Modelo" value={postulacion.vehicleModel} />
+                                        <InfoRow
+                                          label="Vehículo"
+                                          value={`${postulacion.vehicleBrand || ''} ${postulacion.vehicleModel || ''}`}
+                                        />
+                                        <InfoRow label="Año" value={postulacion.vehicleYear || '-'} />
                                         <InfoRow label="Placa" value={postulacion.vehiclePlate || '-'} />
                                       </div>
                                     ) : (
-                                      <p className="text-xs text-muted-foreground italic">Sin vehículo</p>
-                                    )}
-                                    {postulacion.workZone && (
-                                      <div className="pt-1.5 border-t">
-                                        <span className="text-xs text-muted-foreground block mb-1">Zonas</span>
-                                        <div className="flex flex-wrap gap-1">
-                                          {postulacion.workZone.split(',').slice(0, 2).map((zone: string, i: number) => (
-                                            <Badge key={i} variant="secondary" className="text-xs py-0 px-1.5">
-                                              {zone}
-                                            </Badge>
-                                          ))}
-                                        </div>
-                                      </div>
+                                      <p className="text-xs text-muted-foreground">Sin vehículo</p>
                                     )}
                                   </div>
 
-                                  {/* Pago */}
                                   <div className="space-y-2">
                                     <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                                       <CreditCard className="h-3.5 w-3.5" />
@@ -445,27 +429,26 @@ export function PostulacionesTableExpandable({
                                     </h5>
                                     {postulacion.equipmentPayments?.[0] ? (
                                       <div className="space-y-1.5">
-                                        <InfoRow 
-                                          label="Método" 
-                                          value={postulacion.equipmentPayments[0].paymentMethod || "N/A"} 
-                                        />
-                                        <InfoRow 
-                                          label="Monto" 
-                                          value={postulacion.equipmentPayments[0].amount 
-                                            ? `${postulacion.equipmentPayments[0].amount?.toLocaleString() || '0'} Gs`
-                                            : ""} 
-                                        />
                                         <div>
                                           <span className="text-xs text-muted-foreground block">Estado</span>
                                           <PaymentStatusBadge status={postulacion.equipmentPayments[0].status} />
                                         </div>
+                                        <InfoRow
+                                          label="Método"
+                                          value={postulacion.equipmentPayments[0].paymentMethod || '-'}
+                                        />
+                                        {postulacion.equipmentPayments[0].amount && (
+                                          <InfoRow
+                                            label="Monto"
+                                            value={`${postulacion.equipmentPayments[0].amount.toLocaleString()} Gs`}
+                                          />
+                                        )}
                                       </div>
                                     ) : (
                                       <p className="text-xs text-muted-foreground italic">Sin info de pago</p>
                                     )}
                                   </div>
 
-                                  {/* Onboarding */}
                                   <div className="space-y-2">
                                     <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                                       <Calendar className="h-3.5 w-3.5" />
@@ -477,14 +460,14 @@ export function PostulacionesTableExpandable({
                                           <span className="text-xs text-muted-foreground block">Estado</span>
                                           <OnboardingStatusBadge status={postulacion.onboardingAttendances[0].status} />
                                         </div>
-                                        <InfoRow 
-                                          label="Fecha" 
-                                          value={new Date(postulacion.onboardingAttendances[0].event.scheduledDate).toLocaleDateString("es-PY")} 
+                                        <InfoRow
+                                          label="Fecha"
+                                          value={new Date(postulacion.onboardingAttendances[0].event.scheduledDate).toLocaleDateString("es-PY")}
                                         />
                                         {postulacion.onboardingAttendances[0].event.location && (
-                                          <InfoRow 
-                                            label="Lugar" 
-                                            value={postulacion.onboardingAttendances[0].event.location} 
+                                          <InfoRow
+                                            label="Lugar"
+                                            value={postulacion.onboardingAttendances[0].event.location}
                                           />
                                         )}
                                       </div>
@@ -500,7 +483,6 @@ export function PostulacionesTableExpandable({
                                   </div>
                                 </div>
 
-                                {/* Ubicación - Fila inferior */}
                                 <div className="pt-3 border-t">
                                   <div className="flex items-center gap-6 text-xs">
                                     <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -593,7 +575,6 @@ export function PostulacionesTableExpandable({
         </CardContent>
       </Card>
 
-      {/* Modal de onboarding */}
       <ScheduleOnboardingModal
         open={!!selectedDriverForOnboarding}
         onOpenChange={(open) => !open && setSelectedDriverForOnboarding(null)}
@@ -603,6 +584,149 @@ export function PostulacionesTableExpandable({
       />
     </>
   )
+}
+
+// ✅ Componente de icono con 3 categorías únicas
+function StatusIcon({ type }: { type: string }) {
+  // 📄 DOCUMENTOS
+  if (type === 'DOCUMENTOS_PENDIENTES') {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <div className="h-7 w-7 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center">
+            <FileText className="h-4 w-4 text-red-600 dark:text-red-400" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">Documentos Pendientes</p>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+  
+  if (type === 'DOCUMENTOS_EN_REVISION') {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <div className="h-7 w-7 rounded-full bg-yellow-100 dark:bg-yellow-950 flex items-center justify-center">
+            <FileText className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">Documentos en Revisión</p>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+  
+  if (type === 'DOCUMENTOS_COMPLETOS') {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <div className="h-7 w-7 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
+            <FileText className="h-4 w-4 text-green-600 dark:text-green-400" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">Documentos Completos</p>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+  
+  // 💳 PAGO
+  if (type === 'PAGO_PENDIENTE') {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <div className="h-7 w-7 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center">
+            <CreditCard className="h-4 w-4 text-red-600 dark:text-red-400" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">Pago Pendiente</p>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+  
+  if (type === 'PAGO_EN_VERIFICACION') {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <div className="h-7 w-7 rounded-full bg-purple-100 dark:bg-purple-950 flex items-center justify-center">
+            <CreditCard className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">Pago en Verificación</p>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+  
+  if (type === 'PAGO_COMPLETO') {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <div className="h-7 w-7 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
+            <CreditCard className="h-4 w-4 text-green-600 dark:text-green-400" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">Pago Completo</p>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+  
+  // 📋 FACTURACIÓN
+  if (type === 'FACTURACION_PENDIENTE') {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <div className="h-7 w-7 rounded-full bg-orange-100 dark:bg-orange-950 flex items-center justify-center">
+            <Receipt className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">Facturación Pendiente</p>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+  
+  if (type === 'FACTURACION_COMPLETA') {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <div className="h-7 w-7 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
+            <Receipt className="h-4 w-4 text-green-600 dark:text-green-400" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">Facturación Completa</p>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+  
+  if (type === 'FACTURACION_NA') {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <div className="h-7 w-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+            <Receipt className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">No Factura</p>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+
+  return null
 }
 
 // Helper components

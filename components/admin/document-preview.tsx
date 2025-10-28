@@ -33,6 +33,7 @@ import {
   XCircle,
   Clock,
   Loader2,
+  AlertCircle,
 } from "lucide-react"
 import { DocumentActionsModal } from "@/components/admin/document-actions-modal"
 
@@ -46,26 +47,14 @@ interface DocumentPreviewProps {
   isLoading?: boolean
 }
 
+// ✅ SIMPLIFICADO - Solo documentos esenciales
 const documentTypes = [
   { value: 'CEDULA_FRONT', label: 'Cédula (Frente)' },
-  { value: 'CEDULA_BACK', label: 'Cédula (Reverso)' },
-  { value: 'LICENCIA_FRONT', label: 'Licencia de Conducir (Frente)' },
-  { value: 'LICENCIA_BACK', label: 'Licencia de Conducir (Reverso)' },
-  { value: 'LICENSE_FRONT', label: 'Licencia (Frente)' },
-  { value: 'LICENSE_BACK', label: 'Licencia (Reverso)' },
   { value: 'CRIMINAL_RECORD', label: 'Antecedentes Penales' },
-  { value: 'ANTECEDENTES', label: 'Certificado de Antecedentes' },
-  { value: 'TITULO_VEHICULO', label: 'Título del Vehículo' },
-  { value: 'CEDULA_VERDE', label: 'Cédula Verde' },
-  { value: 'VEHICLE_INSURANCE', label: 'Seguro de Vehículo' },
-  { value: 'VEHICLE_REGISTRATION', label: 'Registro de Vehículo' },
-  { value: 'VEHICLE_PHOTO_FRONT', label: 'Foto Vehículo (Frente)' },
-  { value: 'VEHICLE_PHOTO_BACK', label: 'Foto Vehículo (Atrás)' },
-  { value: 'VEHICLE_PHOTO_SIDE', label: 'Foto Vehículo (Lateral)' },
-  { value: 'SELFIE', label: 'Selfie con Cédula' },
-  { value: 'COMPROBANTE_DOMICILIO', label: 'Comprobante de Domicilio' },
-  { value: 'TAX_COMPLIANCE', label: 'Cumplimiento Tributario' },
-  { value: 'OTHER', label: 'Otros' },
+  { value: 'LICENCIA_FRONT', label: 'Licencia de Conducir' },
+  { value: 'VEHICLE_PHOTO_FRONT', label: 'Foto del Vehículo' },
+  { value: 'TAX_COMPLIANCE', label: 'Certificado Tributario', special: true }, // ← Especial
+  { value: "OTHER", label: 'Otros' },
 ]
 
 export function DocumentPreview({
@@ -122,12 +111,9 @@ export function DocumentPreview({
     return badges[status as keyof typeof badges] || badges.PENDING
   }
 
-  // Agrupar documentos por tipo base (sin FRONT/BACK)
+  // Agrupar documentos por tipo base
   const groupedDocuments: Record<string, { title: string; documents: any[] }> = documents.reduce((acc, doc) => {
     const baseType = doc.documentType
-      .replace('_FRONT', '')
-      .replace('_BACK', '')
-      .replace('_SIDE', '')
     
     if (!acc[baseType]) {
       acc[baseType] = {
@@ -141,22 +127,17 @@ export function DocumentPreview({
 
   const getSectionTitle = (type: string) => {
     const titles: Record<string, string> = {
-      'CEDULA': 'Cédula',
-      'LICENCIA': 'Licencia de Conducir',
-      'LICENSE': 'Licencia',
+      'CEDULA_FRONT': 'Cédula',
       'CRIMINAL_RECORD': 'Antecedentes Penales',
-      'ANTECEDENTES': 'Antecedentes Penales',
-      'TITULO_VEHICULO': 'Título del Vehículo',
-      'CEDULA_VERDE': 'Cédula Verde',
-      'VEHICLE_INSURANCE': 'Seguro de Vehículo',
-      'VEHICLE_REGISTRATION': 'Registro de Vehículo',
-      'VEHICLE_PHOTO': 'Fotos del Vehículo',
-      'SELFIE': 'Selfie con Cédula',
-      'COMPROBANTE_DOMICILIO': 'Comprobante de Domicilio',
-      'TAX_COMPLIANCE': 'Cumplimiento Tributario',
+      'LICENCIA_FRONT': 'Licencia de Conducir',
+      'VEHICLE_PHOTO_FRONT': 'Foto del Vehículo',
+      'TAX_COMPLIANCE': 'Certificado Tributario',
     }
     return titles[type] || type
   }
+
+  // ✅ Identificar si es TAX_COMPLIANCE
+  const isTaxCompliance = (type: string) => type === 'TAX_COMPLIANCE'
 
   return (
     <div className="space-y-6">
@@ -169,25 +150,30 @@ export function DocumentPreview({
         <div className="space-y-6">
           {Object.entries(groupedDocuments).map(([type, group], groupIndex) => (
             <div key={type}>
-              {/* Línea divisoria entre secciones (excepto la primera) */}
               {groupIndex > 0 && <div className="border-t border-border mb-6" />}
               
-              {/* Título de sección */}
-              <h4 className="text-sm font-semibold text-foreground mb-3">
-                {getSectionTitle(type)}
-              </h4>
+              {/* Título de sección con badge especial para TAX_COMPLIANCE */}
+              <div className="flex items-center gap-2 mb-3">
+                <h4 className="text-sm font-semibold text-foreground">
+                  {getSectionTitle(type)}
+                </h4>
+                {isTaxCompliance(type) && (
+                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                    Sincronizado con Facturación
+                  </Badge>
+                )}
+              </div>
 
               {/* Documentos de esta sección */}
               <div className="space-y-2">
                 {group.documents.map((doc: any) => (
                   <div key={doc.id} className="border border-border rounded-lg p-3 hover:bg-muted/30 transition-colors">
                     <div className="flex items-start gap-3">
-                      {/* Icono */}
                       <div className="flex-shrink-0 mt-0.5">
                         <FileText className="h-4 w-4 text-muted-foreground" />
                       </div>
 
-                      {/* Info del documento */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-sm font-medium">
@@ -199,6 +185,14 @@ export function DocumentPreview({
                         <p className="text-xs text-muted-foreground mb-1">
                           {doc.fileName}
                         </p>
+
+                        {/* Info especial para TAX_COMPLIANCE */}
+                        {isTaxCompliance(doc.documentType) && (
+                          <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
+                            <AlertCircle className="h-3 w-3" />
+                            Este documento actualiza automáticamente el registro de facturación
+                          </p>
+                        )}
 
                         {doc.status === 'APPROVED' && doc.reviewedBy && (
                           <p className="text-xs text-green-600 flex items-center gap-1">
@@ -220,7 +214,6 @@ export function DocumentPreview({
                         )}
                       </div>
 
-                      {/* Acciones */}
                       <div className="flex items-center gap-1">
                         <Button
                           size="icon"
@@ -305,6 +298,11 @@ export function DocumentPreview({
                 {documentTypes.map((type) => (
                   <SelectItem key={type.value} value={type.value}>
                     {type.label}
+                    {type.special && (
+                      <span className="text-xs text-blue-600 ml-2">
+                        (Sincroniza con Facturación)
+                      </span>
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -330,13 +328,24 @@ export function DocumentPreview({
               disabled={!uploadType || isLoading}
             />
           </div>
+          
+          {/* ✅ Warning especial para TAX_COMPLIANCE */}
+          {uploadType === 'TAX_COMPLIANCE' && (
+            <div className="border border-blue-200 bg-blue-50 rounded-lg p-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-blue-700">
+                <p className="font-medium">Nota importante:</p>
+                <p>Este documento se sincronizará automáticamente con el registro de facturación del conductor.</p>
+              </div>
+            </div>
+          )}
+          
           <p className="text-xs text-muted-foreground">
             Formatos aceptados: JPG, PNG, PDF • Tamaño máximo: 5MB
           </p>
         </div>
       )}
 
-      {/* Modal de acciones */}
       <DocumentActionsModal
         open={showActionsModal}
         onOpenChange={setShowActionsModal}
@@ -354,13 +363,17 @@ export function DocumentPreview({
         isLoading={isLoading}
       />
 
-      {/* Dialog de confirmación de eliminación */}
       <AlertDialog open={!!deleteDocumentId} onOpenChange={(open) => !open && setDeleteDocumentId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar documento?</AlertDialogTitle>
             <AlertDialogDescription>
               Esta acción no se puede deshacer. El documento será eliminado permanentemente del sistema.
+              {deleteDocumentId && documents.find(d => d.id === deleteDocumentId)?.documentType === 'TAX_COMPLIANCE' && (
+                <span className="block mt-2 text-blue-600 font-medium">
+                  Nota: También se eliminará la referencia en el registro de facturación.
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
