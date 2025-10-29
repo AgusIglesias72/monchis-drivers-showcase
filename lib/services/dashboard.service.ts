@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { subDays, startOfDay, endOfDay, format, differenceInYears } from 'date-fns'
+import { es } from 'date-fns/locale'
 
 export class DashboardService {
   
@@ -87,6 +88,8 @@ export class DashboardService {
    * Obtiene estadísticas de postulaciones
    */
   async getPostulacionesStats() {
+    const sietedasAtras = subDays(new Date(), 7)
+    
     const [
       totalPostulaciones,
       completadas,
@@ -101,8 +104,8 @@ export class DashboardService {
       prisma.formDriver.count({ where: { status: 'ABANDONED' } }),
       prisma.formDriver.count({
         where: {
-          startedAt: {
-            gte: subDays(new Date(), 7)
+          createdAt: {
+            gte: sietedasAtras
           }
         }
       }),
@@ -110,7 +113,7 @@ export class DashboardService {
         where: {
           status: 'COMPLETED',
           completedAt: {
-            gte: subDays(new Date(), 7)
+            gte: sietedasAtras
           }
         }
       }),
@@ -166,15 +169,15 @@ export class DashboardService {
   }
   
   /**
-   * Obtiene visitas por día (últimos 7 días)
+   * Obtiene visitas por día (últimos 30 días)
    */
   async getVisitasPorDia() {
     const dias = []
-    for (let i = 6; i >= 0; i--) {
+    for (let i = 29; i >= 0; i--) {
       const fecha = subDays(new Date(), i)
       const count = await prisma.formDriver.count({
         where: {
-          startedAt: {
+          createdAt: {
             gte: startOfDay(fecha),
             lte: endOfDay(fecha)
           }
@@ -182,7 +185,7 @@ export class DashboardService {
       })
       
       dias.push({
-        fecha: format(fecha, 'dd/MM'),
+        fecha: format(fecha, 'd MMM', { locale: es }),
         visitas: count
       })
     }
@@ -191,11 +194,11 @@ export class DashboardService {
   }
   
   /**
-   * Obtiene completados por día (últimos 7 días)
+   * Obtiene completados por día (últimos 30 días)
    */
   async getCompletadosPorDia() {
     const dias = []
-    for (let i = 6; i >= 0; i--) {
+    for (let i = 29; i >= 0; i--) {
       const fecha = subDays(new Date(), i)
       const count = await prisma.formDriver.count({
         where: {
@@ -208,7 +211,7 @@ export class DashboardService {
       })
       
       dias.push({
-        fecha: format(fecha, 'dd/MM'),
+        fecha: format(fecha, 'd MMM', { locale: es }),
         completados: count
       })
     }
@@ -296,7 +299,7 @@ export class DashboardService {
     })
   
     const total = formDrivers.length
-    const colores = ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#fecaca']
+    const colores = ['#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe', '#ede9fe']
   
     return Object.entries(rangos).map(([rango, cantidad], index) => ({
       rango,
@@ -310,6 +313,8 @@ export class DashboardService {
    * Obtiene estadísticas de onboarding
    */
   async getOnboardingStats() {
+    const treintaDiasAtras = subDays(new Date(), 30)
+    
     const [
       upcomingEvents,
       pendingDrivers,
@@ -334,7 +339,7 @@ export class DashboardService {
         where: {
           status: 'COMPLETED',
           onboardingStatus: {
-            in: ['NOT_READY', 'READY'] // Removed `null` to fix type error
+            in: ['NOT_READY', 'READY']
           }
         }
       }),
@@ -353,7 +358,7 @@ export class DashboardService {
         where: {
           status: 'ATTENDED',
           checkedInAt: {
-            gte: startOfDay(subDays(new Date(), 30))
+            gte: startOfDay(treintaDiasAtras)
           }
         }
       }),
@@ -363,7 +368,7 @@ export class DashboardService {
         where: {
           status: 'NO_SHOW',
           markedNoShowAt: {
-            gte: startOfDay(subDays(new Date(), 30))
+            gte: startOfDay(treintaDiasAtras)
           }
         }
       }),

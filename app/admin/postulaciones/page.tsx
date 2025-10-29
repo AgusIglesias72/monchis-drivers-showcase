@@ -123,18 +123,26 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   }
 
   // ==================== STATS ====================
-  const [total, completadas, enProgreso, abandonadas] = await Promise.all([
+  const treintaDiasAtras = new Date()
+  treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30)
+
+  const [total, completadas, enProgreso, abandonadas, nuevasUltimos30Dias] = await Promise.all([
     prisma.formDriver.count(),
     prisma.formDriver.count({ where: { status: 'COMPLETED' } }),
     prisma.formDriver.count({ where: { status: 'IN_PROGRESS' } }),
     prisma.formDriver.count({ where: { status: 'ABANDONED' } }),
+    prisma.formDriver.count({ where: { createdAt: { gte: treintaDiasAtras } } }),
   ])
 
+  const tasaCompletado = total > 0 ? Math.round((completadas / total) * 100) : 0
+
   const stats = {
-    total,
+    totalPostulaciones: total,
     completadas,
     enProgreso,
     abandonadas,
+    nuevasUltimos30Dias,
+    tasaCompletado,
   }
 
   // ==================== DATA ====================
