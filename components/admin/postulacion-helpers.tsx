@@ -12,6 +12,10 @@ import {
   Edit, 
   FileText,
   Calendar as CalendarIcon,
+  Eye,
+  Download,
+  Loader2,
+  Upload,
 } from "lucide-react"
 
 // ==================== HELPER FUNCTIONS ====================
@@ -87,17 +91,53 @@ export function StatusBadges({
 
 // ==================== SECCIÓN DE PAGO MEJORADA ====================
 
+
 export function PaymentSection({ 
   payment, 
   postulacionId,
   onManage,
-  onViewProof 
+  onViewProof,
+  onUploadProof 
 }: { 
   payment?: any
   postulacionId: string
   onManage: () => void
-  onViewProof: () => void
+  onViewProof?: () => void
+  onUploadProof?: (file: File) => Promise<void>
 }) {
+  const [uploading, setUploading] = React.useState(false)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !onUploadProof) return
+
+    // Validar tipo de archivo
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf']
+    if (!allowedTypes.includes(file.type)) {
+      alert('Solo se permiten imágenes (JPG, PNG, WebP) o PDF')
+      return
+    }
+
+    // Validar tamaño (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('El archivo no debe superar 5MB')
+      return
+    }
+
+    setUploading(true)
+    try {
+      await onUploadProof(file)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    } catch (error) {
+      console.error('Error al subir comprobante:', error)
+    } finally {
+      setUploading(false)
+    }
+  }
+
   if (!payment) {
     return (
       <div className="space-y-4">
@@ -145,10 +185,20 @@ export function PaymentSection({
     const methods: Record<string, string> = {
       'POS': 'POS',
       'BANK_TRANSFER': 'Transferencia',
-      'CASH': 'Efectivo'
+      'TRANSFERENCIA': 'Transferencia',
+      'CASH': 'Efectivo',
+      'OTROS': 'Otros'
     }
     return methods[method] || method
   }
+
+  // ✅ Extraer información del archivo si existe
+  const proofFileInfo = payment.paymentProofUrl ? {
+    url: payment.paymentProofUrl,
+    fileName: payment.paymentProofUrl.split('/').pop()?.split('?')[0] || 'comprobante.pdf',
+    // Estimar tipo de archivo por extensión
+    type: payment.paymentProofUrl.toLowerCase().endsWith('.pdf') ? 'PDF' : 'Imagen'
+  } : null
 
   return (
     <div className="space-y-4">
@@ -188,10 +238,10 @@ export function PaymentSection({
         </div>
 
         {/* Fecha de Pago */}
-        {payment.paidAt && (
+        {payment.paymentDate && (
           <InfoField 
             label="Fecha de Pago" 
-            value={new Date(payment.paidAt).toLocaleDateString('es-PY', {
+            value={new Date(payment.paymentDate).toLocaleDateString('es-PY', {
               day: '2-digit',
               month: 'long',
               year: 'numeric'
@@ -199,7 +249,7 @@ export function PaymentSection({
           />
         )}
 
-        {/* Verificado por - CON NOMBRE COMPLETO DEL USUARIO */}
+        {/* Verificado por */}
         {payment.verifiedAt && payment.verifiedBy && (
           <InfoField 
             label="Verificado" 
@@ -210,6 +260,112 @@ export function PaymentSection({
           />
         )}
       </div>
+
+      {/* ✅ COMPROBANTE DE PAGO - CON INFO DEL ARCHIVO */}
+      {proofFileInfo ? (
+        <div className="pt-3 border-t space-y-2">
+          <label className="text-xs font-medium text-muted-foreground block">
+            Comprobante de Pago
+          </label>
+          
+          {/* Card del archivo */}
+          <div className="border border-border rounded-lg p-3 bg-muted/30">
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0">
+                <FileText className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">
+                  Comprobante de Pago
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {proofFileInfo.type}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {onViewProof && (
+                  <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0"
+                  onClick={() => window.open(proofFileInfo.url, '_blank')}
+                  title="Ver"
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+                )}
+              
+              </div>
+            </div>
+          </div>
+
+          {/* Opción para reemplazar */}
+          {onUploadProof && (
+            <div className="flex gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                onChange={handleFileSelect}
+                disabled={uploading}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-4     w-4 mr-2 animate-spin" />
+                    Subiendo...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Reemplazar Comprobante
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        // Si no hay comprobante, mostrar botón para subir
+        onUploadProof && (
+          <div className="pt-3 border-t">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.pdf"
+              className="hidden"
+              onChange={handleFileSelect}
+              disabled={uploading}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Subiendo...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Subir Comprobante
+                </>
+              )}
+            </Button>
+          </div>
+        )
+      )}
 
       {/* Notas y razón de rechazo */}
       {payment.adminNotes && (
@@ -225,21 +381,6 @@ export function PaymentSection({
           <p className="text-xs text-red-700 bg-red-50 p-2.5 rounded-md border border-red-100">
             {payment.rejectionReason}
           </p>
-        </div>
-      )}
-
-      {/* Comprobante de pago */}
-      {payment.paymentProofUrl && (
-        <div className="pt-3 border-t">
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="w-full cursor-pointer" 
-            onClick={onViewProof}
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            Ver Comprobante
-          </Button>
         </div>
       )}
       
@@ -282,36 +423,21 @@ export function OnboardingSection({
           <div>
             <p className="text-sm font-medium">Sin onboarding agendado</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {status === 'READY' 
-                ? 'El conductor está listo para agendar'
-                : 'El conductor aún no está listo'}
+              Podés agendar el onboarding en cualquier momento
             </p>
           </div>
         </div>
         
-        {status === 'READY' && (
-          <Button 
-            size="sm" 
-            variant="default" 
-            className="w-full cursor-pointer" 
-            onClick={onSchedule}
-          >
-            <CalendarIcon className="h-4 w-4 mr-2" />
-            Agendar Onboarding
-          </Button>
-        )}
-        
-        {status !== 'READY' && (
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="w-full" 
-            disabled
-          >
-            <AlertCircle className="h-4 w-4 mr-2" />
-            No Listo para Agendar
-          </Button>
-        )}
+        {/* ✅ SIEMPRE ACTIVO - Sin validación de estado */}
+        <Button 
+          size="sm" 
+          variant="default" 
+          className="w-full cursor-pointer" 
+          onClick={onSchedule}
+        >
+          <CalendarIcon className="h-4 w-4 mr-2" />
+          Agendar Onboarding
+        </Button>
       </div>
     )
   }
@@ -372,7 +498,10 @@ export function OnboardingSection({
         
         <InfoField 
           label="Horario" 
-          value={`${attendance.event.startTime} - ${attendance.event.endTime}`}
+          value={attendance.event.endTime 
+            ? `${attendance.event.startTime} - ${attendance.event.endTime}`
+            : attendance.event.startTime
+          }
         />
 
         {attendance.event.location && (
@@ -383,7 +512,7 @@ export function OnboardingSection({
         )}
       </div>
 
-      {/* Botón de gestionar */}
+      {/* Botón de gestionar - SIEMPRE ACTIVO */}
       <div className="pt-3 border-t">
         <Button 
           size="sm" 

@@ -12,12 +12,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -46,6 +40,7 @@ import {
   Calendar,
   XCircle,
   AlertTriangle,
+  Download,
 } from "lucide-react"
 import { DocumentPreview } from "@/components/admin/document-preview"
 import { ManageOnboardingModal } from "@/components/admin/manage-onboarding-modal"
@@ -103,6 +98,8 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  const [showProofModal, setShowProofModal] = useState(false)
+const [uploadingProof, setUploadingProof] = useState(false)
   
   const [paymentData, setPaymentData] = useState({
     paymentMethod: postulacion.equipmentPayments?.[0]?.paymentMethod || '',
@@ -413,11 +410,62 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
     })
   }
 
+  // ==================== HANDLER PARA SUBIR COMPROBANTE ====================
+const handleUploadPaymentProof = async (file: File) => {
+  setUploadingProof(true)
+  
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('paymentId', postulacion.equipmentPayments[0].id)
+
+    const response = await fetch('/api/postulaciones/payments/upload-proof', {
+      method: 'POST',
+      body: formData
+    })
+
+    const result = await response.json()
+
+    if (result.success) {
+      toast.success('Comprobante subido exitosamente')
+      
+      // Actualizar estado local optimísticamente
+      setPostulacion({
+        ...postulacion,
+        equipmentPayments: [{
+          ...postulacion.equipmentPayments[0],
+          paymentProofUrl: result.proofUrl
+        }]
+      })
+      
+      // Refresh para sincronizar con servidor
+      setTimeout(() => router.refresh(), 500)
+    } else {
+      toast.error(result.error || 'Error al subir comprobante')
+    }
+  } catch (error: any) {
+    console.error('Error al subir comprobante:', error)
+    toast.error('Error al subir el comprobante')
+  } finally {
+    setUploadingProof(false)
+  }
+}
+
+// ==================== HANDLER PARA VER COMPROBANTE ====================
+const handleViewPaymentProof = () => {
+  const proofUrl = postulacion.equipmentPayments[0]?.paymentProofUrl
+  if (proofUrl) {
+    setShowProofModal(true)
+    // O alternativamente abrir en nueva pestaña:
+    // window.open(proofUrl, '_blank')
+  }
+}
+
   return (
     <div className="flex flex-1 flex-col">
       <AdminHeader 
         breadcrumbs={[
-          { label: "Postulaciones" },
+          { label: "Postulaciones", href: "/admin/postulaciones" },
           { label: postulacion.fullName }
         ]}
       />
@@ -575,21 +623,61 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </Card>
 
           <Card>
-            <CardHeader className="pb-3 border-b">
-              <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
-                <CreditCard className="h-4 w-4" />
-                Pago de Equipamiento
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <PaymentSection 
-                payment={postulacion.equipmentPayments?.[0]}
-                postulacionId={postulacion.id}
-                onManage={() => setShowPaymentModal(true)}
-                onViewProof={() => setShowProofPreview(true)}
-              />
-            </CardContent>
-          </Card>
+  <CardHeader>
+    <CardTitle className="text-base flex items-center gap-2">
+      <CreditCard className="h-5 w-5" />
+      Pago de Equipamiento
+    </CardTitle>
+  </CardHeader>
+  <CardContent>
+    <PaymentSection
+      payment={postulacion.equipmentPayments?.[0]}
+      postulacionId={postulacion.id}
+      onManage={() => setShowPaymentModal(true)}
+      onViewProof={handleViewPaymentProof}
+      onUploadProof={handleUploadPaymentProof}
+    />
+  </CardContent>
+</Card>
+
+{showProofModal && postulacion.equipmentPayments[0]?.paymentProofUrl && (
+  <Dialog open={showProofModal} onOpenChange={setShowProofModal}>
+    <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogHeader>
+        <DialogTitle>Comprobante de Pago</DialogTitle>
+      </DialogHeader>
+      
+      <div className="overflow-auto">
+        {postulacion.equipmentPayments[0].paymentProofUrl.toLowerCase().endsWith('.pdf') ? (
+          <iframe
+            src={postulacion.equipmentPayments[0].paymentProofUrl}
+            className="w-full h-[70vh]"
+            title="Comprobante de Pago"
+          />
+        ) : (
+          <img
+            src={postulacion.equipmentPayments[0].paymentProofUrl}
+            alt="Comprobante de Pago"
+            className="w-full h-auto"
+          />
+        )}
+      </div>
+      
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="outline"
+          onClick={() => window.open(postulacion.equipmentPayments[0].paymentProofUrl, '_blank')}
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Descargar
+        </Button>
+        <Button onClick={() => setShowProofModal(false)}>
+          Cerrar
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
+)}
 
           <Card>
             <CardHeader className="pb-3 border-b">

@@ -105,6 +105,32 @@ export async function POST(request: NextRequest) {
     // Recalcular documentsStatus automáticamente
     await recalculateDocumentsStatus(submission.formDriverId);
 
+    if (enumDocType === 'TAX_COMPLIANCE') {
+      console.log(`🔄 [FORM] Sincronizando TAX_COMPLIANCE desde formulario público...`);
+      
+      try {
+        await prisma.financialService.upsert({
+          where: { formDriverId: submission.formDriverId },
+          create: {
+            formDriverId: submission.formDriverId,
+            hasInvoice: true,
+            taxComplianceUrl: blob.url,
+            // Los demás campos se llenarán cuando procese el Step 4 completo
+          },
+          update: {
+            hasInvoice: true,
+            taxComplianceUrl: blob.url,
+            updatedAt: new Date()
+          }
+        });
+        
+        console.log(`✅ [FORM] FinancialService actualizado con certificado tributario`);
+      } catch (syncError) {
+        console.error('⚠️ [FORM] Error al sincronizar FinancialService:', syncError);
+        // No fallar el upload por esto, solo loguear
+      }
+    }
+
     return NextResponse.json({
       success: true,
       url: blob.url,

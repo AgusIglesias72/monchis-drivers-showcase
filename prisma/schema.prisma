@@ -527,7 +527,48 @@ model OnboardingAttendee {
   @@map("onboarding_attendees")
 }
 
+model BackgroundJob {
+  id        String   @id @default(uuid())
+  type      JobType  
+  status    JobStatus @default(QUEUED)  
+  userId    String  
+  metadata  Json  
+  progress  Int      @default(0)  // 0-100
+  current   Int      @default(0)  // Items procesados
+  total     Int      @default(0)  // Total items
+  logs      Json     @default("[]")
+  result    Json?
+  
+  error     String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  startedAt DateTime?
+  completedAt DateTime?
+  
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
 // ==================== ENUMS ====================
+
+enum JobType {
+  DRIVER_PROCESSING      // Procesar pagos de conductores
+  DOCUMENT_VALIDATION    // Validar documentos con AI
+  EXPORT_DATA            // Exportar datos
+  BULK_EMAIL             // Envío masivo de emails
+}
+
+enum JobStatus {
+  QUEUED      // En cola
+  PROCESSING  // Ejecutándose
+  COMPLETED   // Terminado exitosamente
+  FAILED      // Falló
+  CANCELLED   // Cancelado
+}
 
 enum AdminRole {
   SUPER_ADMIN
