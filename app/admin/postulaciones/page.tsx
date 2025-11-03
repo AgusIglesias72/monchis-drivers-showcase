@@ -24,7 +24,7 @@ const POSTULACION_INCLUDE = {
     select: {
       id: true,
       documentType: true,
-      status: true, // ✅ (no verificationStatus)
+      status: true,
       blobUrl: true,
       fileName: true,
       createdAt: true,
@@ -38,10 +38,10 @@ const POSTULACION_INCLUDE = {
       id: true,
       amount: true,
       paymentMethod: true,
-      status: true, // ✅ (no verificationStatus)
-      paymentNumber: true, // ✅ existe
-      invoiceNumber: true, // ✅ existe
-      paymentProofUrl: true, // ✅ (no receiptUrl)
+      status: true,
+      paymentNumber: true,
+      invoiceNumber: true,
+      paymentProofUrl: true,
       paymentDate: true,
       createdAt: true,
     },
@@ -89,20 +89,38 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   // ==================== WHERE CLAUSE ====================
   const where: Prisma.FormDriverWhereInput = {}
 
+  // Filtro de status general
   if (params.status && params.status !== 'all') {
     where.status = params.status as any
   }
 
+  // ✅ FILTRO DE ONBOARDING CORREGIDO
+  // El filtro de tabs viene como string minúscula, pero el enum es MAYÚSCULA
   if (params.onboardingStatus && params.onboardingStatus !== 'all') {
-    where.onboardingStatus = params.onboardingStatus as any
+    if (params.onboardingStatus === 'pending') {
+      // Pendiente: NOT_READY, READY, o null
+      where.OR = [
+        { onboardingStatus: 'NOT_READY' },
+        { onboardingStatus: 'READY' },
+        { onboardingStatus: null },
+      ]
+    } else if (params.onboardingStatus === 'scheduled') {
+      // ✅ Corregido: Usar SCHEDULED (mayúscula) que es el valor del enum
+      where.onboardingStatus = 'SCHEDULED'
+    } else if (params.onboardingStatus === 'completed') {
+      // ✅ Corregido: Usar COMPLETED (mayúscula) que es el valor del enum
+      where.onboardingStatus = 'COMPLETED'
+    }
   }
 
+  // Filtro de vehículo
   if (params.hasVehicle === 'yes') {
     where.hasVehicle = true
   } else if (params.hasVehicle === 'no') {
     where.hasVehicle = false
   }
 
+  // Filtro de búsqueda
   if (params.search) {
     where.OR = [
       { fullName: { contains: params.search, mode: 'insensitive' } },
@@ -114,6 +132,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     ]
   }
 
+  // Filtro de fechas
   if (params.startDate) {
     where.createdAt = { ...where.createdAt as any, gte: new Date(params.startDate) }
   }

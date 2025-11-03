@@ -18,11 +18,21 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import {
   Search,
   Download,
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Calendar,
+  ClipboardCheck,
+  Clock,
+  FileCheck,
+  X,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -44,6 +54,8 @@ interface PostulacionesPageContentProps {
   }
 }
 
+type QuickFilter = 'all' | 'scheduled' | 'pending-schedule' | 'review' | 'pending-completion'
+
 export function PostulacionesPageContent({
   stats,
   postulaciones,
@@ -63,13 +75,53 @@ export function PostulacionesPageContent({
   const [endDate, setEndDate] = useState(currentFilters.endDate || '')
   const [isExporting, setIsExporting] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
+  const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all')
 
-  const applyFilters = (page: number = 1) => {
+  // Determinar el filtro rápido activo basado en los filtros actuales
+  useEffect(() => {
+    if (onboardingStatusFilter === 'scheduled') {
+      setActiveQuickFilter('scheduled')
+    } else if (onboardingStatusFilter === 'pending' && statusFilter === 'COMPLETED') {
+      setActiveQuickFilter('pending-schedule')
+    } else if (statusFilter === 'COMPLETED' && onboardingStatusFilter === 'all') {
+      setActiveQuickFilter('review')
+    } else if (statusFilter === 'IN_PROGRESS') {
+      setActiveQuickFilter('pending-completion')
+    } else {
+      setActiveQuickFilter('all')
+    }
+  }, [statusFilter, onboardingStatusFilter])
+
+  const applyFilters = (page: number = 1, quickFilter?: QuickFilter) => {
     const params = new URLSearchParams()
     
+    // Si se especifica un filtro rápido, aplicar esos filtros
+    if (quickFilter) {
+      switch (quickFilter) {
+        case 'scheduled':
+          params.set('onboardingStatus', 'scheduled')
+          params.set('status', 'COMPLETED')
+          break
+        case 'pending-schedule':
+          params.set('onboardingStatus', 'pending')
+          params.set('status', 'COMPLETED')
+          break
+        case 'review':
+          params.set('status', 'COMPLETED')
+          break
+        case 'pending-completion':
+          params.set('status', 'IN_PROGRESS')
+          break
+        // 'all' no agrega filtros especiales
+      }
+    } else {
+      // Aplicar filtros manuales
+      if (statusFilter !== 'all') params.set('status', statusFilter)
+      if (onboardingStatusFilter !== 'all') params.set('onboardingStatus', onboardingStatusFilter)
+    }
+    
+    // Filtros adicionales que siempre se aplican
     if (searchTerm) params.set('search', searchTerm)
-    if (statusFilter !== 'all') params.set('status', statusFilter)
-    if (onboardingStatusFilter !== 'all') params.set('onboardingStatus', onboardingStatusFilter)
     if (startDate) params.set('startDate', startDate)
     if (endDate) params.set('endDate', endDate)
     if (page > 1) params.set('page', page.toString())
@@ -78,16 +130,42 @@ export function PostulacionesPageContent({
     router.push(`/admin/postulaciones${queryString ? `?${queryString}` : ''}`, { scroll: false })
   }
 
+  const handleQuickFilter = (filter: QuickFilter) => {
+    setIsSearching(true)
+    setActiveQuickFilter(filter)
+    
+    // Resetear filtros manuales cuando se usa un filtro rápido
+    if (filter !== 'all') {
+      setStatusFilter('all')
+      setOnboardingStatusFilter('all')
+    }
+    
+    setTimeout(() => {
+      applyFilters(1, filter)
+    }, 100)
+  }
+
   const handleSearch = () => {
     setIsSearching(true)
-    // Pequeño delay para mostrar el loading
     setTimeout(() => {
       applyFilters(1)
     }, 100)
   }
 
+  const handleClearFilters = () => {
+    setSearchTerm('')
+    setStatusFilter('all')
+    setOnboardingStatusFilter('all')
+    setStartDate('')
+    setEndDate('')
+    setActiveQuickFilter('all')
+    router.push('/admin/postulaciones', { scroll: false })
+  }
+
+  const hasActiveFilters = searchTerm || statusFilter !== 'all' || onboardingStatusFilter !== 'all' || startDate || endDate
+
   const handlePageChange = (newPage: number) => {
-    applyFilters(newPage)
+    applyFilters(newPage, activeQuickFilter === 'all' ? undefined : activeQuickFilter)
   }
 
   const handleExport = async () => {
@@ -138,11 +216,12 @@ export function PostulacionesPageContent({
     <div className="min-h-screen bg-background">
       <AdminHeader />
       
-      <div className="p-8 space-y-6">
+      {/* CONTENEDOR PRINCIPAL: Se ajusta al ancho disponible */}
+      <div className="w-full p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Postulaciones</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Postulaciones</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Gestiona y revisa todas las postulaciones de drivers
           </p>
         </div>
@@ -150,12 +229,42 @@ export function PostulacionesPageContent({
         {/* KPIs */}
         <PostulacionesKPIs stats={stats} />
 
-        {/* Filtros */}
+        {/* Tabs de filtros rápidos */}
+        <Card>
+          <CardContent className="pt-6">
+            <Tabs value={activeQuickFilter} onValueChange={(value) => handleQuickFilter(value as QuickFilter)} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 h-auto gap-2">
+                <TabsTrigger value="all" className="flex items-center gap-2">
+                  <ClipboardCheck className="h-4 w-4" />
+                  <span className="hidden sm:inline">Todas</span>
+                </TabsTrigger>
+                <TabsTrigger value="scheduled" className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  <span className="hidden sm:inline">Agendados</span>
+                </TabsTrigger>
+                <TabsTrigger value="pending-schedule" className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  <span className="hidden sm:inline">Pendiente de Agendar</span>
+                </TabsTrigger>
+                <TabsTrigger value="review" className="flex items-center gap-2">
+                  <FileCheck className="h-4 w-4" />
+                  <span className="hidden sm:inline">Revisar Postulación</span>
+                </TabsTrigger>
+                <TabsTrigger value="pending-completion" className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Postulación Pendiente</span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        {/* Filtros avanzados */}
         <Card>
           <CardContent className="pt-6 space-y-4">
-            <div className="flex flex-wrap items-end gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
               {/* Búsqueda */}
-              <div className="space-y-1.5 flex-1 min-w-[240px]">
+              <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="search" className="text-xs text-muted-foreground">Buscar</Label>
                 <Input
                   id="search"
@@ -171,7 +280,7 @@ export function PostulacionesPageContent({
               <div className="space-y-1.5">
                 <Label htmlFor="status" className="text-xs text-muted-foreground">Estado</Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger id="status" className="w-[130px] h-9">
+                  <SelectTrigger id="status" className="h-9">
                     <SelectValue placeholder="Estado" />
                   </SelectTrigger>
                   <SelectContent>
@@ -187,7 +296,7 @@ export function PostulacionesPageContent({
               <div className="space-y-1.5">
                 <Label htmlFor="onboarding" className="text-xs text-muted-foreground">Onboarding</Label>
                 <Select value={onboardingStatusFilter} onValueChange={setOnboardingStatusFilter}>
-                  <SelectTrigger id="onboarding" className="w-[130px] h-9">
+                  <SelectTrigger id="onboarding" className="h-9">
                     <SelectValue placeholder="Onboarding" />
                   </SelectTrigger>
                   <SelectContent>
@@ -207,7 +316,7 @@ export function PostulacionesPageContent({
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-[140px] h-9"
+                  className="h-9"
                 />
               </div>
 
@@ -219,16 +328,18 @@ export function PostulacionesPageContent({
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-[140px] h-9"
+                  className="h-9"
                 />
               </div>
+            </div>
 
-              {/* Botones de acción */}
-              <div className="flex items-end gap-2">
+            {/* Botones de acción */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button 
                   onClick={handleSearch} 
                   size="sm" 
-                  className="h-9 cursor-pointer"
+                  className="h-9"
                   disabled={isSearching}
                 >
                   {isSearching ? (
@@ -243,21 +354,30 @@ export function PostulacionesPageContent({
                     </>
                   )}
                 </Button>
-              </div>
-            </div>
 
-            {/* Barra de acciones inferior */}
-            <div className="flex items-center justify-between pt-2 border-t">
-              <Button 
-                variant="outline" 
-                onClick={handleExport} 
-                size="sm"
-                className="h-9 cursor-pointer"
-                disabled={isExporting}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                {isExporting ? 'Exportando...' : 'Exportar lista'}
-              </Button>
+                {hasActiveFilters && (
+                  <Button 
+                    variant="outline" 
+                    onClick={handleClearFilters} 
+                    size="sm"
+                    className="h-9"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Limpiar filtros
+                  </Button>
+                )}
+
+                <Button 
+                  variant="outline" 
+                  onClick={handleExport} 
+                  size="sm"
+                  className="h-9"
+                  disabled={isExporting}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {isExporting ? 'Exportando...' : 'Exportar'}
+                </Button>
+              </div>
 
               <div className="text-sm text-muted-foreground">
                 Mostrando {postulaciones.length} de {total} postulaciones
@@ -285,7 +405,7 @@ export function PostulacionesPageContent({
         {totalPages > 1 && (
           <Card>
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-sm text-muted-foreground">
                   Página {currentPage} de {totalPages}
                 </div>
@@ -296,10 +416,9 @@ export function PostulacionesPageContent({
                     size="sm"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="cursor-pointer"
                   >
                     <ChevronLeft className="h-4 w-4 mr-1" />
-                    Anterior
+                    <span className="hidden sm:inline">Anterior</span>
                   </Button>
                   
                   {/* Botones de páginas */}
@@ -318,7 +437,7 @@ export function PostulacionesPageContent({
                           variant={currentPage === page ? "default" : "outline"}
                           size="sm"
                           onClick={() => handlePageChange(page)}
-                          className="w-9 h-9 p-0 cursor-pointer"
+                          className="w-9 h-9 p-0"
                         >
                           {page}
                         </Button>
@@ -331,9 +450,8 @@ export function PostulacionesPageContent({
                     size="sm"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="cursor-pointer"
                   >
-                    Siguiente
+                    <span className="hidden sm:inline">Siguiente</span>
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
                 </div>

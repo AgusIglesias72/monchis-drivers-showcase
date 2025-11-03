@@ -1,4 +1,4 @@
-// components/admin/postulaciones-table-expandable.tsx
+// components/admin/postulaciones-table-expandable-improved.tsx
 
 "use client"
 
@@ -49,6 +49,31 @@ type SortOrder = 'asc' | 'desc' | null
 
 interface PostulacionesTableProps {
   postulaciones: any[]
+}
+
+// Componente para el icono de ordenamiento
+function SortIcon({ field, currentField, order }: { field: SortField, currentField: SortField | null, order: SortOrder }) {
+  if (currentField !== field) {
+    return <ArrowUpDown className="h-3 w-3 opacity-40" />
+  }
+  if (order === 'asc') {
+    return <ArrowUp className="h-3 w-3" />
+  }
+  if (order === 'desc') {
+    return <ArrowDown className="h-3 w-3" />
+  }
+  return <ArrowUpDown className="h-3 w-3 opacity-40" />
+}
+
+// Componente para filas de información
+function InfoRow({ label, value }: { label: string, value?: string | null }) {
+  if (!value) return null
+  return (
+    <div className="flex flex-col">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium break-words">{value}</span>
+    </div>
+  )
 }
 
 export function PostulacionesTableExpandable({
@@ -150,14 +175,15 @@ export function PostulacionesTableExpandable({
         </CardHeader>
         <CardContent>
           <div className="border rounded-lg overflow-hidden">
+            {/* Contenedor con scroll horizontal para pantallas pequeñas */}
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[900px]">
                 <thead className="bg-muted/50 border-b">
                   <tr>
-                    <th className="px-4 py-3 text-left w-10"></th>
+                    <th className="px-3 py-3 text-left w-10"></th>
                     
                     <th
-                      className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
+                      className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none min-w-[180px]"
                       onClick={() => handleSort('fullName')}
                     >
                       <div className="flex items-center gap-2">
@@ -167,7 +193,7 @@ export function PostulacionesTableExpandable({
                     </th>
                     
                     <th
-                      className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
+                      className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none min-w-[120px]"
                       onClick={() => handleSort('city')}
                     >
                       <div className="flex items-center gap-2">
@@ -177,7 +203,7 @@ export function PostulacionesTableExpandable({
                     </th>
                     
                     <th
-                      className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
+                      className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none min-w-[130px]"
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center gap-2">
@@ -186,17 +212,16 @@ export function PostulacionesTableExpandable({
                       </div>
                     </th>
                     
-                    {/* ✅ COLUMNA: Estados (máximo 3 iconos) */}
-                    <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">
+                    <th className="px-3 py-3 text-center text-xs font-medium text-muted-foreground uppercase min-w-[120px]">
                       Estados
                     </th>
                     
-                    <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground uppercase">
+                    <th className="px-3 py-3 text-center text-xs font-medium text-muted-foreground uppercase min-w-[120px]">
                       Onboarding
                     </th>
                     
                     <th
-                      className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none"
+                      className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none min-w-[110px]"
                       onClick={() => handleSort('startedAt')}
                     >
                       <div className="flex items-center gap-2">
@@ -205,7 +230,7 @@ export function PostulacionesTableExpandable({
                       </div>
                     </th>
                     
-                    <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase w-16">
+                    <th className="px-3 py-3 text-right text-xs font-medium text-muted-foreground uppercase w-16">
                       Acciones
                     </th>
                   </tr>
@@ -218,8 +243,50 @@ export function PostulacionesTableExpandable({
                     const onboardingStatus = postulacion.onboardingStatus
                     const canSchedule = isCompleted && (!onboardingStatus || ['NOT_READY', 'READY'].includes(onboardingStatus))
                     
-                    // 🎯 Calcular badges
+                    // Calcular badges para TODAS las postulaciones
                     const { badges } = calculatePostulacionBadges(postulacion)
+                    
+                    // SIEMPRE mostrar estos 3 iconos (el color cambia según estado)
+                    const getDocumentIcon = () => {
+                      const docBadge = badges.find(b => b.includes('DOCUMENTO'))
+                      if (docBadge === 'DOCUMENTOS_COMPLETOS') {
+                        return { icon: FileText, bg: 'bg-green-100', text: 'text-green-700', tooltip: 'Documentos completos' }
+                      } else if (docBadge === 'DOCUMENTOS_EN_REVISION') {
+                        return { icon: FileText, bg: 'bg-amber-100', text: 'text-amber-700', tooltip: 'Documentos en revisión' }
+                      } else {
+                        return { icon: FileText, bg: 'bg-yellow-100', text: 'text-yellow-700', tooltip: 'Documentos pendientes' }
+                      }
+                    }
+                    
+                    const getPaymentIcon = () => {
+                      const payBadge = badges.find(b => b.includes('PAGO') || b === 'PAGADO' || b === 'VERIFICAR_PAGO')
+                      if (payBadge === 'PAGADO' || payBadge === 'PAGO_COMPLETO') {
+                        return { icon: CreditCard, bg: 'bg-green-100', text: 'text-green-700', tooltip: 'Pago completo' }
+                      } else if (payBadge === 'PAGO_EN_VERIFICACION' || payBadge === 'VERIFICAR_PAGO') {
+                        return { icon: CreditCard, bg: 'bg-purple-100', text: 'text-purple-700', tooltip: 'Pago en verificación' }
+                      } else {
+                        return { icon: CreditCard, bg: 'bg-red-100', text: 'text-red-700', tooltip: 'Pago pendiente' }
+                      }
+                    }
+                    
+                    const getInvoiceIcon = () => {
+                      const invBadge = badges.find(b => b.includes('FACTURACION'))
+                      if (invBadge === 'FACTURACION_COMPLETA') {
+                        return { icon: Receipt, bg: 'bg-green-100', text: 'text-green-700', tooltip: 'Facturación completa' }
+                      } else if (invBadge === 'FACTURACION_NA') {
+                        return { icon: Receipt, bg: 'bg-gray-100', text: 'text-gray-500', tooltip: 'No aplica facturación' }
+                      } else {
+                        return { icon: Receipt, bg: 'bg-orange-100', text: 'text-orange-700', tooltip: 'Facturación pendiente' }
+                      }
+                    }
+                    
+                    const docIcon = getDocumentIcon()
+                    const payIcon = getPaymentIcon()
+                    const invIcon = getInvoiceIcon()
+                    
+                    const DocIcon = docIcon.icon
+                    const PayIcon = payIcon.icon
+                    const InvIcon = invIcon.icon
                     
                     return (
                       <>
@@ -228,154 +295,191 @@ export function PostulacionesTableExpandable({
                           className="hover:bg-muted/50 transition-colors cursor-pointer"
                           onClick={() => toggleRow(postulacion.id)}
                         >
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3">
                             <div className="flex items-center justify-center">
-                              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              )}
                             </div>
                           </td>
-                          
-                          <td className="px-4 py-3">
-                            <div>
-                              <div className="font-medium text-foreground text-sm">
-                                {postulacion.fullName}
+
+                          {/* POSTULANTE */}
+                          <td className="px-3 py-3">
+                            <div className="space-y-0.5">
+                              <div className="font-medium text-sm">
+                                {postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
                               </div>
-                              <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                <span>CI: {postulacion.cedula}</span>
-                                <span>•</span>
-                                <span className="flex items-center gap-1">
-                                  <Phone className="h-3 w-3" />
-                                  {postulacion.phoneNumber}
-                                </span>
+                              <div className="text-xs text-muted-foreground">
+                                CI: {postulacion.cedula}
                               </div>
                             </div>
                           </td>
-                          
-                          <td className="px-4 py-3">
-                            <div className="text-sm">
-                              <div className="font-medium text-foreground">{postulacion.city || '-'}</div>
+
+                          {/* CIUDAD Y DEPARTAMENTO */}
+                          <td className="px-3 py-3">
+                            <div className="text-sm space-y-0.5">
+                              <div className="font-medium">{postulacion.city || '-'}</div>
                               <div className="text-xs text-muted-foreground">{postulacion.department || '-'}</div>
                             </div>
                           </td>
-                          
-                          <td className="px-4 py-3">
-                            {isCompleted ? (
-                              <StatusBadge status="COMPLETED" />
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <StatusBadge status="IN_PROGRESS" />
-                                <span className="text-xs text-muted-foreground">
-                                  {postulacion.currentStep || 1}/6
-                                </span>
-                              </div>
-                            )}
+
+                          {/* POSTULACIÓN STATUS */}
+                          <td className="px-3 py-3">
+                            <Badge
+                              variant="outline"
+                              className={`text-xs
+                                ${postulacion.status === 'COMPLETED' 
+                                  ? 'bg-green-50 text-green-700 border-green-200' 
+                                  : postulacion.status === 'IN_PROGRESS'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : 'bg-gray-50 text-gray-500 border-gray-200'
+                                }`}
+                            >
+                              {postulacion.status === 'COMPLETED' 
+                                ? 'Completada' 
+                                : postulacion.status === 'IN_PROGRESS'
+                                ? 'En Progreso'
+                                : 'Abandonada'}
+                            </Badge>
                           </td>
-                          
-                          {/* ✅ COLUMNA ESTADOS CON 3 ICONOS ÚNICOS */}
-                          <td className="px-4 py-3">
+
+                          {/* ESTADOS - SIEMPRE 3 ICONOS FIJOS */}
+                          <td className="px-3 py-3">
                             <TooltipProvider>
-                              <div className="flex items-center justify-center gap-2">
-                                {badges.length > 0 ? (
-                                  badges.map((badge) => <StatusIcon key={badge} type={badge} />)
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">—</span>
-                                )}
+                              <div className="flex items-center justify-center gap-1.5">
+                                {/* 1. DOCUMENTOS */}
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className={`flex items-center justify-center w-8 h-8 rounded-full ${docIcon.bg} ${docIcon.text}`}>
+                                      <DocIcon className="h-4 w-4" />
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="text-xs">{docIcon.tooltip}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+
+                                {/* 2. PAGO */}
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className={`flex items-center justify-center w-8 h-8 rounded-full ${payIcon.bg} ${payIcon.text}`}>
+                                      <PayIcon className="h-4 w-4" />
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="text-xs">{payIcon.tooltip}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+
+                                {/* 3. FACTURACIÓN */}
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className={`flex items-center justify-center w-8 h-8 rounded-full ${invIcon.bg} ${invIcon.text}`}>
+                                      <InvIcon className="h-4 w-4" />
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="text-xs">{invIcon.tooltip}</p>
+                                  </TooltipContent>
+                                </Tooltip>
                               </div>
                             </TooltipProvider>
                           </td>
-                          
-                          <td className="px-4 py-3 text-center">
+
+                          {/* ONBOARDING MEJORADO */}
+                          <td className="px-3 py-3 text-center">
                             {hasOnboarding ? (
                               <div className="flex flex-col items-center gap-1">
-                                <OnboardingStatusBadge status={hasOnboarding.status} />
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs ${
+                                    hasOnboarding.status === 'ATTENDED' || hasOnboarding.status === 'CONFIRMED'
+                                      ? 'bg-green-50 text-green-700 border-green-200'
+                                      : hasOnboarding.status === 'SCHEDULED'
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  }`}
+                                >
+                                  {hasOnboarding.status === 'ATTENDED' ? 'Capacitado' : 
+                                   hasOnboarding.status === 'CONFIRMED' ? 'Capacitado' :
+                                   hasOnboarding.status === 'SCHEDULED' ? 'Agendado' : 'Pendiente'}
+                                </Badge>
                                 {hasOnboarding.event?.scheduledDate && (
-                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                    <Calendar className="h-3 w-3" />
-                                    <span>
-                                      {new Date(hasOnboarding.event.scheduledDate).toLocaleDateString('es-PY', {
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                      })}
-                                    </span>
-                                  </div>
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(hasOnboarding.event.scheduledDate).toLocaleDateString('es-ES', {
+                                      day: '2-digit',
+                                      month: 'short'
+                                    })}
+                                  </span>
                                 )}
                               </div>
-                            ) : onboardingStatus ? (
-                              <OnboardingStatusBadge status={onboardingStatus} />
+                            ) : onboardingStatus === 'READY' || onboardingStatus === 'SCHEDULED' ? (
+                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                                Pendiente
+                              </Badge>
                             ) : (
-                              <span className="text-xs text-muted-foreground">Sin agendar</span>
+                              <span className="text-xs text-muted-foreground italic">Sin agendar</span>
                             )}
                           </td>
-                          
-                          <td className="px-4 py-3">
+
+                          {/* FECHA */}
+                          <td className="px-3 py-3">
                             <div className="text-xs text-muted-foreground">
-                              {new Date(postulacion.startedAt).toLocaleDateString('es-PY')}
+                              {new Date(postulacion.startedAt).toLocaleDateString('es-ES', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric'
+                              })}
                             </div>
                           </td>
-                          
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => handleViewDetails(postulacion.id, e)}
-                                className="h-8 w-8 p-0 cursor-pointer hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950"
-                                title="Ver detalles"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
 
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 cursor-pointer"
-                                  >
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={(e) => handleContact(postulacion, e)}
-                                    className="cursor-pointer"
-                                  >
-                                    <Phone className="h-4 w-4 mr-2" />
-                                    Contactar
-                                  </DropdownMenuItem>
-                                  
-                                  {canSchedule && (
-                                    <>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        onClick={(e) => handleScheduleOnboarding(postulacion, e)}
-                                        className="cursor-pointer text-green-600"
-                                      >
-                                        <CheckCircle className="h-4 w-4 mr-2" />
-                                        Agendar Onboarding
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                  
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={(e) => handleReject(postulacion, e)}
-                                    className="cursor-pointer text-red-600"
-                                  >
-                                    <XCircle className="h-4 w-4 mr-2" />
-                                    Rechazar
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
+                          {/* ACCIONES */}
+                          <td className="px-3 py-3">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={(e) => handleViewDetails(postulacion.id, e)}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  Ver detalles
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => handleContact(postulacion, e)}>
+                                  <Phone className="mr-2 h-4 w-4" />
+                                  Contactar
+                                </DropdownMenuItem>
+                                {canSchedule && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={(e) => handleScheduleOnboarding(postulacion, e)}>
+                                      <Calendar className="mr-2 h-4 w-4" />
+                                      Agendar Onboarding
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  onClick={(e) => handleReject(postulacion, e)}
+                                  className="text-red-600"
+                                >
+                                  <XCircle className="mr-2 h-4 w-4" />
+                                  Rechazar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </td>
                         </tr>
 
-                        {/* ✅ Expandable (colSpan=8) */}
+                        {/* FILA EXPANDIDA */}
                         {isExpanded && (
                           <tr>
                             <td colSpan={8} className="px-6 py-4 bg-muted/20">
                               <div className="space-y-4">
-                                <div className="grid grid-cols-4 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                   <div className="space-y-2">
                                     <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                                       <User className="h-3.5 w-3.5" />
@@ -410,100 +514,77 @@ export function PostulacionesTableExpandable({
                                     </h5>
                                     {postulacion.hasVehicle ? (
                                       <div className="space-y-1.5">
-                                        <InfoRow
-                                          label="Vehículo"
-                                          value={`${postulacion.vehicleBrand || ''} ${postulacion.vehicleModel || ''}`}
+                                        <InfoRow 
+                                          label="Vehículo" 
+                                          value={`${postulacion.vehicleBrand} ${postulacion.vehicleModel}`} 
                                         />
-                                        <InfoRow label="Año" value={postulacion.vehicleYear || '-'} />
-                                        <InfoRow label="Placa" value={postulacion.vehiclePlate || '-'} />
+                                        <InfoRow label="Año" value={postulacion.vehicleYear?.toString()} />
                                       </div>
                                     ) : (
-                                      <p className="text-xs text-muted-foreground">Sin vehículo</p>
+                                      <p className="text-sm text-muted-foreground italic">Sin vehículo</p>
                                     )}
                                   </div>
 
                                   <div className="space-y-2">
                                     <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                                      <CreditCard className="h-3.5 w-3.5" />
-                                      PAGO EQUIPO
+                                      <MapPin className="h-3.5 w-3.5" />
+                                      UBICACIÓN
                                     </h5>
-                                    {postulacion.equipmentPayments?.[0] ? (
-                                      <div className="space-y-1.5">
-                                        <div>
-                                          <span className="text-xs text-muted-foreground block">Estado</span>
-                                          <PaymentStatusBadge status={postulacion.equipmentPayments[0].status} />
-                                        </div>
-                                        <InfoRow
-                                          label="Método"
-                                          value={postulacion.equipmentPayments[0].paymentMethod || '-'}
-                                        />
-                                        {postulacion.equipmentPayments[0].amount && (
-                                          <InfoRow
-                                            label="Monto"
-                                            value={`${postulacion.equipmentPayments[0].amount.toLocaleString()} Gs`}
-                                          />
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <p className="text-xs text-muted-foreground italic">Sin info de pago</p>
-                                    )}
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                                      <Calendar className="h-3.5 w-3.5" />
-                                      ONBOARDING
-                                    </h5>
-                                    {postulacion.onboardingAttendances?.[0] ? (
-                                      <div className="space-y-1.5">
-                                        <div>
-                                          <span className="text-xs text-muted-foreground block">Estado</span>
-                                          <OnboardingStatusBadge status={postulacion.onboardingAttendances[0].status} />
-                                        </div>
-                                        <InfoRow
-                                          label="Fecha"
-                                          value={new Date(postulacion.onboardingAttendances[0].event.scheduledDate).toLocaleDateString("es-PY")}
-                                        />
-                                        {postulacion.onboardingAttendances[0].event.location && (
-                                          <InfoRow
-                                            label="Lugar"
-                                            value={postulacion.onboardingAttendances[0].event.location}
-                                          />
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <>
-                                        <div>
-                                          <span className="text-xs text-muted-foreground block">Estado</span>
-                                          <OnboardingStatusBadge status={postulacion.onboardingStatus || "NOT_READY"} />
-                                        </div>
-                                        <p className="text-xs text-muted-foreground italic">No agendado</p>
-                                      </>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="pt-3 border-t">
-                                  <div className="flex items-center gap-6 text-xs">
-                                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                                      <MapPin className="h-3 w-3" />
-                                      <span>{postulacion.city}, {postulacion.department}</span>
-                                      {postulacion.neighborhood && <span className="text-muted-foreground/70">• {postulacion.neighborhood}</span>}
+                                    <div className="space-y-1.5">
+                                      <InfoRow label="Ciudad" value={postulacion.city} />
+                                      <InfoRow label="Departamento" value={postulacion.department} />
+                                      {postulacion.address && (
+                                        <InfoRow label="Dirección" value={postulacion.address} />
+                                      )}
                                     </div>
-                                    {postulacion.experience && (
-                                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                                        <FileText className="h-3 w-3" />
-                                        <span>Exp: {postulacion.experience}</span>
-                                      </div>
-                                    )}
-                                    {postulacion.availability?.length > 0 && (
-                                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                                        <Clock className="h-3 w-3" />
-                                        <span>{postulacion.availability.join(', ')}</span>
-                                      </div>
-                                    )}
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                                      <Clock className="h-3.5 w-3.5" />
+                                      ESTADO
+                                    </h5>
+                                    <div className="space-y-1.5">
+                                      <InfoRow 
+                                        label="Progreso" 
+                                        value={`${postulacion.currentStep}/7 pasos`} 
+                                      />
+                                      <InfoRow 
+                                        label="Fecha inicio" 
+                                        value={new Date(postulacion.startedAt).toLocaleDateString('es-ES')} 
+                                      />
+                                      {postulacion.completedAt && (
+                                        <InfoRow 
+                                          label="Fecha completado" 
+                                          value={new Date(postulacion.completedAt).toLocaleDateString('es-ES')} 
+                                        />
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
+
+                                {/* Lista completa de badges */}
+                                {badges.length > 0 && (
+                                  <div className="pt-3 border-t">
+                                    <h5 className="text-xs font-semibold text-muted-foreground mb-2">
+                                      ESTADOS Y DOCUMENTACIÓN
+                                    </h5>
+                                    <div className="flex flex-wrap gap-2">
+                                      {badges.map((badgeType, idx) => {
+                                        const config = getBadgeConfig(badgeType)
+                                        return (
+                                          <Badge
+                                            key={idx}
+                                            variant="outline"
+                                            className={`text-xs ${config.color} border`}
+                                          >
+                                            {config.label}
+                                          </Badge>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -522,7 +603,7 @@ export function PostulacionesTableExpandable({
             )}
           </div>
 
-          {/* Paginación */}
+          {/* Paginación local de la tabla */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-4">
               <div className="text-sm text-muted-foreground">
@@ -534,7 +615,6 @@ export function PostulacionesTableExpandable({
                   size="sm"
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="cursor-pointer"
                 >
                   Anterior
                 </Button>
@@ -553,7 +633,7 @@ export function PostulacionesTableExpandable({
                         variant={currentPage === page ? "default" : "outline"}
                         size="sm"
                         onClick={() => setCurrentPage(page)}
-                        className="w-8 h-8 p-0 cursor-pointer"
+                        className="w-8 h-8 p-0"
                       >
                         {page}
                       </Button>
@@ -565,7 +645,6 @@ export function PostulacionesTableExpandable({
                   size="sm"
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="cursor-pointer"
                 >
                   Siguiente
                 </Button>
@@ -577,209 +656,13 @@ export function PostulacionesTableExpandable({
 
       <ScheduleOnboardingModal
         open={!!selectedDriverForOnboarding}
-        onOpenChange={(open) => !open && setSelectedDriverForOnboarding(null)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedDriverForOnboarding(null)
+        }}
         driverId={selectedDriverForOnboarding?.id || ''}
         driverName={selectedDriverForOnboarding?.name || ''}
         onSuccess={handleOnboardingSuccess}
       />
     </>
-  )
-}
-
-// ✅ Componente de icono con 3 categorías únicas
-function StatusIcon({ type }: { type: string }) {
-  // 📄 DOCUMENTOS
-  if (type === 'DOCUMENTOS_PENDIENTES') {
-    return (
-      <Tooltip>
-        <TooltipTrigger>
-          <div className="h-7 w-7 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center">
-            <FileText className="h-4 w-4 text-red-600 dark:text-red-400" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p className="text-xs">Documentos Pendientes</p>
-        </TooltipContent>
-      </Tooltip>
-    )
-  }
-  
-  if (type === 'DOCUMENTOS_EN_REVISION') {
-    return (
-      <Tooltip>
-        <TooltipTrigger>
-          <div className="h-7 w-7 rounded-full bg-yellow-100 dark:bg-yellow-950 flex items-center justify-center">
-            <FileText className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p className="text-xs">Documentos en Revisión</p>
-        </TooltipContent>
-      </Tooltip>
-    )
-  }
-  
-  if (type === 'DOCUMENTOS_COMPLETOS') {
-    return (
-      <Tooltip>
-        <TooltipTrigger>
-          <div className="h-7 w-7 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
-            <FileText className="h-4 w-4 text-green-600 dark:text-green-400" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p className="text-xs">Documentos Completos</p>
-        </TooltipContent>
-      </Tooltip>
-    )
-  }
-  
-  // 💳 PAGO
-  if (type === 'PAGO_PENDIENTE') {
-    return (
-      <Tooltip>
-        <TooltipTrigger>
-          <div className="h-7 w-7 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center">
-            <CreditCard className="h-4 w-4 text-red-600 dark:text-red-400" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p className="text-xs">Pago Pendiente</p>
-        </TooltipContent>
-      </Tooltip>
-    )
-  }
-  
-  if (type === 'PAGO_EN_VERIFICACION') {
-    return (
-      <Tooltip>
-        <TooltipTrigger>
-          <div className="h-7 w-7 rounded-full bg-purple-100 dark:bg-purple-950 flex items-center justify-center">
-            <CreditCard className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p className="text-xs">Pago en Verificación</p>
-        </TooltipContent>
-      </Tooltip>
-    )
-  }
-  
-  if (type === 'PAGO_COMPLETO') {
-    return (
-      <Tooltip>
-        <TooltipTrigger>
-          <div className="h-7 w-7 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
-            <CreditCard className="h-4 w-4 text-green-600 dark:text-green-400" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p className="text-xs">Pago Completo</p>
-        </TooltipContent>
-      </Tooltip>
-    )
-  }
-  
-  // 📋 FACTURACIÓN
-  if (type === 'FACTURACION_PENDIENTE') {
-    return (
-      <Tooltip>
-        <TooltipTrigger>
-          <div className="h-7 w-7 rounded-full bg-orange-100 dark:bg-orange-950 flex items-center justify-center">
-            <Receipt className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p className="text-xs">Facturación Pendiente</p>
-        </TooltipContent>
-      </Tooltip>
-    )
-  }
-  
-  if (type === 'FACTURACION_COMPLETA') {
-    return (
-      <Tooltip>
-        <TooltipTrigger>
-          <div className="h-7 w-7 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
-            <Receipt className="h-4 w-4 text-green-600 dark:text-green-400" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p className="text-xs">Facturación Completa</p>
-        </TooltipContent>
-      </Tooltip>
-    )
-  }
-  
-  if (type === 'FACTURACION_NA') {
-    return (
-      <Tooltip>
-        <TooltipTrigger>
-          <div className="h-7 w-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-            <Receipt className="h-4 w-4 text-gray-400 dark:text-gray-500" />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p className="text-xs">No Factura</p>
-        </TooltipContent>
-      </Tooltip>
-    )
-  }
-
-  return null
-}
-
-// Helper components
-function StatusBadge({ status }: { status: string }) {
-  const config = {
-    COMPLETED: { label: 'Completada', className: 'bg-green-100 text-green-800 hover:bg-green-100' },
-    IN_PROGRESS: { label: 'En Progreso', className: 'bg-amber-100 text-amber-800 hover:bg-amber-100' },
-    ABANDONED: { label: 'Abandonada', className: 'bg-red-100 text-red-800 hover:bg-red-100' },
-  }
-  const { label, className } = config[status as keyof typeof config] || config.IN_PROGRESS
-  return <Badge className={className}>{label}</Badge>
-}
-
-function PaymentStatusBadge({ status }: { status: string }) {
-  const config = {
-    VERIFIED: { label: 'Verificado', variant: 'default' as const },
-    PENDING: { label: 'Pendiente', variant: 'secondary' as const },
-    REJECTED: { label: 'Rechazado', variant: 'destructive' as const },
-    PARTIAL: { label: 'Parcial', variant: 'outline' as const },
-  }
-  const { label, variant } = config[status as keyof typeof config] || { label: 'N/A', variant: 'outline' as const }
-  return <Badge variant={variant} className="text-xs">{label}</Badge>
-}
-
-export function OnboardingStatusBadge({ status }: { status: string }) {
-  const config = {
-    COMPLETED: { label: 'Completado', variant: 'default' as const },
-    ATTENDED: { label: 'Asistió', variant: 'default' as const },
-    SCHEDULED: { label: 'Agendado', variant: 'secondary' as const },
-    CONFIRMED: { label: 'Confirmado', variant: 'secondary' as const },
-    INVITED: { label: 'Invitado', variant: 'outline' as const },
-    IN_PROGRESS: { label: 'En Proceso', variant: 'outline' as const },
-    NOT_READY: { label: 'No Listo', variant: 'destructive' as const },
-    READY: { label: 'Listo', variant: 'outline' as const },
-    NO_SHOW: { label: 'No Asistió', variant: 'destructive' as const },
-    CANCELLED: { label: 'Cancelado', variant: 'destructive' as const },
-  }
-  const { label, variant } = config[status as keyof typeof config] || { label: 'N/A', variant: 'outline' as const }
-  return <Badge variant={variant} className="text-xs">{label}</Badge>
-}
-
-function SortIcon({ field, currentField, order }: { field: string; currentField: string | null; order: SortOrder }) {
-  if (currentField !== field) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/50" />
-  if (order === 'asc') return <ArrowUp className="h-3.5 w-3.5 text-foreground" />
-  if (order === 'desc') return <ArrowDown className="h-3.5 w-3.5 text-foreground" />
-  return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/50" />
-}
-
-function InfoRow({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div>
-      <span className="text-xs text-muted-foreground block">{label}</span>
-      <span className="font-medium text-xs">{value || '-'}</span>
-    </div>
   )
 }
