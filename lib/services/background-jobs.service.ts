@@ -1,15 +1,8 @@
 // lib/services/background-jobs.service.ts
+// Versión mejorada con logs detallados
 
 import { prisma } from '@/lib/prisma';
 import { JobType, JobStatus } from '@prisma/client';
-import { 
-  emitJobUpdate, 
-  emitJobLog, 
-  emitJobProgress,
-  emitJobCompleted,
-  emitJobFailed,
-  emitJobStatusChange
-} from '@/lib/socket/server';
 
 export interface CreateJobInput {
   type: JobType;
@@ -23,6 +16,8 @@ export const backgroundJobsService = {
    * Crea un nuevo job en la base de datos
    */
   async create(input: CreateJobInput) {
+    console.log(`[DB] Creando job: ${input.type} para usuario ${input.userId}`);
+    
     const job = await prisma.backgroundJob.create({
       data: {
         type: input.type,
@@ -34,18 +29,7 @@ export const backgroundJobsService = {
       },
     });
 
-    console.log(`✅ Job ${job.id} creado: ${job.type}`);
-
-    // Emitir evento WebSocket de creación
-    emitJobUpdate(job.id, {
-      id: job.id,
-      type: job.type,
-      status: job.status,
-      progress: 0,
-      current: 0,
-      total: job.total,
-    });
-
+    console.log(`✅ [DB] Job ${job.id} creado: ${job.type}`);
     return job;
   },
 
@@ -53,15 +37,27 @@ export const backgroundJobsService = {
    * Obtiene un job por ID
    */
   async getById(jobId: string) {
-    return await prisma.backgroundJob.findUnique({
+    console.log(`[DB] Buscando job ${jobId}...`);
+    
+    const job = await prisma.backgroundJob.findUnique({
       where: { id: jobId },
     });
+    
+    if (job) {
+      console.log(`✅ [DB] Job ${jobId} encontrado. Status: ${job.status}, Progress: ${job.progress}%`);
+    } else {
+      console.warn(`⚠️  [DB] Job ${jobId} NO encontrado en la base de datos`);
+    }
+    
+    return job;
   },
 
   /**
    * Actualiza el status de un job
    */
   async updateStatus(jobId: string, status: JobStatus, error?: string) {
+    console.log(`[DB] Actualizando job ${jobId}: ${status}`);
+    
     const updates: any = { status };
     
     if (status === 'PROCESSING') {
@@ -76,27 +72,18 @@ export const backgroundJobsService = {
       updates.error = error;
     }
 
-    const job = await prisma.backgroundJob.update({
-      where: { id: jobId },
-      data: updates,
-    });
+    try {
+      const job = await prisma.backgroundJob.update({
+        where: { id: jobId },
+        data: updates,
+      });
 
-    console.log(`📊 Job ${jobId} → ${status}`);
-
-    // Emitir eventos WebSocket
-    emitJobStatusChange(jobId, status);
-    emitJobUpdate(jobId, {
-      status: job.status,
-      error: job.error,
-      startedAt: job.startedAt?.toISOString(),
-      completedAt: job.completedAt?.toISOString(),
-    });
-
-    if (status === 'FAILED' && error) {
-      emitJobFailed(jobId, error);
+      console.log(`✅ [DB] Job ${jobId} → ${status}`);
+      return job;
+    } catch (error: any) {
+      console.error(`❌ [DB] Error actualizando status de job ${jobId}:`, error.message);
+      throw error;
     }
-
-    return job;
   },
 
   /**
@@ -105,119 +92,141 @@ export const backgroundJobsService = {
   async updateProgress(jobId: string, current: number, total?: number) {
     const percentage = total ? Math.round((current / total) * 100) : 0;
     
-    const job = await prisma.backgroundJob.update({
-      where: { id: jobId },
-      data: {
-        current,
-        total: total || undefined,
-        progress: percentage,
-      },
-    });
+    try {
+      const job = await prisma.backgroundJob.update({
+        where: { id: jobId },
+        data: {
+          current,
+          total: total || undefined,
+          progress: percentage,
+        },
+      });
 
-    // Emitir evento WebSocket
-    emitJobProgress(jobId, current, total || job.total);
+      // Solo log cada 10%
+      if (percentage % 10 === 0 || percentage === 100) {
+        console.log(`📊 [DB] Job ${jobId} progreso: ${percentage}% (${current}/${total})`);
+      }
 
-    return job;
+      return job;
+    } catch (error: any) {
+      console.error(`❌ [DB] Error actualizando progreso de job ${jobId}:`, error.message);
+      throw error;
+    }
   },
 
   /**
    * Agrega un log al job
    */
   async addLog(jobId: string, message: string) {
-    const job = await prisma.backgroundJob.findUnique({
-      where: { id: jobId },
-      select: { logs: true },
-    });
-    
-    if (!job) {
-      console.warn(`⚠️  Job ${jobId} no encontrado para agregar log`);
-      return;
-    }
-    
-    const logs = Array.isArray(job.logs) ? job.logs : [];
-    const timestampedLog = `[${new Date().toISOString()}] ${message}`;
-    logs.push(timestampedLog);
-    
-    await prisma.backgroundJob.update({
-      where: { id: jobId },
-      data: { logs },
-    });
+    try {
+      const job = await prisma.backgroundJob.findUnique({
+        where: { id: jobId },
+        select: { logs: true },
+      });
+      
+      if (!job) {
+        console.warn(`⚠️  [DB] Job ${jobId} no encontrado para agregar log`);
+        return;
+      }
+      
+      const logs = Array.isArray(job.logs) ? job.logs : [];
+      const timestampedLog = `[${new Date().toISOString()}] ${message}`;
+      logs.push(timestampedLog);
+      
+      await prisma.backgroundJob.update({
+        where: { id: jobId },
+        data: { logs },
+      });
 
-    // Emitir evento WebSocket
-    emitJobLog(jobId, timestampedLog);
+      // Solo mostrar logs importantes en consola
+      if (message.includes('✅') || message.includes('❌') || message.includes('🚀')) {
+        console.log(`📝 [DB] Job ${jobId}: ${message}`);
+      }
+    } catch (error: any) {
+      console.error(`❌ [DB] Error agregando log a job ${jobId}:`, error.message);
+      // No throw - los logs no son críticos
+    }
   },
 
   /**
-   * Agrega múltiples logs en batch (más eficiente)
+   * Agrega múltiples logs en batch
    */
   async addLogs(jobId: string, messages: string[]) {
-    const job = await prisma.backgroundJob.findUnique({
-      where: { id: jobId },
-      select: { logs: true },
-    });
-    
-    if (!job) {
-      console.warn(`⚠️  Job ${jobId} no encontrado para agregar logs`);
-      return;
+    try {
+      const job = await prisma.backgroundJob.findUnique({
+        where: { id: jobId },
+        select: { logs: true },
+      });
+      
+      if (!job) {
+        console.warn(`⚠️  [DB] Job ${jobId} no encontrado para agregar logs`);
+        return;
+      }
+      
+      const logs = Array.isArray(job.logs) ? job.logs : [];
+      const timestampedLogs = messages.map(
+        msg => `[${new Date().toISOString()}] ${msg}`
+      );
+      logs.push(...timestampedLogs);
+      
+      await prisma.backgroundJob.update({
+        where: { id: jobId },
+        data: { logs },
+      });
+      
+      console.log(`📝 [DB] ${messages.length} logs agregados a job ${jobId}`);
+    } catch (error: any) {
+      console.error(`❌ [DB] Error agregando logs batch a job ${jobId}:`, error.message);
+      // No throw - los logs no son críticos
     }
-    
-    const logs = Array.isArray(job.logs) ? job.logs : [];
-    const timestampedLogs = messages.map(
-      msg => `[${new Date().toISOString()}] ${msg}`
-    );
-    logs.push(...timestampedLogs);
-    
-    await prisma.backgroundJob.update({
-      where: { id: jobId },
-      data: { logs },
-    });
-
-    // Emitir cada log por WebSocket
-    timestampedLogs.forEach(log => emitJobLog(jobId, log));
   },
 
   /**
    * Guarda el resultado final del job
    */
   async saveResult(jobId: string, result: any) {
-    const job = await prisma.backgroundJob.update({
-      where: { id: jobId },
-      data: {
-        result,
-        status: 'COMPLETED',
-        completedAt: new Date(),
-      },
-    });
+    console.log(`[DB] Guardando resultado final de job ${jobId}...`);
+    
+    try {
+      const job = await prisma.backgroundJob.update({
+        where: { id: jobId },
+        data: {
+          result,
+          status: 'COMPLETED',
+          completedAt: new Date(),
+        },
+      });
 
-    console.log(`✅ Job ${jobId} completado exitosamente`);
-
-    // Emitir evento de completado
-    emitJobCompleted(jobId, result);
-    emitJobStatusChange(jobId, 'COMPLETED');
-
-    return job;
+      console.log(`✅ [DB] Job ${jobId} completado exitosamente`);
+      return job;
+    } catch (error: any) {
+      console.error(`❌ [DB] Error guardando resultado de job ${jobId}:`, error.message);
+      throw error;
+    }
   },
 
   /**
    * Marca el job como fallido
    */
   async markAsFailed(jobId: string, error: string) {
-    const job = await prisma.backgroundJob.update({
-      where: { id: jobId },
-      data: {
-        status: 'FAILED',
-        error,
-        completedAt: new Date(),
-      },
-    });
+    console.log(`[DB] Marcando job ${jobId} como FAILED...`);
+    
+    try {
+      const job = await prisma.backgroundJob.update({
+        where: { id: jobId },
+        data: {
+          status: 'FAILED',
+          error,
+          completedAt: new Date(),
+        },
+      });
 
-    console.error(`❌ Job ${jobId} falló: ${error}`);
-
-    // Emitir eventos
-    emitJobFailed(jobId, error);
-    emitJobStatusChange(jobId, 'FAILED');
-
-    return job;
+      console.error(`❌ [DB] Job ${jobId} falló: ${error}`);
+      return job;
+    } catch (dbError: any) {
+      console.error(`❌ [DB] Error marcando job ${jobId} como fallido:`, dbError.message);
+      throw dbError;
+    }
   },
 
   /**
@@ -258,6 +267,8 @@ export const backgroundJobsService = {
    * Cancela un job (si está en cola o procesando)
    */
   async cancel(jobId: string, userId: string) {
+    console.log(`[DB] Intentando cancelar job ${jobId} por usuario ${userId}...`);
+    
     const job = await prisma.backgroundJob.findUnique({
       where: { id: jobId },
     });
@@ -282,11 +293,7 @@ export const backgroundJobsService = {
       },
     });
 
-    console.log(`🚫 Job ${jobId} cancelado por usuario`);
-
-    emitJobStatusChange(jobId, 'CANCELLED');
-    emitJobUpdate(jobId, { status: 'CANCELLED' });
-
+    console.log(`🚫 [DB] Job ${jobId} cancelado por usuario`);
     return updatedJob;
   },
 };

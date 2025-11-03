@@ -325,7 +325,7 @@ export function PostulacionesTable({
                         />
                       </div>
                       <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                        {postulacion.currentStep}/7
+                        {postulacion.currentStep}/6
                       </span>
                     </div>
                   </td>

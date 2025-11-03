@@ -2,7 +2,6 @@
 "use client"
 
 import { useEffect, useState, useRef } from 'react'
-import { io, Socket } from 'socket.io-client'
 import {
   Dialog,
   DialogContent,
@@ -21,9 +20,10 @@ import {
   Clock,
   X,
   AlertTriangle,
+  StopCircle,
 } from "lucide-react"
 import { toast } from "sonner"
-import { cancelJob } from '@/app/admin/reportes/actions'
+import { cancelJob, getJobDetails } from '@/app/admin/reportes/actions'
 
 interface ProcessingMonitorProps {
   open: boolean
@@ -33,21 +33,9 @@ interface ProcessingMonitorProps {
   onJobComplete?: () => void
 }
 
-interface JobUpdate {
-  id: string
-  status: string
-  progress?: {
-    current: number
-    total: number
-    percentage: number
-  }
-  result?: any
-  error?: string
-}
-
 const STATUS_CONFIG = {
-  PENDING: {
-    label: 'Pendiente',
+  QUEUED: {
+    label: 'En Cola',
     icon: Clock,
     color: 'bg-gray-500',
     variant: 'secondary' as const,
@@ -82,89 +70,72 @@ export function ProcessingMonitor({
   open,
   onOpenChange,
   jobId,
-  jobType = 'DRIVER_PROCESSING',
+  jobType = 'Conductores Externos',
   onJobComplete,
 }: ProcessingMonitorProps) {
-  const [socket, setSocket] = useState<Socket | null>(null)
-  const [status, setStatus] = useState<keyof typeof STATUS_CONFIG>('PENDING')
-  const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 })
-  const [logs, setLogs] = useState<Array<{ timestamp: string; message: string }>>([])
+  const [status, setStatus] = useState<keyof typeof STATUS_CONFIG>('QUEUED')
+  const [progress, setProgress] = useState(0)
+  const [current, setCurrent] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [logs, setLogs] = useState<string[]>([])
   const [isCancelling, setIsCancelling] = useState(false)
   const [result, setResult] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
   
   const scrollAreaRef = useRef<HTMLDivElement>(null)
-  const shouldAutoScroll = useRef(true)
+  const pollingInterval = useRef<NodeJS.Timeout | null>(null)
 
-  // Conectar WebSocket
+  // Polling del estado del job
   useEffect(() => {
     if (!open || !jobId) return
 
-    const newSocket = io('/api/socketio', {
-      path: '/api/socketio',
-    })
+    const pollJobStatus = async () => {
+      try {
+        const job = await getJobDetails(jobId)
+        
+        setStatus(job.status as keyof typeof STATUS_CONFIG)
+        setProgress(job.progress)
+        setCurrent(job.current)
+        setTotal(job.total)
+        setLogs(Array.isArray(job.logs) ? job.logs.map(log => log as string) : [])
+        setResult(job.result)
+        setError(job.error)
 
-    newSocket.on('connect', () => {
-      console.log('✅ WebSocket conectado')
-      newSocket.emit('subscribe-job', jobId)
-    })
+        // Si terminó, detener polling
+        if (job.status === 'COMPLETED' || job.status === 'FAILED' || job.status === 'CANCELLED') {
+          if (pollingInterval.current) {
+            clearInterval(pollingInterval.current)
+            pollingInterval.current = null
+          }
 
-    newSocket.on('job-update', (data: JobUpdate) => {
-      console.log('📨 Job update:', data)
-      if (data.id === jobId) {
-        setStatus(data.status as keyof typeof STATUS_CONFIG)
-        if (data.progress) {
-          setProgress(data.progress)
+          if (job.status === 'COMPLETED') {
+            toast.success('Proceso completado exitosamente')
+            onJobComplete?.()
+          } else if (job.status === 'FAILED') {
+            toast.error('El proceso falló')
+          }
         }
-        if (data.result) {
-          setResult(data.result)
-        }
+      } catch (error: any) {
+        console.error('Error polling job:', error)
       }
-    })
+    }
 
-    newSocket.on('job-log', (data: { jobId: string; message: string; timestamp: string }) => {
-      if (data.jobId === jobId) {
-        setLogs(prev => [...prev, { timestamp: data.timestamp, message: data.message }])
-      }
-    })
+    // Polling inicial inmediato
+    pollJobStatus()
 
-    newSocket.on('job-progress', (data: { jobId: string; current: number; total: number; percentage: number }) => {
-      if (data.jobId === jobId) {
-        setProgress({ current: data.current, total: data.total, percentage: data.percentage })
-      }
-    })
-
-    newSocket.on('job-completed', (data: { jobId: string; result: any }) => {
-      if (data.jobId === jobId) {
-        setStatus('COMPLETED')
-        setResult(data.result)
-        toast.success('Proceso completado exitosamente')
-        onJobComplete?.()
-      }
-    })
-
-    newSocket.on('job-failed', (data: { jobId: string; error: string }) => {
-      if (data.jobId === jobId) {
-        setStatus('FAILED')
-        toast.error('El proceso falló')
-      }
-    })
-
-    newSocket.on('connect_error', (error) => {
-      console.error('❌ Error de conexión WebSocket:', error)
-      toast.error('Error de conexión en tiempo real')
-    })
-
-    setSocket(newSocket)
+    // Polling cada 2 segundos
+    pollingInterval.current = setInterval(pollJobStatus, 2000)
 
     return () => {
-      newSocket.emit('unsubscribe-job', jobId)
-      newSocket.disconnect()
+      if (pollingInterval.current) {
+        clearInterval(pollingInterval.current)
+      }
     }
   }, [open, jobId, onJobComplete])
 
   // Auto-scroll en logs
   useEffect(() => {
-    if (shouldAutoScroll.current && scrollAreaRef.current) {
+    if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]')
       if (scrollContainer) {
         scrollContainer.scrollTop = scrollContainer.scrollHeight
@@ -180,8 +151,8 @@ export function ProcessingMonitor({
       await cancelJob(jobId)
       toast.success('Proceso cancelado')
       setStatus('CANCELLED')
-    } catch (error) {
-      toast.error('Error al cancelar el proceso')
+    } catch (error: any) {
+      toast.error(error.message || 'Error al cancelar el proceso')
     } finally {
       setIsCancelling(false)
     }
@@ -198,144 +169,176 @@ export function ProcessingMonitor({
   }
 
   const StatusIcon = STATUS_CONFIG[status]?.icon || Clock
-  const statusConfig = STATUS_CONFIG[status] || STATUS_CONFIG.PENDING
+  const statusConfig = STATUS_CONFIG[status] || STATUS_CONFIG.QUEUED
 
-  const canCancel = status === 'PENDING' || status === 'PROCESSING'
+  const canCancel = status === 'QUEUED' || status === 'PROCESSING'
   const isFinished = status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED'
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl max-h-[85vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
+      <DialogContent className="max-w-3xl max-h-[90vh]">
+        <DialogHeader className="pb-2">
+          <DialogTitle className="flex items-center justify-between pr-8">
+            <span className="flex items-center gap-2.5 text-lg">
               <StatusIcon 
-                className={`h-5 w-5 ${status === 'PROCESSING' ? 'animate-spin' : ''}`}
+                className={`h-5 w-5 ${status === 'PROCESSING' ? 'animate-spin text-primary' : ''}`}
               />
-              Procesamiento: {jobType}
+              {jobType}
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleClose}
-              className="h-8 w-8"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </DialogTitle>
-          <DialogDescription>
-            Monitoreando proceso en tiempo real
+          <DialogDescription className="text-xs">
+            Actualización automática cada 2 segundos
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* Estado */}
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Estado:</span>
-            <Badge variant={statusConfig.variant} className="gap-1">
+          <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50">
+            <span className="text-sm font-medium">Estado</span>
+            <Badge variant={statusConfig.variant} className="gap-1.5">
               <StatusIcon className={`h-3 w-3 ${status === 'PROCESSING' ? 'animate-spin' : ''}`} />
               {statusConfig.label}
             </Badge>
           </div>
 
-          {/* Progress Bar */}
-          {progress.total > 0 && (
+          {/* Progreso */}
+          {total > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Progreso:</span>
-                <span className="text-muted-foreground">
-                  {progress.current} / {progress.total} ({Math.round(progress.percentage)}%)
+                <span className="font-medium">Progreso</span>
+                <span className="text-muted-foreground font-mono text-xs">
+                  {current} / {total} ({progress}%)
                 </span>
               </div>
-              <Progress value={progress.percentage} className="h-2" />
+              <Progress value={progress} className="h-2.5" />
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm">
+              <p className="font-semibold text-destructive flex items-center gap-1.5">
+                <XCircle className="h-4 w-4" />
+                Error
+              </p>
+              <p className="mt-1.5 text-destructive/90 text-xs">{error}</p>
             </div>
           )}
 
           {/* Resultado */}
           {result && (
-            <div className="rounded-lg border p-3 bg-muted/50">
-              <h4 className="text-sm font-semibold mb-2">Resultado:</h4>
-              <div className="text-sm space-y-1">
-                {result.exitosos !== undefined && (
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span>Exitosos: {result.exitosos}</span>
-                  </div>
-                )}
-                {result.fallidos !== undefined && result.fallidos > 0 && (
-                  <div className="flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-red-500" />
-                    <span>Fallidos: {result.fallidos}</span>
-                  </div>
-                )}
-                {result.duracionMinutos !== undefined && (
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-blue-500" />
-                    <span>Duración: {result.duracionMinutos} min</span>
-                  </div>
-                )}
+            <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 p-3">
+              <p className="font-semibold text-green-900 dark:text-green-100 flex items-center gap-1.5 text-sm mb-3">
+                <CheckCircle className="h-4 w-4" />
+                Resultado
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center p-3 rounded-lg bg-green-100 dark:bg-green-900/30">
+                  <p className="text-green-600 dark:text-green-400 font-bold text-2xl">{result.successful}</p>
+                  <p className="text-green-700 dark:text-green-300 text-xs mt-1">Exitosos</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-red-100 dark:bg-red-900/30">
+                  <p className="text-red-600 dark:text-red-400 font-bold text-2xl">{result.failed}</p>
+                  <p className="text-red-700 dark:text-red-300 text-xs mt-1">Fallidos</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                  <p className="text-blue-600 dark:text-blue-400 font-bold text-2xl">{result.total}</p>
+                  <p className="text-blue-700 dark:text-blue-300 text-xs mt-1">Total</p>
+                </div>
               </div>
+              {(result.jsFolder || result.mgFolder) && (
+                <div className="mt-3 space-y-1 text-xs text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 p-2 rounded">
+                  {result.jsFolder && <p>📁 JS: {result.jsFolder}</p>}
+                  {result.mgFolder && <p>📁 M&G: {result.mgFolder}</p>}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Logs Terminal */}
+          {/* Logs */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold">Logs:</h4>
-              <span className="text-xs text-muted-foreground">
-                {logs.length} mensajes
-              </span>
+              <span className="text-sm font-medium">Logs de Ejecución</span>
+              <span className="text-xs text-muted-foreground">{logs.length} entradas</span>
             </div>
-            
             <ScrollArea 
               ref={scrollAreaRef}
-              className="h-64 rounded-lg border bg-black/95 p-3"
+              className="h-[280px] rounded-lg border bg-slate-950 p-3"
             >
-              <div className="font-mono text-xs space-y-1">
-                {logs.length === 0 ? (
-                  <div className="text-gray-500">Esperando logs...</div>
-                ) : (
-                  logs.map((log, index) => (
-                    <div key={index} className="text-green-400">
-                      <span className="text-gray-500">
-                        [{new Date(log.timestamp).toLocaleTimeString()}]
-                      </span>
-                      {' '}
-                      {log.message}
-                    </div>
-                  ))
-                )}
-              </div>
+              {logs.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-sm text-slate-500">
+                    Esperando logs del proceso...
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-0.5 font-mono text-[11px] leading-relaxed">
+                  {logs.map((log, index) => {
+                    // Limpiar timestamp del log
+                    const cleanLog = log.replace(/^\[.*?\]\s*/, '')
+                    
+                    // Determinar color según el contenido
+                    let colorClass = 'text-slate-300'
+                    if (cleanLog.includes('✅')) colorClass = 'text-green-400'
+                    else if (cleanLog.includes('❌')) colorClass = 'text-red-400'
+                    else if (cleanLog.includes('📊') || cleanLog.includes('📁') || cleanLog.includes('🤖') || cleanLog.includes('🚀')) colorClass = 'text-blue-400 font-semibold'
+                    else if (cleanLog.includes('═══')) colorClass = 'text-slate-600'
+                    else if (cleanLog.includes('⚠️')) colorClass = 'text-orange-400'
+                    else if (cleanLog.includes('💡')) colorClass = 'text-yellow-400'
+                    
+                    return (
+                      <div key={index} className={colorClass}>
+                        {cleanLog}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </ScrollArea>
           </div>
 
           {/* Acciones */}
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-2 justify-end pt-2 border-t">
             {canCancel && (
               <Button
                 variant="destructive"
+                size="sm"
                 onClick={handleCancel}
                 disabled={isCancelling}
+                className="gap-2"
               >
                 {isCancelling ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Cancelando...
                   </>
                 ) : (
-                  'Cancelar Proceso'
+                  <>
+                    <StopCircle className="h-4 w-4" />
+                    Cancelar Proceso
+                  </>
                 )}
               </Button>
             )}
-            
-            <Button
-              variant={isFinished ? "default" : "outline"}
-              onClick={handleClose}
-              className="ml-auto"
-            >
-              Cerrar
-            </Button>
+            {isFinished && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => onOpenChange(false)}
+              >
+                Cerrar
+              </Button>
+            )}
           </div>
+
+          {/* Info adicional */}
+          {status === 'PROCESSING' && !isFinished && (
+            <div className="text-center py-2 px-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900">
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                💡 El proceso continúa en segundo plano si cierras esta ventana
+              </p>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

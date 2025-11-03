@@ -15,38 +15,28 @@ interface PageProps {
     startDate?: string
     endDate?: string
     page?: string
+    sortBy?: string
+    sortOrder?: string
   }>
 }
 
-// ✅ INCLUDE CORRECTO CON CAMPOS REALES DEL SCHEMA
-const POSTULACION_INCLUDE = {
+// ✅ INCLUDE OPTIMIZADO - Solo lo necesario para mostrar badges
+const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
   documents: {
     select: {
       id: true,
       documentType: true,
       status: true,
-      blobUrl: true,
-      fileName: true,
-      createdAt: true,
-    },
-    orderBy: {
-      createdAt: 'desc' as const
     }
   },
   equipmentPayments: {
     select: {
       id: true,
-      amount: true,
-      paymentMethod: true,
       status: true,
-      paymentNumber: true,
-      invoiceNumber: true,
-      paymentProofUrl: true,
       paymentDate: true,
-      createdAt: true,
     },
     orderBy: {
-      createdAt: 'desc' as const
+      createdAt: 'desc'
     },
     take: 1
   },
@@ -54,10 +44,6 @@ const POSTULACION_INCLUDE = {
     select: {
       id: true,
       hasInvoice: true,
-      taxComplianceUrl: true,
-      interestedInConto: true,
-      contoStatus: true,
-      createdAt: true,
     }
   },
   onboardingAttendances: {
@@ -69,22 +55,33 @@ const POSTULACION_INCLUDE = {
         select: {
           id: true,
           scheduledDate: true,
-          location: true,
         }
       }
     },
     orderBy: {
-      createdAt: 'desc' as const
+      createdAt: 'desc'
     },
     take: 1
   }
-} satisfies Prisma.FormDriverInclude
+}
 
 export default async function PostulacionesPage({ searchParams }: PageProps) {
   const params = await searchParams
   
   const page = params.page ? parseInt(params.page) : 1
-  const limit = 20
+  const limit = 50 // ✅ AUMENTADO A 50
+
+  // ==================== ORDENAMIENTO ====================
+  const sortBy = params.sortBy || 'createdAt'
+  const sortOrder = params.sortOrder || 'desc'
+  
+  // Construir el orderBy dinámico
+  const orderBy: any = {}
+  if (sortBy === 'fullName' || sortBy === 'city' || sortBy === 'status' || sortBy === 'createdAt') {
+    orderBy[sortBy] = sortOrder
+  } else {
+    orderBy.createdAt = 'desc' // fallback
+  }
 
   // ==================== WHERE CLAUSE ====================
   const where: Prisma.FormDriverWhereInput = {}
@@ -95,20 +92,16 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   }
 
   // ✅ FILTRO DE ONBOARDING CORREGIDO
-  // El filtro de tabs viene como string minúscula, pero el enum es MAYÚSCULA
   if (params.onboardingStatus && params.onboardingStatus !== 'all') {
     if (params.onboardingStatus === 'pending') {
-      // Pendiente: NOT_READY, READY, o null
       where.OR = [
         { onboardingStatus: 'NOT_READY' },
         { onboardingStatus: 'READY' },
         { onboardingStatus: null },
       ]
     } else if (params.onboardingStatus === 'scheduled') {
-      // ✅ Corregido: Usar SCHEDULED (mayúscula) que es el valor del enum
       where.onboardingStatus = 'SCHEDULED'
     } else if (params.onboardingStatus === 'completed') {
-      // ✅ Corregido: Usar COMPLETED (mayúscula) que es el valor del enum
       where.onboardingStatus = 'COMPLETED'
     }
   }
@@ -141,16 +134,36 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     where.createdAt = { ...where.createdAt as any, lte: new Date(params.endDate) }
   }
 
-  // ==================== STATS ====================
+  // ==================== QUERIES PARALELAS OPTIMIZADAS ====================
   const treintaDiasAtras = new Date()
   treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30)
 
-  const [total, completadas, enProgreso, abandonadas, nuevasUltimos30Dias] = await Promise.all([
+  // ✅ EJECUTAR TODAS LAS QUERIES EN PARALELO
+  const [
+    total,
+    completadas,
+    enProgreso,
+    abandonadas,
+    nuevasUltimos30Dias,
+    totalFiltered,
+    postulaciones
+  ] = await Promise.all([
+    // Stats globales
     prisma.formDriver.count(),
     prisma.formDriver.count({ where: { status: 'COMPLETED' } }),
     prisma.formDriver.count({ where: { status: 'IN_PROGRESS' } }),
     prisma.formDriver.count({ where: { status: 'ABANDONED' } }),
     prisma.formDriver.count({ where: { createdAt: { gte: treintaDiasAtras } } }),
+    
+    // Data filtrada
+    prisma.formDriver.count({ where }),
+    prisma.formDriver.findMany({
+      where,
+      include: POSTULACION_INCLUDE,
+      orderBy: orderBy,
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
   ])
 
   const tasaCompletado = total > 0 ? Math.round((completadas / total) * 100) : 0
@@ -163,18 +176,6 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     nuevasUltimos30Dias,
     tasaCompletado,
   }
-
-  // ==================== DATA ====================
-  const [totalFiltered, postulaciones] = await Promise.all([
-    prisma.formDriver.count({ where }),
-    prisma.formDriver.findMany({
-      where,
-      include: POSTULACION_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-  ])
 
   const totalPages = Math.ceil(totalFiltered / limit)
   const hasMore = page < totalPages
@@ -194,6 +195,8 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
         hasVehicle: params.hasVehicle,
         startDate: params.startDate,
         endDate: params.endDate,
+        sortBy: params.sortBy,
+        sortOrder: params.sortOrder,
       }}
     />
   )

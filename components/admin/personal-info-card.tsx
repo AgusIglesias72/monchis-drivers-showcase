@@ -20,6 +20,49 @@ export function PersonalInfoCard({
   isEditing,
   setEditedData,
 }: PersonalInfoCardProps) {
+  // Función helper para convertir DD/MM/YYYY a YYYY-MM-DD
+  const convertToISODate = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return ''
+    
+    try {
+      // Si ya está en formato YYYY-MM-DD o es ISO
+      if (dateStr.includes('-')) {
+        const date = new Date(dateStr)
+        if (!isNaN(date.getTime())) {
+          return date.toISOString().split('T')[0]
+        }
+      }
+      
+      // Si está en formato DD/MM/YYYY
+      if (dateStr.includes('/')) {
+        const parts = dateStr.split('/')
+        if (parts.length === 3) {
+          const day = parts[0].padStart(2, '0')
+          const month = parts[1].padStart(2, '0')
+          const year = parts[2]
+          
+          // Construir fecha en formato YYYY-MM-DD
+          const isoDate = `${year}-${month}-${day}`
+          const date = new Date(isoDate)
+          
+          if (!isNaN(date.getTime())) {
+            return isoDate
+          }
+        }
+      }
+      
+      // Intentar crear fecha directamente
+      const date = new Date(dateStr)
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0]
+      }
+    } catch (error) {
+      console.error('Error converting date:', error)
+    }
+    
+    return ''
+  }
+  
   return (
     <Card>
       <CardHeader className="pb-3 border-b">
@@ -57,18 +100,54 @@ export function PersonalInfoCard({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">CI</Label>
-                <p className="text-sm">{postulacion.cedula}</p>
+                {isEditing ? (
+                  <Input
+                    value={editedData.cedula || ''}
+                    onChange={(e) => setEditedData({ ...editedData, cedula: e.target.value })}
+                    placeholder="Cédula"
+                    className="h-8 text-sm"
+                  />
+                ) : (
+                  <p className="text-sm">{postulacion.cedula}</p>
+                )}
               </div>
               
-              {postulacion.birthDate && (
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Fecha de Nacimiento</Label>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Fecha de Nacimiento</Label>
+                {isEditing ? (
+                  <Input
+                    type="date"
+                    value={convertToISODate(editedData.birthDate || postulacion.birthDate)}
+                    onChange={(e) => setEditedData({ ...editedData, birthDate: e.target.value })}
+                    className="h-8 text-sm"
+                  />
+                ) : postulacion.birthDate ? (
                   <p className="text-sm">
                     {formatBirthDateWithAge(postulacion.birthDate) || formatDateOnly(postulacion.birthDate) || postulacion.birthDate}
                   </p>
-                </div>
-              )}
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No registrada</p>
+                )}
+              </div>
             </div>
+
+            {postulacion.uenoAccountNumber && (
+              <div className="space-y-1 pt-2">
+                <Label className="text-xs text-muted-foreground">Cuenta Ueno</Label>
+                {isEditing ? (
+                  <Input
+                    value={editedData.uenoAccountNumber || ''}
+                    onChange={(e) => setEditedData({ ...editedData, uenoAccountNumber: e.target.value })}
+                    placeholder="Número de cuenta Ueno"
+                    className="h-8 text-sm"
+                  />
+                ) : (
+                  <p className="text-sm font-mono bg-muted/50 px-2 py-1 rounded text-xs">
+                    {postulacion.uenoAccountNumber}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Contacto */}

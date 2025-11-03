@@ -5,12 +5,14 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ExternalDriversReportCard } from './components/ExternalDriversReportCard'
 import { JobsHistoryTable } from './components/jobs/JobsHistoryTable'
+import { ActiveJobCard } from './components/ActiveJobCard'
 import { getJobsHistory } from './actions'
 import { CheckCircle, XCircle, Loader2, Clock, FileText } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function ReportesPage() {
   const [jobs, setJobs] = useState([])
+  const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -25,6 +27,17 @@ export default function ReportesPage() {
     try {
       const jobsData = await getJobsHistory({ limit: 20 })
       setJobs(jobsData as any)
+      
+      // Buscar job activo (QUEUED o PROCESSING)
+      const activeJob = jobsData.find((j: any) => 
+        j.status === 'QUEUED' || j.status === 'PROCESSING'
+      )
+      
+      if (activeJob) {
+        setActiveJobId(activeJob.id)
+      } else {
+        setActiveJobId(null)
+      }
       
       // Calcular stats manualmente
       const newStats = {
@@ -41,6 +54,11 @@ export default function ReportesPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleJobStart = (jobId: string) => {
+    setActiveJobId(jobId)
+    loadData()
   }
 
   useEffect(() => {
@@ -133,6 +151,17 @@ export default function ReportesPage() {
         </Card>
       </div>
 
+      {/* Active Job Card */}
+      {activeJobId && (
+        <ActiveJobCard 
+          jobId={activeJobId} 
+          onClose={() => {
+            setActiveJobId(null)
+            loadData()
+          }}
+        />
+      )}
+
       {/* Tabs: Reportes Disponibles y Historial */}
       <Tabs defaultValue="reports" className="space-y-6">
         <TabsList className="grid w-full max-w-md grid-cols-2">
@@ -142,27 +171,25 @@ export default function ReportesPage() {
 
         {/* Tab: Reportes Disponibles */}
         <TabsContent value="reports" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
-            {/* Card de Conductores Externos */}
-            <ExternalDriversReportCard onJobStart={loadData} />
+          {/* Card de Conductores Externos - Ancho completo */}
+          <ExternalDriversReportCard onJobStart={handleJobStart} />
 
-            {/* Placeholder para futuros reportes */}
-            <Card className="border-dashed">
-              <CardHeader>
-                <CardTitle className="text-xl text-muted-foreground">
-                  Más Reportes Próximamente
-                </CardTitle>
-                <CardDescription>
-                  Estamos trabajando en agregar más reportes automatizados
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-40 flex items-center justify-center text-muted-foreground">
-                  <p className="text-sm">Próximos reportes en desarrollo...</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Placeholder para futuros reportes */}
+          <Card className="border-dashed">
+            <CardHeader>
+              <CardTitle className="text-xl text-muted-foreground">
+                Más Reportes Próximamente
+              </CardTitle>
+              <CardDescription>
+                Estamos trabajando en agregar más reportes automatizados
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-32 flex items-center justify-center text-muted-foreground">
+                <p className="text-sm">Próximos reportes en desarrollo...</p>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Tab: Historial */}

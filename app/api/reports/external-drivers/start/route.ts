@@ -3,8 +3,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { backgroundJobsService } from '@/lib/services/background-jobs.service';
+import { externalDriversProcessor } from '@/lib/services/external-drivers-processor.service';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // 5 minutos para la función (el proceso real continúa en background)
 
 interface StartJobRequest {
   startDate: string;
@@ -71,14 +73,18 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Iniciar procesamiento en background
-    void import('@/lib/services/external-drivers-processor.service').then(
-      ({ externalDriversProcessor }) => {
-        externalDriversProcessor.processJob(job.id).catch((error) => {
-          console.error(`Error procesando job ${job.id}:`, error);
-        });
-      }
-    );
+    console.log(`🚀 Job ${job.id} creado, iniciando procesamiento...`);
+
+    // Iniciar procesamiento en background de forma INMEDIATA
+    // NO usar await aquí - queremos que se ejecute en paralelo
+    externalDriversProcessor.processJob(job.id).catch((error) => {
+      console.error(`❌ Error crítico procesando job ${job.id}:`, error);
+      // Intentar marcar como fallido
+      backgroundJobsService.markAsFailed(job.id, error.message).catch(console.error);
+    });
+
+    // Dar un pequeño delay para que el job empiece
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     return NextResponse.json({
       success: true,
@@ -87,7 +93,7 @@ export async function POST(request: NextRequest) {
     });
     
   } catch (error: any) {
-    console.error('Error iniciando job:', error);
+    console.error('❌ Error iniciando job:', error);
     return NextResponse.json(
       { 
         success: false,

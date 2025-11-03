@@ -490,11 +490,11 @@ const handleViewPaymentProof = () => {
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap justify-end items-center gap-2">
             {!isEditing && (
               <Button
                 variant="outline"
-                className="gap-2"
+                className="gap-2 hidden"
                 disabled
               >
                 <Bot className="h-4 w-4" />

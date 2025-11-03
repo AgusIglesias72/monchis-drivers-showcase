@@ -23,73 +23,23 @@ export async function getJobsHistory(filters?: {
 
     const jobs = await backgroundJobsService.getByUser(userId, filters);
     
-    // Serializar para pasar al cliente
+    // Serializar las fechas para que sean JSON-safe
     return jobs.map(job => ({
-      id: job.id,
-      type: job.type,
-      status: job.status,
-      progress: job.progress,
-      current: job.current,
-      total: job.total,
-      metadata: job.metadata as any,
-      result: job.result as any,
-      error: job.error,
+      ...job,
       createdAt: job.createdAt.toISOString(),
-      startedAt: job.startedAt?.toISOString(),
-      completedAt: job.completedAt?.toISOString(),
+      updatedAt: job.updatedAt.toISOString(),
+      startedAt: job.startedAt?.toISOString() || null,
+      completedAt: job.completedAt?.toISOString() || null,
     }));
     
   } catch (error: any) {
-    console.error('Error obteniendo historial:', error);
-    throw error;
+    console.error('Error obteniendo historial de jobs:', error);
+    throw new Error(error.message || 'Error al obtener el historial');
   }
 }
 
 /**
- * Obtiene un job específico por ID
- */
-export async function getJobById(jobId: string) {
-  try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      throw new Error('No autorizado');
-    }
-
-    const job = await backgroundJobsService.getById(jobId);
-    
-    if (!job) {
-      throw new Error('Job no encontrado');
-    }
-    
-    if (job.userId !== userId) {
-      throw new Error('No tienes permiso para ver este job');
-    }
-
-    return {
-      id: job.id,
-      type: job.type,
-      status: job.status,
-      progress: job.progress,
-      current: job.current,
-      total: job.total,
-      logs: job.logs as string[],
-      metadata: job.metadata as any,
-      result: job.result as any,
-      error: job.error,
-      createdAt: job.createdAt.toISOString(),
-      startedAt: job.startedAt?.toISOString(),
-      completedAt: job.completedAt?.toISOString(),
-    };
-    
-  } catch (error: any) {
-    console.error('Error obteniendo job:', error);
-    throw error;
-  }
-}
-
-/**
- * Cancela un job activo
+ * Cancela un job en ejecución
  */
 export async function cancelJob(jobId: string) {
   try {
@@ -105,12 +55,12 @@ export async function cancelJob(jobId: string) {
     
   } catch (error: any) {
     console.error('Error cancelando job:', error);
-    throw error;
+    throw new Error(error.message || 'Error al cancelar el job');
   }
 }
 
 /**
- * Obtiene estadísticas de jobs del usuario
+ * Obtiene las estadísticas de jobs del usuario
  */
 export async function getJobsStats() {
   try {
@@ -120,20 +70,57 @@ export async function getJobsStats() {
       throw new Error('No autorizado');
     }
 
-    const allJobs = await backgroundJobsService.getByUser(userId, { limit: 100 });
+    const allJobs = await backgroundJobsService.getByUser(userId);
     
     const stats = {
       total: allJobs.length,
+      pending: allJobs.filter(j => j.status === 'QUEUED').length,
+      processing: allJobs.filter(j => j.status === 'PROCESSING').length,
       completed: allJobs.filter(j => j.status === 'COMPLETED').length,
       failed: allJobs.filter(j => j.status === 'FAILED').length,
-      processing: allJobs.filter(j => j.status === 'PROCESSING').length,
-      queued: allJobs.filter(j => j.status === 'QUEUED').length,
+      cancelled: allJobs.filter(j => j.status === 'CANCELLED').length,
     };
     
     return stats;
     
   } catch (error: any) {
-    console.error('Error obteniendo estadísticas:', error);
-    throw error;
+    console.error('Error obteniendo stats de jobs:', error);
+    throw new Error(error.message || 'Error al obtener estadísticas');
+  }
+}
+
+/**
+ * Obtiene los detalles de un job específico
+ */
+export async function getJobDetails(jobId: string) {
+  try {
+    const { userId } = await auth();
+    
+    if (!userId) {
+      throw new Error('No autorizado');
+    }
+
+    const job = await backgroundJobsService.getById(jobId);
+    
+    if (!job) {
+      throw new Error('Job no encontrado');
+    }
+
+    if (job.userId !== userId) {
+      throw new Error('No autorizado para ver este job');
+    }
+
+    // Serializar las fechas
+    return {
+      ...job,
+      createdAt: job.createdAt.toISOString(),
+      updatedAt: job.updatedAt.toISOString(),
+      startedAt: job.startedAt?.toISOString() || null,
+      completedAt: job.completedAt?.toISOString() || null,
+    };
+    
+  } catch (error: any) {
+    console.error('Error obteniendo detalles de job:', error);
+    throw new Error(error.message || 'Error al obtener detalles del job');
   }
 }

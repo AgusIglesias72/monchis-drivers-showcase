@@ -76,32 +76,64 @@ export class PostulacionService {
    * Actualiza datos básicos de una postulación
    */
   async updatePostulacion(id: string, data: any) {
+    // Preparar datos para actualizar
+    const updateData: any = {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      fullName: `${data.firstName} ${data.lastName}`,
+      phoneNumber: data.phoneNumber,
+      email: data.email,
+      department: data.department,
+      city: data.city,
+      address: data.address,
+      emergencyName: data.emergencyName,
+      emergencyPhone: data.emergencyPhone,
+      emergencyRelationship: data.emergencyRelationship,
+      // Vehículo
+      hasVehicle: data.hasVehicle,
+      vehicleBrand: data.vehicleBrand,
+      vehicleModel: data.vehicleModel,
+      vehicleYear: data.vehicleYear,
+      vehiclePlate: data.vehiclePlate,
+      workZone: data.workZone,
+      // Otros
+      experience: data.experience,
+      availability: data.availability,
+      whenCanStart: data.whenCanStart,
+    }
+
+    // ✅ AGREGAR CÉDULA si viene en data
+    if (data.cedula !== undefined) {
+      updateData.cedula = data.cedula
+    }
+
+    // ✅ AGREGAR CUENTA UENO si viene en data
+    if (data.uenoAccountNumber !== undefined) {
+      updateData.uenoAccountNumber = data.uenoAccountNumber
+    }
+
+    // ✅ AGREGAR FECHA DE NACIMIENTO si viene en data
+    if (data.birthDate !== undefined) {
+      // Convertir la fecha de YYYY-MM-DD a Date object
+      if (data.birthDate) {
+        try {
+          // Si viene en formato YYYY-MM-DD del input date
+          const dateValue = new Date(data.birthDate)
+          if (!isNaN(dateValue.getTime())) {
+            updateData.birthDate = dateValue
+          }
+        } catch (error) {
+          console.error('Error al convertir fecha:', error)
+        }
+      } else {
+        // Si es null o vacío, permitir actualizar a null
+        updateData.birthDate = null
+      }
+    }
+
     return prisma.formDriver.update({
       where: { id },
-      data: {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        fullName: `${data.firstName} ${data.lastName}`,
-        phoneNumber: data.phoneNumber,
-        email: data.email,
-        department: data.department,
-        city: data.city,
-        address: data.address,
-        emergencyName: data.emergencyName,
-        emergencyPhone: data.emergencyPhone,
-        emergencyRelationship: data.emergencyRelationship,
-        // Vehículo
-        hasVehicle: data.hasVehicle,
-        vehicleBrand: data.vehicleBrand,
-        vehicleModel: data.vehicleModel,
-        vehicleYear: data.vehicleYear,
-        vehiclePlate: data.vehiclePlate,
-        workZone: data.workZone,
-        // Otros
-        experience: data.experience,
-        availability: data.availability,
-        whenCanStart: data.whenCanStart,
-      }
+      data: updateData
     })
   }
 

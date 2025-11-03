@@ -2,12 +2,13 @@
 
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useTransition } from "react"
 import { AdminHeader } from "@/components/admin/admin-header"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
 import { PostulacionesKPIs } from "@/components/admin/postulaciones-kpis"
 import { PostulacionesTableExpandable } from "@/components/admin/postulaciones-table-expandable"
 import {
@@ -17,11 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs"
 import {
   Search,
   Download,
@@ -51,10 +47,29 @@ interface PostulacionesPageContentProps {
     hasVehicle?: string
     startDate?: string
     endDate?: string
+    sortBy?: string
+    sortOrder?: string
   }
 }
 
 type QuickFilter = 'all' | 'scheduled' | 'pending-schedule' | 'review' | 'pending-completion'
+
+// ✅ Hook personalizado para debouncing
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value)
+    }, delay)
+
+    return () => {
+      clearTimeout(handler)
+    }
+  }, [value, delay])
+
+  return debouncedValue
+}
 
 export function PostulacionesPageContent({
   stats,
@@ -66,16 +81,21 @@ export function PostulacionesPageContent({
   currentFilters
 }: PostulacionesPageContentProps) {
   const router = useRouter()
-  
+  const [isPending, startTransition] = useTransition()
+
   // Estados locales para los filtros
   const [searchTerm, setSearchTerm] = useState(currentFilters.search || '')
   const [statusFilter, setStatusFilter] = useState(currentFilters.status || 'all')
   const [onboardingStatusFilter, setOnboardingStatusFilter] = useState(currentFilters.onboardingStatus || 'all')
   const [startDate, setStartDate] = useState(currentFilters.startDate || '')
   const [endDate, setEndDate] = useState(currentFilters.endDate || '')
+  const [sortBy, setSortBy] = useState(currentFilters.sortBy || 'createdAt')
+  const [sortOrder, setSortOrder] = useState(currentFilters.sortOrder || 'desc')
   const [isExporting, setIsExporting] = useState(false)
-  const [isSearching, setIsSearching] = useState(false)
   const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all')
+
+  // ✅ Debounce para búsqueda (500ms)
+  const debouncedSearchTerm = useDebounce(searchTerm, 500)
 
   // Determinar el filtro rápido activo basado en los filtros actuales
   useEffect(() => {
@@ -92,9 +112,16 @@ export function PostulacionesPageContent({
     }
   }, [statusFilter, onboardingStatusFilter])
 
-  const applyFilters = (page: number = 1, quickFilter?: QuickFilter) => {
+  // ✅ Auto-search cuando el debounced value cambia
+  useEffect(() => {
+    if (debouncedSearchTerm !== currentFilters.search) {
+      applyFilters(1)
+    }
+  }, [debouncedSearchTerm])
+
+  const applyFilters = useCallback((page: number = 1, quickFilter?: QuickFilter) => {
     const params = new URLSearchParams()
-    
+
     // Si se especifica un filtro rápido, aplicar esos filtros
     if (quickFilter) {
       switch (quickFilter) {
@@ -119,37 +146,37 @@ export function PostulacionesPageContent({
       if (statusFilter !== 'all') params.set('status', statusFilter)
       if (onboardingStatusFilter !== 'all') params.set('onboardingStatus', onboardingStatusFilter)
     }
-    
+
     // Filtros adicionales que siempre se aplican
-    if (searchTerm) params.set('search', searchTerm)
+    if (debouncedSearchTerm) params.set('search', debouncedSearchTerm)
     if (startDate) params.set('startDate', startDate)
     if (endDate) params.set('endDate', endDate)
+    if (sortBy !== 'createdAt') params.set('sortBy', sortBy)
+    if (sortOrder !== 'desc') params.set('sortOrder', sortOrder)
     if (page > 1) params.set('page', page.toString())
-    
+
     const queryString = params.toString()
-    router.push(`/admin/postulaciones${queryString ? `?${queryString}` : ''}`, { scroll: false })
-  }
+    
+    // ✅ Usar startTransition para hacer la navegación no bloqueante
+    startTransition(() => {
+      router.push(`/admin/postulaciones${queryString ? `?${queryString}` : ''}`, { scroll: false })
+    })
+  }, [router, statusFilter, onboardingStatusFilter, debouncedSearchTerm, startDate, endDate, sortBy, sortOrder])
 
   const handleQuickFilter = (filter: QuickFilter) => {
-    setIsSearching(true)
     setActiveQuickFilter(filter)
-    
+
     // Resetear filtros manuales cuando se usa un filtro rápido
     if (filter !== 'all') {
       setStatusFilter('all')
       setOnboardingStatusFilter('all')
     }
-    
-    setTimeout(() => {
-      applyFilters(1, filter)
-    }, 100)
+
+    applyFilters(1, filter)
   }
 
   const handleSearch = () => {
-    setIsSearching(true)
-    setTimeout(() => {
-      applyFilters(1)
-    }, 100)
+    applyFilters(1)
   }
 
   const handleClearFilters = () => {
@@ -158,8 +185,13 @@ export function PostulacionesPageContent({
     setOnboardingStatusFilter('all')
     setStartDate('')
     setEndDate('')
+    setSortBy('createdAt')
+    setSortOrder('desc')
     setActiveQuickFilter('all')
-    router.push('/admin/postulaciones', { scroll: false })
+    
+    startTransition(() => {
+      router.push('/admin/postulaciones', { scroll: false })
+    })
   }
 
   const hasActiveFilters = searchTerm || statusFilter !== 'all' || onboardingStatusFilter !== 'all' || startDate || endDate
@@ -170,7 +202,7 @@ export function PostulacionesPageContent({
 
   const handleExport = async () => {
     setIsExporting(true)
-    
+
     try {
       const response = await fetch('/api/admin/postulaciones/export', {
         method: 'POST',
@@ -207,16 +239,15 @@ export function PostulacionesPageContent({
     }
   }
 
-  // Resetear loading cuando los datos cambian
-  useEffect(() => {
-    setIsSearching(false)
-  }, [postulaciones])
-
   return (
     <div className="min-h-screen bg-background">
-      <AdminHeader />
-      
-      {/* CONTENEDOR PRINCIPAL: Se ajusta al ancho disponible */}
+      <AdminHeader
+        breadcrumbs={[
+          { label: "Postulaciones", href: "/admin/postulaciones" },
+        ]}
+      />
+
+      {/* CONTENEDOR PRINCIPAL */}
       <div className="w-full p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Header */}
         <div>
@@ -229,59 +260,62 @@ export function PostulacionesPageContent({
         {/* KPIs */}
         <PostulacionesKPIs stats={stats} />
 
-        {/* Tabs de filtros rápidos */}
-        <Card>
-          <CardContent className="pt-6">
-            <Tabs value={activeQuickFilter} onValueChange={(value) => handleQuickFilter(value as QuickFilter)} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 h-auto gap-2">
-                <TabsTrigger value="all" className="flex items-center gap-2">
-                  <ClipboardCheck className="h-4 w-4" />
-                  <span className="hidden sm:inline">Todas</span>
-                </TabsTrigger>
-                <TabsTrigger value="scheduled" className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  <span className="hidden sm:inline">Agendados</span>
-                </TabsTrigger>
-                <TabsTrigger value="pending-schedule" className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  <span className="hidden sm:inline">Pendiente de Agendar</span>
-                </TabsTrigger>
-                <TabsTrigger value="review" className="flex items-center gap-2">
-                  <FileCheck className="h-4 w-4" />
-                  <span className="hidden sm:inline">Revisar Postulación</span>
-                </TabsTrigger>
-                <TabsTrigger value="pending-completion" className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">Postulación Pendiente</span>
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </CardContent>
-        </Card>
-
         {/* Filtros avanzados */}
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Card className="-mt-[1px] relative z-0">
+          <CardHeader className="">
+            <CardTitle className="text-lg">Filtros de Búsqueda</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Búsqueda y filtros en una línea */}
+            <div className="flex flex-wrap items-end gap-2">
               {/* Búsqueda */}
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="search" className="text-xs text-muted-foreground">Buscar</Label>
+              <div className="relative w-[280px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
                 <Input
                   id="search"
-                  placeholder="Nombre, cédula, teléfono o email..."
+                  placeholder="Buscar por nombre, cédula, teléfono o email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  className="h-9"
+                  className="pl-9 pr-9 h-9 text-sm"
+                  disabled={isPending}
                 />
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0 hover:bg-muted"
+                    onClick={() => {
+                      setSearchTerm('')
+                      setTimeout(() => applyFilters(1), 100)
+                    }}
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {isPending && debouncedSearchTerm !== searchTerm && (
+                  <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  </div>
+                )}
               </div>
 
-              {/* Filtro de estado */}
-              <div className="space-y-1.5">
-                <Label htmlFor="status" className="text-xs text-muted-foreground">Estado</Label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger id="status" className="h-9">
-                    <SelectValue placeholder="Estado" />
+              {/* Estado postulación */}
+              <div className="space-y-1.5 flex-1 min-w-[150px]">
+                <Label htmlFor="status" className="text-xs font-medium text-muted-foreground">
+                  Estado postulación
+                </Label>
+                <Select 
+                  value={statusFilter} 
+                  onValueChange={(value) => {
+                    setStatusFilter(value)
+                    setTimeout(() => applyFilters(1), 100)
+                  }}
+                  disabled={isPending}
+                >
+                  <SelectTrigger id="status" className="h-9 text-sm w-full">
+                    <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
@@ -292,173 +326,265 @@ export function PostulacionesPageContent({
                 </Select>
               </div>
 
-              {/* Filtro de onboarding */}
-              <div className="space-y-1.5">
-                <Label htmlFor="onboarding" className="text-xs text-muted-foreground">Onboarding</Label>
-                <Select value={onboardingStatusFilter} onValueChange={setOnboardingStatusFilter}>
-                  <SelectTrigger id="onboarding" className="h-9">
-                    <SelectValue placeholder="Onboarding" />
+              {/* Onboarding */}
+              <div className="space-y-1.5 flex-1 min-w-[140px]">
+                <Label htmlFor="onboarding" className="text-xs font-medium text-muted-foreground">
+                  Onboarding
+                </Label>
+                <Select 
+                  value={onboardingStatusFilter} 
+                  onValueChange={(value) => {
+                    setOnboardingStatusFilter(value)
+                    setTimeout(() => applyFilters(1), 100)
+                  }}
+                  disabled={isPending}
+                >
+                  <SelectTrigger id="onboarding" className="h-9 text-sm w-full">
+                    <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="pending">Pendiente</SelectItem>
                     <SelectItem value="scheduled">Agendado</SelectItem>
-                    <SelectItem value="completed">Realizado</SelectItem>
+                    <SelectItem value="completed">Completado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Ordenar por */}
+              <div className="space-y-1.5 flex-1 min-w-[140px]">
+                <Label htmlFor="sortBy" className="text-xs font-medium text-muted-foreground">
+                  Ordenar por
+                </Label>
+                <Select 
+                  value={sortBy} 
+                  onValueChange={(value) => {
+                    setSortBy(value)
+                    setTimeout(() => applyFilters(1), 100)
+                  }}
+                  disabled={isPending}
+                >
+                  <SelectTrigger id="sortBy" className="h-9 text-sm w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="createdAt">Más recientes</SelectItem>
+                    <SelectItem value="fullName">Nombre A-Z</SelectItem>
+                    <SelectItem value="city">Ciudad A-Z</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Fecha desde */}
-              <div className="space-y-1.5">
-                <Label htmlFor="startDate" className="text-xs text-muted-foreground">Desde</Label>
+              <div className="space-y-1.5 flex-1 min-w-[140px]">
+                <Label htmlFor="startDate" className="text-xs font-medium text-muted-foreground">
+                  Desde
+                </Label>
                 <Input
                   id="startDate"
                   type="date"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="h-9"
+                  onChange={(e) => {
+                    setStartDate(e.target.value)
+                    setTimeout(() => applyFilters(1), 100)
+                  }}
+                  className="h-9 text-sm w-full"
+                  disabled={isPending}
                 />
               </div>
 
               {/* Fecha hasta */}
-              <div className="space-y-1.5">
-                <Label htmlFor="endDate" className="text-xs text-muted-foreground">Hasta</Label>
+              <div className="space-y-1.5 flex-1 min-w-[140px]">
+                <Label htmlFor="endDate" className="text-xs font-medium text-muted-foreground">
+                  Hasta
+                </Label>
                 <Input
                   id="endDate"
                   type="date"
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="h-9"
+                  onChange={(e) => {
+                    setEndDate(e.target.value)
+                    setTimeout(() => applyFilters(1), 100)
+                  }}
+                  className="h-9 text-sm w-full"
+                  disabled={isPending}
                 />
               </div>
-            </div>
 
-            {/* Botones de acción */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button 
-                  onClick={handleSearch} 
-                  size="sm" 
-                  className="h-9"
-                  disabled={isSearching}
+              {/* Exportar */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground opacity-0 select-none">
+                  _
+                </Label>
+                <Button
+                  variant="outline"
+                  onClick={handleExport}
+                  size="sm"
+                  className="h-9 whitespace-nowrap"
+                  disabled={isExporting || isPending}
                 >
-                  {isSearching ? (
+                  {isExporting ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Buscando...
+                      <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                      Exportando...
                     </>
                   ) : (
                     <>
-                      <Search className="h-4 w-4 mr-2" />
-                      Buscar
+                      <Download className="h-3.5 w-3.5 mr-2" />
+                      Exportar
                     </>
                   )}
                 </Button>
-
-                {hasActiveFilters && (
-                  <Button 
-                    variant="outline" 
-                    onClick={handleClearFilters} 
-                    size="sm"
-                    className="h-9"
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Limpiar filtros
-                  </Button>
-                )}
-
-                <Button 
-                  variant="outline" 
-                  onClick={handleExport} 
-                  size="sm"
-                  className="h-9"
-                  disabled={isExporting}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  {isExporting ? 'Exportando...' : 'Exportar'}
-                </Button>
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                Mostrando {postulaciones.length} de {total} postulaciones
               </div>
             </div>
+
+            {/* Footer con acciones */}
+            {hasActiveFilters && (
+              <div className="flex flex-wrap items-center gap-3 pt-2 border-t">
+                <Button
+                  variant="ghost"
+                  onClick={handleClearFilters}
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={isPending}
+                >
+                  <X className="h-3 w-3 mr-1.5" />
+                  Limpiar filtros
+                </Button>
+                
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                  <span>Filtros activos</span>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Tabla de postulaciones */}
         <div className="relative">
-          {isSearching && (
-            <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
-              <div className="flex flex-col items-center gap-2">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Cargando postulaciones...</p>
-              </div>
-            </div>
-          )}
-          <PostulacionesTableExpandable 
-            postulaciones={postulaciones}
-          />
-        </div>
-
-        {/* Paginación */}
-        {totalPages > 1 && (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-sm text-muted-foreground">
-                  Página {currentPage} de {totalPages}
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    <span className="hidden sm:inline">Anterior</span>
-                  </Button>
-                  
-                  {/* Botones de páginas */}
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                      let page = i + 1
-                      if (totalPages > 5) {
-                        if (currentPage > 3) {
-                          page = currentPage - 2 + i
-                        }
-                        if (page > totalPages) return null
-                      }
-                      return (
-                        <Button
-                          key={page}
-                          variant={currentPage === page ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => handlePageChange(page)}
-                          className="w-9 h-9 p-0"
-                        >
-                          {page}
-                        </Button>
-                      )
-                    }).filter(Boolean)}
+          <div className="flex flex-wrap items-end gap-1 pb-0">
+            <button
+              onClick={() => handleQuickFilter('all')}
+              disabled={isPending}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all
+                cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed
+                ${activeQuickFilter === 'all'
+                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <ClipboardCheck className="h-4 w-4" />
+              <span className="hidden sm:inline text-sm">Todas</span>
+            </button>
+            <button
+              onClick={() => handleQuickFilter('scheduled')}
+              disabled={isPending}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all 
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                ${activeQuickFilter === 'scheduled'
+                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <Calendar className="h-4 w-4" />
+              <span className="hidden sm:inline text-sm">Agendados</span>
+            </button>
+            <button
+              onClick={() => handleQuickFilter('pending-schedule')}
+              disabled={isPending}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all 
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                ${activeQuickFilter === 'pending-schedule'
+                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <Clock className="h-4 w-4" />
+              <span className="hidden sm:inline text-sm">Pendiente de Agendar</span>
+            </button>
+            <button
+              onClick={() => handleQuickFilter('review')}
+              disabled={isPending}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all 
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                ${activeQuickFilter === 'review'
+                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <FileCheck className="h-4 w-4" />
+              <span className="hidden sm:inline text-sm">Revisar Postulación</span>
+            </button>
+            <button
+              onClick={() => handleQuickFilter('pending-completion')}
+              disabled={isPending}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all 
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                ${activeQuickFilter === 'pending-completion'
+                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <Loader2 className="h-4 w-4" />
+              <span className="hidden sm:inline text-sm">Postulación Pendiente</span>
+            </button>
+          </div>
+          
+          {/* Skeleton durante la carga */}
+          {isPending ? (
+            <Card className="rounded-t-none">
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  {/* Header de la tabla skeleton */}
+                  <div className="flex items-center gap-4 pb-3 border-b">
+                    <Skeleton className="h-4 w-4" />
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-20 ml-auto" />
                   </div>
                   
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                  >
-                    <span className="hidden sm:inline">Siguiente</span>
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
+                  {/* Filas skeleton */}
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 py-4 border-b">
+                      <Skeleton className="h-4 w-4" />
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-4 w-48" />
+                        <Skeleton className="h-3 w-32" />
+                      </div>
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-6 w-24 rounded-full" />
+                      <div className="flex gap-2">
+                        <Skeleton className="h-8 w-8 rounded-full" />
+                        <Skeleton className="h-8 w-8 rounded-full" />
+                        <Skeleton className="h-8 w-8 rounded-full" />
+                      </div>
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                      <Skeleton className="h-3 w-16" />
+                      <div className="flex gap-2">
+                        <Skeleton className="h-8 w-8 rounded" />
+                        <Skeleton className="h-8 w-8 rounded" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              </CardContent>
+            </Card>
+          ) : (
+            <PostulacionesTableExpandable
+              postulaciones={postulaciones}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              total={total}
+              isPending={isPending}
+              onPageChange={handlePageChange}
+            />
+          )}
+        </div>
       </div>
     </div>
   )

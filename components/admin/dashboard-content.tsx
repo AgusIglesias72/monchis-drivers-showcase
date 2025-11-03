@@ -11,10 +11,12 @@ import {
   TrendingUp,
   TrendingDown,
   Activity,
+  FileCheck,
+  FileX,
+  FileClock,
+  AlertCircle,
 } from "lucide-react"
 import { 
-  Area, 
-  AreaChart, 
   Bar, 
   BarChart, 
   CartesianGrid, 
@@ -25,6 +27,9 @@ import {
   Cell,
   Funnel,
   FunnelChart,
+  Pie,
+  PieChart,
+  Legend,
 } from "recharts"
 import { motion } from "framer-motion"
 
@@ -37,6 +42,56 @@ interface DashboardContentProps {
   abandonoPorStep: any[]
   edadesPorRango: any[]
   onboardingStats: any
+}
+
+// Componente de Tooltip Personalizado para el Funnel
+const CustomFunnelTooltip = ({ active, payload, fullFunnelData }: any) => {
+  if (!active || !payload || !payload.length) return null
+  
+  const data = payload[0].payload
+  const currentValue = data.value
+  const currentIndex = fullFunnelData.findIndex((item: any) => item.step === data.step)
+  
+  // Calcular porcentajes
+  const totalIniciadas = fullFunnelData[0]?.value || 1
+  const porcentajeTotal = ((currentValue / totalIniciadas) * 100).toFixed(1)
+  
+  // Calcular porcentaje respecto al paso anterior
+  let porcentajeAnterior = null
+  if (currentIndex > 0) {
+    const valorAnterior = fullFunnelData[currentIndex - 1]?.value || 1
+    porcentajeAnterior = ((currentValue / valorAnterior) * 100).toFixed(1)
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg p-4 min-w-[220px]">
+      <div className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">
+        {data.step}
+      </div>
+      <div className="space-y-2">
+        <div className="flex justify-between items-center gap-4">
+          <span className="text-sm text-gray-600 dark:text-gray-400">Cantidad:</span>
+          <span className="font-semibold text-gray-900 dark:text-gray-100">
+            {currentValue.toLocaleString()}
+          </span>
+        </div>
+        <div className="flex justify-between items-center gap-4">
+          <span className="text-sm text-gray-600 dark:text-gray-400">% del total:</span>
+          <span className="font-semibold text-blue-600 dark:text-blue-400">
+            {porcentajeTotal}%
+          </span>
+        </div>
+        {porcentajeAnterior !== null && (
+          <div className="flex justify-between items-center gap-4 pt-1 border-t border-gray-200 dark:border-gray-700">
+            <span className="text-sm text-gray-600 dark:text-gray-400">% del anterior:</span>
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+              {porcentajeAnterior}%
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export function DashboardContent({
@@ -114,6 +169,83 @@ export function DashboardContent({
   const tasaConversionTotal = funnelData.length > 0 && funnelData[0]?.count > 0
     ? ((onboardingStats.completedThisMonth / funnelData[0].count) * 100).toFixed(1)
     : "0"
+
+  // Preparar datos para el gráfico de documentos
+  const documentosData = [
+    { 
+      name: 'Aprobados', 
+      value: mainStats.manualReviewDocs > 0 ? mainStats.manualReviewDocs : 0, 
+      fill: '#10b981',
+      icon: FileCheck 
+    },
+    { 
+      name: 'Rechazados', 
+      value: mainStats.rejectedDocs, 
+      fill: '#ef4444',
+      icon: FileX 
+    },
+    { 
+      name: 'Pendientes', 
+      value: mainStats.pendingDocs, 
+      fill: '#f59e0b',
+      icon: FileClock 
+    },
+  ]
+
+  const totalDocumentos = documentosData.reduce((sum, item) => sum + item.value, 0)
+
+  // Renderizar label personalizado para el pie chart
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+    if (percent === 0) return null
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5
+    const x = cx + radius * Math.cos(-midAngle * Math.PI / 180)
+    const y = cy + radius * Math.sin(-midAngle * Math.PI / 180)
+
+    return (
+      <text 
+        x={x} 
+        y={y} 
+        fill="white" 
+        textAnchor={x > cx ? 'start' : 'end'} 
+        dominantBaseline="central"
+        className="font-bold text-sm"
+      >
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    )
+  }
+
+  // Tooltip personalizado para el gráfico de documentos
+  const CustomDocumentosTooltip = ({ active, payload }: any) => {
+    if (!active || !payload || !payload.length) return null
+    
+    const data = payload[0]
+    const porcentaje = totalDocumentos > 0 
+      ? ((data.value / totalDocumentos) * 100).toFixed(1)
+      : '0'
+
+    return (
+      <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg p-3 min-w-[180px]">
+        <div className="font-bold text-sm mb-2 text-gray-900 dark:text-gray-100">
+          {data.name}
+        </div>
+        <div className="space-y-1">
+          <div className="flex justify-between items-center gap-3">
+            <span className="text-xs text-gray-600 dark:text-gray-400">Cantidad:</span>
+            <span className="font-semibold text-gray-900 dark:text-gray-100">
+              {data.value}
+            </span>
+          </div>
+          <div className="flex justify-between items-center gap-3">
+            <span className="text-xs text-gray-600 dark:text-gray-400">Porcentaje:</span>
+            <span className="font-semibold" style={{ color: data.payload.fill }}>
+              {porcentaje}%
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-1 flex-col">
@@ -232,20 +364,7 @@ export function DashboardContent({
                   axisLine={false}
                 />
                 <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#ffffff',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                  }}
-                  labelStyle={{ 
-                    fontWeight: 600,
-                    marginBottom: '6px',
-                    color: '#000000',
-                    fontSize: '14px'
-                  }}
-                  formatter={(value: any) => [value, 'Postulantes']}
+                  content={<CustomFunnelTooltip fullFunnelData={fullFunnelData} />}
                   cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
                 />
                 <Bar 
@@ -293,13 +412,7 @@ export function DashboardContent({
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={250}>
-                <AreaChart data={visitasPorDia}>
-                  <defs>
-                    <linearGradient id="colorIniciadas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
+                <BarChart data={visitasPorDia}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis 
                     dataKey="fecha" 
@@ -323,18 +436,14 @@ export function DashboardContent({
                       color: '#000000'
                     }}
                     formatter={(value: any) => [value, 'Postulaciones']}
-                    cursor={{ stroke: '#3b82f6', strokeWidth: 2 }}
+                    cursor={{ fill: '#3b82f6', opacity: 0.1 }}
                   />
-                  <Area 
-                    type="monotone" 
+                  <Bar 
                     dataKey="visitas" 
-                    stroke="#3b82f6" 
-                    fillOpacity={1} 
-                    fill="url(#colorIniciadas)"
-                    strokeWidth={2}
-                    activeDot={{ r: 6, fill: '#3b82f6' }}
+                    fill="#3b82f6" 
+                    radius={[8, 8, 0, 0]}
                   />
-                </AreaChart>
+                </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
@@ -389,8 +498,131 @@ export function DashboardContent({
           </Card>
         </div>
 
-        {/* Abandonos y Edades */}
+        {/* Estado de Documentos y Abandonos */}
         <div className="grid gap-4 md:grid-cols-2">
+          {/* Estado de Documentos */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileCheck className="h-4 w-4 text-blue-500" />
+                Estado de Documentos
+              </CardTitle>
+              <CardDescription>
+                Revisión de documentación
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                {/* Gráfico de Torta */}
+                <div className="flex-1">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={documentosData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={renderCustomLabel}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {documentosData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomDocumentosTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Leyenda con iconos */}
+                <div className="flex-1 space-y-3">
+                  {documentosData.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: item.fill }}
+                        />
+                        <span className="text-sm font-medium">{item.name}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-sm">{item.value}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {totalDocumentos > 0 
+                            ? `${((item.value / totalDocumentos) * 100).toFixed(1)}%`
+                            : '0%'
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Total */}
+                  <div className="pt-3 border-t mt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">Total</span>
+                      <span className="font-bold">{totalDocumentos}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Alerta de pendientes */}
+                  {mainStats.pendingDocs > 0 && (
+                    <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                        <AlertCircle className="h-4 w-4" />
+                        <span className="text-xs font-medium">
+                          {mainStats.pendingDocs} doc{mainStats.pendingDocs !== 1 ? 's' : ''} pendiente{mainStats.pendingDocs !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-4 w-4 text-purple-500" />
+              Distribución por Edades
+            </CardTitle>
+            <CardDescription>
+              Rangos etarios de postulantes
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {edadesPorRango.map((rango, index) => (
+                <div key={index} className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{rango.rango} años</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">
+                        {rango.cantidad}
+                      </span>
+                      <span className="font-semibold text-purple-600">
+                        {rango.porcentaje.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${rango.porcentaje}%` }}
+                      transition={{ delay: index * 0.1, duration: 0.5 }}
+                      className="h-full rounded-full"
+                      style={{ backgroundColor: rango.fill }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
           {/* Abandonos por Step */}
           <Card>
             <CardHeader>
@@ -403,87 +635,59 @@ export function DashboardContent({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={abandonoPorStep}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis 
-                    dataKey="label" 
-                    className="text-xs"
-                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis 
-                    className="text-xs"
-                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#ffffff',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      padding: '8px 12px'
-                    }}
-                    labelStyle={{ 
-                      fontWeight: 600,
-                      marginBottom: '4px',
-                      color: '#000000'
-                    }}
-                    formatter={(value: any) => [value, 'Abandonos']}
-                    cursor={{ fill: '#ef4444', opacity: 0.1 }}
-                  />
-                  <Bar 
-                    dataKey="abandonos" 
-                    fill="#ef4444" 
-                    radius={[8, 8, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Distribución por Edades - Compacto */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Users className="h-4 w-4 text-purple-500" />
-                Distribución por Edades
-              </CardTitle>
-              <CardDescription>
-                Rangos etarios de postulantes
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {edadesPorRango.map((rango, index) => (
-                  <div key={index} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{rango.rango} años</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">
-                          {rango.cantidad}
-                        </span>
-                        <span className="font-semibold text-purple-600">
-                          {rango.porcentaje.toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${rango.porcentaje}%` }}
-                        transition={{ delay: index * 0.1, duration: 0.5 }}
-                        className="h-full rounded-full"
-                        style={{ backgroundColor: rango.fill }}
-                      />
-                    </div>
+              {abandonoPorStep.length > 0 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={abandonoPorStep}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="label" 
+                      className="text-xs"
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={100}
+                      interval={0}
+                    />
+                    <YAxis 
+                      className="text-xs"
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#ffffff',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                        padding: '8px 12px'
+                      }}
+                      labelStyle={{ 
+                        fontWeight: 600,
+                        marginBottom: '4px',
+                        color: '#000000'
+                      }}
+                      formatter={(value: any) => [value, 'Abandonos']}
+                      cursor={{ fill: '#ef4444', opacity: 0.1 }}
+                    />
+                    <Bar 
+                      dataKey="abandonos" 
+                      fill="#ef4444" 
+                      radius={[8, 8, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                  <div className="text-center">
+                    <CheckCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No hay abandonos registrados</p>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
+
+        {/* Distribución por Edades */}
+
       </div>
     </div>
   )

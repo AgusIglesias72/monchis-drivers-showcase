@@ -1,5 +1,5 @@
 // lib/services/external-drivers-processor.service.ts
-// Adaptado de scripts/external-drivers.ts para ejecutarse como background job
+// Procesador de conductores externos usando Playwright - VERSIÓN HEADLESS TRUE
 
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import * as path from 'path';
@@ -31,7 +31,7 @@ interface ProcessJobMetadata {
 }
 
 // ============================================================================
-// UTILIDADES (del script original)
+// UTILIDADES
 // ============================================================================
 
 function sleep(ms: number): Promise<void> {
@@ -42,11 +42,6 @@ function ensureDownloadDir(): void {
   if (!fs.existsSync(DOWNLOADS_DIR)) {
     fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
   }
-}
-
-function parseDate(dateStr: string): { day: number; month: number; year: number } {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return { day, month, year };
 }
 
 function cleanDriverName(name: string): string {
@@ -74,7 +69,7 @@ function generatePdfFileName(driver: ExternalDriver, startDate: string, endDate:
 }
 
 // ============================================================================
-// CLASE DE AUTOMATIZACIÓN (del script original)
+// CLASE DE AUTOMATIZACIÓN
 // ============================================================================
 
 class PDFDownloadAutomation {
@@ -91,7 +86,7 @@ class PDFDownloadAutomation {
     ensureDownloadDir();
     
     this.browser = await chromium.launch({
-      headless: process.env.NODE_ENV === 'production',
+      headless: true, // ✅ HEADLESS TRUE para producción
       slowMo: 50,
     });
 
@@ -144,8 +139,6 @@ class PDFDownloadAutomation {
   ): Promise<string> {
     if (!this.page || !this.context) throw new Error('Navegador no inicializado');
     
-    console.log(`\n📥 [Worker ${this.workerId}] Procesando: ${driver.nombre}`);
-    
     if (!isFirstDriver) {
       const currentUrl = this.page.url();
       if (!currentUrl.includes('driverpayment')) {
@@ -153,8 +146,7 @@ class PDFDownloadAutomation {
       }
     }
     
-    console.log(`📅 [Worker ${this.workerId}] Configurando fechas...`);
-    
+    // Configurar fechas
     const fechaDesdeInput = await this.page.waitForSelector('input[placeholder="Fecha desde"]', { timeout: 10000 });
     await fechaDesdeInput.click();
     await sleep(300);
@@ -177,8 +169,7 @@ class PDFDownloadAutomation {
     await this.page.keyboard.press('Tab');
     await sleep(500);
     
-    console.log(`🔍 [Worker ${this.workerId}] Buscando conductor...`);
-    
+    // Buscar conductor
     const driverInput = await this.page.waitForSelector('#filtersDriverPaymentForm_driver', { timeout: 10000 });
     await driverInput.click();
     await driverInput.fill('');
@@ -193,23 +184,19 @@ class PDFDownloadAutomation {
     }
     
     await firstOption.click();
-    console.log(`✅ [Worker ${this.workerId}] Conductor seleccionado`);
     
-    console.log(`🔍 [Worker ${this.workerId}] Ejecutando búsqueda...`);
-    
+    // Ejecutar búsqueda
     const submitButtonSelectors = [
       'button:has-text("Buscar")',
       'button[type="submit"]',
       '.ant-btn-primary',
     ];
     
-    let submitClicked = false;
     for (const selector of submitButtonSelectors) {
       try {
         const submitButton = await this.page.$(selector);
         if (submitButton) {
           await submitButton.click();
-          submitClicked = true;
           break;
         }
       } catch (error) {
@@ -217,16 +204,11 @@ class PDFDownloadAutomation {
       }
     }
     
-    console.log(`⏳ [Worker ${this.workerId}] Esperando resultados...`);
     await this.page.waitForSelector('.anticon-file-pdf', { timeout: 20000 });
-    console.log(`✅ [Worker ${this.workerId}] Resultados cargados`);
-    
     await sleep(1000);
     
     const fileName = generatePdfFileName(driver, startDate, endDate);
     const filePath = path.join(DOWNLOADS_DIR, fileName);
-    
-    console.log(`📄 [Worker ${this.workerId}] Generando PDF...`);
     
     let blobUrl: string | null = null;
     
@@ -243,8 +225,6 @@ class PDFDownloadAutomation {
       const pdfIcon = await this.page.waitForSelector('.anticon-file-pdf', { timeout: 5000 });
       await pdfIcon.click();
       
-      console.log(`⏳ [Worker ${this.workerId}] Esperando blob URL...`);
-      
       for (let i = 0; i < 20; i++) {
         if (blobUrl) break;
         await sleep(250);
@@ -256,15 +236,23 @@ class PDFDownloadAutomation {
         throw new Error('No se pudo capturar la URL del blob');
       }
       
-      const capturedBlobUrl: string = blobUrl;
+      // ✅ FIX 1: Dar tiempo antes de abrir nueva pestaña
+      await sleep(1000);
       
-      console.log(`🌐 [Worker ${this.workerId}] Abriendo blob en nueva pestaña...`);
+      const capturedBlobUrl: string = blobUrl;
       const newPage = await this.context.newPage();
       
-      await newPage.goto(capturedBlobUrl, { waitUntil: 'networkidle' });
-      await sleep(2000);
+      // Ir al blob y manejar posibles errores de navegación
+      await newPage.goto(capturedBlobUrl, { 
+        waitUntil: 'load',
+        timeout: 10000 
+      }).catch((err) => {
+        // Ignorar errores de navegación - el contenido puede estar cargándose
+        console.log(`⚠️  [Worker ${this.workerId}] Nav warning (probablemente OK):`, err.message);
+      });
       
-      console.log(`💾 [Worker ${this.workerId}] Descargando PDF...`);
+      // ✅ FIX 2: Aumentar el sleep para dar tiempo al blob
+      await sleep(3000);
       
       const base64Data = await newPage.evaluate(async (url) => {
         const response = await fetch(url);
@@ -284,11 +272,7 @@ class PDFDownloadAutomation {
       const pdfBuffer = Buffer.from(base64Data, 'base64');
       fs.writeFileSync(filePath, pdfBuffer);
       
-      console.log(`✅ [Worker ${this.workerId}] PDF descargado: ${fileName}`);
-      
       await newPage.close();
-      
-      console.log(`🔄 [Worker ${this.workerId}] Refrescando página...`);
       await this.page.reload({ waitUntil: 'networkidle' });
       await sleep(1000);
       
@@ -297,13 +281,11 @@ class PDFDownloadAutomation {
     } catch (error: any) {
       this.page.off('request', requestHandler);
       
-      console.error(`❌ [Worker ${this.workerId}] Error:`, error.message);
-      
       try {
         await this.page.reload({ waitUntil: 'networkidle' });
         await sleep(1000);
       } catch (refreshError) {
-        console.log(`⚠️  [Worker ${this.workerId}] Error al refrescar`);
+        // Ignorar
       }
       
       throw error;
@@ -319,33 +301,80 @@ class PDFDownloadAutomation {
 }
 
 // ============================================================================
-// PROCESADOR PRINCIPAL (usa backgroundJobsService)
+// PROCESADOR PRINCIPAL
 // ============================================================================
 
 export const externalDriversProcessor = {
   async processJob(jobId: string): Promise<void> {
+    console.log(`🚀🚀🚀 [PROCESSOR] Iniciando processJob para ${jobId} 🚀🚀🚀`);
+    
     try {
-      await backgroundJobsService.updateStatus(jobId, 'PROCESSING');
-      await backgroundJobsService.addLog(jobId, '🚀 Iniciando procesamiento...');
-
+      // 1. Obtener el job PRIMERO
+      console.log(`[${jobId}] Obteniendo job de la base de datos...`);
       const job = await backgroundJobsService.getById(jobId);
-      if (!job) throw new Error('Job no encontrado');
-
-      const metadata = job.metadata as unknown as ProcessJobMetadata;
       
-      // 1. Obtener conductores
-      await backgroundJobsService.addLog(jobId, '📊 Obteniendo lista de conductores...');
+      if (!job) {
+        console.error(`❌ [${jobId}] Job no encontrado en la base de datos`);
+        throw new Error('Job no encontrado');
+      }
+      
+      console.log(`✅ [${jobId}] Job encontrado. Status actual: ${job.status}`);
+
+      // 2. Cambiar status a PROCESSING
+      console.log(`[${jobId}] Cambiando status a PROCESSING...`);
+      await backgroundJobsService.updateStatus(jobId, 'PROCESSING');
+      console.log(`✅ [${jobId}] Status cambiado a PROCESSING`);
+      
+      await backgroundJobsService.addLog(jobId, '🚀 Iniciando procesamiento...');
+      console.log(`✅ [${jobId}] Log inicial agregado`);
+
+      // 3. Validar metadata
+      const metadata = job.metadata as unknown as ProcessJobMetadata;
+      console.log(`[${jobId}] Metadata:`, {
+        startDate: metadata.startDate,
+        endDate: metadata.endDate,
+        concurrency: metadata.concurrency,
+        maxDrivers: metadata.maxDrivers,
+        hasSpreadsheetId: !!metadata.spreadsheetsId,
+        hasDriveFolderId: !!metadata.driveFolderId,
+        hasEmail: !!metadata.email,
+        hasPassword: !!metadata.password,
+      });
+      
+      if (!metadata.spreadsheetsId) {
+        throw new Error('Missing spreadsheetsId in metadata');
+      }
+      if (!metadata.driveFolderId) {
+        throw new Error('Missing driveFolderId in metadata');
+      }
+      if (!metadata.email || !metadata.password) {
+        throw new Error('Missing email or password in metadata');
+      }
+      
+      // 4. Obtener conductores
+      console.log(`[${jobId}] Obteniendo conductores desde Google Sheets...`);
+      await backgroundJobsService.addLog(jobId, '');
+      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
+      await backgroundJobsService.addLog(jobId, '📊 OBTENIENDO CONDUCTORES');
+      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
+      
       const drivers = await getExternalDrivers(metadata.spreadsheetsId, 'Drivers Externos');
+      console.log(`✅ [${jobId}] ${drivers.length} conductores obtenidos de Google Sheets`);
       
       const driversToProcess = metadata.maxDrivers 
         ? drivers.slice(0, metadata.maxDrivers)
         : drivers;
       
+      console.log(`[${jobId}] Procesando ${driversToProcess.length} conductores`);
       await backgroundJobsService.updateProgress(jobId, 0, driversToProcess.length);
-      await backgroundJobsService.addLog(jobId, `✅ ${driversToProcess.length} conductores a procesar`);
+      await backgroundJobsService.addLog(jobId, `✅ ${driversToProcess.length} conductores encontrados`);
+      await backgroundJobsService.addLog(jobId, '');
 
-      // 2. Crear carpetas en Drive
-      await backgroundJobsService.addLog(jobId, '📁 Creando estructura de carpetas...');
+      // 5. Crear carpetas
+      console.log(`[${jobId}] Creando carpetas en Google Drive...`);
+      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
+      await backgroundJobsService.addLog(jobId, '📁 PREPARANDO CARPETAS EN DRIVE');
+      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
       
       const jsAgencyFolderId = await createDriveFolder('JS', metadata.driveFolderId, metadata.ownerEmail);
       const mgAgencyFolderId = await createDriveFolder('M&G', metadata.driveFolderId, metadata.ownerEmail);
@@ -354,27 +383,48 @@ export const externalDriversProcessor = {
       const jsWeekFolderId = await createDriveFolder(weekName, jsAgencyFolderId, metadata.ownerEmail);
       const mgWeekFolderId = await createDriveFolder(weekName, mgAgencyFolderId, metadata.ownerEmail);
       
-      await backgroundJobsService.addLog(jobId, `✅ Carpetas creadas: JS/${weekName} y M&G/${weekName}`);
+      console.log(`✅ [${jobId}] Carpetas creadas en Drive`);
+      await backgroundJobsService.addLog(jobId, `✅ Carpeta JS: ${weekName}`);
+      await backgroundJobsService.addLog(jobId, `✅ Carpeta M&G: ${weekName}`);
+      await backgroundJobsService.addLog(jobId, '');
 
-      // 3. Inicializar workers
+      // 6. Inicializar workers
+      console.log(`[${jobId}] Iniciando ${metadata.concurrency} workers con Playwright...`);
+      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
+      await backgroundJobsService.addLog(jobId, `🤖 INICIANDO ${metadata.concurrency} WORKERS`);
+      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
+      
       const workers: PDFDownloadAutomation[] = [];
       for (let i = 0; i < metadata.concurrency; i++) {
+        console.log(`[${jobId}] Inicializando worker ${i + 1}...`);
         const worker = new PDFDownloadAutomation(i + 1);
         await worker.initialize();
+        console.log(`[${jobId}] Worker ${i + 1} inicializado, haciendo login...`);
         await worker.login(metadata.email, metadata.password, metadata.loginUrl, metadata.driversPageUrl);
         workers.push(worker);
-        await backgroundJobsService.addLog(jobId, `✅ Worker ${i + 1} inicializado`);
+        await backgroundJobsService.addLog(jobId, `✅ Worker ${i + 1} listo`);
+        console.log(`✅ [${jobId}] Worker ${i + 1} listo`);
       }
+      
+      await backgroundJobsService.addLog(jobId, '');
+      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
+      await backgroundJobsService.addLog(jobId, '🚀 PROCESANDO CONDUCTORES');
+      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
+      await backgroundJobsService.addLog(jobId, '');
 
-      // 4. Dividir drivers entre workers
+      // 7. Dividir drivers
+      console.log(`[${jobId}] Dividiendo conductores entre ${metadata.concurrency} workers...`);
       const workerQueues: ExternalDriver[][] = Array.from({ length: metadata.concurrency }, () => []);
       
       for (let i = 0; i < driversToProcess.length; i++) {
-        const workerIndex = i % metadata.concurrency;
-        workerQueues[workerIndex].push(driversToProcess[i]);
+        workerQueues[i % metadata.concurrency].push(driversToProcess[i]);
       }
+      
+      console.log(`[${jobId}] Distribución de conductores:`, 
+        workerQueues.map((q, i) => `Worker ${i + 1}: ${q.length}`).join(', ')
+      );
 
-      // 5. Procesar drivers
+      // 8. Procesar
       const results = {
         successful: 0,
         failed: 0,
@@ -383,7 +433,9 @@ export const externalDriversProcessor = {
 
       let processed = 0;
 
-      const workerProcess = async (worker: PDFDownloadAutomation, driversList: ExternalDriver[]) => {
+      const workerProcess = async (worker: PDFDownloadAutomation, driversList: ExternalDriver[], workerIndex: number) => {
+        console.log(`[${jobId}] Worker ${workerIndex + 1} comenzando procesamiento de ${driversList.length} conductores`);
+        
         for (let i = 0; i < driversList.length; i++) {
           const driver = driversList[i];
           const isFirst = processed === 0;
@@ -391,7 +443,7 @@ export const externalDriversProcessor = {
           const targetFolderId = driverType === 'M&G' ? mgWeekFolderId : jsWeekFolderId;
           
           try {
-            await backgroundJobsService.addLog(jobId, `📥 Procesando: ${driver.nombre}`);
+            console.log(`[${jobId}] Worker ${workerIndex + 1} procesando: ${cleanDriverName(driver.nombre)}`);
             
             const pdfPath = await worker.downloadPDF(
               driver,
@@ -412,41 +464,44 @@ export const externalDriversProcessor = {
             await backgroundJobsService.updateProgress(jobId, processed, driversToProcess.length);
             await backgroundJobsService.addLog(
               jobId, 
-              `✅ [${processed}/${driversToProcess.length}] ${driver.nombre} → ${driverType}/${fileName}`
+              `✅ [${processed}/${driversToProcess.length}] ${cleanDriverName(driver.nombre)} → ${driverType}`
             );
             
+            console.log(`✅ [${jobId}] Worker ${workerIndex + 1}: ${cleanDriverName(driver.nombre)} completado (${processed}/${driversToProcess.length})`);
+            
           } catch (error: any) {
+            console.error(`❌ [${jobId}] Worker ${workerIndex + 1} error con ${cleanDriverName(driver.nombre)}:`, error.message);
+            
             results.failed++;
-            results.errors.push({
-              driver: driver.nombre,
-              error: error.message,
-            });
+            results.errors.push({ driver: driver.nombre, error: error.message });
             processed++;
             
             await backgroundJobsService.updateProgress(jobId, processed, driversToProcess.length);
-            await backgroundJobsService.addLog(
-              jobId,
-              `❌ [${processed}/${driversToProcess.length}] Error: ${driver.nombre} - ${error.message}`
-            );
+            await backgroundJobsService.addLog(jobId, `❌ [${processed}/${driversToProcess.length}] ${cleanDriverName(driver.nombre)} - ERROR`);
           }
           
           if (i < driversList.length - 1) {
             await sleep(DELAY_BETWEEN_DOWNLOADS);
           }
         }
+        
+        console.log(`[${jobId}] Worker ${workerIndex + 1} completó su cola de conductores`);
       };
 
-      const workerPromises = workers.map((worker, index) => 
-        workerProcess(worker, workerQueues[index])
-      );
+      console.log(`[${jobId}] Iniciando procesamiento paralelo...`);
+      await Promise.all(workers.map((worker, index) => workerProcess(worker, workerQueues[index], index)));
+      console.log(`✅ [${jobId}] Todos los workers completaron su trabajo`);
 
-      await Promise.all(workerPromises);
-
-      // 6. Cerrar workers
-      await backgroundJobsService.addLog(jobId, '🔄 Cerrando navegadores...');
+      // 9. Cerrar
+      console.log(`[${jobId}] Cerrando navegadores...`);
+      await backgroundJobsService.addLog(jobId, '');
+      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
+      await backgroundJobsService.addLog(jobId, '🏁 FINALIZANDO PROCESO');
+      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
       await Promise.all(workers.map(w => w.close()));
+      console.log(`✅ [${jobId}] Navegadores cerrados`);
 
-      // 7. Guardar resultado
+      // 10. Resultado con detalles de errores
       const finalResult = {
         successful: results.successful,
         failed: results.failed,
@@ -456,13 +511,42 @@ export const externalDriversProcessor = {
         mgFolder: `M&G/${weekName}`,
       };
 
+      console.log(`[${jobId}] Guardando resultado final...`);
       await backgroundJobsService.saveResult(jobId, finalResult);
-      await backgroundJobsService.addLog(jobId, `✅ Completado: ${results.successful} exitosos, ${results.failed} fallidos`);
+      
+      await backgroundJobsService.addLog(jobId, '');
+      await backgroundJobsService.addLog(jobId, '📊 RESUMEN FINAL:');
+      await backgroundJobsService.addLog(jobId, `   ✅ Exitosos: ${results.successful}`);
+      await backgroundJobsService.addLog(jobId, `   ❌ Fallidos: ${results.failed}`);
+      await backgroundJobsService.addLog(jobId, `   📁 Total: ${driversToProcess.length}`);
+      
+      if (results.errors.length > 0) {
+        await backgroundJobsService.addLog(jobId, '');
+        await backgroundJobsService.addLog(jobId, '⚠️  CONDUCTORES CON ERRORES:');
+        for (const err of results.errors) {
+          await backgroundJobsService.addLog(jobId, `   • ${cleanDriverName(err.driver)}`);
+        }
+        await backgroundJobsService.addLog(jobId, '');
+        await backgroundJobsService.addLog(jobId, '💡 Tip: Puedes reintentar los fallidos manualmente desde la app');
+      }
+      
+      await backgroundJobsService.addLog(jobId, '');
+      await backgroundJobsService.addLog(jobId, '✅ Proceso completado exitosamente');
+      
+      console.log(`✅✅✅ [${jobId}] Proceso completado exitosamente ✅✅✅`);
 
     } catch (error: any) {
-      console.error(`Error en job ${jobId}:`, error);
-      await backgroundJobsService.markAsFailed(jobId, error.message);
-      await backgroundJobsService.addLog(jobId, `❌ Error fatal: ${error.message}`);
+      console.error(`❌❌❌ [PROCESSOR] Error crítico en job ${jobId}:`, error);
+      console.error(`Stack trace:`, error.stack);
+      
+      try {
+        await backgroundJobsService.markAsFailed(jobId, error.message);
+        await backgroundJobsService.addLog(jobId, `❌ Error fatal: ${error.message}`);
+      } catch (dbError) {
+        console.error(`❌ No se pudo actualizar el job en la DB:`, dbError);
+      }
+      
+      throw error;
     }
   },
 };

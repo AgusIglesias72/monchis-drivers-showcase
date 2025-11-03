@@ -1,4 +1,4 @@
-// components/admin/postulaciones-table-expandable-improved.tsx
+// components/admin/postulaciones-table-expandable.tsx
 
 "use client"
 
@@ -22,6 +22,7 @@ import {
 import {
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Eye,
   Phone,
   MapPin,
@@ -29,9 +30,6 @@ import {
   Clock,
   FileText,
   Bike,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   CreditCard,
   Calendar,
   CheckCircle,
@@ -44,25 +42,13 @@ import { useRouter } from "next/navigation"
 import { formatBirthDateWithAge } from "@/lib/utils"
 import { calculatePostulacionBadges } from "@/lib/utils/postulacion-badges.utils"
 
-type SortField = 'fullName' | 'city' | 'status' | 'startedAt'
-type SortOrder = 'asc' | 'desc' | null
-
 interface PostulacionesTableProps {
   postulaciones: any[]
-}
-
-// Componente para el icono de ordenamiento
-function SortIcon({ field, currentField, order }: { field: SortField, currentField: SortField | null, order: SortOrder }) {
-  if (currentField !== field) {
-    return <ArrowUpDown className="h-3 w-3 opacity-40" />
-  }
-  if (order === 'asc') {
-    return <ArrowUp className="h-3 w-3" />
-  }
-  if (order === 'desc') {
-    return <ArrowDown className="h-3 w-3" />
-  }
-  return <ArrowUpDown className="h-3 w-3 opacity-40" />
+  currentPage: number
+  totalPages: number
+  total: number
+  isPending: boolean
+  onPageChange: (page: number) => void
 }
 
 // Componente para filas de información
@@ -76,55 +62,38 @@ function InfoRow({ label, value }: { label: string, value?: string | null }) {
   )
 }
 
+// Helper function para determinar el label del badge
+function getBadgeConfig(badgeType: string) {
+  const configs: Record<string, { label: string; color: string }> = {
+    'DOCUMENTOS_COMPLETOS': { label: 'Documentos Completos', color: 'bg-green-50 text-green-700' },
+    'DOCUMENTOS_EN_REVISION': { label: 'Documentos en Revisión', color: 'bg-amber-50 text-amber-700' },
+    'DOCUMENTOS_PENDIENTES': { label: 'Documentos Pendientes', color: 'bg-yellow-50 text-yellow-700' },
+    'PAGO_COMPLETO': { label: 'Pago Completo', color: 'bg-green-50 text-green-700' },
+    'PAGO_EN_VERIFICACION': { label: 'Pago en Verificación', color: 'bg-purple-50 text-purple-700' },
+    'PAGO_PENDIENTE': { label: 'Pago Pendiente', color: 'bg-red-50 text-red-700' },
+    'FACTURACION_COMPLETA': { label: 'Facturación Completa', color: 'bg-green-50 text-green-700' },
+    'FACTURACION_NA': { label: 'Sin Facturación', color: 'bg-gray-50 text-gray-500' },
+    'FACTURACION_PENDIENTE': { label: 'Facturación Pendiente', color: 'bg-orange-50 text-orange-700' },
+    'PAGADO': { label: 'Pagado', color: 'bg-green-50 text-green-700' },
+    'VERIFICAR_PAGO': { label: 'Verificar Pago', color: 'bg-purple-50 text-purple-700' },
+  }
+  return configs[badgeType] || { label: badgeType, color: 'bg-gray-50 text-gray-600' }
+}
+
 export function PostulacionesTableExpandable({
-  postulaciones = []
+  postulaciones = [],
+  currentPage,
+  totalPages,
+  total,
+  isPending,
+  onPageChange,
 }: PostulacionesTableProps) {
   const router = useRouter()
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-  const [sortField, setSortField] = useState<SortField | null>(null)
-  const [sortOrder, setSortOrder] = useState<SortOrder>(null)
-  const [currentPage, setCurrentPage] = useState(1)
   const [selectedDriverForOnboarding, setSelectedDriverForOnboarding] = useState<{
     id: string
     name: string
   } | null>(null)
-  
-  const itemsPerPage = 20
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      if (sortOrder === 'asc') {
-        setSortOrder('desc')
-      } else if (sortOrder === 'desc') {
-        setSortOrder(null)
-        setSortField(null)
-      }
-    } else {
-      setSortField(field)
-      setSortOrder('asc')
-    }
-  }
-
-  const sortedPostulaciones = [...postulaciones].sort((a, b) => {
-    if (!sortField || !sortOrder) return 0
-
-    let aValue: any = a[sortField]
-    let bValue: any = b[sortField]
-
-    if (sortField === 'startedAt') {
-      aValue = new Date(aValue).getTime()
-      bValue = new Date(bValue).getTime()
-    }
-
-    if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1
-    if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1
-    return 0
-  })
-
-  const totalPages = Math.ceil(sortedPostulaciones.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const paginatedPostulaciones = sortedPostulaciones.slice(startIndex, endIndex)
 
   const toggleRow = (id: string) => {
     const newExpanded = new Set(expandedRows)
@@ -167,13 +136,81 @@ export function PostulacionesTableExpandable({
     router.refresh()
   }
 
+  const handlePageChange = (page: number) => {
+    onPageChange(page)
+  }
+
   return (
     <>
-      <Card>
+      <Card className="rounded-t-none">
         <CardHeader>
-          <CardTitle>Gestión de Postulaciones</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Gestión de Postulaciones</CardTitle>
+            <div className="text-xs flex items-center gap-1.5 text-muted-foreground">
+              <span>Mostrando</span>
+              <span className="font-semibold text-foreground">{postulaciones.length}</span>
+              <span>de</span>
+              <span className="font-semibold text-foreground">{total.toLocaleString()}</span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
+                    {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pb-4">
+              <div className="text-xs text-muted-foreground">
+                Página <span className="font-semibold text-foreground">{currentPage}</span> de <span className="font-semibold text-foreground">{totalPages}</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1 || isPending}
+                  className="h-8"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+                  <span className="hidden sm:inline text-xs">Anterior</span>
+                </Button>
+
+                {/* Botones de páginas */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    let page = i + 1
+                    if (totalPages > 5) {
+                      if (currentPage > 3) {
+                        page = currentPage - 2 + i
+                      }
+                      if (page > totalPages) return null
+                    }
+                    return (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(page)}
+                        disabled={isPending}
+                        className="w-8 h-8 p-0 text-xs"
+                      >
+                        {page}
+                      </Button>
+                    )
+                  }).filter(Boolean)}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages || isPending}
+                  className="h-8"
+                >
+                  <span className="hidden sm:inline text-xs">Siguiente</span>
+                  <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="border rounded-lg overflow-hidden">
             {/* Contenedor con scroll horizontal para pantallas pequeñas */}
             <div className="overflow-x-auto">
@@ -181,80 +218,82 @@ export function PostulacionesTableExpandable({
                 <thead className="bg-muted/50 border-b">
                   <tr>
                     <th className="px-3 py-3 text-left w-10"></th>
-                    
-                    <th
-                      className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none min-w-[180px]"
-                      onClick={() => handleSort('fullName')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Postulante
-                        <SortIcon field="fullName" currentField={sortField} order={sortOrder} />
-                      </div>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase min-w-[180px]">
+                      Postulante
                     </th>
-                    
-                    <th
-                      className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none min-w-[120px]"
-                      onClick={() => handleSort('city')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Ciudad
-                        <SortIcon field="city" currentField={sortField} order={sortOrder} />
-                      </div>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase min-w-[120px]">
+                      Ciudad
                     </th>
-                    
-                    <th
-                      className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none min-w-[130px]"
-                      onClick={() => handleSort('status')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Postulación
-                        <SortIcon field="status" currentField={sortField} order={sortOrder} />
-                      </div>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase min-w-[130px]">
+                      Postulación
                     </th>
-                    
                     <th className="px-3 py-3 text-center text-xs font-medium text-muted-foreground uppercase min-w-[120px]">
                       Estados
                     </th>
-                    
                     <th className="px-3 py-3 text-center text-xs font-medium text-muted-foreground uppercase min-w-[120px]">
                       Onboarding
                     </th>
-                    
-                    <th
-                      className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase cursor-pointer hover:bg-muted/80 transition-colors select-none min-w-[110px]"
-                      onClick={() => handleSort('startedAt')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Fecha
-                        <SortIcon field="startedAt" currentField={sortField} order={sortOrder} />
-                      </div>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase min-w-[110px]">
+                      Fecha
                     </th>
-                    
-                    <th className="px-3 py-3 text-right text-xs font-medium text-muted-foreground uppercase w-16">
+                    <th className="px-3 py-3 text-right text-xs font-medium text-muted-foreground uppercase w-24">
                       Acciones
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-background divide-y">
-                  {paginatedPostulaciones.map((postulacion) => {
+                  {postulaciones.map((postulacion) => {
                     const isExpanded = expandedRows.has(postulacion.id)
                     const isCompleted = postulacion.status === 'COMPLETED'
                     const hasOnboarding = postulacion.onboardingAttendances?.[0]
                     const onboardingStatus = postulacion.onboardingStatus
                     const canSchedule = isCompleted && (!onboardingStatus || ['NOT_READY', 'READY'].includes(onboardingStatus))
                     
-                    // Calcular badges para TODAS las postulaciones
+                    // Calcular badges
                     const { badges } = calculatePostulacionBadges(postulacion)
                     
-                    // SIEMPRE mostrar estos 3 iconos (el color cambia según estado)
+                    // Iconos de estado
                     const getDocumentIcon = () => {
-                      const docBadge = badges.find(b => b.includes('DOCUMENTO'))
-                      if (docBadge === 'DOCUMENTOS_COMPLETOS') {
-                        return { icon: FileText, bg: 'bg-green-100', text: 'text-green-700', tooltip: 'Documentos completos' }
-                      } else if (docBadge === 'DOCUMENTOS_EN_REVISION') {
-                        return { icon: FileText, bg: 'bg-amber-100', text: 'text-amber-700', tooltip: 'Documentos en revisión' }
-                      } else {
-                        return { icon: FileText, bg: 'bg-yellow-100', text: 'text-yellow-700', tooltip: 'Documentos pendientes' }
+                      const documents = postulacion.documents || []
+                      
+                      const cedulaDocs = documents.filter((doc: any) => 
+                        doc.documentType === 'CEDULA' || 
+                        doc.documentType === 'CEDULA_FRONT' || 
+                        doc.documentType === 'CEDULA_BACK'
+                      )
+                      const hasCedulaApproved = cedulaDocs.some((doc: any) => doc.status === 'APPROVED')
+                      const hasCedulaExists = cedulaDocs.length > 0
+                      
+                      const antecedentesDocs = documents.filter((doc: any) => 
+                        doc.documentType === 'CRIMINAL_RECORD' || 
+                        doc.documentType === 'ANTECEDENTES'
+                      )
+                      const hasAntecedentesApproved = antecedentesDocs.some((doc: any) => doc.status === 'APPROVED')
+                      const hasAntecedentesExists = antecedentesDocs.length > 0
+                      
+                      if (!hasCedulaExists || !hasAntecedentesExists) {
+                        return { 
+                          icon: FileText, 
+                          bg: 'bg-red-100', 
+                          text: 'text-red-700', 
+                          tooltip: 'Documentos Faltantes' 
+                        }
+                      }
+                      
+                      if (!hasCedulaApproved || !hasAntecedentesApproved) {
+                        return { 
+                          icon: FileText, 
+                          bg: 'bg-yellow-100', 
+                          text: 'text-yellow-700', 
+                          tooltip: 'Documentos pendientes de aprobación' 
+                        }
+                      }
+                      
+                      return { 
+                        icon: FileText, 
+                        bg: 'bg-green-100', 
+                        text: 'text-green-700', 
+                        tooltip: 'Documentos completos' 
                       }
                     }
                     
@@ -307,12 +346,16 @@ export function PostulacionesTableExpandable({
 
                           {/* POSTULANTE */}
                           <td className="px-3 py-3">
-                            <div className="space-y-0.5">
+                            <div className="space-y-1">
                               <div className="font-medium text-sm">
                                 {postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                CI: {postulacion.cedula}
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <span>CI: {postulacion.cedula}</span>
+                                <span className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  {postulacion.phoneNumber}
+                                </span>
                               </div>
                             </div>
                           </td>
@@ -327,29 +370,35 @@ export function PostulacionesTableExpandable({
 
                           {/* POSTULACIÓN STATUS */}
                           <td className="px-3 py-3">
-                            <Badge
-                              variant="outline"
-                              className={`text-xs
-                                ${postulacion.status === 'COMPLETED' 
-                                  ? 'bg-green-50 text-green-700 border-green-200' 
+                            <div className="flex flex-row items-center gap-1">
+                              <Badge
+                                variant="outline"
+                                className={`text-xs
+                                  ${postulacion.status === 'COMPLETED' 
+                                    ? 'bg-green-50 text-green-700 border-green-200' 
+                                    : postulacion.status === 'IN_PROGRESS'
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : 'bg-gray-50 text-gray-500 border-gray-200'
+                                  }`}
+                              >
+                                {postulacion.status === 'COMPLETED' 
+                                  ? 'Completada' 
                                   : postulacion.status === 'IN_PROGRESS'
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                  : 'bg-gray-50 text-gray-500 border-gray-200'
-                                }`}
-                            >
-                              {postulacion.status === 'COMPLETED' 
-                                ? 'Completada' 
-                                : postulacion.status === 'IN_PROGRESS'
-                                ? 'En Progreso'
-                                : 'Abandonada'}
-                            </Badge>
+                                  ? 'En Progreso'
+                                  : 'Abandonada'}
+                              </Badge>
+                                {postulacion.status === 'IN_PROGRESS' && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {' '}{postulacion.currentStep}/6
+                                  </span>
+                                )}
+                            </div>
                           </td>
 
-                          {/* ESTADOS - SIEMPRE 3 ICONOS FIJOS */}
+                          {/* ESTADOS - 3 ICONOS FIJOS */}
                           <td className="px-3 py-3">
                             <TooltipProvider>
                               <div className="flex items-center justify-center gap-1.5">
-                                {/* 1. DOCUMENTOS */}
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <div className={`flex items-center justify-center w-8 h-8 rounded-full ${docIcon.bg} ${docIcon.text}`}>
@@ -361,7 +410,6 @@ export function PostulacionesTableExpandable({
                                   </TooltipContent>
                                 </Tooltip>
 
-                                {/* 2. PAGO */}
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <div className={`flex items-center justify-center w-8 h-8 rounded-full ${payIcon.bg} ${payIcon.text}`}>
@@ -373,7 +421,6 @@ export function PostulacionesTableExpandable({
                                   </TooltipContent>
                                 </Tooltip>
 
-                                {/* 3. FACTURACIÓN */}
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <div className={`flex items-center justify-center w-8 h-8 rounded-full ${invIcon.bg} ${invIcon.text}`}>
@@ -388,7 +435,7 @@ export function PostulacionesTableExpandable({
                             </TooltipProvider>
                           </td>
 
-                          {/* ONBOARDING MEJORADO */}
+                          {/* ONBOARDING */}
                           <td className="px-3 py-3 text-center">
                             {hasOnboarding ? (
                               <div className="flex flex-col items-center gap-1">
@@ -397,14 +444,14 @@ export function PostulacionesTableExpandable({
                                   className={`text-xs ${
                                     hasOnboarding.status === 'ATTENDED' || hasOnboarding.status === 'CONFIRMED'
                                       ? 'bg-green-50 text-green-700 border-green-200'
-                                      : hasOnboarding.status === 'SCHEDULED'
+                                      : (hasOnboarding.status === 'SCHEDULED' || hasOnboarding.status === 'INVITED')
                                       ? 'bg-blue-50 text-blue-700 border-blue-200'
                                       : 'bg-amber-50 text-amber-700 border-amber-200'
                                   }`}
                                 >
                                   {hasOnboarding.status === 'ATTENDED' ? 'Capacitado' : 
                                    hasOnboarding.status === 'CONFIRMED' ? 'Capacitado' :
-                                   hasOnboarding.status === 'SCHEDULED' ? 'Agendado' : 'Pendiente'}
+                                   hasOnboarding.status === 'SCHEDULED' || hasOnboarding.status === 'INVITED' ? 'Agendado' : 'Pendiente'}
                                 </Badge>
                                 {hasOnboarding.event?.scheduledDate && (
                                   <span className="text-xs text-muted-foreground">
@@ -415,7 +462,11 @@ export function PostulacionesTableExpandable({
                                   </span>
                                 )}
                               </div>
-                            ) : onboardingStatus === 'READY' || onboardingStatus === 'SCHEDULED' ? (
+                            ) : onboardingStatus === 'SCHEDULED' ? (
+                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                Agendado
+                              </Badge>
+                            ) : onboardingStatus === 'READY' ? (
                               <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
                                 Pendiente
                               </Badge>
@@ -437,40 +488,50 @@ export function PostulacionesTableExpandable({
 
                           {/* ACCIONES */}
                           <td className="px-3 py-3">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={(e) => handleViewDetails(postulacion.id, e)}>
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  Ver detalles
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => handleContact(postulacion, e)}>
-                                  <Phone className="mr-2 h-4 w-4" />
-                                  Contactar
-                                </DropdownMenuItem>
-                                {canSchedule && (
-                                  <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={(e) => handleScheduleOnboarding(postulacion, e)}>
-                                      <Calendar className="mr-2 h-4 w-4" />
-                                      Agendar Onboarding
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  onClick={(e) => handleReject(postulacion, e)}
-                                  className="text-red-600"
-                                >
-                                  <XCircle className="mr-2 h-4 w-4" />
-                                  Rechazar
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={(e) => handleViewDetails(postulacion.id, e)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={(e) => handleViewDetails(postulacion.id, e)}>
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    Ver detalles
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={(e) => handleContact(postulacion, e)}>
+                                    <Phone className="mr-2 h-4 w-4" />
+                                    Contactar
+                                  </DropdownMenuItem>
+                                  {canSchedule && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem onClick={(e) => handleScheduleOnboarding(postulacion, e)}>
+                                        <Calendar className="mr-2 h-4 w-4" />
+                                        Agendar Onboarding
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem 
+                                    onClick={(e) => handleReject(postulacion, e)}
+                                    className="text-red-600"
+                                  >
+                                    <XCircle className="mr-2 h-4 w-4" />
+                                    Rechazar
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           </td>
                         </tr>
 
@@ -547,7 +608,7 @@ export function PostulacionesTableExpandable({
                                     <div className="space-y-1.5">
                                       <InfoRow 
                                         label="Progreso" 
-                                        value={`${postulacion.currentStep}/7 pasos`} 
+                                        value={`${postulacion.currentStep}/6 pasos`} 
                                       />
                                       <InfoRow 
                                         label="Fecha inicio" 
@@ -603,21 +664,26 @@ export function PostulacionesTableExpandable({
             )}
           </div>
 
-          {/* Paginación local de la tabla */}
+          {/* Paginación dentro de la tabla */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4">
-              <div className="text-sm text-muted-foreground">
-                Mostrando {startIndex + 1}-{Math.min(endIndex, sortedPostulaciones.length)} de {sortedPostulaciones.length}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 mt-4 border-t">
+              <div className="text-xs text-muted-foreground">
+                Página <span className="font-semibold text-foreground">{currentPage}</span> de <span className="font-semibold text-foreground">{totalPages}</span>
               </div>
+
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1 || isPending}
+                  className="h-8"
                 >
-                  Anterior
+                  <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+                  <span className="hidden sm:inline text-xs">Anterior</span>
                 </Button>
+
+                {/* Botones de páginas */}
                 <div className="flex items-center gap-1">
                   {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                     let page = i + 1
@@ -629,24 +695,28 @@ export function PostulacionesTableExpandable({
                     }
                     return (
                       <Button
-                        key={`page-${page}`}
+                        key={page}
                         variant={currentPage === page ? "default" : "outline"}
                         size="sm"
-                        onClick={() => setCurrentPage(page)}
-                        className="w-8 h-8 p-0"
+                        onClick={() => handlePageChange(page)}
+                        disabled={isPending}
+                        className="w-8 h-8 p-0 text-xs"
                       >
                         {page}
                       </Button>
                     )
                   }).filter(Boolean)}
                 </div>
+
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages || isPending}
+                  className="h-8"
                 >
-                  Siguiente
+                  <span className="hidden sm:inline text-xs">Siguiente</span>
+                  <ChevronRight className="h-3.5 w-3.5 ml-1" />
                 </Button>
               </div>
             </div>

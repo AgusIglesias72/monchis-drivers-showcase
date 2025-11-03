@@ -115,6 +115,7 @@ function getPaymentBadge(postulacion: any): BadgeType {
  */
 function getInvoiceBadge(postulacion: any): BadgeType {
   const financial = postulacion.financialService
+  const documents = postulacion.documents || []
   
   // Si no hay registro financiero, consideramos pendiente
   if (!financial) {
@@ -126,11 +127,14 @@ function getInvoiceBadge(postulacion: any): BadgeType {
     return 'FACTURACION_NA' // Gris
   }
 
-  // Si puede facturar Y tiene certificado tributario → Completa
-  if (financial.hasInvoice && financial.taxComplianceUrl) {
+  // Si puede facturar, verificar si existe el documento TAX_COMPLIANCE
+  const hasTaxDoc = documents.some((d: any) => d.documentType === 'TAX_COMPLIANCE')
+  
+  // Si existe el documento → Verde
+  if (hasTaxDoc) {
     return 'FACTURACION_COMPLETA' // Verde
   }
 
-  // Si puede facturar pero falta certificado → Pendiente
+  // Si no existe → Naranja
   return 'FACTURACION_PENDIENTE' // Naranja
 }

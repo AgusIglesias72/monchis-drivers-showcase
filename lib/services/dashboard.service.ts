@@ -11,7 +11,7 @@ export class DashboardService {
    */
   async getMainStats() {
     const [
-      manualReviewDocs,
+      approvedDocs, // Cambiado de manualReviewDocs a approvedDocs
       pendingDocs,
       rejectedDocs,
       newDrivers,
@@ -19,9 +19,9 @@ export class DashboardService {
       approvedThisWeek,
       processedThisWeek,
     ] = await Promise.all([
-      // Documentos en revisión manual
+      // Documentos aprobados
       prisma.formDocument.count({
-        where: { status: 'IN_REVIEW' }
+        where: { status: 'APPROVED' }
       }),
       
       // Documentos pendientes
@@ -74,7 +74,8 @@ export class DashboardService {
       : 0
     
     return {
-      manualReviewDocs,
+      manualReviewDocs: approvedDocs, // Retornar como manualReviewDocs para compatibilidad
+      approvedDocs, // También agregar el campo nuevo
       pendingDocs,
       rejectedDocs,
       newDrivers,
