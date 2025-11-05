@@ -4,7 +4,14 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Check, ChevronRight, ChevronLeft, Loader2, User } from 'lucide-react';
 import { toast } from 'sonner';
-import { trackFormStepCompleted, trackFormCompleted, trackDocumentUploaded, trackFormResumed } from '@/lib/analytics';
+import { 
+  trackFormStepCompleted, 
+  trackFormCompleted, 
+  trackDocumentUploaded, 
+  trackFormResumed,
+  trackFormStarted,
+  trackFormStepView
+} from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
 import { LoadingScreen } from './LoadingScreen';
 import { Header } from './Header';
@@ -92,6 +99,7 @@ const FormularioMonchis: React.FC = () => {
     paymentProofUrl: '',
   });
 
+  // Inicializar sesión y trackear inicio de formulario
   useEffect(() => {
     const initSession = async () => {
       let sid = localStorage.getItem('monchis_session_id');
@@ -99,6 +107,8 @@ const FormularioMonchis: React.FC = () => {
       if (!sid) {
         sid = generateUUID();
         localStorage.setItem('monchis_session_id', sid);
+        // ✅ Usuario nuevo - trackear inicio de formulario
+        trackFormStarted();
       }
       
       setSessionId(sid);
@@ -111,6 +121,7 @@ const FormularioMonchis: React.FC = () => {
             setFormData(data.submission.formData);
             setStep(data.submission.currentStep - 1);
             
+            // ✅ Trackear que el usuario retomó el formulario
             trackFormResumed(data.submission.currentStep);
             
             toast.success('¡Bienvenido de vuelta! Continuá desde donde lo dejaste.');
@@ -127,6 +138,15 @@ const FormularioMonchis: React.FC = () => {
 
     initSession();
   }, []);
+
+  // ✅ Trackear vista de cada step cuando cambia
+  useEffect(() => {
+    if (!showLoading && sessionId) {
+      const currentStepNumber = step + 1;
+      const stepName = getStepName(currentStepNumber);
+      trackFormStepView(currentStepNumber, stepName);
+    }
+  }, [step, showLoading, sessionId]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -202,6 +222,7 @@ const FormularioMonchis: React.FC = () => {
         const allUrls = [...currentUrls, ...uploadedUrls];
         handleInputChange(field, allUrls.join(','));
 
+        // ✅ Trackear documento subido
         trackDocumentUploaded(field.replace('PhotoUrl', ''));
         toast.success(`${uploadedUrls.length} archivo(s) subido(s) correctamente`);
       }
@@ -444,6 +465,7 @@ const validateCurrentStep = (): boolean => {
       const data = await response.json();
       
       if (data.success) {
+        // ✅ Trackear completación del step
         trackFormStepCompleted(stepNumber, getStepName(stepNumber));
       }
       
@@ -494,6 +516,7 @@ const validateCurrentStep = (): boolean => {
         localStorage.removeItem('monchis_session_id');
         localStorage.removeItem('monchis_form_data');
         
+        // ✅ Trackear formulario completado
         trackFormCompleted(data.submissionId);
         
         toast.success('¡Postulación enviada con éxito!');

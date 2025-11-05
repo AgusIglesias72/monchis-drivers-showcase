@@ -2,6 +2,7 @@
 import { Montserrat } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { GoogleAnalytics } from '@next/third-parties/google'
+import { GoogleTagManager } from '@/components/GoogleTagManager'
 import ClarityScript from "@/components/ClarityScript"
 import { ClerkProvider } from '@clerk/nextjs'
 import './globals.css';
@@ -28,17 +29,21 @@ export const metadata = {
   }
 };
 
-
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const gaId : string = process.env.NEXT_PUBLIC_GA_ID || '';
+  const gaId: string = process.env.NEXT_PUBLIC_GA_ID || '';
+  const gtmId: string = process.env.NEXT_PUBLIC_GTM_ID || '';
   
   return (
     <ClerkProvider localization={esES}>
       <html lang="es">
+        <head>
+          {/* Google Tag Manager debe ir en el <head> */}
+          {gtmId && <GoogleTagManager gtmId={gtmId} />}
+        </head>
         <body className={`${montserrat.variable} font-sans`}>
           {children}
          
@@ -58,6 +63,7 @@ export default function RootLayout({
                   
           <ClarityScript />
          
+          {/* Google Analytics se mantiene */}
           {gaId && <GoogleAnalytics gaId={gaId} />}
         </body>
       </html>
