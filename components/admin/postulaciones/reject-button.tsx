@@ -127,7 +127,7 @@ export function RejectButton({
         }
       >
         <XCircle className="h-4 w-4" />
-        {showLabel && 'Rechazar'}
+        {'Rechazar'}
       </Button>
 
       <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
