@@ -2,7 +2,7 @@
 
 "use client"
 
-import { useState, useEffect, useCallback, useTransition } from "react"
+import { useState, useEffect, useCallback, useTransition, useMemo } from "react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -32,6 +32,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import { getContactStatus } from "@/lib/utils/contact-status.utils"
 
 interface PostulacionesPageContentProps {
   stats: any
@@ -96,6 +97,21 @@ export function PostulacionesPageContent({
 
   // ✅ Debounce para búsqueda (500ms)
   const debouncedSearchTerm = useDebounce(searchTerm, 500)
+
+  // ✅ NUEVO: Calcular estado de contacto para cada postulación
+  const postulacionesWithContactStatus = useMemo(() => {
+    return postulaciones.map(post => {
+      const hasBeenContacted = (post.driverContacts?.length ?? 0) > 0
+      const isRejected = post.status === 'REJECTED'
+      const completedSteps = post.completedSteps?.length ?? 0
+
+      return {
+        ...post,
+        hasBeenContacted,
+        contactStatus: getContactStatus(isRejected, hasBeenContacted, completedSteps)
+      }
+    })
+  }, [postulaciones])
 
   // Determinar el filtro rápido activo basado en los filtros actuales
   useEffect(() => {
@@ -576,7 +592,7 @@ export function PostulacionesPageContent({
             </Card>
           ) : (
             <PostulacionesTableExpandable
-              postulaciones={postulaciones}
+              postulaciones={postulacionesWithContactStatus}
               currentPage={currentPage}
               totalPages={totalPages}
               total={total}

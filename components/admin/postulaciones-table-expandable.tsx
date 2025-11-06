@@ -2,7 +2,7 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, Fragment } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,9 +38,12 @@ import {
   Receipt,
 } from "lucide-react"
 import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
+import { ContactButton } from "@/components/admin/postulaciones/contact-button"
+import { RejectButton } from "@/components/admin/postulaciones/reject-button"
 import { useRouter } from "next/navigation"
 import { formatBirthDateWithAge } from "@/lib/utils"
 import { calculatePostulacionBadges } from "@/lib/utils/postulacion-badges.utils"
+import { getPostulacionStatusBadge } from "@/lib/utils/postulacion-status-badge.utils"
 
 interface PostulacionesTableProps {
   postulaciones: any[]
@@ -110,26 +113,12 @@ export function PostulacionesTableExpandable({
     window.location.href = `/admin/postulaciones/${postulacionId}`
   }
 
-  const handleContact = (postulacion: any, e: React.MouseEvent) => {
-    e.stopPropagation()
-    const phone = postulacion.phoneNumber.replace(/\D/g, '')
-    window.open(`https://wa.me/595${phone}`, '_blank')
-  }
-
   const handleScheduleOnboarding = (postulacion: any, e: React.MouseEvent) => {
     e.stopPropagation()
     setSelectedDriverForOnboarding({
       id: postulacion.id,
       name: postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`
     })
-  }
-
-  const handleReject = (postulacion: any, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (confirm(`¿Estás seguro de rechazar la postulación de ${postulacion.fullName}?`)) {
-      console.log('Rechazar postulación:', postulacion.id)
-      alert('Función de rechazo en desarrollo')
-    }
   }
 
   const handleOnboardingSuccess = () => {
@@ -155,7 +144,7 @@ export function PostulacionesTableExpandable({
           </div>
         </CardHeader>
         <CardContent>
-                    {totalPages > 1 && (
+          {totalPages > 1 && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pb-4">
               <div className="text-xs text-muted-foreground">
                 Página <span className="font-semibold text-foreground">{currentPage}</span> de <span className="font-semibold text-foreground">{totalPages}</span>
@@ -211,6 +200,7 @@ export function PostulacionesTableExpandable({
               </div>
             </div>
           )}
+          
           <div className="border rounded-lg overflow-hidden">
             {/* Contenedor con scroll horizontal para pantallas pequeñas */}
             <div className="overflow-x-auto">
@@ -236,7 +226,7 @@ export function PostulacionesTableExpandable({
                     <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase min-w-[110px]">
                       Fecha
                     </th>
-                    <th className="px-3 py-3 text-right text-xs font-medium text-muted-foreground uppercase w-24">
+                    <th className="px-3 py-3 text-right text-xs font-medium text-muted-foreground uppercase w-32">
                       Acciones
                     </th>
                   </tr>
@@ -251,6 +241,9 @@ export function PostulacionesTableExpandable({
                     
                     // Calcular badges
                     const { badges } = calculatePostulacionBadges(postulacion)
+                    
+                    // ✅ Badge de estado de postulación (con soporte para REJECTED)
+                    const statusBadgeConfig = getPostulacionStatusBadge(postulacion.status)
                     
                     // Iconos de estado
                     const getDocumentIcon = () => {
@@ -328,9 +321,8 @@ export function PostulacionesTableExpandable({
                     const InvIcon = invIcon.icon
                     
                     return (
-                      <>
+                      <Fragment key={postulacion.id}>
                         <tr
-                          key={postulacion.id}
                           className="hover:bg-muted/50 transition-colors cursor-pointer"
                           onClick={() => toggleRow(postulacion.id)}
                         >
@@ -368,30 +360,20 @@ export function PostulacionesTableExpandable({
                             </div>
                           </td>
 
-                          {/* POSTULACIÓN STATUS */}
+                          {/* POSTULACIÓN STATUS - ✅ CON SOPORTE PARA REJECTED */}
                           <td className="px-3 py-3">
                             <div className="flex flex-row items-center gap-1">
                               <Badge
-                                variant="outline"
-                                className={`text-xs
-                                  ${postulacion.status === 'COMPLETED' 
-                                    ? 'bg-green-50 text-green-700 border-green-200' 
-                                    : postulacion.status === 'IN_PROGRESS'
-                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                    : 'bg-gray-50 text-gray-500 border-gray-200'
-                                  }`}
+                                variant={statusBadgeConfig.variant}
+                                className={`text-xs ${statusBadgeConfig.className}`}
                               >
-                                {postulacion.status === 'COMPLETED' 
-                                  ? 'Completada' 
-                                  : postulacion.status === 'IN_PROGRESS'
-                                  ? 'En Progreso'
-                                  : 'Abandonada'}
+                                {statusBadgeConfig.label}
                               </Badge>
-                                {postulacion.status === 'IN_PROGRESS' && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {' '}{postulacion.currentStep}/6
-                                  </span>
-                                )}
+                              {postulacion.status === 'IN_PROGRESS' && (
+                                <span className="text-xs text-muted-foreground">
+                                  {' '}{postulacion.currentStep}/6
+                                </span>
+                              )}
                             </div>
                           </td>
 
@@ -486,7 +468,7 @@ export function PostulacionesTableExpandable({
                             </div>
                           </td>
 
-                          {/* ACCIONES */}
+                          {/* ACCIONES - ✅ CON NUEVO BOTÓN DE CONTACTO */}
                           <td className="px-3 py-3">
                             <div className="flex items-center justify-end gap-2">
                               <Button
@@ -497,6 +479,15 @@ export function PostulacionesTableExpandable({
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
+                              
+                              {/* ✅ NUEVO: Botón de Contacto */}
+                              <ContactButton
+                                driverId={postulacion.id}
+                                driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
+                                phoneNumber={postulacion.phoneNumber}
+                                contactStatus={postulacion.contactStatus}
+                              />
+                              
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -508,10 +499,6 @@ export function PostulacionesTableExpandable({
                                     <Eye className="mr-2 h-4 w-4" />
                                     Ver detalles
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={(e) => handleContact(postulacion, e)}>
-                                    <Phone className="mr-2 h-4 w-4" />
-                                    Contactar
-                                  </DropdownMenuItem>
                                   {canSchedule && (
                                     <>
                                       <DropdownMenuSeparator />
@@ -522,12 +509,15 @@ export function PostulacionesTableExpandable({
                                     </>
                                   )}
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem 
-                                    onClick={(e) => handleReject(postulacion, e)}
-                                    className="text-red-600"
-                                  >
-                                    <XCircle className="mr-2 h-4 w-4" />
-                                    Rechazar
+                                  {/* ✅ Botón de Rechazar/Habilitar dinámico */}
+                                  <DropdownMenuItem asChild>
+                                    <div>
+                                      <RejectButton
+                                        driverId={postulacion.id}
+                                        driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
+                                        isRejected={postulacion.status === 'REJECTED'}
+                                      />
+                                    </div>
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -650,7 +640,7 @@ export function PostulacionesTableExpandable({
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     )
                   })}
                 </tbody>

@@ -20,7 +20,7 @@ interface PageProps {
   }>
 }
 
-// ✅ INCLUDE OPTIMIZADO - Solo lo necesario para mostrar badges
+// ✅ INCLUDE OPTIMIZADO - Solo lo necesario para mostrar badges + CONTACTOS
 const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
   documents: {
     select: {
@@ -60,6 +60,19 @@ const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
     },
     orderBy: {
       createdAt: 'desc'
+    },
+    take: 1
+  },
+  // ✅ NUEVO: Incluir contactos del driver (solo el más reciente)
+  driverContacts: {
+    select: {
+      id: true,
+      contactedAt: true,
+      contactMethod: true,
+      contactedBy: true,
+    },
+    orderBy: {
+      contactedAt: 'desc'
     },
     take: 1
   }

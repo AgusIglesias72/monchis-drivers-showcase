@@ -1,11 +1,11 @@
-/*
-📦 Schema organizado:
-├── 🔐 Admin & Auth (AdminUser, AuditLog)
-├── 📝 Form System (FormDriver, FormSubmission, FormDocument, etc)
-├── 💰 Payment & Financial (EquipmentPayment, FinancialService)
-├── 🎓 Onboarding Events (OnboardingEvent, OnboardingAttendee)
-└── 📋 Enums (todos al final)
-*/
+/**
+ * 📦 Schema organizado:
+ * ├── 🔐 Admin & Auth (AdminUser, AuditLog)
+ * ├── 📝 Form System (FormDriver, FormSubmission, FormDocument, etc)
+ * ├── 💰 Payment & Financial (EquipmentPayment, FinancialService)
+ * ├── 🎓 Onboarding Events (OnboardingEvent, OnboardingAttendee)
+ * └── 📋 Enums (todos al final)
+ */
 
 // prisma/schema.prisma
 generator client {
@@ -43,18 +43,19 @@ model AdminUser {
   lastLoginAt DateTime? @map("last_login_at")
 
   // Relaciones
-  formNotesCreated                 FormNote[]             @relation("FormNoteCreatedBy")
-  documentsUploaded                FormDocument[]         @relation("DocumentUploadedBy")
-  documentReviews                  FormDocument[]         @relation("DocumentReviewedBy")
-  finalApprovalsGiven              FormDriver[]           @relation("FinalApprovedBy")
-  onboardingEventsOrganized        OnboardingEvent[]      @relation("EventOrganizer")
-  onboardingAttendeesInvited       OnboardingAttendee[]   @relation("AttendeeInvitedBy")
-  onboardingAttendeesCheckedIn     OnboardingAttendee[]   @relation("AttendeeCheckedInBy")
-  onboardingAttendeesCancelled     OnboardingAttendee[]   @relation("AttendeeCancelledBy")
-  onboardingAttendeesMarkedNoShow  OnboardingAttendee[]   @relation("AttendeeMarkedNoShowBy")
-  onboardingAttendeesRescheduled   OnboardingAttendee[]   @relation("AttendeeRescheduledBy")
-  onboardingEventsCompleted        OnboardingEvent[]      @relation("EventCompletedBy")
-  equipmentPaymentsVerified        EquipmentPayment[]     @relation("PaymentVerifiedBy")
+  formNotesCreated                FormNote[]           @relation("FormNoteCreatedBy")
+  documentsUploaded               FormDocument[]       @relation("DocumentUploadedBy")
+  documentReviews                 FormDocument[]       @relation("DocumentReviewedBy")
+  finalApprovalsGiven             FormDriver[]         @relation("FinalApprovedBy")
+  onboardingEventsOrganized       OnboardingEvent[]    @relation("EventOrganizer")
+  onboardingAttendeesInvited      OnboardingAttendee[] @relation("AttendeeInvitedBy")
+  onboardingAttendeesCheckedIn    OnboardingAttendee[] @relation("AttendeeCheckedInBy")
+  onboardingAttendeesCancelled    OnboardingAttendee[] @relation("AttendeeCancelledBy")
+  onboardingAttendeesMarkedNoShow OnboardingAttendee[] @relation("AttendeeMarkedNoShowBy")
+  onboardingAttendeesRescheduled  OnboardingAttendee[] @relation("AttendeeRescheduledBy")
+  onboardingEventsCompleted       OnboardingEvent[]    @relation("EventCompletedBy")
+  equipmentPaymentsVerified       EquipmentPayment[]   @relation("PaymentVerifiedBy")
+  driverContactsCreated           DriverContact[]      @relation("ContactCreatedBy")
 
   @@index([email])
   @@index([role])
@@ -94,6 +95,23 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model DriverContact {
+  id              String        @id @default(cuid())
+  formDriverId    String        @map("form_driver_id")
+  contactedAt     DateTime      @default(now()) @map("contacted_at")
+  contactMethod   ContactMethod @map("contact_method")
+  contactedBy     String        @map("contacted_by") // clerkId
+  contactedByUser AdminUser     @relation("ContactCreatedBy", fields: [contactedBy], references: [id])
+  metadata        Json?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  formDriver      FormDriver    @relation(fields: [formDriverId], references: [id])
+
+  @@index([formDriverId])
+  @@index([contactedAt])
+  @@index([contactedBy])
+  @@map("driver_contacts")
 }
 
 // ==================== FORM SYSTEM ====================
@@ -147,19 +165,19 @@ model FormDriver {
   canInvoice        Boolean  @default(false) @map("can_invoice")
 
   // Estado del formulario
-  status         FormDriverStatus    @default(IN_PROGRESS)
-  currentStep    Int                 @default(1)
-  completedSteps Int[]               @default([]) @map("completed_steps")
+  status          FormDriverStatus    @default(IN_PROGRESS)
+  currentStep     Int                 @default(1)
+  completedSteps  Int[]               @default([]) @map("completed_steps")
   documentsStatus FormDocumentsStatus @default(INCOMPLETE) @map("documents_status")
 
   // On Boarding
   onboardingStatus      OnboardingStatus? @map("onboarding_status")
   onboardingScheduledAt DateTime?         @map("onboarding_scheduled_at")
   onboardingCompletedAt DateTime?         @map("onboarding_completed_at")
-  onboardingNotes       String?           @db.Text @map("onboarding_notes")
+  onboardingNotes       String?           @map("onboarding_notes") @db.Text
 
   // Gestión administrativa
-  internalNotes String? @db.Text @map("internal_notes")
+  internalNotes String? @map("internal_notes") @db.Text
 
   // Aprobación final
   finalApprovedBy     String?    @map("final_approved_by") // clerkId
@@ -171,11 +189,11 @@ model FormDriver {
   metadata Json?
 
   // Timestamps
-  startedAt      DateTime  @default(now()) @map("started_at")
-  lastActivityAt DateTime  @updatedAt @map("last_activity_at")
-  completedAt    DateTime? @map("completed_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  startedAt       DateTime  @default(now()) @map("started_at")
+  lastActivityAt  DateTime  @updatedAt @map("last_activity_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   // Relaciones
   submissions           FormSubmission[]
@@ -183,6 +201,7 @@ model FormDriver {
   documents             FormDocument[]
   onboardingAttendances OnboardingAttendee[]
   equipmentPayments     EquipmentPayment[]
+  driverContacts        DriverContact[]
   financialService      FinancialService?
 
   @@index([cedula])
@@ -242,7 +261,7 @@ model FormStepCompletion {
   id           String @id @default(cuid())
   submissionId String @map("submission_id")
 
-  step     Int    // 1-6
+  step     Int // 1-6
   stepName String @map("step_name") // "contact_info", "payment", etc
 
   // Datos del step específico
@@ -298,7 +317,7 @@ model FormDocument {
   status FormDocumentStatus @default(PENDING)
 
   // Notas administrativas
-  adminNotes String? @db.Text @map("admin_notes")
+  adminNotes String? @map("admin_notes") @db.Text
 
   // Quién cargó el documento
   uploadedBy     String?    @map("uploaded_by") // clerkId o "driver"
@@ -310,7 +329,7 @@ model FormDocument {
   reviewedAt     DateTime?  @map("reviewed_at")
 
   // Razón de rechazo
-  rejectionReason String? @db.Text @map("rejection_reason")
+  rejectionReason String? @map("rejection_reason") @db.Text
 
   // Metadata
   metadata Json?
@@ -340,23 +359,23 @@ model EquipmentPayment {
   paymentMethod String?   @map("payment_method") // TRANSFERENCIA, POS, OTROS
   paymentNumber String?   @map("payment_number") // Últimos 6 dígitos
   invoiceNumber String?   @map("invoice_number") // 001-001-0019089
-  amount        Float?    // Monto abonado
+  amount        Float? // Monto abonado
   paymentDate   DateTime? @map("payment_date")
 
   // Comprobante de pago (solo para transferencias)
   paymentProofUrl String? @map("payment_proof_url") // URL Vercel Blob
 
   // Estado del pago
-  status     PaymentStatus @default(PENDING)
-  verifiedAt DateTime?     @map("verified_at")
-  verifiedBy String?       @map("verified_by") // clerkId
-  verifiedByUser AdminUser? @relation("PaymentVerifiedBy", fields: [verifiedBy], references: [id])
+  status         PaymentStatus @default(PENDING)
+  verifiedAt     DateTime?     @map("verified_at")
+  verifiedBy     String?       @map("verified_by") // clerkId
+  verifiedByUser AdminUser?    @relation("PaymentVerifiedBy", fields: [verifiedBy], references: [id])
 
   // Notas administrativas
-  adminNotes String? @db.Text @map("admin_notes")
+  adminNotes String? @map("admin_notes") @db.Text
 
   // Razón de rechazo
-  rejectionReason String? @db.Text @map("rejection_reason")
+  rejectionReason String? @map("rejection_reason") @db.Text
 
   // Metadata
   metadata Json?
@@ -494,7 +513,7 @@ model OnboardingAttendee {
   cancelledAt     DateTime?  @map("cancelled_at")
   cancelledBy     String?    @map("cancelled_by") // clerkId
   cancelledByUser AdminUser? @relation("AttendeeCancelledBy", fields: [cancelledBy], references: [id])
-  cancelledReason String?    @db.Text @map("cancelled_reason")
+  cancelledReason String?    @map("cancelled_reason") @db.Text
 
   // Reagendamiento
   rescheduledFrom      String?    @map("rescheduled_from")
@@ -508,7 +527,7 @@ model OnboardingAttendee {
   reminderSentAt DateTime? @map("reminder_sent_at")
 
   // Notas
-  attendeeNotes String? @db.Text @map("attendee_notes")
+  attendeeNotes String? @map("attendee_notes") @db.Text
 
   // Metadata
   metadata Json?
@@ -528,25 +547,25 @@ model OnboardingAttendee {
 }
 
 model BackgroundJob {
-  id        String   @id @default(uuid())
-  type      JobType  
-  status    JobStatus @default(QUEUED)  
-  userId    String  
-  metadata  Json  
-  progress  Int      @default(0)  // 0-100
-  current   Int      @default(0)  // Items procesados
-  total     Int      @default(0)  // Total items
-  logs      Json     @default("[]")
-  result    Json?
-  
-  error     String?
-  
+  id       String    @id @default(uuid())
+  type     JobType
+  status   JobStatus @default(QUEUED)
+  userId   String
+  metadata Json
+  progress Int       @default(0) // 0-100
+  current  Int       @default(0) // Items procesados
+  total    Int       @default(0) // Total items
+  logs     Json      @default("[]")
+  result   Json?
+
+  error String?
+
   // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  startedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  startedAt   DateTime?
   completedAt DateTime?
-  
+
   @@index([userId])
   @@index([type])
   @@index([status])
@@ -556,18 +575,18 @@ model BackgroundJob {
 // ==================== ENUMS ====================
 
 enum JobType {
-  DRIVER_PROCESSING      // Procesar pagos de conductores
-  DOCUMENT_VALIDATION    // Validar documentos con AI
-  EXPORT_DATA            // Exportar datos
-  BULK_EMAIL             // Envío masivo de emails
+  DRIVER_PROCESSING // Procesar pagos de conductores
+  DOCUMENT_VALIDATION // Validar documentos con AI
+  EXPORT_DATA // Exportar datos
+  BULK_EMAIL // Envío masivo de emails
 }
 
 enum JobStatus {
-  QUEUED      // En cola
-  PROCESSING  // Ejecutándose
-  COMPLETED   // Terminado exitosamente
-  FAILED      // Falló
-  CANCELLED   // Cancelado
+  QUEUED // En cola
+  PROCESSING // Ejecutándose
+  COMPLETED // Terminado exitosamente
+  FAILED // Falló
+  CANCELLED // Cancelado
 }
 
 enum AdminRole {
@@ -585,6 +604,9 @@ enum AuditAction {
   DRIVER_ASSIGNED
   DRIVER_APPROVED
   DRIVER_REJECTED
+
+  DRIVER_CONTACTED
+  POSTULACION_REJECTED
 
   // Documentos
   DOCUMENT_UPLOADED
@@ -624,62 +646,70 @@ enum AuditAction {
   OTHER
 }
 
+enum ContactMethod {
+  WHATSAPP
+  PHONE
+  EMAIL
+  IN_PERSON
+  OTHER
+}
+
 enum FormDriverStatus {
-  IN_PROGRESS      // Completando formulario
-  COMPLETED        // Formulario completado
-  ABANDONED        // Abandonó el proceso
-  SUBMITTED        // Enviado para revisión
-  UNDER_REVIEW     // En revisión administrativa
-  DOCS_PENDING     // Esperando correcciones de docs
-  APPROVED         // Aprobado por admin
+  IN_PROGRESS // Completando formulario
+  COMPLETED // Formulario completado
+  ABANDONED // Abandonó el proceso
+  SUBMITTED // Enviado para revisión
+  UNDER_REVIEW // En revisión administrativa
+  DOCS_PENDING // Esperando correcciones de docs
+  APPROVED // Aprobado por admin
   READY_ONBOARDING // Listo para On Boarding
-  ONBOARDING       // En proceso de On Boarding
-  ACTIVE           // Activo como driver
-  REJECTED         // Rechazado
+  ONBOARDING // En proceso de On Boarding
+  ACTIVE // Activo como driver
+  REJECTED // Rechazado
 }
 
 enum FormDocumentStatus {
-  PENDING     // Subido, esperando revisión
-  IN_REVIEW   // En proceso de revisión
-  APPROVED    // Aprobado por admin
-  REJECTED    // Rechazado - necesita resubir
+  PENDING // Subido, esperando revisión
+  IN_REVIEW // En proceso de revisión
+  APPROVED // Aprobado por admin
+  REJECTED // Rechazado - necesita resubir
   RESUBMITTED // Re-subido después de rechazo
 }
 
 enum FormDocumentsStatus {
-  INCOMPLETE  // Faltan documentos
-  PENDING     // Todos subidos, esperando revisión
-  IN_REVIEW   // En proceso de revisión
+  INCOMPLETE // Faltan documentos
+  PENDING // Todos subidos, esperando revisión
+  IN_REVIEW // En proceso de revisión
   CORRECTIONS // Algunos rechazados, esperando correcciones
-  APPROVED    // Todos aprobados
+  APPROVED // Todos aprobados
 }
 
 enum OnboardingStatus {
-  NOT_READY   // No cumple condiciones aún
-  READY       // Listo para agendar
-  SCHEDULED   // On boarding agendado
+  NOT_READY // No cumple condiciones aún
+  READY // Listo para agendar
+  SCHEDULED // On boarding agendado
   IN_PROGRESS // En proceso
-  COMPLETED   // Completado
-  CANCELLED   // Cancelado
-  NO_SHOW     // No se presentó
+  COMPLETED // Completado
+  CANCELLED // Cancelado
+  NO_SHOW // No se presentó
 }
 
 enum OnboardingEventStatus {
-  DRAFT       // Borrador
-  SCHEDULED   // Programado
+  DRAFT // Borrador
+  SCHEDULED // Programado
   IN_PROGRESS // En curso
-  COMPLETED   // Completado
-  CANCELLED   // Cancelado
-  POSTPONED   // Pospuesto
+  COMPLETED // Completado
+  CANCELLED // Cancelado
+  POSTPONED // Pospuesto
 }
 
 enum OnboardingAttendeeStatus {
-  INVITED     // Invitado
-  CONFIRMED   // Confirmó asistencia
-  ATTENDED    // Asistió
-  SCHEDULED   // Agendado
-  NO_SHOW     // No se presentó
-  CANCELLED   // Canceló
+  INVITED // Invitado
+  CONFIRMED // Confirmó asistencia
+  ATTENDED // Asistió
+  SCHEDULED // Agendado
+  NO_SHOW // No se presentó
+  CANCELLED // Canceló
   RESCHEDULED // Reagendado
 }
 
@@ -701,8 +731,8 @@ enum DocumentType {
 }
 
 enum PaymentStatus {
-  PENDING   // Pendiente de verificación
-  VERIFIED  // Verificado y aprobado
-  REJECTED  // Rechazado
-  PARTIAL   // Pago parcial recibido
+  PENDING // Pendiente de verificación
+  VERIFIED // Verificado y aprobado
+  REJECTED // Rechazado
+  PARTIAL // Pago parcial recibido
 }
