@@ -41,6 +41,7 @@ import {
   XCircle,
   AlertTriangle,
   Download,
+  Phone,
 } from "lucide-react"
 import { DocumentPreview } from "@/components/admin/document-preview"
 import { ManageOnboardingModal } from "@/components/admin/manage-onboarding-modal"
@@ -51,6 +52,9 @@ import {
   OnboardingSection,
   StatusBadges
 } from "@/components/admin/postulacion-helpers"
+import { ContactButton } from "@/components/admin/postulaciones/contact-button"
+import { RejectButton } from "@/components/admin/postulaciones/reject-button"
+import { getContactStatus } from "@/lib/utils/contact-status.utils"
 import { toast } from "sonner"
 import {
   updatePostulacion,
@@ -99,7 +103,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [showProofModal, setShowProofModal] = useState(false)
-const [uploadingProof, setUploadingProof] = useState(false)
+  const [uploadingProof, setUploadingProof] = useState(false)
   
   const [paymentData, setPaymentData] = useState({
     paymentMethod: postulacion.equipmentPayments?.[0]?.paymentMethod || '',
@@ -122,6 +126,13 @@ const [uploadingProof, setUploadingProof] = useState(false)
 
   // Los eventos disponibles vendrán desde el servidor en la página
   const availableEvents = postulacion.availableOnboardingEvents || []
+
+  // ✅ Calcular estado de contacto
+  const contactStatus = getContactStatus(
+    postulacion.status === 'REJECTED',
+    postulacion.hasBeenContacted || false,
+    postulacion.completedSteps?.length || 0
+  )
 
   const handleSave = () => {
     const updatedPostulacion = { ...postulacion, ...editedData }
@@ -411,55 +422,58 @@ const [uploadingProof, setUploadingProof] = useState(false)
   }
 
   // ==================== HANDLER PARA SUBIR COMPROBANTE ====================
-const handleUploadPaymentProof = async (file: File) => {
-  setUploadingProof(true)
-  
-  try {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('paymentId', postulacion.equipmentPayments[0].id)
+  const handleUploadPaymentProof = async (file: File) => {
+    setUploadingProof(true)
+    
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('paymentId', postulacion.equipmentPayments[0].id)
 
-    const response = await fetch('/api/postulaciones/payments/upload-proof', {
-      method: 'POST',
-      body: formData
-    })
-
-    const result = await response.json()
-
-    if (result.success) {
-      toast.success('Comprobante subido exitosamente')
-      
-      // Actualizar estado local optimísticamente
-      setPostulacion({
-        ...postulacion,
-        equipmentPayments: [{
-          ...postulacion.equipmentPayments[0],
-          paymentProofUrl: result.proofUrl
-        }]
+      const response = await fetch('/api/postulaciones/payments/upload-proof', {
+        method: 'POST',
+        body: formData
       })
-      
-      // Refresh para sincronizar con servidor
-      setTimeout(() => router.refresh(), 500)
-    } else {
-      toast.error(result.error || 'Error al subir comprobante')
-    }
-  } catch (error: any) {
-    console.error('Error al subir comprobante:', error)
-    toast.error('Error al subir el comprobante')
-  } finally {
-    setUploadingProof(false)
-  }
-}
 
-// ==================== HANDLER PARA VER COMPROBANTE ====================
-const handleViewPaymentProof = () => {
-  const proofUrl = postulacion.equipmentPayments[0]?.paymentProofUrl
-  if (proofUrl) {
-    setShowProofModal(true)
-    // O alternativamente abrir en nueva pestaña:
-    // window.open(proofUrl, '_blank')
+      const result = await response.json()
+
+      if (result.success) {
+        toast.success('Comprobante subido exitosamente')
+        
+        // Actualizar estado local optimísticamente
+        setPostulacion({
+          ...postulacion,
+          equipmentPayments: [{
+            ...postulacion.equipmentPayments[0],
+            paymentProofUrl: result.proofUrl
+          }]
+        })
+        
+        // Refresh para sincronizar con servidor
+        setTimeout(() => router.refresh(), 500)
+      } else {
+        toast.error(result.error || 'Error al subir comprobante')
+      }
+    } catch (error: any) {
+      console.error('Error al subir comprobante:', error)
+      toast.error('Error al subir el comprobante')
+    } finally {
+      setUploadingProof(false)
+    }
   }
-}
+
+  // ==================== HANDLER PARA VER COMPROBANTE ====================
+  const handleViewPaymentProof = () => {
+    const proofUrl = postulacion.equipmentPayments[0]?.paymentProofUrl
+    if (proofUrl) {
+      setShowProofModal(true)
+    }
+  }
+
+  // ==================== HANDLER ÉXITO PARA REFRESH ====================
+  const handleActionSuccess = () => {
+    router.refresh()
+  }
 
   return (
     <div className="flex flex-1 flex-col">
@@ -470,8 +484,8 @@ const handleViewPaymentProof = () => {
         ]}
       />
 
-<div className="flex-1 p-4 md:p-8 space-y-6">
-<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="flex-1 p-4 md:p-8 space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="space-y-3">
             <h1 className="text-2xl font-bold tracking-tight">
               {postulacion.fullName}
@@ -491,6 +505,18 @@ const handleViewPaymentProof = () => {
           </div>
 
           <div className="flex flex-wrap justify-end items-center gap-2">
+            {/* ✅ NUEVO: Botón de Contactar con texto */}
+            {!isEditing && (
+              <ContactButton
+                driverId={postulacion.id}
+                driverName={postulacion.fullName || 'Driver'}
+                phoneNumber={postulacion.phoneNumber || ''}
+                contactStatus={contactStatus}
+                showLabel={true}
+                size="default"
+              />
+            )}
+
             {!isEditing && (
               <Button
                 variant="outline"
@@ -561,15 +587,16 @@ const handleViewPaymentProof = () => {
               </>
             )}
 
-            {!isEditing && postulacion.status !== 'REJECTED' && (
-              <Button
-                onClick={() => setShowRejectModal(true)}
-                variant="destructive"
-                className="gap-2 cursor-pointer"
-              >
-                <XCircle className="h-4 w-4" />
-                Rechazar
-              </Button>
+            {/* ✅ MODIFICADO: Usar RejectButton con texto */}
+            {!isEditing && (
+              <RejectButton
+                driverId={postulacion.id}
+                driverName={postulacion.fullName || 'Driver'}
+                isRejected={postulacion.status === 'REJECTED'}
+                onSuccess={handleActionSuccess}
+                showLabel={true}
+                size="default"
+              />
             )}
           </div>
         </div>
@@ -623,61 +650,61 @@ const handleViewPaymentProof = () => {
           </Card>
 
           <Card>
-  <CardHeader>
-    <CardTitle className="text-base flex items-center gap-2">
-      <CreditCard className="h-5 w-5" />
-      Pago de Equipamiento
-    </CardTitle>
-  </CardHeader>
-  <CardContent>
-    <PaymentSection
-      payment={postulacion.equipmentPayments?.[0]}
-      postulacionId={postulacion.id}
-      onManage={() => setShowPaymentModal(true)}
-      onViewProof={handleViewPaymentProof}
-      onUploadProof={handleUploadPaymentProof}
-    />
-  </CardContent>
-</Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Pago de Equipamiento
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PaymentSection
+                payment={postulacion.equipmentPayments?.[0]}
+                postulacionId={postulacion.id}
+                onManage={() => setShowPaymentModal(true)}
+                onViewProof={handleViewPaymentProof}
+                onUploadProof={handleUploadPaymentProof}
+              />
+            </CardContent>
+          </Card>
 
-{showProofModal && postulacion.equipmentPayments[0]?.paymentProofUrl && (
-  <Dialog open={showProofModal} onOpenChange={setShowProofModal}>
-    <DialogContent className="max-w-4xl max-h-[90vh]">
-      <DialogHeader>
-        <DialogTitle>Comprobante de Pago</DialogTitle>
-      </DialogHeader>
-      
-      <div className="overflow-auto">
-        {postulacion.equipmentPayments[0].paymentProofUrl.toLowerCase().endsWith('.pdf') ? (
-          <iframe
-            src={postulacion.equipmentPayments[0].paymentProofUrl}
-            className="w-full h-[70vh]"
-            title="Comprobante de Pago"
-          />
-        ) : (
-          <img
-            src={postulacion.equipmentPayments[0].paymentProofUrl}
-            alt="Comprobante de Pago"
-            className="w-full h-auto"
-          />
-        )}
-      </div>
-      
-      <div className="flex justify-end gap-2">
-        <Button
-          variant="outline"
-          onClick={() => window.open(postulacion.equipmentPayments[0].paymentProofUrl, '_blank')}
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Descargar
-        </Button>
-        <Button onClick={() => setShowProofModal(false)}>
-          Cerrar
-        </Button>
-      </div>
-    </DialogContent>
-  </Dialog>
-)}
+          {showProofModal && postulacion.equipmentPayments[0]?.paymentProofUrl && (
+            <Dialog open={showProofModal} onOpenChange={setShowProofModal}>
+              <DialogContent className="max-w-4xl max-h-[90vh]">
+                <DialogHeader>
+                  <DialogTitle>Comprobante de Pago</DialogTitle>
+                </DialogHeader>
+                
+                <div className="overflow-auto">
+                  {postulacion.equipmentPayments[0].paymentProofUrl.toLowerCase().endsWith('.pdf') ? (
+                    <iframe
+                      src={postulacion.equipmentPayments[0].paymentProofUrl}
+                      className="w-full h-[70vh]"
+                      title="Comprobante de Pago"
+                    />
+                  ) : (
+                    <img
+                      src={postulacion.equipmentPayments[0].paymentProofUrl}
+                      alt="Comprobante de Pago"
+                      className="w-full h-auto"
+                    />
+                  )}
+                </div>
+                
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open(postulacion.equipmentPayments[0].paymentProofUrl, '_blank')}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Descargar
+                  </Button>
+                  <Button onClick={() => setShowProofModal(false)}>
+                    Cerrar
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
 
           <Card>
             <CardHeader className="pb-3 border-b">

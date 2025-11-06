@@ -29,6 +29,7 @@ import {
   Clock,
   FileCheck,
   X,
+  XCircle,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -53,24 +54,7 @@ interface PostulacionesPageContentProps {
   }
 }
 
-type QuickFilter = 'all' | 'scheduled' | 'pending-schedule' | 'review' | 'pending-completion'
-
-// ✅ Hook personalizado para debouncing
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value)
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value)
-    }, delay)
-
-    return () => {
-      clearTimeout(handler)
-    }
-  }, [value, delay])
-
-  return debouncedValue
-}
+type QuickFilter = 'all' | 'scheduled' | 'pending-schedule' | 'review' | 'pending-completion' | 'rejected'
 
 export function PostulacionesPageContent({
   stats,
@@ -95,10 +79,6 @@ export function PostulacionesPageContent({
   const [isExporting, setIsExporting] = useState(false)
   const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all')
 
-  // ✅ Debounce para búsqueda (500ms)
-  const debouncedSearchTerm = useDebounce(searchTerm, 500)
-
-  // ✅ NUEVO: Calcular estado de contacto para cada postulación
   const postulacionesWithContactStatus = useMemo(() => {
     return postulaciones.map(post => {
       const hasBeenContacted = (post.driverContacts?.length ?? 0) > 0
@@ -113,9 +93,10 @@ export function PostulacionesPageContent({
     })
   }, [postulaciones])
 
-  // Determinar el filtro rápido activo basado en los filtros actuales
   useEffect(() => {
-    if (onboardingStatusFilter === 'scheduled') {
+    if (statusFilter === 'REJECTED') {
+      setActiveQuickFilter('rejected')
+    } else if (onboardingStatusFilter === 'scheduled') {
       setActiveQuickFilter('scheduled')
     } else if (onboardingStatusFilter === 'pending' && statusFilter === 'COMPLETED') {
       setActiveQuickFilter('pending-schedule')
@@ -128,17 +109,9 @@ export function PostulacionesPageContent({
     }
   }, [statusFilter, onboardingStatusFilter])
 
-  // ✅ Auto-search cuando el debounced value cambia
-  useEffect(() => {
-    if (debouncedSearchTerm !== currentFilters.search) {
-      applyFilters(1)
-    }
-  }, [debouncedSearchTerm])
-
   const applyFilters = useCallback((page: number = 1, quickFilter?: QuickFilter) => {
     const params = new URLSearchParams()
 
-    // Si se especifica un filtro rápido, aplicar esos filtros
     if (quickFilter) {
       switch (quickFilter) {
         case 'scheduled':
@@ -155,16 +128,16 @@ export function PostulacionesPageContent({
         case 'pending-completion':
           params.set('status', 'IN_PROGRESS')
           break
-        // 'all' no agrega filtros especiales
+        case 'rejected':
+          params.set('status', 'REJECTED')
+          break
       }
     } else {
-      // Aplicar filtros manuales
       if (statusFilter !== 'all') params.set('status', statusFilter)
       if (onboardingStatusFilter !== 'all') params.set('onboardingStatus', onboardingStatusFilter)
     }
 
-    // Filtros adicionales que siempre se aplican
-    if (debouncedSearchTerm) params.set('search', debouncedSearchTerm)
+    if (searchTerm) params.set('search', searchTerm)
     if (startDate) params.set('startDate', startDate)
     if (endDate) params.set('endDate', endDate)
     if (sortBy !== 'createdAt') params.set('sortBy', sortBy)
@@ -173,16 +146,14 @@ export function PostulacionesPageContent({
 
     const queryString = params.toString()
     
-    // ✅ Usar startTransition para hacer la navegación no bloqueante
     startTransition(() => {
       router.push(`/admin/postulaciones${queryString ? `?${queryString}` : ''}`, { scroll: false })
     })
-  }, [router, statusFilter, onboardingStatusFilter, debouncedSearchTerm, startDate, endDate, sortBy, sortOrder])
+  }, [router, statusFilter, onboardingStatusFilter, searchTerm, startDate, endDate, sortBy, sortOrder])
 
   const handleQuickFilter = (filter: QuickFilter) => {
     setActiveQuickFilter(filter)
 
-    // Resetear filtros manuales cuando se usa un filtro rápido
     if (filter !== 'all') {
       setStatusFilter('all')
       setOnboardingStatusFilter('all')
@@ -208,6 +179,30 @@ export function PostulacionesPageContent({
     startTransition(() => {
       router.push('/admin/postulaciones', { scroll: false })
     })
+  }
+
+  const setDatePreset = (preset: 'today' | 'week' | 'month') => {
+    const today = new Date()
+    const todayStr = today.toISOString().split('T')[0]
+    
+    switch (preset) {
+      case 'today':
+        setStartDate(todayStr)
+        setEndDate(todayStr)
+        break
+      case 'week':
+        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+        setStartDate(weekAgo.toISOString().split('T')[0])
+        setEndDate(todayStr)
+        break
+      case 'month':
+        const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+        setStartDate(monthAgo.toISOString().split('T')[0])
+        setEndDate(todayStr)
+        break
+    }
+    
+    setTimeout(() => applyFilters(1), 100)
   }
 
   const hasActiveFilters = searchTerm || statusFilter !== 'all' || onboardingStatusFilter !== 'all' || startDate || endDate
@@ -263,9 +258,7 @@ export function PostulacionesPageContent({
         ]}
       />
 
-      {/* CONTENEDOR PRINCIPAL */}
       <div className="w-full p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Header */}
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Postulaciones</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">
@@ -273,103 +266,104 @@ export function PostulacionesPageContent({
           </p>
         </div>
 
-        {/* KPIs */}
         <PostulacionesKPIs stats={stats} />
 
-        {/* Filtros avanzados */}
-        <Card className="-mt-[1px] relative z-0">
-          <CardHeader className="">
-            <CardTitle className="text-lg">Filtros de Búsqueda</CardTitle>
+        {/* ✅ FILTROS COMPACTOS */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Filtros de Búsqueda</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Búsqueda y filtros en una línea */}
-            <div className="flex flex-wrap items-end gap-2">
+          <CardContent className="space-y-3">
+            {/* Primera fila: Búsqueda + Filtros principales */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Búsqueda */}
-              <div className="relative w-[280px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
-                <Input
-                  id="search"
-                  placeholder="Buscar por nombre, cédula, teléfono o email..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  className="pl-9 pr-9 h-9 text-sm"
-                  disabled={isPending}
-                />
-                {searchTerm && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0 hover:bg-muted"
-                    onClick={() => {
-                      setSearchTerm('')
-                      setTimeout(() => applyFilters(1), 100)
-                    }}
-                    aria-label="Limpiar búsqueda"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                {isPending && debouncedSearchTerm !== searchTerm && (
-                  <div className="absolute right-10 top-1/2 -translate-y-1/2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                  </div>
-                )}
+              <div className="lg:col-span-1">
+                <Label htmlFor="search" className="text-xs text-muted-foreground mb-1.5 block">
+                  Búsqueda
+                </Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    id="search"
+                    placeholder="Nombre, cédula, teléfono, email..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    className="pl-8 pr-8 h-8 text-sm "
+                    disabled={isPending}
+                  />
+                  {searchTerm && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0.5 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
+                      onClick={() => {
+                        setSearchTerm('')
+                        setTimeout(() => applyFilters(1), 100)
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Estado postulación */}
-              <div className="space-y-1.5 flex-1 min-w-[150px]">
-                <Label htmlFor="status" className="text-xs font-medium text-muted-foreground">
+              <div>
+                <Label htmlFor="status" className="text-xs text-muted-foreground mb-1.5 block ">
                   Estado postulación
                 </Label>
                 <Select 
                   value={statusFilter} 
                   onValueChange={(value) => {
                     setStatusFilter(value)
+                    setActiveQuickFilter('all')
                     setTimeout(() => applyFilters(1), 100)
                   }}
                   disabled={isPending}
                 >
-                  <SelectTrigger id="status" className="h-9 text-sm w-full">
-                    <SelectValue placeholder="Todos" />
+                  <SelectTrigger id="status" className="h-8 text-sm">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="COMPLETED">Completadas</SelectItem>
-                    <SelectItem value="IN_PROGRESS">En Progreso</SelectItem>
-                    <SelectItem value="ABANDONED">Abandonadas</SelectItem>
+                    <SelectItem value="all">📋 Todos los estados</SelectItem>
+                    <SelectItem value="COMPLETED">✅ Completadas</SelectItem>
+                    <SelectItem value="IN_PROGRESS">⏳ En Progreso</SelectItem>
+                    <SelectItem value="ABANDONED">🚫 Abandonadas</SelectItem>
+                    <SelectItem value="REJECTED">❌ Rechazadas</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Onboarding */}
-              <div className="space-y-1.5 flex-1 min-w-[140px]">
-                <Label htmlFor="onboarding" className="text-xs font-medium text-muted-foreground">
+              <div>
+                <Label htmlFor="onboarding" className="text-xs text-muted-foreground mb-1.5 block">
                   Onboarding
                 </Label>
                 <Select 
                   value={onboardingStatusFilter} 
                   onValueChange={(value) => {
                     setOnboardingStatusFilter(value)
+                    setActiveQuickFilter('all')
                     setTimeout(() => applyFilters(1), 100)
                   }}
                   disabled={isPending}
                 >
-                  <SelectTrigger id="onboarding" className="h-9 text-sm w-full">
-                    <SelectValue placeholder="Todos" />
+                  <SelectTrigger id="onboarding" className="h-8 text-sm">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="scheduled">Agendado</SelectItem>
-                    <SelectItem value="completed">Completado</SelectItem>
+                    <SelectItem value="all">📋 Todos</SelectItem>
+                    <SelectItem value="pending">⏰ Pendiente</SelectItem>
+                    <SelectItem value="scheduled">📅 Agendado</SelectItem>
+                    <SelectItem value="completed">✓ Completado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Ordenar por */}
-              <div className="space-y-1.5 flex-1 min-w-[140px]">
-                <Label htmlFor="sortBy" className="text-xs font-medium text-muted-foreground">
+              <div>
+                <Label htmlFor="sortBy" className="text-xs text-muted-foreground mb-1.5 block">
                   Ordenar por
                 </Label>
                 <Select 
@@ -380,83 +374,23 @@ export function PostulacionesPageContent({
                   }}
                   disabled={isPending}
                 >
-                  <SelectTrigger id="sortBy" className="h-9 text-sm w-full">
+                  <SelectTrigger id="sortBy" className="h-8 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="createdAt">Más recientes</SelectItem>
-                    <SelectItem value="fullName">Nombre A-Z</SelectItem>
-                    <SelectItem value="city">Ciudad A-Z</SelectItem>
+                    <SelectItem value="createdAt">🕐 Más recientes</SelectItem>
+                    <SelectItem value="fullName">🔤 Nombre A-Z</SelectItem>
+                    <SelectItem value="city">📍 Ciudad A-Z</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Fecha desde */}
-              <div className="space-y-1.5 flex-1 min-w-[140px]">
-                <Label htmlFor="startDate" className="text-xs font-medium text-muted-foreground">
-                  Desde
-                </Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => {
-                    setStartDate(e.target.value)
-                    setTimeout(() => applyFilters(1), 100)
-                  }}
-                  className="h-9 text-sm w-full"
-                  disabled={isPending}
-                />
-              </div>
-
-              {/* Fecha hasta */}
-              <div className="space-y-1.5 flex-1 min-w-[140px]">
-                <Label htmlFor="endDate" className="text-xs font-medium text-muted-foreground">
-                  Hasta
-                </Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => {
-                    setEndDate(e.target.value)
-                    setTimeout(() => applyFilters(1), 100)
-                  }}
-                  className="h-9 text-sm w-full"
-                  disabled={isPending}
-                />
-              </div>
-
-              {/* Exportar */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground opacity-0 select-none">
-                  _
-                </Label>
-                <Button
-                  variant="outline"
-                  onClick={handleExport}
-                  size="sm"
-                  className="h-9 whitespace-nowrap"
-                  disabled={isExporting || isPending}
-                >
-                  {isExporting ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-                      Exportando...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-3.5 w-3.5 mr-2" />
-                      Exportar
-                    </>
-                  )}
-                </Button>
-              </div>
             </div>
 
-            {/* Footer con acciones */}
+
+
+            {/* Footer - más compacto */}
             {hasActiveFilters && (
-              <div className="flex flex-wrap items-center gap-3 pt-2 border-t">
+              <div className="flex items-center justify-between pt-2 border-t">
                 <Button
                   variant="ghost"
                   onClick={handleClearFilters}
@@ -465,94 +399,105 @@ export function PostulacionesPageContent({
                   disabled={isPending}
                 >
                   <X className="h-3 w-3 mr-1.5" />
-                  Limpiar filtros
+                  Limpiar todos los filtros
                 </Button>
                 
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                  <span>Filtros activos</span>
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                  <span>{total} resultado{total !== 1 ? 's' : ''}</span>
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Tabla de postulaciones */}
+        {/* Tabla con tabs */}
         <div className="relative">
           <div className="flex flex-wrap items-end gap-1 pb-0">
             <button
               onClick={() => handleQuickFilter('all')}
               disabled={isPending}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
                 cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed
                 ${activeQuickFilter === 'all'
                   ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
-              <ClipboardCheck className="h-4 w-4" />
-              <span className="hidden sm:inline text-sm">Todas</span>
+              <ClipboardCheck className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Todas</span>
             </button>
             <button
               onClick={() => handleQuickFilter('scheduled')}
               disabled={isPending}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all 
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
                 ${activeQuickFilter === 'scheduled'
                   ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
-              <Calendar className="h-4 w-4" />
-              <span className="hidden sm:inline text-sm">Agendados</span>
+              <Calendar className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Agendados</span>
             </button>
             <button
               onClick={() => handleQuickFilter('pending-schedule')}
               disabled={isPending}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all 
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
                 ${activeQuickFilter === 'pending-schedule'
                   ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
-              <Clock className="h-4 w-4" />
-              <span className="hidden sm:inline text-sm">Pendiente de Agendar</span>
+              <Clock className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Pendiente de Agendar</span>
             </button>
             <button
               onClick={() => handleQuickFilter('review')}
               disabled={isPending}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all 
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
                 ${activeQuickFilter === 'review'
                   ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
-              <FileCheck className="h-4 w-4" />
-              <span className="hidden sm:inline text-sm">Revisar Postulación</span>
+              <FileCheck className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Revisar Postulación</span>
             </button>
             <button
               onClick={() => handleQuickFilter('pending-completion')}
               disabled={isPending}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all 
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
                 ${activeQuickFilter === 'pending-completion'
                   ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
-              <Loader2 className="h-4 w-4" />
-              <span className="hidden sm:inline text-sm">Postulación Pendiente</span>
+              <Loader2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Postulación Pendiente</span>
+            </button>
+            <button
+              onClick={() => handleQuickFilter('rejected')}
+              disabled={isPending}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                ${activeQuickFilter === 'rejected'
+                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Rechazados</span>
             </button>
           </div>
           
-          {/* Skeleton durante la carga */}
           {isPending ? (
             <Card className="rounded-t-none">
               <CardContent className="p-6">
                 <div className="space-y-4">
-                  {/* Header de la tabla skeleton */}
                   <div className="flex items-center gap-4 pb-3 border-b">
                     <Skeleton className="h-4 w-4" />
                     <Skeleton className="h-4 w-40" />
@@ -564,7 +509,6 @@ export function PostulacionesPageContent({
                     <Skeleton className="h-4 w-20 ml-auto" />
                   </div>
                   
-                  {/* Filas skeleton */}
                   {Array.from({ length: 10 }).map((_, i) => (
                     <div key={i} className="flex items-center gap-4 py-4 border-b">
                       <Skeleton className="h-4 w-4" />

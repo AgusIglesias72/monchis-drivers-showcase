@@ -40,13 +40,17 @@ interface ContactButtonProps {
   driverName: string
   phoneNumber: string
   contactStatus: ContactStatus
+  showLabel?: boolean // Si es true, muestra el texto del botón
+  size?: 'sm' | 'default' // Tamaño del botón
 }
 
 export function ContactButton({ 
   driverId, 
   driverName, 
   phoneNumber,
-  contactStatus 
+  contactStatus,
+  showLabel = false,
+  size = 'sm'
 }: ContactButtonProps) {
   const router = useRouter()
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
@@ -109,13 +113,24 @@ export function ContactButton({
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="ghost"
-                  size="sm"
+                  variant={showLabel ? (contactStatus === 'urgent' ? 'default' : 'outline') : 'ghost'}
+                  size={size}
                   disabled={isDisabled || isPending}
-                  className={`h-8 w-8 p-0 rounded-full ${config.bg} ${config.text} ${config.hoverBg}`}
+                  className={
+                    showLabel 
+                      ? `gap-2 ${
+                          contactStatus === 'contacted' 
+                            ? 'bg-green-50 text-green-700 hover:bg-green-100 border-green-200' 
+                            : contactStatus === 'urgent'
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : ''
+                        }`
+                      : `h-8 w-8 p-0 rounded-full ${config.bg} ${config.text} ${config.hoverBg}`
+                  }
                   onClick={(e) => e.stopPropagation()}
                 >
                   <MessageCircle className="h-4 w-4" />
+                  {showLabel && 'Contactar'}
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>

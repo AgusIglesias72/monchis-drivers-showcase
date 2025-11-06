@@ -22,13 +22,17 @@ interface RejectButtonProps {
   driverName: string
   isRejected?: boolean
   onSuccess?: () => void
+  showLabel?: boolean // Si es true, muestra el texto del botón
+  size?: 'sm' | 'default' // Tamaño del botón
 }
 
 export function RejectButton({ 
   driverId, 
   driverName,
   isRejected = false,
-  onSuccess 
+  onSuccess,
+  showLabel = false,
+  size = 'sm'
 }: RejectButtonProps) {
   const [showDialog, setShowDialog] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -61,17 +65,21 @@ export function RejectButton({
   }
 
   if (isRejected) {
-    // Botón de Habilitar (verde)
+    // Botón de Habilitar
     return (
       <>
         <Button
-          variant="ghost"
-          size="sm"
+          variant={showLabel ? 'outline' : 'ghost'}
+          size={size}
           onClick={handleClick}
-          className="text-green-600 hover:text-green-700 hover:bg-green-50 w-full justify-start"
+          className={
+            showLabel 
+              ? 'gap-2 border-green-600 text-green-600 hover:bg-green-50 hover:text-green-700'
+              : 'text-green-600 hover:text-green-700 hover:bg-green-50 w-full justify-start'
+          }
         >
-          <CheckCircle className="h-4 w-4 mr-2" />
-          Habilitar
+          <CheckCircle className="h-4 w-4" />
+          {showLabel && 'Habilitar'}
         </Button>
 
         <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
@@ -105,17 +113,21 @@ export function RejectButton({
     )
   }
 
-  // Botón de Rechazar (rojo)
+  // Botón de Rechazar
   return (
     <>
       <Button
-        variant="ghost"
-        size="sm"
+        variant={showLabel ? 'destructive' : 'ghost'}
+        size={size}
         onClick={handleClick}
-        className="text-red-600 hover:text-red-700 hover:bg-red-50 w-full justify-start"
+        className={
+          showLabel 
+            ? 'gap-2'
+            : 'text-red-600 hover:text-red-700 hover:bg-red-50 w-full justify-start'
+        }
       >
-        <XCircle className="h-4 w-4 mr-2" />
-        Rechazar
+        <XCircle className="h-4 w-4" />
+        {showLabel && 'Rechazar'}
       </Button>
 
       <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
