@@ -41,8 +41,8 @@ const CONFIG: ScriptConfig = {
   driveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID || '',
   
   // MODIFICAR ESTAS FECHAS SEGÚN LA SEMANA
-  startDate: '2025-10-20',
-  endDate: '2025-10-26',
+  startDate: '2025-11-03',
+  endDate: '2025-11-09',
   
   loginUrl: 'https://pr-721.durgl9xxo9p82.amplifyapp.com/auth/login',
   driversPageUrl: 'https://pr-721.durgl9xxo9p82.amplifyapp.com/reports/driverpayment',

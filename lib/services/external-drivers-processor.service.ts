@@ -86,7 +86,7 @@ class PDFDownloadAutomation {
     ensureDownloadDir();
     
     this.browser = await chromium.launch({
-      headless: true, // ✅ HEADLESS TRUE para producción
+      headless: false, // ✅ HEADLESS FALSE para producción
       slowMo: 50,
     });
 

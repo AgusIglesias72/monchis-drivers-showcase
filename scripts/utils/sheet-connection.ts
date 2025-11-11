@@ -18,7 +18,7 @@ const sheetsAuth = new google.auth.GoogleAuth({
     client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
     private_key: GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
   },
-  scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
 const googleSheets = google.sheets({
@@ -377,4 +377,99 @@ export async function getOrCreateWeekFolder(
 ): Promise<string> {
   const folderName = generateWeekFolderName(startDate, endDate);
   return await createDriveFolder(folderName, parentFolderId, userEmail);
+}
+
+
+// Agregar al final de scripts/utils/sheet-connection.ts
+
+/**
+ * Escribe datos en una hoja de Google Sheets
+ * @param spreadsheetId - ID del spreadsheet
+ * @param sheetName - Nombre de la hoja
+ * @param values - Matriz de valores a escribir
+ * @param startCell - Celda inicial (ej: "A1")
+ */
+export async function writeToSheet(
+  spreadsheetId: string,
+  sheetName: string,
+  values: any[][],
+  startCell: string = 'A1'
+): Promise<void> {
+  try {
+    console.log(`📝 Escribiendo ${values.length} filas en "${sheetName}"...`);
+    
+    const range = `${sheetName}!${startCell}`;
+    
+    await googleSheets.spreadsheets.values.update({
+      spreadsheetId,
+      range,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values,
+      },
+    });
+    
+    console.log(`✅ Datos escritos exitosamente en "${sheetName}"`);
+  } catch (error) {
+    console.error(`❌ Error escribiendo en Google Sheets:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Limpia el contenido de una hoja (mantiene los headers)
+ * @param spreadsheetId - ID del spreadsheet
+ * @param sheetName - Nombre de la hoja
+ */
+export async function clearSheet(
+  spreadsheetId: string,
+  sheetName: string,
+  keepHeaders: boolean = true
+): Promise<void> {
+  try {
+    console.log(`🧹 Limpiando hoja "${sheetName}"...`);
+    
+    const startRow = keepHeaders ? 'A2' : 'A1';
+    const range = `${sheetName}!${startRow}:ZZ`;
+    
+    await googleSheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range,
+    });
+    
+    console.log(`✅ Hoja "${sheetName}" limpiada`);
+  } catch (error) {
+    console.error(`❌ Error limpiando hoja:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Agrega filas al final de una hoja
+ * @param spreadsheetId - ID del spreadsheet
+ * @param sheetName - Nombre de la hoja
+ * @param values - Matriz de valores a agregar
+ */
+export async function appendToSheet(
+  spreadsheetId: string,
+  sheetName: string,
+  values: any[][]
+): Promise<void> {
+  try {
+    console.log(`➕ Agregando ${values.length} filas a "${sheetName}"...`);
+    
+    await googleSheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${sheetName}!A:A`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values,
+      },
+    });
+    
+    console.log(`✅ Filas agregadas exitosamente`);
+  } catch (error) {
+    console.error(`❌ Error agregando filas:`, error);
+    throw error;
+  }
 }

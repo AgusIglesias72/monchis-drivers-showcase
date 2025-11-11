@@ -15,7 +15,11 @@
     "// MIGRATION SCRIPTS": "Scripts para migración de datos desde XLSX",
     "migrate:validate": "ts-node validate-xlsx.ts",
     "migrate:drivers": "ts-node migrate-drivers-from-xlsx.ts",
-    "migrate:full": "npm run migrate:validate && npm run migrate:drivers"
+    "migrate:full": "npm run migrate:validate && npm run migrate:drivers",
+    "download-reports": "tsx scripts/download-driver-reports.ts",
+    "upload-reports": "tsx scripts/upload-reports-to-sheets.ts",
+    "process-reports": "tsx scripts/process-and-upload-reports.ts"
+
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
