@@ -1,8 +1,10 @@
 // components/admin/dashboard-content.tsx
 "use client"
 
+import { useRouter, useSearchParams } from "next/navigation"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { 
   Users, 
   CheckCircle, 
@@ -15,6 +17,7 @@ import {
   FileX,
   FileClock,
   AlertCircle,
+  X,
 } from "lucide-react"
 import { 
   Bar, 
@@ -37,11 +40,14 @@ interface DashboardContentProps {
   mainStats: any
   postulacionesStats: any
   funnelData: any[]
-  visitasPorDia: any[]
-  completadosPorDia: any[]
+  visitasPorSemana: any[]
+  completadosPorSemana: any[]
   abandonoPorStep: any[]
   edadesPorRango: any[]
   onboardingStats: any
+  currentDateRange?: string
+  customStartDate?: string
+  customEndDate?: string
 }
 
 // Componente de Tooltip Personalizado para el Funnel
@@ -98,12 +104,31 @@ export function DashboardContent({
   mainStats,
   postulacionesStats,
   funnelData,
-  visitasPorDia,
-  completadosPorDia,
+  visitasPorSemana,
+  completadosPorSemana,
   abandonoPorStep,
   edadesPorRango,
   onboardingStats,
+  currentDateRange = '30',
+  customStartDate,
+  customEndDate,
 }: DashboardContentProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  const handleDateRangeChange = (days: string) => {
+    const params = new URLSearchParams()
+    params.set('dateRange', days)
+    router.push(`/admin?${params.toString()}`)
+    router.refresh()
+  }
+  
+  const clearDateFilter = () => {
+    router.push('/admin')
+    router.refresh()
+  }
+  
+  const hasDateFilter = currentDateRange !== '30'
   
   // Preparar datos para KPIs principales
   const mainKPIs = [
@@ -111,7 +136,7 @@ export function DashboardContent({
       title: "Total Postulaciones",
       value: postulacionesStats.totalPostulaciones,
       change: postulacionesStats.nuevasUltimaSemana,
-      changeLabel: "últimos 7 días",
+      changeLabel: undefined, // Ya no mostramos "últimos 7 días" porque varía según filtro
       icon: Users,
       color: "blue",
       bgColor: "bg-blue-500/10",
@@ -121,18 +146,19 @@ export function DashboardContent({
       title: "Completadas",
       value: postulacionesStats.completadas,
       change: postulacionesStats.completadasUltimaSemana,
-      changeLabel: "últimos 7 días",
+      changeLabel: undefined, // Ya no mostramos "últimos 7 días" porque varía según filtro
       percentage: postulacionesStats.tasaCompletado,
       icon: CheckCircle,
       color: "green",
       bgColor: "bg-green-500/10",
       iconColor: "text-green-600",
+      asistidasIncluidas: postulacionesStats.asistenciasIncluidas || 0,
     },
     {
-      title: "Capacitaciones Agendadas",
-      value: onboardingStats.upcomingEvents,
-      change: onboardingStats.pendingDrivers,
-      changeLabel: "pendientes de agendar",
+      title: "Pendientes de Asistencia",
+      value: onboardingStats.pendingAttendance,
+      change: undefined, // Ya no mostramos cambio
+      changeLabel: undefined,
       icon: Calendar,
       color: "amber",
       bgColor: "bg-amber-500/10",
@@ -141,19 +167,22 @@ export function DashboardContent({
     {
       title: "Asistencias",
       value: onboardingStats.completedThisMonth,
-      percentage: onboardingStats.attendanceRate,
-      change: onboardingStats.noShowsThisMonth,
-      changeLabel: "no shows este mes",
+      percentage: undefined, // No mostrar porcentaje
+      change: undefined,
+      changeLabel: undefined,
       icon: UserCheck,
-      color: "emerald",
-      bgColor: "bg-emerald-500/10",
-      iconColor: "text-emerald-600",
+      color: "teal",
+      bgColor: "bg-teal-500/10",
+      iconColor: "text-teal-600",
     },
   ]
 
   // Combinar funnel completo con onboarding
+  // El primer paso "Iniciado" debería ser el total de postulaciones en el rango
+  const totalIniciadas = postulacionesStats.totalPostulaciones
+  
   const fullFunnelData = [
-    { step: "Iniciado", value: funnelData[0]?.count || 0, fill: "#3b82f6" },
+    { step: "Iniciado", value: totalIniciadas, fill: "#3b82f6" },
     { step: "Contacto", value: funnelData[0]?.count || 0, fill: "#2563eb" },
     { step: "Datos Personales", value: funnelData[1]?.count || 0, fill: "#1d4ed8" },
     { step: "Trabajo", value: funnelData[2]?.count || 0, fill: "#1e40af" },
@@ -166,8 +195,8 @@ export function DashboardContent({
   ]
 
   // Calcular tasa de conversión
-  const tasaConversionTotal = funnelData.length > 0 && funnelData[0]?.count > 0
-    ? ((onboardingStats.completedThisMonth / funnelData[0].count) * 100).toFixed(1)
+  const tasaConversionTotal = totalIniciadas > 0
+    ? ((onboardingStats.completedThisMonth / totalIniciadas) * 100).toFixed(1)
     : "0"
 
   // Preparar datos para el gráfico de documentos
@@ -257,11 +286,63 @@ export function DashboardContent({
 
       <div className="flex-1 p-8 space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
-            Vista general del sistema de gestión de drivers
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground mt-1">
+              Vista general del sistema de gestión de drivers
+            </p>
+          </div>
+          
+          {/* Filtros de Fecha */}
+          <div className="flex flex-col gap-3">
+            {/* Botones rápidos */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant={currentDateRange === '3' && !customStartDate ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleDateRangeChange('3')}
+                className="text-xs"
+              >
+                Últimos 3 días
+              </Button>
+              <Button
+                variant={currentDateRange === '7' && !customStartDate ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleDateRangeChange('7')}
+                className="text-xs"
+              >
+                Últimos 7 días
+              </Button>
+              <Button
+                variant={currentDateRange === '30' && !customStartDate ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleDateRangeChange('30')}
+                className="text-xs"
+              >
+                Últimos 30 días
+              </Button>
+              <Button
+                variant={currentDateRange === '90' && !customStartDate ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleDateRangeChange('90')}
+                className="text-xs"
+              >
+                Últimos 90 días
+              </Button>
+              {hasDateFilter && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearDateFilter}
+                  className="text-xs"
+                >
+                  <X className="h-3.5 w-3.5 mr-1" />
+                  Limpiar
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* KPIs Principales */}
@@ -273,7 +354,7 @@ export function DashboardContent({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1, duration: 0.5 }}
             >
-              <Card className="relative overflow-hidden">
+              <Card className="relative overflow-hidden h-full flex flex-col">
                 <div className={`absolute inset-0 ${kpi.bgColor} opacity-50`} />
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
                   <CardTitle className="text-sm font-medium">
@@ -283,7 +364,7 @@ export function DashboardContent({
                     <kpi.icon className={`h-4 w-4 ${kpi.iconColor}`} />
                   </div>
                 </CardHeader>
-                <CardContent className="relative">
+                <CardContent className="relative flex-1 flex flex-col justify-end">
                   <div className="text-2xl font-bold">
                     {kpi.value.toLocaleString()}
                     {kpi.percentage !== undefined && (
@@ -292,20 +373,23 @@ export function DashboardContent({
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 mt-1">
-                    {kpi.change !== undefined && (
-                      <>
-                        {kpi.change > 0 ? (
-                          <TrendingUp className="h-3 w-3 text-green-600" />
-                        ) : (
-                          <TrendingDown className="h-3 w-3 text-red-600" />
-                        )}
-                        <p className="text-xs text-muted-foreground">
-                          {kpi.change > 0 && '+'}{kpi.change} {kpi.changeLabel}
-                        </p>
-                      </>
-                    )}
-                  </div>
+                  {kpi.asistidasIncluidas !== undefined && kpi.asistidasIncluidas > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Incluye {kpi.asistidasIncluidas} asistida{kpi.asistidasIncluidas !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                  {kpi.change !== undefined && kpi.changeLabel && (
+                    <div className="flex items-center gap-1 mt-1">
+                      {kpi.change > 0 ? (
+                        <TrendingUp className="h-3 w-3 text-green-600" />
+                      ) : (
+                        <TrendingDown className="h-3 w-3 text-red-600" />
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {kpi.change > 0 && '+'}{kpi.change} {kpi.changeLabel}
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
@@ -407,15 +491,15 @@ export function DashboardContent({
                 Postulaciones Iniciadas
               </CardTitle>
               <CardDescription>
-                Últimos 30 días
+                Agrupado por semana
               </CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={visitasPorDia}>
+                <BarChart data={visitasPorSemana}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis 
-                    dataKey="fecha" 
+                    dataKey="semana" 
                     className="text-xs"
                     tick={{ fill: 'hsl(var(--muted-foreground))' }}
                   />
@@ -456,15 +540,15 @@ export function DashboardContent({
                 Postulaciones Completadas
               </CardTitle>
               <CardDescription>
-                Últimos 30 días
+                Agrupado por semana
               </CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={completadosPorDia}>
+                <BarChart data={completadosPorSemana}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis 
-                    dataKey="fecha" 
+                    dataKey="semana" 
                     className="text-xs"
                     tick={{ fill: 'hsl(var(--muted-foreground))' }}
                   />

@@ -6,19 +6,20 @@ import { FormDriver, FormDocument, EquipmentPayment, FinancialService, Onboardin
  * Estados posibles de badges para una postulación
  */
 export type PostulacionBadgeType =
-  | 'VERIFICAR_SOLICITUD'      // 🔵 Solicitud sin revisar
-  | 'DOCUMENTOS_PENDIENTES'    // 🟡 Faltan documentos requeridos
-  | 'DOCUMENTOS_EN_REVISION'   // 🟡 Documentos en revisión
-  | 'DOCUMENTOS_COMPLETOS'     // 🟢 Documentos completos
-  | 'FACTURACION_PENDIENTE'    // 🟠 Falta certificado tributario
-  | 'FACTURACION_COMPLETA'     // 🟢 Facturación completa
-  | 'FACTURACION_NA'           // ⚪ No aplica facturación
-  | 'PAGO_PENDIENTE'           // 🔴 No hay pago registrado
-  | 'PAGO_EN_VERIFICACION'     // 🟣 Pago en verificación
-  | 'PAGO_COMPLETO'            // 🟢 Pago completo
-  | 'VERIFICAR_PAGO'           // 🟣 Pago existe pero no verificado
-  | 'PAGADO'                   // 🟢 Pago verificado
-  | 'AGENDADO'                 // 🟢 Tiene onboarding agendado
+  | 'VERIFICAR_SOLICITUD'
+  | 'DOCUMENTOS_PENDIENTES'
+  | 'DOCUMENTOS_EN_REVISION'
+  | 'DOCUMENTOS_COMPLETOS'
+  | 'FACTURACION_PENDIENTE'
+  | 'FACTURACION_COMPLETA'
+  | 'FACTURACION_NA'
+  | 'PAGO_PENDIENTE'
+  | 'PAGO_EN_VERIFICACION'
+  | 'PAGO_COMPLETO'
+  | 'VERIFICAR_PAGO'
+  | 'PAGADO'
+  | 'AGENDADO'
+  | 'ASISTIDA' // ✅ NUEVO
 
 /**
  * Configuración de estilo y texto para cada badge
@@ -138,5 +139,11 @@ export const BADGE_CONFIGS: Record<PostulacionBadgeType, BadgeConfig> = {
     label: 'Agendado',
     variant: 'default',
     className: 'border-emerald-500 text-emerald-700 bg-emerald-50'
+  },
+  ASISTIDA: {
+    type: 'ASISTIDA',
+    label: 'Asistida',
+    variant: 'default',
+    className: 'border-emerald-500 text-emerald-700 bg-emerald-50 font-semibold'
   }
 }

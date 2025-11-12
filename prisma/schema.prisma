@@ -177,7 +177,10 @@ model FormDriver {
   onboardingNotes       String?           @map("onboarding_notes") @db.Text
 
   // Gestión administrativa
-  internalNotes String? @map("internal_notes") @db.Text
+  internalNotes        String?   @map("internal_notes") @db.Text
+  assistedCompletion   Boolean   @default(false) @map("assisted_completion") // ✅ NUEVO
+  assistedCompletionBy String?   @map("assisted_completion_by") // clerkId del admin
+  assistedCompletionAt DateTime? @map("assisted_completion_at")
 
   // Aprobación final
   finalApprovedBy     String?    @map("final_approved_by") // clerkId
@@ -189,11 +192,11 @@ model FormDriver {
   metadata Json?
 
   // Timestamps
-  startedAt       DateTime  @default(now()) @map("started_at")
-  lastActivityAt  DateTime  @updatedAt @map("last_activity_at")
-  completedAt     DateTime? @map("completed_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  startedAt      DateTime  @default(now()) @map("started_at")
+  lastActivityAt DateTime  @updatedAt @map("last_activity_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   // Relaciones
   submissions           FormSubmission[]

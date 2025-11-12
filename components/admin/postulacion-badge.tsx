@@ -86,5 +86,6 @@ export const BADGE_TOOLTIPS: Record<PostulacionBadgeType, string> = {
   PAGO_COMPLETO: 'El pago de equipamiento ha sido verificado y completado.',
   VERIFICAR_PAGO: 'Hay un pago registrado pero aún no ha sido verificado.',
   PAGADO: 'El pago de equipamiento ha sido verificado.',
-  AGENDADO: 'El postulante tiene una fecha de onboarding confirmada.'
+  AGENDADO: 'El postulante tiene una fecha de onboarding confirmada.',
+  ASISTIDA: 'Esta postulación ha sido asistida por un administrador.'
 }

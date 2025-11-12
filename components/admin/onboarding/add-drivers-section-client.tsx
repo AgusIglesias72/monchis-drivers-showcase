@@ -3,19 +3,11 @@
 
 "use client"
 
-import { useState, useEffect, useTransition, useMemo } from 'react'
+import { useState, useEffect, useTransition, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { 
   Search, 
   Loader2, 
@@ -29,12 +21,15 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Filter,
   X,
   ExternalLink,
   Clock,
   XCircle,
-  Eye
+  Eye,
+  CalendarIcon,
+  FileCheck,
+  UserCheck,
+  List
 } from 'lucide-react'
 import { getEligibleDrivers, assignDriversToEvent } from '@/lib/actions/onboarding.actions'
 import { toast } from 'sonner'
@@ -87,19 +82,18 @@ export function AddDriversSectionClient({
   const [selectedDriverIds, setSelectedDriverIds] = useState<string[]>([])
   const [selectedDriverForDetails, setSelectedDriverForDetails] = useState<string | null>(null)
   
-  // Todos los drivers del servidor (sin paginación del servidor)
-  const [allDrivers] = useState<Driver[]>(initialDrivers)
+  // Todos los drivers del servidor - cargar todos
+  const [allDrivers, setAllDrivers] = useState<Driver[]>(initialDrivers)
+  const [loadingAll, setLoadingAll] = useState(false)
+  const [totalDrivers, setTotalDrivers] = useState(initialPagination.total)
+  const hasLoadedAllRef = useRef(false)
   
   // Paginación del lado del cliente
   const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 10
+  const itemsPerPage = 20
 
   // Filtros y ordenamiento
-  const [filters, setFilters] = useState({
-    documentsStatus: '',
-    applicationStatus: '',
-    onboardingStatus: '',
-  })
+  const [activeQuickFilter, setActiveQuickFilter] = useState<'all' | 'pending-schedule' | 'docs-approved' | 'no-onboarding' | 'ready-to-schedule'>('all')
   const [sortBy, setSortBy] = useState<{
     field: 'name' | 'documentsStatus' | 'status' | 'onboardingStatus' | 'createdAt' | null
     order: 'asc' | 'desc'
@@ -120,20 +114,34 @@ export function AddDriversSectionClient({
       )
     }
 
-    // Filtros
-    if (filters.documentsStatus) {
-      result = result.filter(d => d.documentsStatus === filters.documentsStatus)
-    }
-    if (filters.applicationStatus) {
-      result = result.filter(d => d.status === filters.applicationStatus)
-    }
-    if (filters.onboardingStatus) {
-      if (filters.onboardingStatus === 'NONE') {
+    // Filtros rápidos
+    switch (activeQuickFilter) {
+      case 'pending-schedule':
+        // Pendientes de agendar: sin onboarding programado
+        result = result.filter(d => !d.onboardingScheduledAt && !d.onboardingStatus)
+        break
+      case 'docs-approved':
+        // Documentos aprobados
+        result = result.filter(d => d.documentsStatus === 'APPROVED')
+        break
+      case 'no-onboarding':
+        // Sin onboarding
         result = result.filter(d => !d.onboardingStatus)
-      } else {
-        result = result.filter(d => d.onboardingStatus === filters.onboardingStatus)
-      }
+        break
+      case 'ready-to-schedule':
+        // Listos para agendar: documentos aprobados y sin onboarding programado
+        result = result.filter(d => 
+          d.documentsStatus === 'APPROVED' && 
+          !d.onboardingScheduledAt && 
+          !d.onboardingStatus
+        )
+        break
+      case 'all':
+      default:
+        // Todos - no filtrar
+        break
     }
+
 
     // Ordenamiento
     if (sortBy.field) {
@@ -172,7 +180,7 @@ export function AddDriversSectionClient({
     }
 
     return result
-  }, [allDrivers, searchTerm, filters, sortBy])
+  }, [allDrivers, searchTerm, sortBy, activeQuickFilter])
 
   // Paginación del lado del cliente
   const totalFiltered = filteredAndSortedDrivers.length
@@ -181,10 +189,102 @@ export function AddDriversSectionClient({
   const endIndex = startIndex + itemsPerPage
   const paginatedDrivers = filteredAndSortedDrivers.slice(startIndex, endIndex)
 
+  // Cargar todos los drivers al montar el componente
+  useEffect(() => {
+    // Resetear el ref cuando cambia el eventId
+    hasLoadedAllRef.current = false
+
+    let isMounted = true
+
+    const loadAllDrivers = async () => {
+      // Si ya tenemos todos los drivers, no cargar de nuevo
+      if (allDrivers.length >= totalDrivers && totalDrivers > 0 && allDrivers.length > initialDrivers.length) {
+        hasLoadedAllRef.current = true
+        return
+      }
+
+      setLoadingAll(true)
+      try {
+        // Cargar todos los drivers en lotes
+        const allDriversList: Driver[] = []
+        let page = 1
+        const limit = 100 // Cargar 100 a la vez
+        let hasMore = true
+
+        while (hasMore && isMounted) {
+          const result = await getEligibleDrivers({
+            eventId,
+            page,
+            limit,
+          })
+
+          if (result.success && result.drivers) {
+            // Convertir fechas Date a string para compatibilidad con la interfaz Driver
+            const serializedDrivers = result.drivers.map(driver => ({
+              ...driver,
+              onboardingScheduledAt: driver.onboardingScheduledAt instanceof Date 
+                ? driver.onboardingScheduledAt.toISOString() 
+                : driver.onboardingScheduledAt,
+              createdAt: driver.createdAt instanceof Date 
+                ? driver.createdAt.toISOString() 
+                : driver.createdAt,
+              lastActivityAt: driver.lastActivityAt instanceof Date 
+                ? driver.lastActivityAt.toISOString() 
+                : driver.lastActivityAt,
+              completedAt: driver.completedAt instanceof Date 
+                ? driver.completedAt.toISOString() 
+                : driver.completedAt,
+              assignedEvent: driver.assignedEvent ? {
+                ...driver.assignedEvent,
+                scheduledDate: driver.assignedEvent.scheduledDate instanceof Date
+                  ? driver.assignedEvent.scheduledDate.toISOString()
+                  : driver.assignedEvent.scheduledDate
+              } : null
+            }))
+            allDriversList.push(...serializedDrivers)
+            
+            // Verificar si hay más páginas
+            const totalPages = Math.ceil((result.pagination?.total || 0) / limit)
+            hasMore = page < totalPages && result.drivers.length === limit
+            
+            if (page === 1 && isMounted) {
+              setTotalDrivers(result.pagination?.total || 0)
+            }
+            
+            page++
+          } else {
+            hasMore = false
+          }
+        }
+
+        if (isMounted) {
+          setAllDrivers(allDriversList)
+          hasLoadedAllRef.current = true
+        }
+      } catch (error) {
+        console.error('Error al cargar todos los drivers:', error)
+        if (isMounted) {
+          toast.error('Error al cargar drivers')
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingAll(false)
+        }
+      }
+    }
+
+    loadAllDrivers()
+
+    return () => {
+      isMounted = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]) // Solo ejecutar cuando cambie el eventId
+
   // Resetear página cuando cambian filtros o búsqueda
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchTerm, filters])
+  }, [searchTerm, activeQuickFilter])
 
   const handleToggleDriver = (driverId: string) => {
     if (selectedDriverIds.includes(driverId)) {
@@ -216,6 +316,69 @@ export function AddDriversSectionClient({
       if (result.success) {
         toast.success(`${selectedDriverIds.length} driver(s) agregado(s) exitosamente`)
         setSelectedDriverIds([])
+        // Recargar drivers para actualizar la lista
+        hasLoadedAllRef.current = false
+        setAllDrivers(initialDrivers) // Resetear a los iniciales
+        // Recargar todos los drivers
+        const loadAllDrivers = async () => {
+          setLoadingAll(true)
+          try {
+            const allDriversList: Driver[] = []
+            let page = 1
+            const limit = 100
+            let hasMore = true
+
+            while (hasMore) {
+              const result = await getEligibleDrivers({
+                eventId,
+                page,
+                limit,
+              })
+
+              if (result.success && result.drivers) {
+                // Convertir fechas Date a string para compatibilidad con la interfaz Driver
+                const serializedDrivers = result.drivers.map(driver => ({
+                  ...driver,
+                  onboardingScheduledAt: driver.onboardingScheduledAt instanceof Date 
+                    ? driver.onboardingScheduledAt.toISOString() 
+                    : driver.onboardingScheduledAt,
+                  createdAt: driver.createdAt instanceof Date 
+                    ? driver.createdAt.toISOString() 
+                    : driver.createdAt,
+                  lastActivityAt: driver.lastActivityAt instanceof Date 
+                    ? driver.lastActivityAt.toISOString() 
+                    : driver.lastActivityAt,
+                  completedAt: driver.completedAt instanceof Date 
+                    ? driver.completedAt.toISOString() 
+                    : driver.completedAt,
+                  assignedEvent: driver.assignedEvent ? {
+                    ...driver.assignedEvent,
+                    scheduledDate: driver.assignedEvent.scheduledDate instanceof Date
+                      ? driver.assignedEvent.scheduledDate.toISOString()
+                      : driver.assignedEvent.scheduledDate
+                  } : null
+                }))
+                allDriversList.push(...serializedDrivers)
+                const totalPages = Math.ceil((result.pagination?.total || 0) / limit)
+                hasMore = page < totalPages && result.drivers.length === limit
+                if (page === 1) {
+                  setTotalDrivers(result.pagination?.total || 0)
+                }
+                page++
+              } else {
+                hasMore = false
+              }
+            }
+
+            setAllDrivers(allDriversList)
+            hasLoadedAllRef.current = true
+          } catch (error) {
+            console.error('Error al recargar drivers:', error)
+          } finally {
+            setLoadingAll(false)
+          }
+        }
+        loadAllDrivers()
         onSuccess()
       } else {
         toast.error(result.error || 'Error al agregar drivers')
@@ -328,16 +491,9 @@ export function AddDriversSectionClient({
     }))
   }
 
-  const handleFilterChange = (filterKey: keyof typeof filters, value: string) => {
-    setFilters(prev => ({ ...prev, [filterKey]: value }))
-  }
-
   const clearFilters = () => {
-    setFilters({
-      documentsStatus: '',
-      applicationStatus: '',
-      onboardingStatus: '',
-    })
+    setActiveQuickFilter('all')
+    setSearchTerm('')
   }
 
   const getSortIcon = (field: typeof sortBy.field) => {
@@ -381,66 +537,85 @@ export function AddDriversSectionClient({
           />
         </div>
 
-        {/* Filtros en línea */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Filter className="h-4 w-4" />
-            <span>Filtros:</span>
+        {/* Filtros rápidos */}
+        <div className="relative">
+          <div className="flex flex-wrap items-end gap-1 pb-0">
+            <button
+              onClick={() => setActiveQuickFilter('all')}
+              disabled={loading || submitting}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                ${activeQuickFilter === 'all'
+                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <List className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Todos</span>
+              <span className="sm:hidden">Todos</span>
+            </button>
+            <button
+              onClick={() => setActiveQuickFilter('pending-schedule')}
+              disabled={loading || submitting}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                ${activeQuickFilter === 'pending-schedule'
+                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <CalendarIcon className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Pendientes de Agendar</span>
+              <span className="sm:hidden">Pendientes</span>
+            </button>
+            <button
+              onClick={() => setActiveQuickFilter('docs-approved')}
+              disabled={loading || submitting}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                ${activeQuickFilter === 'docs-approved'
+                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <FileCheck className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Docs Aprobados</span>
+              <span className="sm:hidden">Docs OK</span>
+            </button>
+            <button
+              onClick={() => setActiveQuickFilter('ready-to-schedule')}
+              disabled={loading || submitting}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                ${activeQuickFilter === 'ready-to-schedule'
+                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Listos para Agendar</span>
+              <span className="sm:hidden">Listos</span>
+            </button>
+            <button
+              onClick={() => setActiveQuickFilter('no-onboarding')}
+              disabled={loading || submitting}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                ${activeQuickFilter === 'no-onboarding'
+                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Sin Onboarding</span>
+              <span className="sm:hidden">Sin Onb.</span>
+            </button>
           </div>
-          
-          <div className="flex items-center gap-2">
-            <Label className="text-sm text-muted-foreground whitespace-nowrap">Estado Docs:</Label>
-            <Select value={filters.documentsStatus || 'all'} onValueChange={(val) => handleFilterChange('documentsStatus', val === 'all' ? '' : val)}>
-              <SelectTrigger className="w-[140px] h-9">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="APPROVED">Aprobados</SelectItem>
-                <SelectItem value="PENDING">Pendiente</SelectItem>
-                <SelectItem value="IN_REVIEW">En Revisión</SelectItem>
-                <SelectItem value="CORRECTIONS">Correcciones</SelectItem>
-                <SelectItem value="INCOMPLETE">Incompleto</SelectItem>
-                <SelectItem value="REJECTED">Rechazado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Label className="text-sm text-muted-foreground whitespace-nowrap">Estado:</Label>
-            <Select value={filters.applicationStatus || 'all'} onValueChange={(val) => handleFilterChange('applicationStatus', val === 'all' ? '' : val)}>
-              <SelectTrigger className="w-[140px] h-9">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="ACTIVE">Activo</SelectItem>
-                <SelectItem value="APPROVED">Aprobado</SelectItem>
-                <SelectItem value="PENDING">Pendiente</SelectItem>
-                <SelectItem value="UNDER_REVIEW">En Revisión</SelectItem>
-                <SelectItem value="IN_PROGRESS">En Progreso</SelectItem>
-                <SelectItem value="SUBMITTED">Enviado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Label className="text-sm text-muted-foreground whitespace-nowrap">Onboarding:</Label>
-            <Select value={filters.onboardingStatus || 'all'} onValueChange={(val) => handleFilterChange('onboardingStatus', val === 'all' ? '' : val)}>
-              <SelectTrigger className="w-[140px] h-9">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="NONE">Sin onboarding</SelectItem>
-                <SelectItem value="SCHEDULED">Programado</SelectItem>
-                <SelectItem value="IN_PROGRESS">En Curso</SelectItem>
-                <SelectItem value="COMPLETED">Completado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {(filters.documentsStatus || filters.applicationStatus || filters.onboardingStatus) && (
+        {/* Botón limpiar filtros */}
+        {(activeQuickFilter !== 'all' || searchTerm) && (
+          <div className="flex justify-end">
             <Button
               variant="ghost"
               size="sm"
@@ -448,17 +623,22 @@ export function AddDriversSectionClient({
               className="h-8"
             >
               <X className="h-3 w-3 mr-1" />
-              Limpiar
+              Limpiar filtros
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Stats */}
       <div className="flex items-center justify-between text-sm bg-muted/50 rounded-lg px-4 py-2">
-        <span className="text-muted-foreground">
-          {totalFiltered} de {allDrivers.length} disponible{allDrivers.length !== 1 ? 's' : ''}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">
+            {totalFiltered} de {allDrivers.length} disponible{allDrivers.length !== 1 ? 's' : ''}
+          </span>
+          {loadingAll && (
+            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+          )}
+        </div>
         <span className="font-semibold text-primary">
           {selectedDriverIds.length} seleccionado{selectedDriverIds.length !== 1 ? 's' : ''}
         </span>
@@ -466,26 +646,24 @@ export function AddDriversSectionClient({
 
       {/* Drivers Table */}
       <div className="border rounded-lg overflow-hidden">
-        {loading ? (
+        {loadingAll && allDrivers.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-sm text-muted-foreground">Cargando drivers...</span>
           </div>
         ) : paginatedDrivers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <AlertTriangle className="h-10 w-10 mb-2 opacity-50" />
             <p className="text-sm">
-              {searchTerm || filters.documentsStatus || filters.applicationStatus || filters.onboardingStatus
+              {searchTerm || activeQuickFilter !== 'all'
                 ? 'No se encontraron drivers con estos filtros'
                 : 'No hay drivers disponibles'}
             </p>
-            {(searchTerm || filters.documentsStatus || filters.applicationStatus || filters.onboardingStatus) && (
+            {(searchTerm || activeQuickFilter !== 'all') && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  setSearchTerm('')
-                  clearFilters()
-                }}
+                onClick={clearFilters}
                 className="mt-2"
               >
                 Limpiar búsqueda y filtros

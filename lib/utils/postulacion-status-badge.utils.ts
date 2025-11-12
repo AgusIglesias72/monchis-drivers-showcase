@@ -5,7 +5,16 @@ import { Badge } from '@/components/ui/badge'
 /**
  * Retorna el badge apropiado para el estado de postulación
  */
-export function getPostulacionStatusBadge(status: string) {
+export function getPostulacionStatusBadge(status: string, currentStep?: number, isAssisted?: boolean) {
+  // ✅ NUEVO: Si es asistida y está en progreso, mostrar badge especial
+  if (isAssisted && status === 'IN_PROGRESS') {
+    return {
+      label: 'Asistida', // Solo "Asistida", sin el X/6
+      variant: 'default' as const,
+      className: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold'
+    }
+  }
+
   const statusConfig: Record<string, { 
     label: string
     variant: 'default' | 'secondary' | 'destructive' | 'outline'

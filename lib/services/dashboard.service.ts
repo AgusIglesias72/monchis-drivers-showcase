@@ -1,7 +1,7 @@
 // lib/services/dashboard.service.ts
 
 import { prisma } from '@/lib/prisma'
-import { subDays, startOfDay, endOfDay, format, differenceInYears } from 'date-fns'
+import { subDays, startOfDay, endOfDay, format, differenceInYears, startOfWeek, endOfWeek, eachWeekOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 export class DashboardService {
@@ -82,14 +82,48 @@ export class DashboardService {
       totalDrivers,
       approvalRate,
       processedThisWeek,
+      approvedThisWeek, // Documentos aprobados esta semana
     }
   }
   
   /**
    * Obtiene estadísticas de postulaciones
    */
-  async getPostulacionesStats() {
-    const sietedasAtras = subDays(new Date(), 7)
+  async getPostulacionesStats(startDate?: Date, endDate?: Date) {
+    const end = endDate || new Date()
+    const start = startDate || subDays(end, 7)
+    const sietedasAtras = subDays(end, 7)
+    
+    // Si hay filtros de fecha, aplicarlos a totalPostulaciones y completadas
+    const totalWhere = startDate && endDate ? {
+      createdAt: {
+        gte: startOfDay(start),
+        lte: endOfDay(end)
+      }
+    } : {}
+    
+    const completedWhere = startDate && endDate ? {
+      status: 'COMPLETED' as const,
+      completedAt: {
+        gte: startOfDay(start),
+        lte: endOfDay(end)
+      }
+    } : {
+      status: 'COMPLETED' as const
+    }
+    
+    // Contar asistencias según fecha del evento
+    const attendedWhere = startDate && endDate ? {
+      status: 'ATTENDED' as const,
+      event: {
+        scheduledDate: {
+          gte: startOfDay(start),
+          lte: endOfDay(end)
+        }
+      }
+    } : {
+      status: 'ATTENDED' as const
+    }
     
     const [
       totalPostulaciones,
@@ -99,14 +133,15 @@ export class DashboardService {
       nuevasUltimaSemana,
       completadasUltimaSemana,
     ] = await Promise.all([
-      prisma.formDriver.count(),
-      prisma.formDriver.count({ where: { status: 'COMPLETED' } }),
+      prisma.formDriver.count({ where: totalWhere }),
+      prisma.formDriver.count({ where: completedWhere }),
       prisma.formDriver.count({ where: { status: 'IN_PROGRESS' } }),
       prisma.formDriver.count({ where: { status: 'ABANDONED' } }),
       prisma.formDriver.count({
         where: {
           createdAt: {
-            gte: sietedasAtras
+            gte: sietedasAtras,
+            lte: end
           }
         }
       }),
@@ -114,19 +149,50 @@ export class DashboardService {
         where: {
           status: 'COMPLETED',
           completedAt: {
-            gte: sietedasAtras
+            gte: sietedasAtras,
+            lte: end
           }
         }
       }),
     ])
     
+    // Completadas incluye tanto las postulaciones completadas como las asistencias
+    // Pero no duplicamos si una postulación completada también asistió
+    // Necesitamos contar drivers que asistieron pero no tienen status COMPLETED
+    const attendeesGrouped = await prisma.onboardingAttendee.groupBy({
+      by: ['formDriverId'],
+      where: attendedWhere,
+    })
+    
+    // Obtener los status de los drivers que asistieron
+    const driverIds = attendeesGrouped.map(a => a.formDriverId)
+    const driversStatus = await prisma.formDriver.findMany({
+      where: {
+        id: { in: driverIds }
+      },
+      select: {
+        id: true,
+        status: true
+      }
+    })
+    
+    // Contar solo los que asistieron pero no tienen status COMPLETED
+    const driversQueAsistieronPeroNoCompletaron = driversStatus.filter(
+      d => d.status !== 'COMPLETED'
+    ).length
+    
+    // Total completadas = completadas + asistencias que no están en completadas
+    const totalCompletadas = completadas + driversQueAsistieronPeroNoCompletaron
+    
     const tasaCompletado = totalPostulaciones > 0 
-      ? Math.round((completadas / totalPostulaciones) * 100) 
+      ? Math.round((totalCompletadas / totalPostulaciones) * 100) 
       : 0
     
     return {
       totalPostulaciones,
-      completadas,
+      completadas: totalCompletadas,
+      completadasSoloPostulaciones: completadas,
+      asistenciasIncluidas: driversQueAsistieronPeroNoCompletaron,
       enProgreso,
       abandonadas,
       nuevasUltimaSemana,
@@ -138,14 +204,23 @@ export class DashboardService {
   /**
    * Obtiene datos del funnel de conversión
    */
-  async getFunnelData() {
+  async getFunnelData(startDate?: Date, endDate?: Date) {
+    // Si hay filtros de fecha, aplicarlos a las postulaciones
+    const dateFilter = startDate && endDate ? {
+      createdAt: {
+        gte: startOfDay(startDate),
+        lte: endOfDay(endDate)
+      }
+    } : {}
+    
     const funnelData = await Promise.all(
       [1, 2, 3, 4, 5, 6].map(async (step) => {
         const count = await prisma.formDriver.count({
           where: {
             completedSteps: {
               has: step
-            }
+            },
+            ...dateFilter
           }
         })
         
@@ -170,54 +245,94 @@ export class DashboardService {
   }
   
   /**
-   * Obtiene visitas por día (últimos 30 días)
+   * Obtiene visitas por semana
    */
-  async getVisitasPorDia() {
-    const dias = []
-    for (let i = 29; i >= 0; i--) {
-      const fecha = subDays(new Date(), i)
-      const count = await prisma.formDriver.count({
-        where: {
-          createdAt: {
-            gte: startOfDay(fecha),
-            lte: endOfDay(fecha)
+  async getVisitasPorSemana(startDate?: Date, endDate?: Date) {
+    const end = endDate || new Date()
+    const start = startDate || subDays(end, 30)
+    
+    // Obtener todas las semanas en el rango
+    const weeks = eachWeekOfInterval(
+      { start, end },
+      { weekStartsOn: 1 } // Lunes
+    )
+    
+    const semanas = await Promise.all(
+      weeks.map(async (weekStart) => {
+        const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
+        const actualWeekEnd = weekEnd > end ? end : weekEnd
+        
+        const count = await prisma.formDriver.count({
+          where: {
+            createdAt: {
+              gte: startOfDay(weekStart),
+              lte: endOfDay(actualWeekEnd)
+            }
           }
+        })
+        
+        // Formatear rango de fechas: "3-09 Nov" o "3 Nov" si es la misma semana
+        const startDay = format(weekStart, 'd', { locale: es })
+        const endDay = format(actualWeekEnd, 'd', { locale: es })
+        const month = format(weekStart, 'MMM', { locale: es })
+        const semanaLabel = startDay === endDay 
+          ? `${startDay} ${month}`
+          : `${startDay}-${endDay} ${month}`
+        
+        return {
+          semana: semanaLabel,
+          visitas: count
         }
       })
-      
-      dias.push({
-        fecha: format(fecha, 'd MMM', { locale: es }),
-        visitas: count
-      })
-    }
+    )
     
-    return dias
+    return semanas
   }
   
   /**
-   * Obtiene completados por día (últimos 30 días)
+   * Obtiene completados por semana
    */
-  async getCompletadosPorDia() {
-    const dias = []
-    for (let i = 29; i >= 0; i--) {
-      const fecha = subDays(new Date(), i)
-      const count = await prisma.formDriver.count({
-        where: {
-          completedAt: {
-            gte: startOfDay(fecha),
-            lte: endOfDay(fecha)
-          },
-          status: 'COMPLETED'
+  async getCompletadosPorSemana(startDate?: Date, endDate?: Date) {
+    const end = endDate || new Date()
+    const start = startDate || subDays(end, 30)
+    
+    // Obtener todas las semanas en el rango
+    const weeks = eachWeekOfInterval(
+      { start, end },
+      { weekStartsOn: 1 } // Lunes
+    )
+    
+    const semanas = await Promise.all(
+      weeks.map(async (weekStart) => {
+        const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
+        const actualWeekEnd = weekEnd > end ? end : weekEnd
+        
+        const count = await prisma.formDriver.count({
+          where: {
+            completedAt: {
+              gte: startOfDay(weekStart),
+              lte: endOfDay(actualWeekEnd)
+            },
+            status: 'COMPLETED'
+          }
+        })
+        
+        // Formatear rango de fechas: "3-09 Nov" o "3 Nov" si es la misma semana
+        const startDay = format(weekStart, 'd', { locale: es })
+        const endDay = format(actualWeekEnd, 'd', { locale: es })
+        const month = format(weekStart, 'MMM', { locale: es })
+        const semanaLabel = startDay === endDay 
+          ? `${startDay} ${month}`
+          : `${startDay}-${endDay} ${month}`
+        
+        return {
+          semana: semanaLabel,
+          completados: count
         }
       })
-      
-      dias.push({
-        fecha: format(fecha, 'd MMM', { locale: es }),
-        completados: count
-      })
-    }
+    )
     
-    return dias
+    return semanas
   }
   
   /**
@@ -313,8 +428,10 @@ export class DashboardService {
   /**
    * Obtiene estadísticas de onboarding
    */
-  async getOnboardingStats() {
-    const treintaDiasAtras = subDays(new Date(), 30)
+  async getOnboardingStats(startDate?: Date, endDate?: Date) {
+    const end = endDate || new Date()
+    const start = startDate || subDays(end, 30)
+    const treintaDiasAtras = subDays(end, 30)
     
     const [
       upcomingEvents,
@@ -322,6 +439,7 @@ export class DashboardService {
       inProgressDrivers,
       completedThisMonth,
       noShowsThisMonth,
+      pendingAttendance,
     ] = await Promise.all([
       // Eventos próximos
       prisma.onboardingEvent.count({
@@ -354,22 +472,44 @@ export class DashboardService {
         }
       }),
       
-      // Completados este mes
+      // Completados según fecha del evento
       prisma.onboardingAttendee.count({
         where: {
           status: 'ATTENDED',
-          checkedInAt: {
-            gte: startOfDay(treintaDiasAtras)
+          event: {
+            scheduledDate: {
+              gte: startOfDay(start),
+              lte: endOfDay(end)
+            }
           }
         }
       }),
       
-      // No Shows este mes
+      // No Shows según fecha del evento
       prisma.onboardingAttendee.count({
         where: {
           status: 'NO_SHOW',
-          markedNoShowAt: {
-            gte: startOfDay(treintaDiasAtras)
+          event: {
+            scheduledDate: {
+              gte: startOfDay(start),
+              lte: endOfDay(end)
+            }
+          }
+        }
+      }),
+      
+      // Drivers pendientes de asistencia (agendados pero aún no asistieron ni fueron marcados como no show)
+      // Basado en eventos dentro del rango de fechas
+      prisma.onboardingAttendee.count({
+        where: {
+          status: {
+            in: ['INVITED', 'CONFIRMED', 'SCHEDULED']
+          },
+          event: {
+            scheduledDate: {
+              gte: startOfDay(start),
+              lte: endOfDay(end)
+            }
           }
         }
       }),
@@ -386,39 +526,42 @@ export class DashboardService {
       completedThisMonth,
       noShowsThisMonth,
       attendanceRate,
+      pendingAttendance,
     }
   }
   
   /**
    * Obtiene todas las estadísticas del dashboard de una vez
    */
-  async getAllStats() {
+  async getAllStats(options?: { startDate?: Date; endDate?: Date }) {
+    const { startDate, endDate } = options || {}
+    
     const [
       mainStats,
       postulacionesStats,
       funnelData,
-      visitasPorDia,
-      completadosPorDia,
+      visitasPorSemana,
+      completadosPorSemana,
       abandonoPorStep,
       edadesPorRango,
       onboardingStats,
     ] = await Promise.all([
       this.getMainStats(),
-      this.getPostulacionesStats(),
-      this.getFunnelData(),
-      this.getVisitasPorDia(),
-      this.getCompletadosPorDia(),
+      this.getPostulacionesStats(startDate, endDate),
+      this.getFunnelData(startDate, endDate),
+      this.getVisitasPorSemana(startDate, endDate),
+      this.getCompletadosPorSemana(startDate, endDate),
       this.getAbandonoPorStep(),
       this.getEdadesPorRango(),
-      this.getOnboardingStats(),
+      this.getOnboardingStats(startDate, endDate),
     ])
     
     return {
       mainStats,
       postulacionesStats,
       funnelData,
-      visitasPorDia,
-      completadosPorDia,
+      visitasPorSemana,
+      completadosPorSemana,
       abandonoPorStep,
       edadesPorRango,
       onboardingStats,

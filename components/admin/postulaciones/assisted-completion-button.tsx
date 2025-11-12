@@ -1,9 +1,7 @@
-// components/admin/postulaciones/reject-button.tsx
-
 'use client'
 
 import { useState } from 'react'
-import { XCircle, CheckCircle } from 'lucide-react'
+import { UserCheck, UserX } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,29 +13,26 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenuItem,
-} from '@/components/ui/dropdown-menu'
-import { rejectPostulacion, enablePostulacion } from '@/lib/actions/postulacion-contact.actions'
+import { markAssistedCompletion, unmarkAssistedCompletion } from '@/lib/actions/assisted-completion.actions'
 import { toast } from 'sonner'
 
-interface RejectButtonProps {
+interface AssistedCompletionButtonProps {
   driverId: string
   driverName: string
-  isRejected?: boolean
+  isAssisted: boolean
   onSuccess?: () => void
-  showLabel?: boolean // Si es true, usa Button en lugar de DropdownMenuItem
+  showLabel?: boolean
   size?: 'sm' | 'default'
 }
 
-export function RejectButton({ 
+export function AssistedCompletionButton({ 
   driverId, 
   driverName,
-  isRejected = false,
+  isAssisted,
   onSuccess,
   showLabel = false,
   size = 'sm'
-}: RejectButtonProps) {
+}: AssistedCompletionButtonProps) {
   const [showDialog, setShowDialog] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -49,19 +44,19 @@ export function RejectButton({
   const confirmAction = async () => {
     setIsProcessing(true)
     try {
-      const result = isRejected 
-        ? await enablePostulacion(driverId)
-        : await rejectPostulacion(driverId)
+      const result = isAssisted 
+        ? await unmarkAssistedCompletion(driverId)
+        : await markAssistedCompletion(driverId)
       
       if (result.success) {
-        toast.success(isRejected ? 'Postulación habilitada exitosamente' : 'Postulación rechazada exitosamente')
+        toast.success(isAssisted ? 'Marca de asistencia removida' : 'Postulación marcada como asistida')
         setShowDialog(false)
         onSuccess?.()
       } else {
-        toast.error(result.error || `Error al ${isRejected ? 'habilitar' : 'rechazar'} postulación`)
+        toast.error(result.error || 'Error al actualizar')
       }
     } catch (error) {
-      toast.error(`Error al ${isRejected ? 'habilitar' : 'rechazar'} postulación`)
+      toast.error('Error al actualizar')
       console.error(error)
     } finally {
       setIsProcessing(false)
@@ -70,28 +65,28 @@ export function RejectButton({
 
   // ✅ Versión CON LABEL (para usar fuera de dropdown)
   if (showLabel) {
-    if (isRejected) {
+    if (isAssisted) {
       return (
         <>
           <Button
             variant="outline"
             size={size}
             onClick={handleClick}
-            className="gap-2 border-green-600 text-green-600 hover:bg-green-50 hover:text-green-700"
+            className="gap-2 border-orange-600 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
           >
-            <CheckCircle className="h-4 w-4" />
-            Habilitar
+            <UserX className="h-4 w-4" />
+            Desmarcar Asistida
           </Button>
 
           <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
             <AlertDialogContent onClick={(e) => e.stopPropagation()}>
               <AlertDialogHeader>
-                <AlertDialogTitle>Habilitar Postulación</AlertDialogTitle>
+                <AlertDialogTitle>Desmarcar Postulación Asistida</AlertDialogTitle>
                 <AlertDialogDescription>
-                  ¿Estás seguro de habilitar nuevamente la postulación de <strong>{driverName}</strong>?
+                  ¿Estás seguro de remover la marca de &quot;asistida&quot; de <strong>{driverName}</strong>?
                   <br />
                   <span className="text-xs text-muted-foreground mt-2 block">
-                    Se restaurará el estado anterior al rechazo y podrá continuar con el proceso.
+                    El badge verde &quot;Asistida&quot; dejará de mostrarse.
                   </span>
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -103,9 +98,9 @@ export function RejectButton({
                 <AlertDialogAction 
                   onClick={confirmAction}
                   disabled={isProcessing}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-orange-600 hover:bg-orange-700"
                 >
-                  {isProcessing ? 'Habilitando...' : 'Habilitar Postulación'}
+                  {isProcessing ? 'Desmarcando...' : 'Desmarcar'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -117,24 +112,24 @@ export function RejectButton({
     return (
       <>
         <Button
-          variant="destructive"
+          variant="default"
           size={size}
           onClick={handleClick}
-          className="gap-2"
+          className="gap-2 bg-emerald-600 hover:bg-emerald-700"
         >
-          <XCircle className="h-4 w-4" />
-          Rechazar
+          <UserCheck className="h-4 w-4" />
+          Marcar como Asistida
         </Button>
 
         <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
           <AlertDialogContent onClick={(e) => e.stopPropagation()}>
             <AlertDialogHeader>
-              <AlertDialogTitle>Rechazar Postulación</AlertDialogTitle>
+              <AlertDialogTitle>Marcar Postulación como Asistida</AlertDialogTitle>
               <AlertDialogDescription>
-                ¿Estás seguro de rechazar la postulación de <strong>{driverName}</strong>?
+                ¿Confirmas que <strong>{driverName}</strong> completó su postulación con asistencia del equipo?
                 <br />
                 <span className="text-xs text-muted-foreground mt-2 block">
-                  Podrás revertir esta acción cuando quieras.
+                  Se mostrará un badge verde distintivo &quot;Asistida X/6&quot; para mejor visibilidad.
                 </span>
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -146,9 +141,9 @@ export function RejectButton({
               <AlertDialogAction 
                 onClick={confirmAction}
                 disabled={isProcessing}
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-emerald-600 hover:bg-emerald-700"
               >
-                {isProcessing ? 'Rechazando...' : 'Rechazar Postulación'}
+                {isProcessing ? 'Marcando...' : 'Marcar como Asistida'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -158,29 +153,28 @@ export function RejectButton({
   }
 
   // ✅ Versión SIN LABEL (para usar dentro de dropdown)
-  if (isRejected) {
+  if (isAssisted) {
     return (
       <>
-        <DropdownMenuItem
-          onSelect={(e) => {
-            e.preventDefault()
-            handleClick(e as any)
-          }}
-          className="cursor-pointer"
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleClick}
+          className="w-full justify-start text-left gap-2 h-auto py-2 px-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
         >
-          <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-          <span className="text-green-600">Habilitar</span>
-        </DropdownMenuItem>
+          <UserX className="h-4 w-4" />
+          <span className="flex-1">Desmarcar Asistida</span>
+        </Button>
 
         <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
           <AlertDialogContent onClick={(e) => e.stopPropagation()}>
             <AlertDialogHeader>
-              <AlertDialogTitle>Habilitar Postulación</AlertDialogTitle>
+              <AlertDialogTitle>Desmarcar Postulación Asistida</AlertDialogTitle>
               <AlertDialogDescription>
-                ¿Estás seguro de habilitar nuevamente la postulación de <strong>{driverName}</strong>?
+                ¿Estás seguro de remover la marca de &quot;asistida&quot; de <strong>{driverName}</strong>?
                 <br />
                 <span className="text-xs text-muted-foreground mt-2 block">
-                  Se restaurará el estado anterior al rechazo y podrá continuar con el proceso.
+                  El badge verde &quot;Asistida&quot; dejará de mostrarse.
                 </span>
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -192,9 +186,9 @@ export function RejectButton({
               <AlertDialogAction 
                 onClick={confirmAction}
                 disabled={isProcessing}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-orange-600 hover:bg-orange-700"
               >
-                {isProcessing ? 'Habilitando...' : 'Habilitar Postulación'}
+                {isProcessing ? 'Desmarcando...' : 'Desmarcar'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -205,26 +199,25 @@ export function RejectButton({
 
   return (
     <>
-      <DropdownMenuItem
-        onSelect={(e) => {
-          e.preventDefault()
-          handleClick(e as any)
-        }}
-        className="cursor-pointer"
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleClick}
+        className="w-full justify-start text-left gap-2 h-auto py-2 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
       >
-        <XCircle className="mr-2 h-4 w-4 text-red-600" />
-        <span className="text-red-600">Rechazar</span>
-      </DropdownMenuItem>
+        <UserCheck className="h-4 w-4" />
+        <span className="flex-1">Marcar como Asistida</span>
+      </Button>
 
       <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
         <AlertDialogContent onClick={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Rechazar Postulación</AlertDialogTitle>
+            <AlertDialogTitle>Marcar Postulación como Asistida</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Estás seguro de rechazar la postulación de <strong>{driverName}</strong>?
+              ¿Confirmas que <strong>{driverName}</strong> completó su postulación con asistencia del equipo?
               <br />
               <span className="text-xs text-muted-foreground mt-2 block">
-                Podrás revertir esta acción cuando quieras.
+                Se mostrará un badge verde distintivo &quot;Asistida X/6&quot; para mejor visibilidad.
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -236,9 +229,9 @@ export function RejectButton({
             <AlertDialogAction 
               onClick={confirmAction}
               disabled={isProcessing}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-emerald-600 hover:bg-emerald-700"
             >
-              {isProcessing ? 'Rechazando...' : 'Rechazar Postulación'}
+              {isProcessing ? 'Marcando...' : 'Marcar como Asistida'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

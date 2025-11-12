@@ -6,7 +6,6 @@ import { useState, useEffect, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -15,13 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -45,7 +37,6 @@ import {
   Clock,
   Users,
   Plus,
-  Search,
   MapPin,
   CheckCircle,
   XCircle,
@@ -55,6 +46,8 @@ import {
   Loader2,
   UserPlus,
   ArrowUpDown,
+  CalendarIcon,
+  History,
 } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { EventFormDialog } from "@/components/admin/onboarding/event-form-dialog"
@@ -84,11 +77,9 @@ export function OnboardingPageContent({
   
   // State
   const [events, setEvents] = useState<OnboardingEventWithRelations[]>(initialEvents)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterStatus, setFilterStatus] = useState<string>(currentStatus || "all")
-  const [filterDate, setFilterDate] = useState<string>("all") // all, upcoming, past, today
   const [sortField, setSortField] = useState<SortField>('date')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [activeQuickFilter, setActiveQuickFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming')
   
   // Modals
   const [showEventForm, setShowEventForm] = useState(false)
@@ -118,42 +109,50 @@ export function OnboardingPageContent({
   // Filtering and Sorting
   const filteredAndSortedEvents = events
     .filter(event => {
-      const matchesSearch = searchTerm === "" || 
-        event.location?.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesStatus = filterStatus === "all" || event.status === filterStatus
-      
-      // Date filtering
+      // Date filtering basado en activeQuickFilter
       let matchesDate = true
-      if (filterDate !== "all") {
-        const eventDate = new Date(event.scheduledDate)
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const tomorrow = new Date(today)
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        
-        switch (filterDate) {
-          case "today":
-            const eventDay = new Date(eventDate)
-            eventDay.setHours(0, 0, 0, 0)
-            matchesDate = eventDay.getTime() === today.getTime()
-            break
-          case "upcoming":
-            matchesDate = eventDate >= today
-            break
-          case "past":
-            matchesDate = eventDate < today
-            break
-        }
+      const eventDate = new Date(event.scheduledDate)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      
+      switch (activeQuickFilter) {
+        case "upcoming":
+          // Eventos desde hoy en adelante
+          matchesDate = eventDate >= today
+          break
+        case "past":
+          // Eventos anteriores a hoy
+          matchesDate = eventDate < today
+          break
+        case "all":
+          matchesDate = true
+          break
       }
       
-      return matchesSearch && matchesStatus && matchesDate
+      return matchesDate
     })
     .sort((a, b) => {
       let comparison = 0
       
       switch (sortField) {
         case 'date':
-          comparison = new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
+          // Combinar fecha y hora de inicio para ordenamiento preciso
+          const dateA = new Date(a.scheduledDate)
+          const dateB = new Date(b.scheduledDate)
+          
+          // Comparar primero por fecha
+          const dateComparison = dateA.getTime() - dateB.getTime()
+          
+          // Si son del mismo día, comparar por hora de inicio
+          if (dateComparison === 0 && a.startTime && b.startTime) {
+            const timeA = a.startTime.split(':').map(Number) // ["09", "00"] -> [9, 0]
+            const timeB = b.startTime.split(':').map(Number)
+            const minutesA = timeA[0] * 60 + (timeA[1] || 0)
+            const minutesB = timeB[0] * 60 + (timeB[1] || 0)
+            comparison = minutesA - minutesB
+          } else {
+            comparison = dateComparison
+          }
           break
         case 'location':
           comparison = (a.location || '').localeCompare(b.location || '')
@@ -164,6 +163,20 @@ export function OnboardingPageContent({
         case 'status':
           comparison = a.status.localeCompare(b.status)
           break
+      }
+      
+      // Ordenamiento inteligente por fecha:
+      // - Para "Próximos": ascendente (más próximo primero, más temprano primero si mismo día)
+      // - Para "Pasados": descendente (más reciente primero, más tarde primero si mismo día)
+      // - Para "Todos": ascendente (más próximo primero, más temprano primero si mismo día)
+      if (sortField === 'date') {
+        if (activeQuickFilter === 'past') {
+          // Para pasados, invertir el orden (más reciente primero)
+          return sortDirection === 'asc' ? -comparison : comparison
+        } else {
+          // Para próximos y todos, orden normal (más próximo primero, más temprano primero)
+          return sortDirection === 'asc' ? comparison : -comparison
+        }
       }
       
       return sortDirection === 'asc' ? comparison : -comparison
@@ -271,40 +284,68 @@ export function OnboardingPageContent({
     })
   }
 
-  const getStatusBadge = (status: OnboardingEventStatus) => {
-    const config: Record<OnboardingEventStatus, { className: string; icon: React.ReactNode }> = {
+  const getStatusBadge = (event: OnboardingEventWithRelations) => {
+    const now = new Date()
+    const eventDate = new Date(event.scheduledDate)
+    
+    // Si el evento tiene hora de inicio, combinarla con la fecha para comparación precisa
+    let eventDateTime = eventDate
+    if (event.startTime) {
+      const [hours, minutes] = event.startTime.split(':').map(Number)
+      eventDateTime = new Date(eventDate)
+      eventDateTime.setHours(hours, minutes || 0, 0, 0)
+    }
+    
+    // Detectar si el evento ya pasó
+    const isPast = eventDateTime < now
+    
+    // Si el evento está SCHEDULED pero ya pasó, mostrar como "Pasado"
+    const displayStatus = (event.status === 'SCHEDULED' && isPast) ? 'PAST' : event.status
+    
+    const config: Record<OnboardingEventStatus | 'PAST', { className: string; icon: React.ReactNode; label: string }> = {
       DRAFT: { 
         className: 'bg-gray-100 text-gray-800 border-gray-200',
-        icon: <Edit className="h-3 w-3" />
+        icon: <Edit className="h-3 w-3" />,
+        label: getEventStatusLabel('DRAFT')
       },
       SCHEDULED: { 
         className: 'bg-blue-100 text-blue-800 border-blue-200',
-        icon: <Calendar className="h-3 w-3" />
+        icon: <Calendar className="h-3 w-3" />,
+        label: getEventStatusLabel('SCHEDULED')
       },
       IN_PROGRESS: { 
         className: 'bg-amber-100 text-amber-800 border-amber-200',
-        icon: <Clock className="h-3 w-3" />
+        icon: <Clock className="h-3 w-3" />,
+        label: getEventStatusLabel('IN_PROGRESS')
       },
       COMPLETED: { 
         className: 'bg-green-100 text-green-800 border-green-200',
-        icon: <CheckCircle className="h-3 w-3" />
+        icon: <CheckCircle className="h-3 w-3" />,
+        label: getEventStatusLabel('COMPLETED')
       },
       CANCELLED: { 
         className: 'bg-red-100 text-red-800 border-red-200',
-        icon: <XCircle className="h-3 w-3" />
+        icon: <XCircle className="h-3 w-3" />,
+        label: getEventStatusLabel('CANCELLED')
       },
       POSTPONED: { 
         className: 'bg-purple-100 text-purple-800 border-purple-200',
-        icon: <Clock className="h-3 w-3" />
+        icon: <Clock className="h-3 w-3" />,
+        label: getEventStatusLabel('POSTPONED')
+      },
+      PAST: {
+        className: 'bg-gray-100 text-gray-600 border-gray-300',
+        icon: <History className="h-3 w-3" />,
+        label: 'Pasado'
       },
     }
 
-    const { className, icon } = config[status]
+    const { className, icon, label } = config[displayStatus]
 
     return (
       <Badge variant="outline" className={`gap-1 ${className}`}>
         {icon}
-        {getEventStatusLabel(status)}
+        {label}
       </Badge>
     )
   }
@@ -429,40 +470,54 @@ export function OnboardingPageContent({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col gap-4 md:flex-row md:items-center">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por ubicación..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
+            <div className="flex flex-col gap-4">
+              {/* Quick Filters Tabs */}
+              <div className="relative">
+                <div className="flex flex-wrap items-end gap-1 pb-0">
+                  <button
+                    onClick={() => setActiveQuickFilter('upcoming')}
+                    disabled={isPending}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
+                      cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed
+                      ${activeQuickFilter === 'upcoming'
+                        ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                        : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                      }`}
+                  >
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Próximos</span>
+                    <span className="sm:hidden">Próx.</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveQuickFilter('past')}
+                    disabled={isPending}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
+                      whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                      ${activeQuickFilter === 'past'
+                        ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                        : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                      }`}
+                  >
+                    <History className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Pasados</span>
+                    <span className="sm:hidden">Pas.</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveQuickFilter('all')}
+                    disabled={isPending}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
+                      whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                      ${activeQuickFilter === 'all'
+                        ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                        : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                      }`}
+                  >
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Todos</span>
+                    <span className="sm:hidden">Todos</span>
+                  </button>
+                </div>
               </div>
-              <Select value={filterDate} onValueChange={setFilterDate}>
-                <SelectTrigger className="w-full md:w-[200px]">
-                  <SelectValue placeholder="Filtrar por fecha" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las fechas</SelectItem>
-                  <SelectItem value="today">Hoy</SelectItem>
-                  <SelectItem value="upcoming">Próximos</SelectItem>
-                  <SelectItem value="past">Pasados</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-full md:w-[200px]">
-                  <SelectValue placeholder="Filtrar por estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los estados</SelectItem>
-                  <SelectItem value="SCHEDULED">Programados</SelectItem>
-                  <SelectItem value="IN_PROGRESS">En Curso</SelectItem>
-                  <SelectItem value="COMPLETED">Completados</SelectItem>
-                  <SelectItem value="CANCELLED">Cancelados</SelectItem>
-                  <SelectItem value="POSTPONED">Pospuestos</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </CardContent>
         </Card>
@@ -474,7 +529,7 @@ export function OnboardingPageContent({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.2 }}
         >
-          <Card className="p-0">
+          <Card className={`p-0 ${activeQuickFilter !== 'all' ? 'rounded-t-none' : ''}`}>
           <CardContent className="p-0">
             {isPending ? (
               <div className="flex items-center justify-center py-12">
@@ -496,7 +551,7 @@ export function OnboardingPageContent({
                     {filteredAndSortedEvents.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-                          {searchTerm || filterStatus !== 'all' 
+                          {activeQuickFilter !== 'all'
                             ? 'No se encontraron eventos con los filtros aplicados'
                             : 'No hay eventos creados. Crea tu primer evento de on boarding.'
                           }
@@ -590,7 +645,7 @@ export function OnboardingPageContent({
                           onClick={() => handleViewEvent(event)}
                           className="cursor-pointer"
                         >
-                          {getStatusBadge(event.status)}
+                          {getStatusBadge(event)}
                         </TableCell>
 
                         {/* Acciones */}

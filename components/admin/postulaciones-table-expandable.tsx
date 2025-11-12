@@ -44,6 +44,7 @@ import { useRouter } from "next/navigation"
 import { formatBirthDateWithAge } from "@/lib/utils"
 import { calculatePostulacionBadges } from "@/lib/utils/postulacion-badges.utils"
 import { getPostulacionStatusBadge } from "@/lib/utils/postulacion-status-badge.utils"
+import { AssistedCompletionButton } from "./postulaciones/assisted-completion-button"
 
 interface PostulacionesTableProps {
   postulaciones: any[]
@@ -72,7 +73,7 @@ function getBadgeConfig(badgeType: string) {
     'DOCUMENTOS_EN_REVISION': { label: 'Documentos en Revisión', color: 'bg-amber-50 text-amber-700' },
     'DOCUMENTOS_PENDIENTES': { label: 'Documentos Pendientes', color: 'bg-yellow-50 text-yellow-700' },
     'PAGO_COMPLETO': { label: 'Pago Completo', color: 'bg-green-50 text-green-700' },
-    'PAGO_EN_VERIFICACION': { label: 'Pago en Verificación', color: 'bg-purple-50 text-purple-700' },
+    'PAGO_EN_VERIFICACION': { label: 'Pago en Verificación', color: 'bg-yellow-50 text-yellow-700' },
     'PAGO_PENDIENTE': { label: 'Pago Pendiente', color: 'bg-red-50 text-red-700' },
     'FACTURACION_COMPLETA': { label: 'Facturación Completa', color: 'bg-green-50 text-green-700' },
     'FACTURACION_NA': { label: 'Sin Facturación', color: 'bg-gray-50 text-gray-500' },
@@ -200,7 +201,7 @@ export function PostulacionesTableExpandable({
               </div>
             </div>
           )}
-          
+
           <div className="border rounded-lg overflow-hidden">
             {/* Contenedor con scroll horizontal para pantallas pequeñas */}
             <div className="overflow-x-auto">
@@ -238,88 +239,125 @@ export function PostulacionesTableExpandable({
                     const hasOnboarding = postulacion.onboardingAttendances?.[0]
                     const onboardingStatus = postulacion.onboardingStatus
                     const canSchedule = isCompleted && (!onboardingStatus || ['NOT_READY', 'READY'].includes(onboardingStatus))
-                    
+
                     // Calcular badges
                     const { badges } = calculatePostulacionBadges(postulacion)
-                    
+
+
+
                     // ✅ Badge de estado de postulación (con soporte para REJECTED)
-                    const statusBadgeConfig = getPostulacionStatusBadge(postulacion.status)
-                    
+                    const statusBadgeConfig = getPostulacionStatusBadge(
+                      postulacion.status,
+                      postulacion.currentStep,
+                      postulacion.assistedCompletion
+                    )
                     // Iconos de estado
                     const getDocumentIcon = () => {
                       const documents = postulacion.documents || []
-                      
-                      const cedulaDocs = documents.filter((doc: any) => 
-                        doc.documentType === 'CEDULA' || 
-                        doc.documentType === 'CEDULA_FRONT' || 
+
+                      const cedulaDocs = documents.filter((doc: any) =>
+                        doc.documentType === 'CEDULA' ||
+                        doc.documentType === 'CEDULA_FRONT' ||
                         doc.documentType === 'CEDULA_BACK'
                       )
                       const hasCedulaApproved = cedulaDocs.some((doc: any) => doc.status === 'APPROVED')
                       const hasCedulaExists = cedulaDocs.length > 0
-                      
-                      const antecedentesDocs = documents.filter((doc: any) => 
-                        doc.documentType === 'CRIMINAL_RECORD' || 
+
+                      const antecedentesDocs = documents.filter((doc: any) =>
+                        doc.documentType === 'CRIMINAL_RECORD' ||
                         doc.documentType === 'ANTECEDENTES'
                       )
                       const hasAntecedentesApproved = antecedentesDocs.some((doc: any) => doc.status === 'APPROVED')
                       const hasAntecedentesExists = antecedentesDocs.length > 0
-                      
+
                       if (!hasCedulaExists || !hasAntecedentesExists) {
-                        return { 
-                          icon: FileText, 
-                          bg: 'bg-red-100', 
-                          text: 'text-red-700', 
-                          tooltip: 'Documentos Faltantes' 
+                        return {
+                          icon: FileText,
+                          bg: 'bg-red-100',
+                          text: 'text-red-700',
+                          tooltip: 'Documentos Faltantes'
                         }
                       }
-                      
+
                       if (!hasCedulaApproved || !hasAntecedentesApproved) {
-                        return { 
-                          icon: FileText, 
-                          bg: 'bg-yellow-100', 
-                          text: 'text-yellow-700', 
-                          tooltip: 'Documentos pendientes de aprobación' 
+                        return {
+                          icon: FileText,
+                          bg: 'bg-yellow-100',
+                          text: 'text-yellow-700',
+                          tooltip: 'Documentos pendientes de aprobación'
                         }
                       }
-                      
-                      return { 
-                        icon: FileText, 
-                        bg: 'bg-green-100', 
-                        text: 'text-green-700', 
-                        tooltip: 'Documentos completos' 
+
+                      return {
+                        icon: FileText,
+                        bg: 'bg-green-100',
+                        text: 'text-green-700',
+                        tooltip: 'Documentos completos'
                       }
                     }
-                    
+
                     const getPaymentIcon = () => {
-                      const payBadge = badges.find(b => b.includes('PAGO') || b === 'PAGADO' || b === 'VERIFICAR_PAGO')
-                      if (payBadge === 'PAGADO' || payBadge === 'PAGO_COMPLETO') {
-                        return { icon: CreditCard, bg: 'bg-green-100', text: 'text-green-700', tooltip: 'Pago completo' }
-                      } else if (payBadge === 'PAGO_EN_VERIFICACION' || payBadge === 'VERIFICAR_PAGO') {
-                        return { icon: CreditCard, bg: 'bg-purple-100', text: 'text-purple-700', tooltip: 'Pago en verificación' }
+                      const payBadge = badges.find(b => b.includes('PAGO'))
+
+                      if (payBadge === 'PAGO_COMPLETO') {
+                        return {
+                          icon: CreditCard,
+                          bg: 'bg-green-100',
+                          text: 'text-green-700',
+                          tooltip: 'Pago completo'
+                        }
+                      } else if (payBadge === 'PAGO_EN_VERIFICACION') {
+                        return {
+                          icon: CreditCard,
+                          bg: 'bg-yellow-100',
+                          text: 'text-yellow-700',
+                          tooltip: 'Pago en verificación'
+                        }
                       } else {
-                        return { icon: CreditCard, bg: 'bg-red-100', text: 'text-red-700', tooltip: 'Pago pendiente' }
+                        return {
+                          icon: CreditCard,
+                          bg: 'bg-red-100',
+                          text: 'text-red-700',
+                          tooltip: 'Pago pendiente'
+                        }
                       }
                     }
-                    
+
                     const getInvoiceIcon = () => {
                       const invBadge = badges.find(b => b.includes('FACTURACION'))
+
                       if (invBadge === 'FACTURACION_COMPLETA') {
-                        return { icon: Receipt, bg: 'bg-green-100', text: 'text-green-700', tooltip: 'Facturación completa' }
+                        return {
+                          icon: Receipt,
+                          bg: 'bg-green-100',
+                          text: 'text-green-700',
+                          tooltip: 'Facturación completa'
+                        }
                       } else if (invBadge === 'FACTURACION_NA') {
-                        return { icon: Receipt, bg: 'bg-gray-100', text: 'text-gray-500', tooltip: 'No aplica facturación' }
+                        return {
+                          icon: Receipt,
+                          bg: 'bg-gray-100',
+                          text: 'text-gray-500',
+                          tooltip: 'No aplica facturación'
+                        }
                       } else {
-                        return { icon: Receipt, bg: 'bg-orange-100', text: 'text-orange-700', tooltip: 'Facturación pendiente' }
+                        return {
+                          icon: Receipt,
+                          bg: 'bg-orange-100',
+                          text: 'text-orange-700',
+                          tooltip: 'Facturación pendiente'
+                        }
                       }
                     }
-                    
+
                     const docIcon = getDocumentIcon()
                     const payIcon = getPaymentIcon()
                     const invIcon = getInvoiceIcon()
-                    
+
                     const DocIcon = docIcon.icon
                     const PayIcon = payIcon.icon
                     const InvIcon = invIcon.icon
-                    
+
                     return (
                       <Fragment key={postulacion.id}>
                         <tr
@@ -362,20 +400,20 @@ export function PostulacionesTableExpandable({
 
                           {/* POSTULACIÓN STATUS - ✅ CON SOPORTE PARA REJECTED */}
                           <td className="px-3 py-3">
-                            <div className="flex flex-row items-center gap-1">
-                              <Badge
-                                variant={statusBadgeConfig.variant}
-                                className={`text-xs ${statusBadgeConfig.className}`}
-                              >
-                                {statusBadgeConfig.label}
-                              </Badge>
-                              {postulacion.status === 'IN_PROGRESS' && (
-                                <span className="text-xs text-muted-foreground">
-                                  {' '}{postulacion.currentStep}/6
-                                </span>
-                              )}
-                            </div>
-                          </td>
+  <div className="flex flex-row items-center gap-1">
+    <Badge
+      variant={statusBadgeConfig.variant}
+      className={`text-xs ${statusBadgeConfig.className}`}
+    >
+      {statusBadgeConfig.label}
+    </Badge>
+    {postulacion.status === 'IN_PROGRESS' && (
+      <span className="text-xs text-muted-foreground">
+        {' '}{postulacion.currentStep}/6
+      </span>
+    )}
+  </div>
+</td>
 
                           {/* ESTADOS - 3 ICONOS FIJOS */}
                           <td className="px-3 py-3">
@@ -423,17 +461,16 @@ export function PostulacionesTableExpandable({
                               <div className="flex flex-col items-center gap-1">
                                 <Badge
                                   variant="outline"
-                                  className={`text-xs ${
-                                    hasOnboarding.status === 'ATTENDED' || hasOnboarding.status === 'CONFIRMED'
-                                      ? 'bg-green-50 text-green-700 border-green-200'
-                                      : (hasOnboarding.status === 'SCHEDULED' || hasOnboarding.status === 'INVITED')
+                                  className={`text-xs ${hasOnboarding.status === 'ATTENDED' || hasOnboarding.status === 'CONFIRMED'
+                                    ? 'bg-green-50 text-green-700 border-green-200'
+                                    : (hasOnboarding.status === 'SCHEDULED' || hasOnboarding.status === 'INVITED')
                                       ? 'bg-blue-50 text-blue-700 border-blue-200'
                                       : 'bg-amber-50 text-amber-700 border-amber-200'
-                                  }`}
+                                    }`}
                                 >
-                                  {hasOnboarding.status === 'ATTENDED' ? 'Capacitado' : 
-                                   hasOnboarding.status === 'CONFIRMED' ? 'Capacitado' :
-                                   hasOnboarding.status === 'SCHEDULED' || hasOnboarding.status === 'INVITED' ? 'Agendado' : 'Pendiente'}
+                                  {hasOnboarding.status === 'ATTENDED' ? 'Capacitado' :
+                                    hasOnboarding.status === 'CONFIRMED' ? 'Capacitado' :
+                                      hasOnboarding.status === 'SCHEDULED' || hasOnboarding.status === 'INVITED' ? 'Agendado' : 'Pendiente'}
                                 </Badge>
                                 {hasOnboarding.event?.scheduledDate && (
                                   <span className="text-xs text-muted-foreground">
@@ -479,7 +516,7 @@ export function PostulacionesTableExpandable({
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              
+
                               {/* ✅ NUEVO: Botón de Contacto */}
                               <ContactButton
                                 driverId={postulacion.id}
@@ -487,7 +524,7 @@ export function PostulacionesTableExpandable({
                                 phoneNumber={postulacion.phoneNumber}
                                 contactStatus={postulacion.contactStatus}
                               />
-                              
+
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -499,6 +536,7 @@ export function PostulacionesTableExpandable({
                                     <Eye className="mr-2 h-4 w-4" />
                                     Ver detalles
                                   </DropdownMenuItem>
+
                                   {canSchedule && (
                                     <>
                                       <DropdownMenuSeparator />
@@ -508,17 +546,25 @@ export function PostulacionesTableExpandable({
                                       </DropdownMenuItem>
                                     </>
                                   )}
+
                                   <DropdownMenuSeparator />
-                                  {/* ✅ Botón de Rechazar/Habilitar dinámico */}
-                                  <DropdownMenuItem asChild>
-                                    <div>
-                                      <RejectButton
-                                        driverId={postulacion.id}
-                                        driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
-                                        isRejected={postulacion.status === 'REJECTED'}
-                                      />
-                                    </div>
-                                  </DropdownMenuItem>
+
+                                  {/* ✅ Botón integrado directamente sin wrapper */}
+                                  <RejectButton
+                                    driverId={postulacion.id}
+                                    driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
+                                    isRejected={postulacion.status === 'REJECTED'}
+                                    onSuccess={() => window.location.reload()}
+                                  />
+
+                                  <DropdownMenuSeparator />
+
+                                  <AssistedCompletionButton
+  driverId={postulacion.id}
+  driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
+  isAssisted={postulacion.assistedCompletion || false}
+  onSuccess={() => window.location.reload()}
+/>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -565,9 +611,9 @@ export function PostulacionesTableExpandable({
                                     </h5>
                                     {postulacion.hasVehicle ? (
                                       <div className="space-y-1.5">
-                                        <InfoRow 
-                                          label="Vehículo" 
-                                          value={`${postulacion.vehicleBrand} ${postulacion.vehicleModel}`} 
+                                        <InfoRow
+                                          label="Vehículo"
+                                          value={`${postulacion.vehicleBrand} ${postulacion.vehicleModel}`}
                                         />
                                         <InfoRow label="Año" value={postulacion.vehicleYear?.toString()} />
                                       </div>
@@ -596,18 +642,18 @@ export function PostulacionesTableExpandable({
                                       ESTADO
                                     </h5>
                                     <div className="space-y-1.5">
-                                      <InfoRow 
-                                        label="Progreso" 
-                                        value={`${postulacion.currentStep}/6 pasos`} 
+                                      <InfoRow
+                                        label="Progreso"
+                                        value={`${postulacion.currentStep}/6 pasos`}
                                       />
-                                      <InfoRow 
-                                        label="Fecha inicio" 
-                                        value={new Date(postulacion.startedAt).toLocaleDateString('es-ES')} 
+                                      <InfoRow
+                                        label="Fecha inicio"
+                                        value={new Date(postulacion.startedAt).toLocaleDateString('es-ES')}
                                       />
                                       {postulacion.completedAt && (
-                                        <InfoRow 
-                                          label="Fecha completado" 
-                                          value={new Date(postulacion.completedAt).toLocaleDateString('es-ES')} 
+                                        <InfoRow
+                                          label="Fecha completado"
+                                          value={new Date(postulacion.completedAt).toLocaleDateString('es-ES')}
                                         />
                                       )}
                                     </div>

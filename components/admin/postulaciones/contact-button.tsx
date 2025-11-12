@@ -42,6 +42,7 @@ interface ContactButtonProps {
   contactStatus: ContactStatus
   showLabel?: boolean // Si es true, muestra el texto del botón
   size?: 'sm' | 'default' // Tamaño del botón
+  inDropdown?: boolean // ✅ NUEVO: Si está dentro de un dropdown "Acciones"
 }
 
 export function ContactButton({ 
@@ -50,7 +51,8 @@ export function ContactButton({
   phoneNumber,
   contactStatus,
   showLabel = false,
-  size = 'sm'
+  size = 'sm',
+  inDropdown = false // ✅ NUEVO
 }: ContactButtonProps) {
   const router = useRouter()
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
@@ -80,7 +82,6 @@ export function ContactButton({
         toast.success('Contacto registrado exitosamente')
         setShowConfirmDialog(false)
         
-        // Usar startTransition para mostrar spinner mientras recarga
         startTransition(() => {
           router.refresh()
         })
@@ -95,9 +96,191 @@ export function ContactButton({
     }
   }
 
+  // ✅ CASO 1: Con label (página de detalle, fuera de dropdown)
+  if (showLabel) {
+    return (
+      <>
+        {isPending && (
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-6 shadow-xl flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm font-medium">Actualizando datos...</p>
+            </div>
+          </div>
+        )}
+
+        <TooltipProvider>
+          <Tooltip>
+            <DropdownMenu>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={contactStatus === 'urgent' ? 'default' : 'outline'}
+                    size={size}
+                    disabled={isDisabled || isPending}
+                    className={`gap-2 ${
+                      contactStatus === 'contacted' 
+                        ? 'bg-green-50 text-green-700 hover:bg-green-100 border-green-200' 
+                        : contactStatus === 'urgent'
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : ''
+                    }`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Contactar
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuItem 
+                  onClick={handleWhatsApp}
+                  className="cursor-pointer"
+                >
+                  <MessageCircle className="mr-2 h-4 w-4 text-green-600" />
+                  <span>Abrir WhatsApp</span>
+                </DropdownMenuItem>
+                
+                <DropdownMenuItem 
+                  onClick={handleRegister}
+                  className="cursor-pointer"
+                  disabled={contactStatus === 'contacted'}
+                >
+                  <Phone className="mr-2 h-4 w-4 text-blue-600" />
+                  <span>Registrar Contacto</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
+            <TooltipContent>
+              <p>{config.tooltip}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Contacto</AlertDialogTitle>
+              <AlertDialogDescription>
+                ¿Confirmas que contactaste a <strong>{driverName}</strong>?
+                <br />
+                <span className="text-xs text-muted-foreground mt-2 block">
+                  Se registrará este contacto en el historial del driver.
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isRegistering}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmRegister}
+                disabled={isRegistering}
+              >
+                {isRegistering ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Registrando...
+                  </>
+                ) : (
+                  'Confirmar'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
+    )
+  }
+
+  // ✅ CASO 2: Sin label, dentro del dropdown "Acciones" (página de detalle)
+  if (inDropdown) {
+    return (
+      <>
+        {isPending && (
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-6 shadow-xl flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm font-medium">Actualizando datos...</p>
+            </div>
+          </div>
+        )}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isDisabled || isPending}
+              className="w-full justify-start text-left gap-2 h-auto py-2 px-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span className="flex-1">Contactar</span>
+            </Button>
+          </DropdownMenuTrigger>
+          
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuItem 
+              onClick={handleWhatsApp}
+              className="cursor-pointer"
+            >
+              <MessageCircle className="mr-2 h-4 w-4 text-green-600" />
+              <span>Abrir WhatsApp</span>
+            </DropdownMenuItem>
+            
+            <DropdownMenuItem 
+              onClick={handleRegister}
+              className="cursor-pointer"
+              disabled={contactStatus === 'contacted'}
+            >
+              <Phone className="mr-2 h-4 w-4 text-blue-600" />
+              <span>Registrar Contacto</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Contacto</AlertDialogTitle>
+              <AlertDialogDescription>
+                ¿Confirmas que contactaste a <strong>{driverName}</strong>?
+                <br />
+                <span className="text-xs text-muted-foreground mt-2 block">
+                  Se registrará este contacto en el historial del driver.
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isRegistering}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmRegister}
+                disabled={isRegistering}
+              >
+                {isRegistering ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Registrando...
+                  </>
+                ) : (
+                  'Confirmar'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
+    )
+  }
+
+  // ✅ CASO 3: Sin label, en la tabla (botón simple con tooltip)
   return (
     <>
-      {/* Overlay de loading */}
       {isPending && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-white rounded-lg p-6 shadow-xl flex flex-col items-center gap-3">
@@ -113,24 +296,13 @@ export function ContactButton({
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant={showLabel ? (contactStatus === 'urgent' ? 'default' : 'outline') : 'ghost'}
+                  variant="ghost"
                   size={size}
                   disabled={isDisabled || isPending}
-                  className={
-                    showLabel 
-                      ? `gap-2 ${
-                          contactStatus === 'contacted' 
-                            ? 'bg-green-50 text-green-700 hover:bg-green-100 border-green-200' 
-                            : contactStatus === 'urgent'
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : ''
-                        }`
-                      : `h-8 w-8 p-0 rounded-full ${config.bg} ${config.text} ${config.hoverBg}`
-                  }
+                  className={`h-8 w-8 p-0 rounded-full ${config.bg} ${config.text} ${config.hoverBg}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <MessageCircle className="h-4 w-4" />
-                  {showLabel && 'Contactar'}
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
@@ -161,7 +333,6 @@ export function ContactButton({
         </Tooltip>
       </TooltipProvider>
 
-      {/* Modal de confirmación */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent onClick={(e) => e.stopPropagation()}>
           <AlertDialogHeader>

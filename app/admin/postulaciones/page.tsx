@@ -3,24 +3,15 @@
 import { PostulacionesPageContent } from "@/components/admin/postulaciones-page-content"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
+import type { PostulacionFilters } from "@/types/postulacion-filters.types"
 
 export const revalidate = 30
 
 interface PageProps {
-  searchParams: Promise<{
-    status?: string
-    search?: string
-    onboardingStatus?: string
-    hasVehicle?: string
-    startDate?: string
-    endDate?: string
-    page?: string
-    sortBy?: string
-    sortOrder?: string
-  }>
+  searchParams: Promise<PostulacionFilters>
 }
 
-// ✅ INCLUDE OPTIMIZADO - Solo lo necesario para mostrar badges + CONTACTOS
+// ✅ INCLUDE OPTIMIZADO
 const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
   documents: {
     select: {
@@ -63,7 +54,6 @@ const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
     },
     take: 1
   },
-  // ✅ NUEVO: Incluir contactos del driver (solo el más reciente)
   driverContacts: {
     select: {
       id: true,
@@ -82,29 +72,38 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   const params = await searchParams
   
   const page = params.page ? parseInt(params.page) : 1
-  const limit = 50 // ✅ AUMENTADO A 50
+  const limit = 50
 
   // ==================== ORDENAMIENTO ====================
   const sortBy = params.sortBy || 'createdAt'
   const sortOrder = params.sortOrder || 'desc'
   
-  // Construir el orderBy dinámico
   const orderBy: any = {}
-  if (sortBy === 'fullName' || sortBy === 'city' || sortBy === 'status' || sortBy === 'createdAt') {
-    orderBy[sortBy] = sortOrder
+  if (sortBy === 'fullName' || sortBy === 'city' || sortBy === 'createdAt' || sortBy === 'currentStep') {    orderBy[sortBy] = sortOrder
   } else {
-    orderBy.createdAt = 'desc' // fallback
+    orderBy.createdAt = 'desc'
   }
 
   // ==================== WHERE CLAUSE ====================
   const where: Prisma.FormDriverWhereInput = {}
 
-  // Filtro de status general
+  // Filtro de status general (incluye ASISTIDA)
   if (params.status && params.status !== 'all') {
-    where.status = params.status as any
+    if (params.status === 'ASISTIDA') {
+      // Filtrar por postulaciones asistidas
+      where.assistedCompletion = true
+      where.status = 'IN_PROGRESS'
+    } else {
+      where.status = params.status as any
+    }
   }
 
-  // ✅ FILTRO DE ONBOARDING CORREGIDO
+  // ✅ Filtro de PASO ACTUAL
+  if (params.currentStep && params.currentStep !== 'all') {
+    where.currentStep = parseInt(params.currentStep)
+  }
+
+  // Filtro de onboarding
   if (params.onboardingStatus && params.onboardingStatus !== 'all') {
     if (params.onboardingStatus === 'pending') {
       where.OR = [
@@ -140,18 +139,30 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
 
   // Filtro de fechas
   if (params.startDate) {
-    where.createdAt = { ...where.createdAt as any, gte: new Date(params.startDate) }
+    // Crear fecha al inicio del día en zona horaria local (00:00:00)
+    const startDate = new Date(params.startDate)
+    startDate.setHours(0, 0, 0, 0)
+    where.createdAt = { ...where.createdAt as any, gte: startDate }
   }
 
   if (params.endDate) {
-    where.createdAt = { ...where.createdAt as any, lte: new Date(params.endDate) }
+    // Crear fecha al final del día en zona horaria local (23:59:59.999)
+    const endDate = new Date(params.endDate)
+    endDate.setHours(23, 59, 59, 999)
+    where.createdAt = { ...where.createdAt as any, lte: endDate }
   }
 
-  // ==================== QUERIES PARALELAS OPTIMIZADAS ====================
+  // ==================== QUERIES PARALELAS ====================
   const treintaDiasAtras = new Date()
   treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30)
 
-  // ✅ EJECUTAR TODAS LAS QUERIES EN PARALELO
+  // Verificar si hay filtros POST-PROCESSING que requieren traer todos los datos
+  const hasPostProcessingFilters = 
+    (params.contactStatus && params.contactStatus !== 'all') ||
+    (params.documentStatus && params.documentStatus !== 'all') ||
+    (params.paymentStatus && params.paymentStatus !== 'all') ||
+    (params.invoiceStatus && params.invoiceStatus !== 'all')
+
   const [
     total,
     completadas,
@@ -159,25 +170,140 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     abandonadas,
     nuevasUltimos30Dias,
     totalFiltered,
-    postulaciones
+    postulacionesRaw
   ] = await Promise.all([
-    // Stats globales
     prisma.formDriver.count(),
     prisma.formDriver.count({ where: { status: 'COMPLETED' } }),
     prisma.formDriver.count({ where: { status: 'IN_PROGRESS' } }),
     prisma.formDriver.count({ where: { status: 'ABANDONED' } }),
     prisma.formDriver.count({ where: { createdAt: { gte: treintaDiasAtras } } }),
-    
-    // Data filtrada
     prisma.formDriver.count({ where }),
-    prisma.formDriver.findMany({
-      where,
-      include: POSTULACION_INCLUDE,
-      orderBy: orderBy,
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
+    // Si hay filtros POST-PROCESSING, traer todos los datos; si no, solo la página actual
+    hasPostProcessingFilters
+      ? prisma.formDriver.findMany({
+          where,
+          include: POSTULACION_INCLUDE,
+          orderBy: orderBy,
+        })
+      : prisma.formDriver.findMany({
+          where,
+          include: POSTULACION_INCLUDE,
+          orderBy: orderBy,
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
   ])
+
+  // ==================== POST-PROCESSING FILTERS ====================
+  // Filtros que requieren cálculo después de traer los datos
+  
+  let postulaciones = postulacionesRaw
+
+  // ✅ Filtro de CONTACTO
+  if (params.contactStatus && params.contactStatus !== 'all') {
+    postulaciones = postulaciones.filter(p => {
+      const hasBeenContacted = (p.driverContacts?.length ?? 0) > 0
+      const isRejected = p.status === 'REJECTED'
+      const completedSteps = p.completedSteps?.length ?? 0
+      
+      // Calcular contactStatus
+      let contactStatus = 'not-applicable'
+      if (isRejected) {
+        contactStatus = 'not-applicable'
+      } else if (hasBeenContacted) {
+        contactStatus = 'contacted'
+      } else if (completedSteps > 0) {
+        // Pendiente engloba tanto los casos urgentes (>=3 pasos) como los pendientes normales (>0 pasos)
+        contactStatus = 'pending'
+      }
+      
+      return contactStatus === params.contactStatus
+    })
+  }
+
+  // ✅ Filtro de DOCUMENTOS
+  if (params.documentStatus && params.documentStatus !== 'all') {
+    postulaciones = postulaciones.filter(p => {
+      const documents = p.documents || []
+      
+      const criminalRecords = documents.filter(d => d.documentType === 'CRIMINAL_RECORD')
+      const cedulaFront = documents.filter(d => d.documentType === 'CEDULA_FRONT')
+      const cedulaBack = documents.filter(d => d.documentType === 'CEDULA_BACK')
+      
+      const hasCriminalRecord = criminalRecords.length > 0
+      const hasCedula = cedulaFront.length > 0 || cedulaBack.length > 0
+      
+      if (!hasCriminalRecord || !hasCedula) {
+        return params.documentStatus === 'pendientes'
+      }
+      
+      const mainDocuments = [...criminalRecords, ...cedulaFront, ...cedulaBack]
+      const hasRejected = mainDocuments.some(d => d.status === 'REJECTED')
+      
+      if (hasRejected) {
+        return params.documentStatus === 'pendientes'
+      }
+      
+      const hasPending = mainDocuments.some(d => d.status === 'PENDING' || d.status === 'IN_REVIEW')
+      
+      if (hasPending) {
+        return params.documentStatus === 'en-revision'
+      }
+      
+      const allApproved = mainDocuments.every(d => d.status === 'APPROVED')
+      
+      if (allApproved) {
+        return params.documentStatus === 'completos'
+      }
+      
+      return params.documentStatus === 'pendientes'
+    })
+  }
+
+  // ✅ Filtro de PAGO
+  if (params.paymentStatus && params.paymentStatus !== 'all') {
+    postulaciones = postulaciones.filter(p => {
+      const payment = p.equipmentPayments?.[0]
+      
+      if (!payment) {
+        return params.paymentStatus === 'pendiente'
+      }
+      
+      if (payment.status === 'VERIFIED') {
+        return params.paymentStatus === 'verificado'
+      }
+      
+      if (payment.status === 'PENDING' || payment.status === 'PARTIAL') {
+        return params.paymentStatus === 'en-verificacion'
+      }
+      
+      return params.paymentStatus === 'pendiente'
+    })
+  }
+
+  // ✅ Filtro de FACTURACIÓN
+  if (params.invoiceStatus && params.invoiceStatus !== 'all') {
+    postulaciones = postulaciones.filter(p => {
+      const financial = p.financialService
+      const documents = p.documents || []
+      
+      const taxDoc = documents.find(d => d.documentType === 'TAX_COMPLIANCE')
+      
+      if (taxDoc && taxDoc.status === 'APPROVED') {
+        return params.invoiceStatus === 'completa'
+      }
+      
+      if (!financial) {
+        return params.invoiceStatus === 'pendiente'
+      }
+      
+      if (!financial.hasInvoice) {
+        return params.invoiceStatus === 'na'
+      }
+      
+      return params.invoiceStatus === 'pendiente'
+    })
+  }
 
   const tasaCompletado = total > 0 ? Math.round((completadas / total) * 100) : 0
 
@@ -190,14 +316,37 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     tasaCompletado,
   }
 
-  const totalPages = Math.ceil(totalFiltered / limit)
-  const hasMore = page < totalPages
+  // Calcular total y paginación correctamente
+  let finalTotal = totalFiltered
+  let totalPages = 1
+  let hasMore = false
+  let postulacionesToShow = postulaciones
+
+  if (hasPostProcessingFilters) {
+    // Si hay filtros POST-PROCESSING, ya trajimos todos los datos
+    // El total real es el número de resultados después del filtrado POST-PROCESSING
+    finalTotal = postulaciones.length
+    totalPages = Math.ceil(finalTotal / limit)
+    
+    // Aplicar paginación en memoria
+    const startIndex = (page - 1) * limit
+    const endIndex = startIndex + limit
+    postulacionesToShow = postulaciones.slice(startIndex, endIndex)
+    
+    hasMore = endIndex < postulaciones.length
+  } else {
+    // Si no hay filtros POST-PROCESSING, usamos el totalFiltered de la BD
+    finalTotal = totalFiltered
+    totalPages = Math.ceil(finalTotal / limit)
+    hasMore = page < totalPages
+    postulacionesToShow = postulaciones
+  }
 
   return (
     <PostulacionesPageContent
       stats={stats}
-      postulaciones={postulaciones}
-      total={totalFiltered}
+      postulaciones={postulacionesToShow}
+      total={finalTotal}
       currentPage={page}
       totalPages={totalPages}
       hasMore={hasMore}
@@ -208,6 +357,11 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
         hasVehicle: params.hasVehicle,
         startDate: params.startDate,
         endDate: params.endDate,
+        currentStep: params.currentStep,
+        contactStatus: params.contactStatus,
+        documentStatus: params.documentStatus,
+        paymentStatus: params.paymentStatus,
+        invoiceStatus: params.invoiceStatus,
         sortBy: params.sortBy,
         sortOrder: params.sortOrder,
       }}

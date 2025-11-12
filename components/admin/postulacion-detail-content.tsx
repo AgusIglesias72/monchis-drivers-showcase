@@ -42,13 +42,14 @@ import {
   AlertTriangle,
   Download,
   Phone,
+  MoreVertical,
 } from "lucide-react"
 import { DocumentPreview } from "@/components/admin/document-preview"
 import { ManageOnboardingModal } from "@/components/admin/manage-onboarding-modal"
 import { PersonalInfoCard } from "@/components/admin/personal-info-card"
 import { InternalNotesCard } from "@/components/admin/internal-notes-card"
-import { 
-  PaymentSection, 
+import {
+  PaymentSection,
   OnboardingSection,
   StatusBadges
 } from "@/components/admin/postulacion-helpers"
@@ -66,6 +67,8 @@ import {
   rejectDocument,
   deleteDocument,
 } from "@/lib/actions/postulacion.actions"
+import { AssistedCompletionButton } from "./postulaciones/assisted-completion-button"
+import { DropdownMenu, DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuSeparator } from "../ui/dropdown-menu"
 
 interface PostulacionDetailContentProps {
   postulacion: any
@@ -73,30 +76,30 @@ interface PostulacionDetailContentProps {
 
 export function PostulacionDetailContent({ postulacion: initialPostulacion }: PostulacionDetailContentProps) {
   const router = useRouter()
-  
+
   // ✅ Usar un key basado en los datos de onboarding para forzar re-render
   const onboardingKey = JSON.stringify(initialPostulacion.onboardingAttendances)
-  
+
   const [postulacion, setPostulacion] = useState(initialPostulacion)
-  
+
   // ✅ Sincronizar cuando cambian los datos de onboarding
   useEffect(() => {
     setPostulacion(initialPostulacion)
   }, [onboardingKey, initialPostulacion])
-  
+
   const [isEditingPending, startEditingTransition] = useTransition()
   const [isNotePending, startNoteTransition] = useTransition()
   const [isDocumentPending, startDocumentTransition] = useTransition()
   const [isPaymentPending, startPaymentTransition] = useTransition()
   const [isRejectPending, startRejectTransition] = useTransition()
-  
+
   const [isEditing, setIsEditing] = useState(false)
   const [editedData, setEditedData] = useState(postulacion)
   const [notes, setNotes] = useState(postulacion.notes || [])
   const [documents, setDocuments] = useState(postulacion.documents || [])
-  
+
   const regularDocuments = documents.filter((doc: any) => doc.documentType !== 'PAYMENT_PROOF')
-  
+
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showProofPreview, setShowProofPreview] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
@@ -104,7 +107,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   const [rejectReason, setRejectReason] = useState('')
   const [showProofModal, setShowProofModal] = useState(false)
   const [uploadingProof, setUploadingProof] = useState(false)
-  
+
   const [paymentData, setPaymentData] = useState({
     paymentMethod: postulacion.equipmentPayments?.[0]?.paymentMethod || '',
     paymentNumber: postulacion.equipmentPayments?.[0]?.paymentNumber || '',
@@ -139,10 +142,10 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
     setPostulacion(updatedPostulacion)
     setIsEditing(false)
     toast.success('Guardando cambios...')
-    
+
     startEditingTransition(async () => {
       const result = await updatePostulacion(postulacion.id, editedData)
-      
+
       if (result.success) {
         toast.success(result.message)
         setTimeout(() => router.refresh(), 800)
@@ -171,13 +174,13 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         email: ''
       }
     }
-    
+
     setNotes([tempNote, ...notes])
     toast.success('Añadiendo nota...')
-    
+
     startNoteTransition(async () => {
       const result = await createNote(postulacion.id, content)
-      
+
       if (result.success) {
         setNotes([result.note, ...notes])
         toast.success('Nota añadida')
@@ -191,13 +194,13 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
 
   const handleEditNote = async (noteId: string, content: string) => {
     const previousNotes = [...notes]
-    setNotes(notes.map((note: any) => 
+    setNotes(notes.map((note: any) =>
       note.id === noteId ? { ...note, content } : note
     ))
-    
+
     startNoteTransition(async () => {
       const result = await updateNote(noteId, content)
-      
+
       if (result.success) {
         toast.success('Nota actualizada')
         setTimeout(() => router.refresh(), 800)
@@ -211,10 +214,10 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   const handleDeleteNote = async (noteId: string) => {
     const previousNotes = [...notes]
     setNotes(notes.filter((note: any) => note.id !== noteId))
-    
+
     startNoteTransition(async () => {
       const result = await deleteNote(noteId)
-      
+
       if (result.success) {
         toast.success('Nota eliminada')
         setTimeout(() => router.refresh(), 800)
@@ -231,7 +234,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
 
   const handleModalSuccess = (action?: 'cancel' | 'assign' | 'reassign') => {
     // ✅ NO mostrar toast aquí, el modal ya lo mostró
-    
+
     if (action === 'cancel') {
       // Si se canceló, limpiar el onboarding inmediatamente
       setPostulacion({
@@ -241,7 +244,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         onboardingScheduledAt: null
       })
     }
-    
+
     // Siempre hacer refresh para sincronizar con el servidor
     // El useEffect se encargará de actualizar el estado cuando lleguen los nuevos datos
     setTimeout(() => router.refresh(), 100)
@@ -250,10 +253,10 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   const handleDocumentDelete = (documentId: string) => {
     const previousDocs = [...documents]
     setDocuments(documents.filter((doc: any) => doc.id !== documentId))
-    
+
     startDocumentTransition(async () => {
       const result = await deleteDocument(documentId)
-      
+
       if (result.success) {
         toast.success('Documento eliminado')
         setTimeout(() => router.refresh(), 800)
@@ -266,14 +269,14 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
 
   const handleDocumentUpload = async (documentType: string, files: FileList) => {
     if (!files || files.length === 0) return
-    
+
     const file = files[0]
-    
+
     if (file.size > 5 * 1024 * 1024) {
       toast.error('El archivo no debe superar 5MB')
       return
     }
-    
+
     const formData = new FormData()
     formData.append('file', file)
     formData.append('formDriverId', postulacion.id)
@@ -286,7 +289,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
       status: 'PENDING',
       uploadedAt: new Date().toISOString(),
     }
-    
+
     setDocuments([...documents, tempDoc])
     toast.success('Subiendo documento...')
 
@@ -316,15 +319,15 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
 
   const handleDocumentApprove = (documentId: string) => {
     const previousDocs = [...documents]
-    setDocuments(documents.map((doc: any) => 
-      doc.id === documentId 
+    setDocuments(documents.map((doc: any) =>
+      doc.id === documentId
         ? { ...doc, status: 'APPROVED', reviewedAt: new Date().toISOString() }
         : doc
     ))
-    
+
     startDocumentTransition(async () => {
       const result = await approveDocument(documentId)
-      
+
       if (result.success) {
         toast.success('Documento aprobado')
         setTimeout(() => router.refresh(), 800)
@@ -337,20 +340,20 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
 
   const handleDocumentReject = (documentId: string, reason: string) => {
     const previousDocs = [...documents]
-    setDocuments(documents.map((doc: any) => 
-      doc.id === documentId 
-        ? { 
-            ...doc, 
-            status: 'REJECTED', 
-            rejectionReason: reason,
-            reviewedAt: new Date().toISOString() 
-          }
+    setDocuments(documents.map((doc: any) =>
+      doc.id === documentId
+        ? {
+          ...doc,
+          status: 'REJECTED',
+          rejectionReason: reason,
+          reviewedAt: new Date().toISOString()
+        }
         : doc
     ))
-    
+
     startDocumentTransition(async () => {
       const result = await rejectDocument(documentId, reason)
-      
+
       if (result.success) {
         toast.success('Documento rechazado')
         setTimeout(() => router.refresh(), 800)
@@ -363,24 +366,24 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
 
   const handleSavePayment = () => {
     const previousPayment = postulacion.equipmentPayments?.[0]
-    
+
     setPostulacion({
       ...postulacion,
       equipmentPayments: [{
         ...previousPayment,
         ...paymentData,
-        verifiedAt: paymentData.status === 'VERIFIED' 
+        verifiedAt: paymentData.status === 'VERIFIED'
           ? new Date().toISOString()
           : null
       }]
     })
-    
+
     setShowPaymentModal(false)
     toast.success('Guardando pago...')
-    
+
     startPaymentTransition(async () => {
       const result = await updatePayment(postulacion.id, paymentData)
-      
+
       if (result.success) {
         toast.success('Pago actualizado')
         setTimeout(() => router.refresh(), 800)
@@ -396,21 +399,21 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
       toast.error('Debes indicar el motivo del rechazo')
       return
     }
-    
+
     setPostulacion({
       ...postulacion,
       status: 'REJECTED'
     })
-    
+
     setShowRejectModal(false)
     toast.success('Rechazando postulación...')
-    
+
     startRejectTransition(async () => {
       const result = await updatePostulacion(postulacion.id, {
         status: 'REJECTED',
         rejectionReason: rejectReason
       })
-      
+
       if (result.success) {
         toast.success('Postulación rechazada')
         setTimeout(() => router.refresh(), 800)
@@ -424,7 +427,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   // ==================== HANDLER PARA SUBIR COMPROBANTE ====================
   const handleUploadPaymentProof = async (file: File) => {
     setUploadingProof(true)
-    
+
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -439,7 +442,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
 
       if (result.success) {
         toast.success('Comprobante subido exitosamente')
-        
+
         // Actualizar estado local optimísticamente
         setPostulacion({
           ...postulacion,
@@ -448,7 +451,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
             paymentProofUrl: result.proofUrl
           }]
         })
-        
+
         // Refresh para sincronizar con servidor
         setTimeout(() => router.refresh(), 500)
       } else {
@@ -477,7 +480,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
 
   return (
     <div className="flex flex-1 flex-col">
-      <AdminHeader 
+      <AdminHeader
         breadcrumbs={[
           { label: "Postulaciones", href: "/admin/postulaciones" },
           { label: postulacion.fullName }
@@ -495,9 +498,9 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
               <span>•</span>
               <span>Postulación iniciada el {new Date(postulacion.startedAt).toLocaleDateString('es-PY')}</span>
             </div>
-            
+
             {/* Badges de estado */}
-            <StatusBadges 
+            <StatusBadges
               formStatus={postulacion.status}
               paymentStatus={postulacion.equipmentPayments?.[0]?.status}
               onboardingStatus={postulacion.onboardingAttendances?.[0]?.status}
@@ -505,29 +508,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </div>
 
           <div className="flex flex-wrap justify-end items-center gap-2">
-            {/* ✅ NUEVO: Botón de Contactar con texto */}
-            {!isEditing && (
-              <ContactButton
-                driverId={postulacion.id}
-                driverName={postulacion.fullName || 'Driver'}
-                phoneNumber={postulacion.phoneNumber || ''}
-                contactStatus={contactStatus}
-                showLabel={true}
-                size="default"
-              />
-            )}
-
-            {!isEditing && (
-              <Button
-                variant="outline"
-                className="gap-2 hidden"
-                disabled
-              >
-                <Bot className="h-4 w-4" />
-                Verificar con IA
-              </Button>
-            )}
-
+            {/* Botón principal: Onboarding */}
             {!isEditing && hasScheduledOnboarding ? (
               <Button
                 onClick={handleScheduleOnboarding}
@@ -547,6 +528,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
               </Button>
             ) : null}
 
+            {/* Botón de Editar/Guardar/Cancelar */}
             {!isEditing ? (
               <Button
                 onClick={() => setIsEditing(true)}
@@ -587,22 +569,65 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
               </>
             )}
 
-            {/* ✅ MODIFICADO: Usar RejectButton con texto */}
+            {/* ✅ NUEVO: Dropdown de Acciones */}
             {!isEditing && (
-              <RejectButton
-                driverId={postulacion.id}
-                driverName={postulacion.fullName || 'Driver'}
-                isRejected={postulacion.status === 'REJECTED'}
-                onSuccess={handleActionSuccess}
-                showLabel={true}
-                size="default"
-              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <MoreVertical className="h-4 w-4" />
+                    Acciones
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {/* Contactar */}
+                  <DropdownMenuItem
+                    onSelect={(e) => e.preventDefault()}
+                    className="p-0"
+                  >
+                    <ContactButton
+                      driverId={postulacion.id}
+                      driverName={postulacion.fullName || 'Driver'}
+                      phoneNumber={postulacion.phoneNumber || ''}
+                      contactStatus={contactStatus}
+                      inDropdown={true} // ✅ NUEVO
+                    />
+                  </DropdownMenuItem>
+
+                  {/* Marcar como Asistida - solo si está IN_PROGRESS */}
+                  {postulacion.status === 'IN_PROGRESS' && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={(e) => e.preventDefault()}
+                        className="p-0"
+                      >
+                        <AssistedCompletionButton
+                          driverId={postulacion.id}
+                          driverName={postulacion.fullName || 'Driver'}
+                          isAssisted={postulacion.assistedCompletion || false}
+                          onSuccess={handleActionSuccess}
+                        />
+                      </DropdownMenuItem>
+                    </>
+                  )}
+
+                  <DropdownMenuSeparator />
+
+                  {/* Rechazar/Habilitar */}
+                  <RejectButton
+                    driverId={postulacion.id}
+                    driverName={postulacion.fullName || 'Driver'}
+                    isRejected={postulacion.status === 'REJECTED'}
+                    onSuccess={handleActionSuccess}
+                  />
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-          <PersonalInfoCard 
+          <PersonalInfoCard
             postulacion={postulacion}
             editedData={editedData}
             isEditing={isEditing}
@@ -617,7 +642,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              <DocumentPreview 
+              <DocumentPreview
                 documents={regularDocuments}
                 isEditing={true}
                 onDocumentDelete={handleDocumentDelete}
@@ -673,7 +698,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                 <DialogHeader>
                   <DialogTitle>Comprobante de Pago</DialogTitle>
                 </DialogHeader>
-                
+
                 <div className="overflow-auto">
                   {postulacion.equipmentPayments[0].paymentProofUrl.toLowerCase().endsWith('.pdf') ? (
                     <iframe
@@ -689,7 +714,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                     />
                   )}
                 </div>
-                
+
                 <div className="flex justify-end gap-2">
                   <Button
                     variant="outline"
@@ -714,7 +739,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              <OnboardingSection 
+              <OnboardingSection
                 attendance={postulacion.onboardingAttendances?.[0]}
                 status={postulacion.onboardingStatus}
                 postulacionId={postulacion.id}
@@ -743,7 +768,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
               Indica el motivo del rechazo. Esta acción no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="reject-reason">Motivo del rechazo</Label>
@@ -758,14 +783,14 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </div>
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setShowRejectModal(false)}
               className="cursor-pointer"
             >
               Cancelar
             </Button>
-            <Button 
+            <Button
               variant="destructive"
               onClick={handleReject}
               disabled={!rejectReason.trim() || isRejectPending}
@@ -892,15 +917,15 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </div>
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setShowPaymentModal(false)}
               disabled={isPaymentPending}
               className="cursor-pointer"
             >
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleSavePayment}
               disabled={isPaymentPending}
               className="cursor-pointer"
@@ -925,8 +950,8 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </DialogHeader>
           {postulacion.equipmentPayments?.[0]?.paymentProofUrl && (
             <div className="relative aspect-video">
-              <Image 
-                src={postulacion.equipmentPayments[0].paymentProofUrl} 
+              <Image
+                src={postulacion.equipmentPayments[0].paymentProofUrl}
                 alt="Comprobante de pago"
                 width={800}
                 height={600}

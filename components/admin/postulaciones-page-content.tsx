@@ -8,9 +8,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PostulacionesKPIs } from "@/components/admin/postulaciones-kpis"
 import { PostulacionesTableExpandable } from "@/components/admin/postulaciones-table-expandable"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+} from "@/components/ui/sheet"
 import {
   Select,
   SelectContent,
@@ -20,20 +30,33 @@ import {
 } from "@/components/ui/select"
 import {
   Search,
-  Download,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  Calendar,
+  Filter,
+  X,
+  Calendar as CalendarIcon,
   ClipboardCheck,
   Clock,
   FileCheck,
-  X,
+  Loader2,
   XCircle,
+  HelpCircle,
 } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { getContactStatus } from "@/lib/utils/contact-status.utils"
+import type { PostulacionFilters } from "@/types/postulacion-filters.types"
+import {
+  CURRENT_STEP_OPTIONS,
+  CONTACT_STATUS_OPTIONS,
+  DOCUMENT_STATUS_OPTIONS,
+  PAYMENT_STATUS_OPTIONS,
+  INVOICE_STATUS_OPTIONS,
+} from "@/types/postulacion-filters.types"
 
 interface PostulacionesPageContentProps {
   stats: any
@@ -42,16 +65,7 @@ interface PostulacionesPageContentProps {
   currentPage: number
   totalPages: number
   hasMore: boolean
-  currentFilters: {
-    status?: string
-    search?: string
-    onboardingStatus?: string
-    hasVehicle?: string
-    startDate?: string
-    endDate?: string
-    sortBy?: string
-    sortOrder?: string
-  }
+  currentFilters: PostulacionFilters
 }
 
 type QuickFilter = 'all' | 'scheduled' | 'pending-schedule' | 'review' | 'pending-completion' | 'rejected'
@@ -67,16 +81,21 @@ export function PostulacionesPageContent({
 }: PostulacionesPageContentProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [isSheetOpen, setIsSheetOpen] = useState(false)
 
   // Estados locales para los filtros
   const [searchTerm, setSearchTerm] = useState(currentFilters.search || '')
   const [statusFilter, setStatusFilter] = useState(currentFilters.status || 'all')
   const [onboardingStatusFilter, setOnboardingStatusFilter] = useState(currentFilters.onboardingStatus || 'all')
+  const [currentStepFilter, setCurrentStepFilter] = useState(currentFilters.currentStep || 'all')
+  const [contactStatusFilter, setContactStatusFilter] = useState(currentFilters.contactStatus || 'all')
+  const [documentStatusFilter, setDocumentStatusFilter] = useState(currentFilters.documentStatus || 'all')
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState(currentFilters.paymentStatus || 'all')
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState(currentFilters.invoiceStatus || 'all')
   const [startDate, setStartDate] = useState(currentFilters.startDate || '')
   const [endDate, setEndDate] = useState(currentFilters.endDate || '')
   const [sortBy, setSortBy] = useState(currentFilters.sortBy || 'createdAt')
   const [sortOrder, setSortOrder] = useState(currentFilters.sortOrder || 'desc')
-  const [isExporting, setIsExporting] = useState(false)
   const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all')
 
   const postulacionesWithContactStatus = useMemo(() => {
@@ -135,6 +154,11 @@ export function PostulacionesPageContent({
     } else {
       if (statusFilter !== 'all') params.set('status', statusFilter)
       if (onboardingStatusFilter !== 'all') params.set('onboardingStatus', onboardingStatusFilter)
+      if (currentStepFilter !== 'all') params.set('currentStep', currentStepFilter)
+      if (contactStatusFilter !== 'all') params.set('contactStatus', contactStatusFilter)
+      if (documentStatusFilter !== 'all') params.set('documentStatus', documentStatusFilter)
+      if (paymentStatusFilter !== 'all') params.set('paymentStatus', paymentStatusFilter)
+      if (invoiceStatusFilter !== 'all') params.set('invoiceStatus', invoiceStatusFilter)
     }
 
     if (searchTerm) params.set('search', searchTerm)
@@ -149,7 +173,7 @@ export function PostulacionesPageContent({
     startTransition(() => {
       router.push(`/admin/postulaciones${queryString ? `?${queryString}` : ''}`, { scroll: false })
     })
-  }, [router, statusFilter, onboardingStatusFilter, searchTerm, startDate, endDate, sortBy, sortOrder])
+  }, [router, statusFilter, onboardingStatusFilter, currentStepFilter, contactStatusFilter, documentStatusFilter, paymentStatusFilter, invoiceStatusFilter, searchTerm, startDate, endDate, sortBy, sortOrder])
 
   const handleQuickFilter = (filter: QuickFilter) => {
     setActiveQuickFilter(filter)
@@ -157,6 +181,11 @@ export function PostulacionesPageContent({
     if (filter !== 'all') {
       setStatusFilter('all')
       setOnboardingStatusFilter('all')
+      setCurrentStepFilter('all')
+      setContactStatusFilter('all')
+      setDocumentStatusFilter('all')
+      setPaymentStatusFilter('all')
+      setInvoiceStatusFilter('all')
     }
 
     applyFilters(1, filter)
@@ -166,10 +195,20 @@ export function PostulacionesPageContent({
     applyFilters(1)
   }
 
+  const handleApplyFilters = () => {
+    setIsSheetOpen(false)
+    applyFilters(1)
+  }
+
   const handleClearFilters = () => {
     setSearchTerm('')
     setStatusFilter('all')
     setOnboardingStatusFilter('all')
+    setCurrentStepFilter('all')
+    setContactStatusFilter('all')
+    setDocumentStatusFilter('all')
+    setPaymentStatusFilter('all')
+    setInvoiceStatusFilter('all')
     setStartDate('')
     setEndDate('')
     setSortBy('createdAt')
@@ -181,73 +220,33 @@ export function PostulacionesPageContent({
     })
   }
 
-  const setDatePreset = (preset: 'today' | 'week' | 'month') => {
-    const today = new Date()
-    const todayStr = today.toISOString().split('T')[0]
-    
-    switch (preset) {
-      case 'today':
-        setStartDate(todayStr)
-        setEndDate(todayStr)
-        break
-      case 'week':
-        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-        setStartDate(weekAgo.toISOString().split('T')[0])
-        setEndDate(todayStr)
-        break
-      case 'month':
-        const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-        setStartDate(monthAgo.toISOString().split('T')[0])
-        setEndDate(todayStr)
-        break
-    }
-    
-    setTimeout(() => applyFilters(1), 100)
-  }
+  // Contar filtros activos (excluyendo búsqueda y ordenamiento)
+  const activeFiltersCount = [
+    statusFilter !== 'all',
+    onboardingStatusFilter !== 'all',
+    currentStepFilter !== 'all',
+    contactStatusFilter !== 'all',
+    documentStatusFilter !== 'all',
+    paymentStatusFilter !== 'all',
+    invoiceStatusFilter !== 'all',
+    startDate !== '',
+    endDate !== '',
+  ].filter(Boolean).length
 
-  const hasActiveFilters = searchTerm || statusFilter !== 'all' || onboardingStatusFilter !== 'all' || startDate || endDate
+  const hasActiveFilters = 
+    searchTerm || 
+    statusFilter !== 'all' || 
+    onboardingStatusFilter !== 'all' || 
+    currentStepFilter !== 'all' ||
+    contactStatusFilter !== 'all' ||
+    documentStatusFilter !== 'all' ||
+    paymentStatusFilter !== 'all' ||
+    invoiceStatusFilter !== 'all' ||
+    startDate || 
+    endDate
 
   const handlePageChange = (newPage: number) => {
     applyFilters(newPage, activeQuickFilter === 'all' ? undefined : activeQuickFilter)
-  }
-
-  const handleExport = async () => {
-    setIsExporting(true)
-
-    try {
-      const response = await fetch('/api/admin/postulaciones/export', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: statusFilter !== 'all' ? statusFilter : undefined,
-          searchTerm: searchTerm || undefined,
-          onboardingStatus: onboardingStatusFilter !== 'all' ? onboardingStatusFilter : undefined,
-          startDate: startDate || undefined,
-          endDate: endDate || undefined,
-        }),
-      })
-
-      if (!response.ok) throw new Error('Error al exportar')
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `postulaciones_${new Date().toISOString().split('T')[0]}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-
-      toast.success('Datos exportados correctamente')
-    } catch (error) {
-      console.error('Error al exportar:', error)
-      toast.error('Error al exportar los datos')
-    } finally {
-      setIsExporting(false)
-    }
   }
 
   return (
@@ -268,150 +267,417 @@ export function PostulacionesPageContent({
 
         <PostulacionesKPIs stats={stats} />
 
-        {/* ✅ FILTROS COMPACTOS */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Filtros de Búsqueda</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {/* Primera fila: Búsqueda + Filtros principales */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Búsqueda */}
-              <div className="lg:col-span-1">
-                <Label htmlFor="search" className="text-xs text-muted-foreground mb-1.5 block">
-                  Búsqueda
-                </Label>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    id="search"
-                    placeholder="Nombre, cédula, teléfono, email..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    className="pl-8 pr-8 h-8 text-sm "
-                    disabled={isPending}
-                  />
-                  {searchTerm && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0.5 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-                      onClick={() => {
-                        setSearchTerm('')
-                        setTimeout(() => applyFilters(1), 100)
-                      }}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Estado postulación */}
-              <div>
-                <Label htmlFor="status" className="text-xs text-muted-foreground mb-1.5 block ">
-                  Estado postulación
-                </Label>
-                <Select 
-                  value={statusFilter} 
-                  onValueChange={(value) => {
-                    setStatusFilter(value)
-                    setActiveQuickFilter('all')
-                    setTimeout(() => applyFilters(1), 100)
-                  }}
-                  disabled={isPending}
-                >
-                  <SelectTrigger id="status" className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">📋 Todos los estados</SelectItem>
-                    <SelectItem value="COMPLETED">✅ Completadas</SelectItem>
-                    <SelectItem value="IN_PROGRESS">⏳ En Progreso</SelectItem>
-                    <SelectItem value="ABANDONED">🚫 Abandonadas</SelectItem>
-                    <SelectItem value="REJECTED">❌ Rechazadas</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Onboarding */}
-              <div>
-                <Label htmlFor="onboarding" className="text-xs text-muted-foreground mb-1.5 block">
-                  Onboarding
-                </Label>
-                <Select 
-                  value={onboardingStatusFilter} 
-                  onValueChange={(value) => {
-                    setOnboardingStatusFilter(value)
-                    setActiveQuickFilter('all')
-                    setTimeout(() => applyFilters(1), 100)
-                  }}
-                  disabled={isPending}
-                >
-                  <SelectTrigger id="onboarding" className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">📋 Todos</SelectItem>
-                    <SelectItem value="pending">⏰ Pendiente</SelectItem>
-                    <SelectItem value="scheduled">📅 Agendado</SelectItem>
-                    <SelectItem value="completed">✓ Completado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Ordenar por */}
-              <div>
-                <Label htmlFor="sortBy" className="text-xs text-muted-foreground mb-1.5 block">
-                  Ordenar por
-                </Label>
-                <Select 
-                  value={sortBy} 
-                  onValueChange={(value) => {
-                    setSortBy(value)
-                    setTimeout(() => applyFilters(1), 100)
-                  }}
-                  disabled={isPending}
-                >
-                  <SelectTrigger id="sortBy" className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="createdAt">🕐 Más recientes</SelectItem>
-                    <SelectItem value="fullName">🔤 Nombre A-Z</SelectItem>
-                    <SelectItem value="city">📍 Ciudad A-Z</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-
-
-            {/* Footer - más compacto */}
-            {hasActiveFilters && (
-              <div className="flex items-center justify-between pt-2 border-t">
-                <Button
-                  variant="ghost"
-                  onClick={handleClearFilters}
-                  size="sm"
-                  className="h-7 text-xs"
-                  disabled={isPending}
-                >
-                  <X className="h-3 w-3 mr-1.5" />
-                  Limpiar todos los filtros
-                </Button>
-                
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  <span>{total} resultado{total !== 1 ? 's' : ''}</span>
-                </div>
-              </div>
+        {/* ✅ BARRA DE FILTROS COMPACTA */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Búsqueda */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nombre, cédula, teléfono, email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="pl-9 pr-9 h-10"
+              disabled={isPending}
+            />
+            {searchTerm && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                onClick={() => {
+                  setSearchTerm('')
+                  setTimeout(() => applyFilters(1), 100)
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
             )}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Tabla con tabs */}
+          {/* Botón de Filtros con Sheet */}
+          <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="gap-2 relative">
+                <Filter className="h-4 w-4" />
+                Filtros
+                {activeFiltersCount > 0 && (
+                  <Badge variant="default" className="ml-1 h-5 min-w-5 px-1 text-xs">
+                    {activeFiltersCount}
+                  </Badge>
+                )}
+              </Button>
+            </SheetTrigger>
+            <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-4">
+              <SheetHeader className="pb-2 border-b border-gray-200 mb-3 px-0">
+                <SheetTitle className="text-lg font-semibold text-gray-900">Filtros</SheetTitle>
+                <SheetDescription className="text-xs text-gray-500 mt-1">
+                  Selecciona los criterios para filtrar las postulaciones
+                </SheetDescription>
+              </SheetHeader>
+
+              <TooltipProvider>
+                <div className="space-y-4">
+                  {/* Sección: Filtros de Fecha */}
+                  <div className="space-y-2.5">
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Rango de Fechas</h3>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="sheet-start-date" className="text-xs font-medium text-gray-600">
+                            Fecha Desde
+                          </Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Filtra postulaciones desde esta fecha</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Input
+                          id="sheet-start-date"
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          className="h-9 text-sm w-full cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="sheet-end-date" className="text-xs font-medium text-gray-600">
+                            Fecha Hasta
+                          </Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Filtra postulaciones hasta esta fecha</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Input
+                          id="sheet-end-date"
+                          type="date"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          className="h-9 text-sm w-full cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sección: Estado General */}
+                  <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Estado General</h3>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="sheet-status" className="text-xs font-medium text-gray-600">
+                            Estado de Postulación
+                          </Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Filtra por el estado general de la postulación</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Select 
+                          value={statusFilter} 
+                          onValueChange={(value) => setStatusFilter(value as any)}
+                        >
+                          <SelectTrigger id="sheet-status" className="h-9 text-sm w-full cursor-pointer">
+                            <SelectValue placeholder="Todos los estados" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all" className="cursor-pointer">Todos</SelectItem>
+                            <SelectItem value="COMPLETED" className="cursor-pointer">Completadas</SelectItem>
+                            <SelectItem value="IN_PROGRESS" className="cursor-pointer">En Progreso</SelectItem>
+                            <SelectItem value="ASISTIDA" className="cursor-pointer">Asistidas</SelectItem>
+                            <SelectItem value="ABANDONED" className="cursor-pointer">Abandonadas</SelectItem>
+                            <SelectItem value="REJECTED" className="cursor-pointer">Rechazadas</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="sheet-step" className="text-xs font-medium text-gray-600">
+                            Paso Actual
+                          </Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Filtra por el paso actual del proceso</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Select 
+                          value={currentStepFilter} 
+                          onValueChange={(value) => setCurrentStepFilter(value as any)}
+                        >
+                          <SelectTrigger id="sheet-step" className="h-9 text-sm w-full cursor-pointer">
+                            <SelectValue placeholder="Todos los pasos" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all" className="cursor-pointer">Todos los pasos</SelectItem>
+                            <SelectItem value="1" className="cursor-pointer">Paso 1/6</SelectItem>
+                            <SelectItem value="2" className="cursor-pointer">Paso 2/6</SelectItem>
+                            <SelectItem value="3" className="cursor-pointer">Paso 3/6</SelectItem>
+                            <SelectItem value="4" className="cursor-pointer">Paso 4/6</SelectItem>
+                            <SelectItem value="5" className="cursor-pointer">Paso 5/6</SelectItem>
+                            <SelectItem value="6" className="cursor-pointer">Paso 6/6</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sección: Proceso de Onboarding */}
+                  <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Proceso de Onboarding</h3>
+                    
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="sheet-onboarding" className="text-xs font-medium text-gray-600">
+                          Estado de Onboarding
+                        </Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Filtra por el estado de la capacitación</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Select 
+                        value={onboardingStatusFilter} 
+                        onValueChange={(value) => setOnboardingStatusFilter(value as any)}
+                      >
+                        <SelectTrigger id="sheet-onboarding" className="h-9 text-sm w-full cursor-pointer">
+                          <SelectValue placeholder="Todos los estados" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all" className="cursor-pointer">Todos</SelectItem>
+                          <SelectItem value="pending" className="cursor-pointer">Pendiente</SelectItem>
+                          <SelectItem value="scheduled" className="cursor-pointer">Agendado</SelectItem>
+                          <SelectItem value="completed" className="cursor-pointer">Completado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Sección: Estados de Proceso */}
+                  <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Estados de Proceso</h3>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="sheet-contact" className="text-xs font-medium text-gray-600">
+                            Estado de Contacto
+                          </Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Filtra por si el driver ha sido contactado</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Select 
+                          value={contactStatusFilter} 
+                          onValueChange={(value) => setContactStatusFilter(value as any)}
+                        >
+                          <SelectTrigger id="sheet-contact" className="h-9 text-sm w-full cursor-pointer">
+                            <SelectValue placeholder="Todos los estados" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all" className="cursor-pointer">Todos</SelectItem>
+                            <SelectItem value="contacted" className="cursor-pointer">Contactado</SelectItem>
+                            <SelectItem value="pending" className="cursor-pointer">Pendiente</SelectItem>
+                            <SelectItem value="not-applicable" className="cursor-pointer">No aplica</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="sheet-docs" className="text-xs font-medium text-gray-600">
+                            Estado de Documentos
+                          </Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Filtra por el estado de los documentos</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Select 
+                          value={documentStatusFilter} 
+                          onValueChange={(value) => setDocumentStatusFilter(value as any)}
+                        >
+                          <SelectTrigger id="sheet-docs" className="h-9 text-sm w-full cursor-pointer">
+                            <SelectValue placeholder="Todos los estados" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all" className="cursor-pointer">Todos</SelectItem>
+                            <SelectItem value="completos" className="cursor-pointer">Completos</SelectItem>
+                            <SelectItem value="en-revision" className="cursor-pointer">En Revisión</SelectItem>
+                            <SelectItem value="pendientes" className="cursor-pointer">Pendientes</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="sheet-payment" className="text-xs font-medium text-gray-600">
+                            Estado de Pago
+                          </Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Filtra por el estado de verificación de pago</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Select 
+                          value={paymentStatusFilter} 
+                          onValueChange={(value) => setPaymentStatusFilter(value as any)}
+                        >
+                          <SelectTrigger id="sheet-payment" className="h-9 text-sm w-full cursor-pointer">
+                            <SelectValue placeholder="Todos los estados" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all" className="cursor-pointer">Todos</SelectItem>
+                            <SelectItem value="verificado" className="cursor-pointer">Verificado</SelectItem>
+                            <SelectItem value="en-verificacion" className="cursor-pointer">En Verificación</SelectItem>
+                            <SelectItem value="pendiente" className="cursor-pointer">Pendiente</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="sheet-invoice" className="text-xs font-medium text-gray-600">
+                            Estado de Facturación
+                          </Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Filtra por el estado de facturación</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Select 
+                          value={invoiceStatusFilter} 
+                          onValueChange={(value) => setInvoiceStatusFilter(value as any)}
+                        >
+                          <SelectTrigger id="sheet-invoice" className="h-9 text-sm w-full cursor-pointer">
+                            <SelectValue placeholder="Todos los estados" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all" className="cursor-pointer">Todos</SelectItem>
+                            <SelectItem value="completa" className="cursor-pointer">Completa</SelectItem>
+                            <SelectItem value="pendiente" className="cursor-pointer">Pendiente</SelectItem>
+                            <SelectItem value="na" className="cursor-pointer">No Aplica</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sección: Ordenamiento */}
+                  <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Ordenamiento</h3>
+                    
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="sheet-sort" className="text-xs font-medium text-gray-600">
+                          Ordenar Por
+                        </Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Selecciona cómo ordenar los resultados</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Select 
+                        value={sortBy} 
+                        onValueChange={(value) => setSortBy(value as any)}
+                      >
+                        <SelectTrigger id="sheet-sort" className="h-9 text-sm w-full cursor-pointer">
+                          <SelectValue placeholder="Más recientes" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="createdAt" className="cursor-pointer">Más recientes</SelectItem>
+                          <SelectItem value="fullName" className="cursor-pointer">Nombre A-Z</SelectItem>
+                          <SelectItem value="city" className="cursor-pointer">Ciudad A-Z</SelectItem>
+                          <SelectItem value="currentStep" className="cursor-pointer">Por paso</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              </TooltipProvider>
+
+              <SheetFooter className="gap-2 pt-4 mt-4 border-t border-gray-200">
+                <Button
+                  variant="outline"
+                  onClick={handleClearFilters}
+                  className="flex-1 h-9 text-sm"
+                  disabled={!hasActiveFilters}
+                >
+                  <X className="h-3.5 w-3.5 mr-1.5" />
+                  Limpiar
+                </Button>
+                <Button
+                  onClick={handleApplyFilters}
+                  className="flex-1 h-9 text-sm"
+                  disabled={isPending}
+                >
+                  {isPending ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      Aplicando...
+                    </>
+                  ) : (
+                    'Aplicar Filtros'
+                  )}
+                </Button>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
+
+          {/* Contador de resultados */}
+          <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 rounded-lg text-sm whitespace-nowrap">
+            <span className="font-semibold text-foreground">{total}</span>
+            <span className="text-muted-foreground">resultado{total !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+
+        {/* Quick Filters (Tabs) */}
         <div className="relative">
           <div className="flex flex-wrap items-end gap-1 pb-0">
             <button
@@ -437,7 +703,7 @@ export function PostulacionesPageContent({
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
-              <Calendar className="h-3.5 w-3.5" />
+              <CalendarIcon className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Agendados</span>
             </button>
             <button
@@ -498,38 +764,8 @@ export function PostulacionesPageContent({
             <Card className="rounded-t-none">
               <CardContent className="p-6">
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4 pb-3 border-b">
-                    <Skeleton className="h-4 w-4" />
-                    <Skeleton className="h-4 w-40" />
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-4 w-28" />
-                    <Skeleton className="h-4 w-28" />
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-4 w-20 ml-auto" />
-                  </div>
-                  
                   {Array.from({ length: 10 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-4 py-4 border-b">
-                      <Skeleton className="h-4 w-4" />
-                      <div className="space-y-2 flex-1">
-                        <Skeleton className="h-4 w-48" />
-                        <Skeleton className="h-3 w-32" />
-                      </div>
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-6 w-24 rounded-full" />
-                      <div className="flex gap-2">
-                        <Skeleton className="h-8 w-8 rounded-full" />
-                        <Skeleton className="h-8 w-8 rounded-full" />
-                        <Skeleton className="h-8 w-8 rounded-full" />
-                      </div>
-                      <Skeleton className="h-6 w-20 rounded-full" />
-                      <Skeleton className="h-3 w-16" />
-                      <div className="flex gap-2">
-                        <Skeleton className="h-8 w-8 rounded" />
-                        <Skeleton className="h-8 w-8 rounded" />
-                      </div>
-                    </div>
+                    <Skeleton key={i} className="h-16 w-full" />
                   ))}
                 </div>
               </CardContent>

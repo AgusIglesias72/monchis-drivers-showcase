@@ -17,10 +17,8 @@ export function calculatePostulacionBadges(postulacion: any): PostulacionBadges 
   const badges: PostulacionBadgeType[] = []
   let priority = 0
 
-  // Solo procesar si la postulación está completada
-  if (postulacion.status !== 'COMPLETED') {
-    return { badges: [], priority: 0 }
-  }
+  // ✅ REMOVIDO: Ya no validamos si está completada
+  // Los badges se muestran siempre, solo cambia el color según el estado
 
   // 1️⃣ DOCUMENTOS - SIEMPRE mostrar
   const docBadge = getDocumentsBadge(postulacion)
@@ -117,24 +115,29 @@ function getInvoiceBadge(postulacion: any): BadgeType {
   const financial = postulacion.financialService
   const documents = postulacion.documents || []
   
-  // Si no hay registro financiero, consideramos pendiente
-  if (!financial) {
-    return 'FACTURACION_PENDIENTE' // Naranja
-  }
-
-  // Si NO puede facturar → N/A (gris)
-  if (!financial.hasInvoice) {
-    return 'FACTURACION_NA' // Gris
-  }
-
-  // Si puede facturar, verificar si existe el documento TAX_COMPLIANCE
-  const hasTaxDoc = documents.some((d: any) => d.documentType === 'TAX_COMPLIANCE')
+  // Buscar documento TAX_COMPLIANCE
+  const taxDoc = documents.find((d: any) => d.documentType === 'TAX_COMPLIANCE')
   
-  // Si existe el documento → Verde
-  if (hasTaxDoc) {
-    return 'FACTURACION_COMPLETA' // Verde
+  // Si existe el documento TAX_COMPLIANCE y está aprobado → Verde
+  if (taxDoc && taxDoc.status === 'APPROVED') {
+    return 'FACTURACION_COMPLETA'
+  }
+  
+  // Si existe pero no está aprobado (PENDING, IN_REVIEW) → Amarillo
+  if (taxDoc && (taxDoc.status === 'PENDING' || taxDoc.status === 'IN_REVIEW')) {
+    return 'FACTURACION_PENDIENTE' // Podríamos crear 'FACTURACION_EN_REVISION' si querés
+  }
+  
+  // Si NO hay registro financiero → Pendiente
+  if (!financial) {
+    return 'FACTURACION_PENDIENTE'
   }
 
-  // Si no existe → Naranja
-  return 'FACTURACION_PENDIENTE' // Naranja
+  // Si NO puede facturar (hasInvoice = false) → N/A (gris)
+  if (!financial.hasInvoice) {
+    return 'FACTURACION_NA'
+  }
+
+  // Si puede facturar pero no tiene documento → Naranja
+  return 'FACTURACION_PENDIENTE'
 }

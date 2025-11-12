@@ -46,7 +46,7 @@ export function ExternalDriversReportCard({ onJobStart }: ExternalDriversReportC
   useEffect(() => {
     if (!startDate) setStartDate(getLastMonday())
     if (!endDate) setEndDate(getLastSunday())
-  }, [])
+  }, [startDate, endDate])
 
   const handleStartProcess = async () => {
     if (!startDate || !endDate) {

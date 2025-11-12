@@ -54,7 +54,7 @@ import {
   UserCog,
   Filter,
 } from 'lucide-react'
-import { checkInAttendee, markAttendeeNoShow, confirmAttendee } from '@/lib/actions/onboarding.actions'
+import { checkInAttendee, markAttendeeNoShow } from '@/lib/actions/onboarding.actions'
 import { toast } from 'sonner'
 import { CancelAttendeeDialog } from './cancel-attendee-dialog'
 import { DriverManagementSheet } from './driver-management-sheet'
@@ -118,17 +118,6 @@ export function AttendeesManagementSection({
     setLoading(null)
   }
 
-  const handleConfirm = async (attendeeId: string) => {
-    setLoading(attendeeId)
-    const result = await confirmAttendee(attendeeId)
-    if (result.success) {
-      toast.success('Confirmado')
-      onRefresh()
-    } else {
-      toast.error(result.error || 'Error')
-    }
-    setLoading(null)
-  }
 
   const handleCancelClick = (attendee: any) => {
     setAttendeeToCancel(attendee)
@@ -404,25 +393,7 @@ export function AttendeesManagementSection({
 
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {/* Botón de Confirmar (solo ícono) */}
-                          {attendee.status === 'INVITED' && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              onClick={() => handleConfirm(attendee.id)}
-                              disabled={loading === attendee.id}
-                              title="Confirmar asistencia"
-                            >
-                              {loading === attendee.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <CheckCircle className="h-4 w-4" />
-                              )}
-                            </Button>
-                          )}
-
-                          {/* Botón de Check-in (solo ícono) */}
+                          {/* Botón de Check-in (Marcar Asistencia) */}
                           {(attendee.status === 'INVITED' || attendee.status === 'CONFIRMED') && (
                             <Button
                               variant="ghost"

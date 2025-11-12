@@ -60,7 +60,7 @@ class OnboardingService {
         attendees: true
       },
       orderBy: {
-        scheduledDate: 'asc'
+        scheduledDate: 'asc' // Ordenar de más próximo a más lejano (ascendente)
       }
     })
   }
