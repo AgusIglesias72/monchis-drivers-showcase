@@ -1,13 +1,11 @@
 // components/admin/comunicacion/MessageTestForm.tsx
 'use client';
 
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -15,457 +13,463 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Send, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
-
-// Schema de validación
-const messageSchema = z.object({
-  phone: z.string().min(1, 'El teléfono es requerido'),
-  name: z.string().min(1, 'El nombre es requerido'),
-  type: z.string().min(1, 'Selecciona un tipo de mensaje'),
-  step: z.string().optional(),
-  // Campo para mensaje personalizado
-  customMessage: z.string().optional(),
-  // Campos dinámicos para onboarding_reminder
-  date: z.string().optional(),
-  time: z.string().optional(),
-  location: z.string().optional(),
-  meetingUrl: z.string().optional(),
-  // Campos dinámicos para application_received
-  applicationId: z.string().optional(),
-  estimatedResponseTime: z.string().optional(),
-  // Campos dinámicos para capacitation_reminder
-  capacitationName: z.string().optional(),
-  duration: z.string().optional(),
-  // Campos dinámicos para form_incomplete
-  formUrl: z.string().optional(),
-});
-
-type MessageFormData = z.infer<typeof messageSchema>;
-
-const MESSAGE_TYPES = [
-  { value: 'WELCOME', label: 'Mensaje de Bienvenida' },
-  { value: 'APPLICATION_RECEIVED', label: 'Postulación Recibida' },
-  { value: 'FORM_INCOMPLETE', label: 'Formulario Incompleto' },
-  { value: 'ONBOARDING_REMINDER', label: 'Recordatorio de Onboarding' },
-  { value: 'CAPACITATION_REMINDER', label: 'Recordatorio de Capacitación' },
-  { value: 'CUSTOM', label: '✏️ Mensaje Personalizado' },
-];
-
-const FORM_STEPS = [
-  { value: 'personal_info', label: 'Datos Personales' },
-  { value: 'documents', label: 'Documentación' },
-  { value: 'vehicle_info', label: 'Información del Vehículo' },
-  { value: 'bank_info', label: 'Información Bancaria' },
-  { value: 'availability', label: 'Disponibilidad' },
-  { value: 'references', label: 'Referencias' },
-];
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Loader2, Send, Info, CheckCircle2, AlertCircle, AlertTriangle, FileText, MessageSquare, Check } from 'lucide-react';
+import {
+  ACTIVE_MESSAGE_TYPES,
+  FORM_STEPS,
+  PHONE_EXAMPLES,
+  VALIDATION_MESSAGES,
+  getActiveMessageTypes,
+  getFormSteps,
+  requiresStep,
+} from '@/lib/constants/whatsapp-messages';
 
 interface MessageTestFormProps {
   onChange?: (data: any) => void;
   onMessageSent?: () => void;
 }
 
+type ResultType = 'success' | 'error' | 'warning';
+
 export function MessageTestForm({ onChange, onMessageSent }: MessageTestFormProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedType, setSelectedType] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState<{
+    type: ResultType;
+    title: string;
+    message: string;
+  } | null>(null);
 
-  const form = useForm<MessageFormData>({
-    resolver: zodResolver(messageSchema),
-    defaultValues: {
-      phone: '',
-      name: '',
-      type: '',
-      estimatedResponseTime: '48 horas',
-      duration: '2 horas',
-    },
-  });
+  const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [type, setType] = useState('');
+  const [step, setStep] = useState('');
+  const [customMessage, setCustomMessage] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Notificar cambios al padre cuando cambian los valores específicos
-  const watchedValues = form.watch();
-  
-  React.useEffect(() => {
-    if (onChange) {
-      onChange(watchedValues);
+  const notifyChange = (updates: any) => {
+    const formData = {
+      phone,
+      name,
+      type,
+      step,
+      customMessage,
+      ...updates,
+    };
+    onChange?.(formData);
+  };
+
+  const handlePhoneChange = (value: string) => {
+    setPhone(value);
+    notifyChange({ phone: value });
+    if (errors.phone) {
+      setErrors((prev) => ({ ...prev, phone: '' }));
     }
-  }, [
-    watchedValues.phone, 
-    watchedValues.name, 
-    watchedValues.type, 
-    watchedValues.step, 
-    watchedValues.date, 
-    watchedValues.time, 
-    watchedValues.location, 
-    watchedValues.meetingUrl, 
-    watchedValues.applicationId, 
-    watchedValues.estimatedResponseTime, 
-    watchedValues.capacitationName, 
-    watchedValues.duration, 
-    watchedValues.formUrl
-  ]);
+  };
 
-  const onSubmit = async (data: MessageFormData) => {
-    setIsSubmitting(true);
+  const handleNameChange = (value: string) => {
+    setName(value);
+    notifyChange({ name: value });
+    if (errors.name) {
+      setErrors((prev) => ({ ...prev, name: '' }));
+    }
+  };
+
+  const handleTypeChange = (value: string) => {
+    setType(value);
+    setStep('');
+    setCustomMessage('');
+    notifyChange({ type: value, step: '', customMessage: '' });
+    if (errors.type) {
+      setErrors((prev) => ({ ...prev, type: '' }));
+    }
+  };
+
+  const handleStepChange = (value: string) => {
+    setStep(value);
+    notifyChange({ step: value });
+    if (errors.step) {
+      setErrors((prev) => ({ ...prev, step: '' }));
+    }
+  };
+
+  const handleCustomMessageChange = (value: string) => {
+    setCustomMessage(value);
+    notifyChange({ customMessage: value });
+    if (errors.customMessage) {
+      setErrors((prev) => ({ ...prev, customMessage: '' }));
+    }
+  };
+
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!phone.trim()) {
+      newErrors.phone = VALIDATION_MESSAGES.phone.required;
+    } else if (!/^\d+$/.test(phone)) {
+      newErrors.phone = VALIDATION_MESSAGES.phone.invalid;
+    }
+
+    if (!name.trim()) {
+      newErrors.name = VALIDATION_MESSAGES.name.required;
+    } else if (name.trim().length < 2) {
+      newErrors.name = VALIDATION_MESSAGES.name.minLength;
+    }
+
+    if (!type) {
+      newErrors.type = VALIDATION_MESSAGES.type.required;
+    }
+
+    if (requiresStep(type) && !step) {
+      newErrors.step = VALIDATION_MESSAGES.step.required;
+    }
+
+    if (type === 'CUSTOM') {
+      if (!customMessage.trim()) {
+        newErrors.customMessage = VALIDATION_MESSAGES.customMessage.required;
+      } else if (customMessage.trim().length < 10) {
+        newErrors.customMessage = VALIDATION_MESSAGES.customMessage.minLength;
+      } else if (customMessage.length > 1000) {
+        newErrors.customMessage = VALIDATION_MESSAGES.customMessage.maxLength;
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResult(null);
+
+    if (!validate()) {
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
-      // Construir metadata según el tipo
-      const metadata: Record<string, any> = {};
+      const payload: any = {
+        phone: phone.trim(),
+        name: name.trim(),
+        type: type,
+      };
 
-      if (data.type === 'ONBOARDING_REMINDER') {
-        metadata.date = data.date;
-        metadata.time = data.time;
-        metadata.location = data.location;
-        metadata.meetingUrl = data.meetingUrl;
-      } else if (data.type === 'APPLICATION_RECEIVED') {
-        metadata.applicationId = data.applicationId;
-        metadata.estimatedResponseTime = data.estimatedResponseTime;
-      } else if (data.type === 'CAPACITATION_REMINDER') {
-        metadata.capacitationName = data.capacitationName;
-        metadata.date = data.date;
-        metadata.time = data.time;
-        metadata.location = data.location;
-        metadata.duration = data.duration;
-        metadata.meetingUrl = data.meetingUrl;
-      } else if (data.type === 'FORM_INCOMPLETE') {
-        metadata.formUrl = data.formUrl;
+      if (requiresStep(type)) {
+        payload.step = step;
       }
 
-      // Llamar al API
+      if (type === 'CUSTOM') {
+        payload.customMessage = customMessage.trim();
+      }
+
       const response = await fetch('/api/whatsapp/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: data.phone,
-          name: data.name,
-          type: data.type,
-          step: data.step,
-          metadata,
-          customMessage: data.customMessage, // Para tipo CUSTOM
-          source: 'TEST',
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
 
-      const result = await response.json();
+      const data = await response.json();
 
-      if (result.success) {
-        toast.success('¡Mensaje enviado exitosamente!', {
-          description: `Enviado a ${data.name}`,
-        });
-        
-        // Limpiar formulario
-        form.reset();
-        setSelectedType('');
-        
-        // Notificar al padre
-        if (onMessageSent) {
-          onMessageSent();
+      if (response.ok && data.success) {
+        if (data.warning) {
+          setResult({
+            type: 'warning',
+            title: 'Mensaje enviado con advertencia',
+            message: data.warning,
+          });
+        } else {
+          setResult({
+            type: 'success',
+            title: 'Mensaje enviado exitosamente',
+            message: 'El mensaje fue enviado y registrado correctamente',
+          });
         }
+
+        setPhone('');
+        setName('');
+        setType('');
+        setStep('');
+        setCustomMessage('');
+        notifyChange({
+          phone: '',
+          name: '',
+          type: '',
+          step: '',
+          customMessage: '',
+        });
+
+        onMessageSent?.();
       } else {
-        toast.error('Error al enviar mensaje', {
-          description: result.error || 'Intenta nuevamente',
+        setResult({
+          type: 'error',
+          title: 'Error al enviar mensaje',
+          message: data.error || 'No se pudo enviar el mensaje. Verifica la conexión del bot.',
         });
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      toast.error('Error al enviar mensaje', {
-        description: 'Verifica tu conexión e intenta nuevamente',
+      setResult({
+        type: 'error',
+        title: 'Error de conexión',
+        message: 'No se pudo conectar con el servidor. Intenta nuevamente.',
       });
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 
-  const handleReset = () => {
-    form.reset();
-    setSelectedType('');
-  };
+  const selectedMessageType = type ? ACTIVE_MESSAGE_TYPES[type as keyof typeof ACTIVE_MESSAGE_TYPES] : null;
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-      {/* Sección: Destinatario */}
-      <div className="space-y-4">
-        <h3 className="font-semibold text-sm">Destinatario</h3>
-        
-        <div className="space-y-2">
-          <Label htmlFor="name">Nombre completo</Label>
-          <Input
-            id="name"
-            {...form.register('name')}
-            placeholder="Juan Pérez"
-          />
-          {form.formState.errors.name && (
-            <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
-          )}
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Phone Number */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Label htmlFor="phone">Número de WhatsApp</Label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="font-semibold mb-2">Formato de teléfono:</p>
+                <ul className="text-sm space-y-1">
+                  {PHONE_EXAMPLES.map((example, i) => (
+                    <li key={i}>• {example}</li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Sin espacios, guiones ni caracteres especiales
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="phone">Teléfono</Label>
-          <Input
-            id="phone"
-            {...form.register('phone')}
-            placeholder="+54 9 11 1234-5678"
-          />
-          <p className="text-xs text-muted-foreground">
-            Formato: +54 9 11 xxxx-xxxx o 1112345678
-          </p>
-          {form.formState.errors.phone && (
-            <p className="text-sm text-destructive">{form.formState.errors.phone.message}</p>
-          )}
-        </div>
+        <Input
+          id="phone"
+          type="text"
+          placeholder="5491158165977"
+          value={phone}
+          onChange={(e) => handlePhoneChange(e.target.value)}
+          disabled={isLoading}
+          className={errors.phone ? 'border-red-500' : ''}
+        />
+        {errors.phone && (
+          <p className="text-sm text-red-500">{errors.phone}</p>
+        )}
       </div>
 
-      {/* Sección: Tipo de Mensaje */}
-      <div className="space-y-4">
-        <h3 className="font-semibold text-sm">Tipo de Mensaje</h3>
-        
-        <div className="space-y-2">
-          <Label htmlFor="type">Selecciona el tipo</Label>
-          <Select
-            value={selectedType}
-            onValueChange={(value) => {
-              setSelectedType(value);
-              form.setValue('type', value);
-            }}
+      {/* Name */}
+      <div className="space-y-2">
+        <Label htmlFor="name">Nombre del destinatario</Label>
+        <Input
+          id="name"
+          type="text"
+          placeholder="Juan Pérez"
+          value={name}
+          onChange={(e) => handleNameChange(e.target.value)}
+          disabled={isLoading}
+          className={errors.name ? 'border-red-500' : ''}
+        />
+        {errors.name && (
+          <p className="text-sm text-red-500">{errors.name}</p>
+        )}
+      </div>
+
+      {/* Message Type */}
+      <div className="space-y-3">
+        <Label htmlFor="type" className="text-sm font-medium">Tipo de mensaje</Label>
+        <Select value={type} onValueChange={handleTypeChange} disabled={isLoading}>
+          <SelectTrigger 
+            className={`h-auto min-h-[72px] py-3 px-4 ${errors.type ? 'border-red-500 focus:border-red-500' : ''}`}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecciona un tipo..." />
+            {selectedMessageType ? (
+              <div className="flex items-center gap-3 w-full">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <MessageSquare className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex flex-col items-start flex-1 min-w-0">
+                  <span className="font-medium text-sm text-foreground">
+                    {selectedMessageType.label}
+                  </span>
+                  <span className="text-xs text-muted-foreground line-clamp-1">
+                    {selectedMessageType.description}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <SelectValue placeholder="Selecciona un tipo de mensaje" />
+            )}
+          </SelectTrigger>
+          <SelectContent className="max-h-[400px]">
+            {getActiveMessageTypes().map((messageType) => (
+              <SelectItem 
+                key={messageType.value} 
+                value={messageType.value}
+                className="py-3 px-4"
+              >
+                <div className="flex items-center gap-3 w-full">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <MessageSquare className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex flex-col items-start flex-1 min-w-0">
+                    <span className="font-medium text-sm">{messageType.label}</span>
+                    <span className="text-xs text-muted-foreground line-clamp-2">
+                      {messageType.description}
+                    </span>
+                  </div>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        
+        {selectedMessageType && (
+          <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg border border-primary/20 shadow-sm">
+            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+              <Check className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-primary">
+                {selectedMessageType.label}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Tipo de mensaje seleccionado
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {errors.type && (
+          <p className="text-sm text-red-500 flex items-center gap-1.5">
+            <AlertCircle className="h-4 w-4" />
+            {errors.type}
+          </p>
+        )}
+      </div>
+
+      {/* Step */}
+      {requiresStep(type) && (
+        <div className="space-y-2">
+          <Label htmlFor="step">Step del formulario</Label>
+          <Select value={step} onValueChange={handleStepChange} disabled={isLoading}>
+            <SelectTrigger className={errors.step ? 'border-red-500' : ''}>
+              <SelectValue placeholder="Selecciona el step incompleto" />
             </SelectTrigger>
             <SelectContent>
-              {MESSAGE_TYPES.map((type) => (
-                <SelectItem key={type.value} value={type.value}>
-                  {type.label}
+              {getFormSteps().map((formStep) => (
+                <SelectItem key={formStep.value} value={formStep.value}>
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center flex-shrink-0">
+                      <FileText className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                    </div>
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium text-sm">{formStep.label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formStep.description}
+                      </span>
+                    </div>
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {form.formState.errors.type && (
-            <p className="text-sm text-destructive">{form.formState.errors.type.message}</p>
+          {errors.step && (
+            <p className="text-sm text-red-500">{errors.step}</p>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Campos Dinámicos según el tipo */}
-      {selectedType === 'FORM_INCOMPLETE' && (
-        <div className="space-y-4">
-          <h3 className="font-semibold text-sm">Detalles del Formulario</h3>
-          
-          <div className="space-y-2">
-            <Label htmlFor="step">Step del formulario</Label>
-            <Select
-              value={form.watch('step') || ''}
-              onValueChange={(value) => form.setValue('step', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona un step..." />
-              </SelectTrigger>
-              <SelectContent>
-                {FORM_STEPS.map((step) => (
-                  <SelectItem key={step.value} value={step.value}>
-                    {step.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="formUrl">URL del formulario (opcional)</Label>
-            <Input
-              id="formUrl"
-              {...form.register('formUrl')}
-              placeholder="https://monchis.com/apply?id=123"
-            />
+      {/* Custom Message */}
+      {type === 'CUSTOM' && (
+        <div className="space-y-2">
+          <Label htmlFor="customMessage">Mensaje personalizado</Label>
+          <Textarea
+            id="customMessage"
+            placeholder="Escribe tu mensaje aquí..."
+            value={customMessage}
+            onChange={(e) => handleCustomMessageChange(e.target.value)}
+            disabled={isLoading}
+            rows={5}
+            className={errors.customMessage ? 'border-red-500' : ''}
+          />
+          <div className="flex justify-between items-center">
+            {errors.customMessage ? (
+              <p className="text-sm text-red-500">{errors.customMessage}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {customMessage.length}/1000 caracteres
+              </p>
+            )}
           </div>
         </div>
       )}
 
-      {selectedType === 'ONBOARDING_REMINDER' && (
-        <div className="space-y-4">
-          <h3 className="font-semibold text-sm">Detalles del Onboarding</h3>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="date">Fecha</Label>
-              <Input
-                id="date"
-                {...form.register('date')}
-                placeholder="15 de Noviembre"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="time">Hora</Label>
-              <Input
-                id="time"
-                {...form.register('time')}
-                placeholder="10:00 AM"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="location">Ubicación</Label>
-            <Input
-              id="location"
-              {...form.register('location')}
-              placeholder="Oficina Central"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="meetingUrl">Link de reunión (opcional)</Label>
-            <Input
-              id="meetingUrl"
-              {...form.register('meetingUrl')}
-              placeholder="https://meet.google.com/xxx"
-            />
-          </div>
-        </div>
-      )}
-
-      {selectedType === 'APPLICATION_RECEIVED' && (
-        <div className="space-y-4">
-          <h3 className="font-semibold text-sm">Detalles de la Postulación</h3>
-          
-          <div className="space-y-2">
-            <Label htmlFor="applicationId">ID de postulación (opcional)</Label>
-            <Input
-              id="applicationId"
-              {...form.register('applicationId')}
-              placeholder="APP-2024-001"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="estimatedResponseTime">Tiempo estimado de respuesta</Label>
-            <Input
-              id="estimatedResponseTime"
-              {...form.register('estimatedResponseTime')}
-              placeholder="48 horas"
-            />
-          </div>
-        </div>
-      )}
-
-      {selectedType === 'CAPACITATION_REMINDER' && (
-        <div className="space-y-4">
-          <h3 className="font-semibold text-sm">Detalles de la Capacitación</h3>
-          
-          <div className="space-y-2">
-            <Label htmlFor="capacitationName">Nombre de la capacitación</Label>
-            <Input
-              id="capacitationName"
-              {...form.register('capacitationName')}
-              placeholder="Seguridad Vial Avanzada"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="date">Fecha</Label>
-              <Input
-                id="date"
-                {...form.register('date')}
-                placeholder="20 de Noviembre"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="time">Hora</Label>
-              <Input
-                id="time"
-                {...form.register('time')}
-                placeholder="14:00 hs"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="location">Ubicación (opcional)</Label>
-            <Input
-              id="location"
-              {...form.register('location')}
-              placeholder="Oficina Central"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="duration">Duración (opcional)</Label>
-            <Input
-              id="duration"
-              {...form.register('duration')}
-              placeholder="2 horas"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="meetingUrl">Link de reunión (opcional)</Label>
-            <Input
-              id="meetingUrl"
-              {...form.register('meetingUrl')}
-              placeholder="https://meet.google.com/xxx"
-            />
-          </div>
-        </div>
-      )}
-
-      {selectedType === 'CUSTOM' && (
-        <div className="space-y-4">
-          <h3 className="font-semibold text-sm">Mensaje Personalizado</h3>
-          
-          <div className="space-y-2">
-            <Label htmlFor="customMessage">Escribe tu mensaje</Label>
-            <textarea
-              id="customMessage"
-              {...form.register('customMessage')}
-              placeholder="Escribe aquí el mensaje que quieres enviar..."
-              className="w-full min-h-[150px] p-3 border rounded-md resize-y"
-            />
-            <p className="text-xs text-muted-foreground">
-              Este mensaje se enviará tal cual lo escribas, sin usar ningún template.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {selectedType === 'WELCOME' && (
-        <div className="p-4 bg-muted/50 rounded-lg">
-          <p className="text-sm text-muted-foreground">
-            Este mensaje no requiere información adicional
-          </p>
-        </div>
-      )}
-
-      {/* Botones de Acción */}
-      <div className="flex gap-2 pt-4 border-t">
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className="flex-1"
+      {/* Result Alert - Mejorado */}
+      {result && (
+        <Alert 
+          variant={result.type === 'error' ? 'destructive' : 'default'}
+          className={
+            result.type === 'success' 
+              ? 'border-green-500 bg-green-50 dark:bg-green-950/20' 
+              : result.type === 'warning'
+              ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20'
+              : ''
+          }
         >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Enviando...
-            </>
-          ) : (
-            <>
-              <Send className="h-4 w-4 mr-2" />
-              Enviar Mensaje
-            </>
-          )}
-        </Button>
+          <div className="flex items-start gap-3">
+            <div className={`mt-0.5 ${
+              result.type === 'success' ? 'text-green-600 dark:text-green-400' :
+              result.type === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+              'text-red-600 dark:text-red-400'
+            }`}>
+              {result.type === 'success' && <CheckCircle2 className="h-5 w-5" />}
+              {result.type === 'warning' && <AlertTriangle className="h-5 w-5" />}
+              {result.type === 'error' && <AlertCircle className="h-5 w-5" />}
+            </div>
+            <div className="flex-1">
+              <AlertTitle className={
+                result.type === 'success' ? 'text-green-900 dark:text-green-100' :
+                result.type === 'warning' ? 'text-yellow-900 dark:text-yellow-100' :
+                ''
+              }>
+                {result.title}
+              </AlertTitle>
+              <AlertDescription className={
+                result.type === 'success' ? 'text-green-800 dark:text-green-200' :
+                result.type === 'warning' ? 'text-yellow-800 dark:text-yellow-200' :
+                ''
+              }>
+                {result.message}
+              </AlertDescription>
+            </div>
+          </div>
+        </Alert>
+      )}
 
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleReset}
-          disabled={isSubmitting}
-        >
-          <Trash2 className="h-4 w-4 mr-2" />
-          Limpiar
-        </Button>
-      </div>
+      {/* Submit Button */}
+      <Button type="submit" className="w-full" disabled={isLoading}>
+        {isLoading ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Enviando...
+          </>
+        ) : (
+          <>
+            <Send className="h-4 w-4 mr-2" />
+            Enviar Mensaje
+          </>
+        )}
+      </Button>
     </form>
   );
 }

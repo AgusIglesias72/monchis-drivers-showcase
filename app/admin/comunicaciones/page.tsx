@@ -3,11 +3,14 @@ import { AdminHeader } from '@/components/admin/admin-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import WhatsAppQRScanner from '@/components/admin/comunicacion/WhatsAppQRScanner';
-import { Info, CheckCircle2, Server, MessageSquare, TestTube2, ArrowRight } from 'lucide-react';
+import { Info, CheckCircle2, Server, MessageSquare, TestTube2, ArrowRight, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
+import { getActiveMessageTypes } from '@/lib/constants/whatsapp-messages';
 
 export default function ComunicacionesPage() {
+  const activeMessageTypes = getActiveMessageTypes();
+
   return (
     <>
       <AdminHeader
@@ -60,7 +63,19 @@ export default function ComunicacionesPage() {
                     </h3>
                     <p className="text-sm text-muted-foreground">
                       Envía mensajes automáticos a postulantes según diferentes eventos:
-                      formularios incompletos, recordatorios de onboarding, capacitaciones, etc.
+                      confirmación de postulación recibida, recordatorios de formularios incompletos
+                      y mensajes personalizados.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-blue-600" />
+                      Mensajes automáticos
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      El sistema revisa automáticamente las postulaciones cada 6 horas (8am, 12pm, 4pm, 8pm)
+                      y envía recordatorios a quienes no completaron el formulario.
                     </p>
                   </div>
 
@@ -90,15 +105,22 @@ export default function ComunicacionesPage() {
 
                   <div className="space-y-2">
                     <h3 className="font-semibold text-sm">
-                      Tipos de mensajes disponibles
+                      Tipos de mensajes activos
                     </h3>
                     <div className="flex flex-wrap gap-2 mt-2">
-                      <Badge variant="outline" className="text-xs">Recordatorio de Onboarding</Badge>
-                      <Badge variant="outline" className="text-xs">Formulario Incompleto</Badge>
-                      <Badge variant="outline" className="text-xs">Mensaje de Bienvenida</Badge>
-                      <Badge variant="outline" className="text-xs">Postulación Recibida</Badge>
-                      <Badge variant="outline" className="text-xs">Recordatorio de Capacitación</Badge>
+                      {activeMessageTypes.map((messageType) => (
+                        <Badge
+                          key={messageType.value}
+                          variant="outline"
+                          className="text-xs"
+                        >
+                          {messageType.label}
+                        </Badge>
+                      ))}
                     </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Los mensajes de onboarding y capacitación estarán disponibles próximamente.
+                    </p>
                   </div>
 
                   {/* Nuevo: Link rápido a pruebas */}

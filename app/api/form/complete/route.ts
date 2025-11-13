@@ -1,6 +1,22 @@
 // app/api/form/complete/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { messagesService } from "@/lib/services/messages.service";
+import { WhatsAppMessageType, WhatsAppMessageSource } from "@prisma/client";
+
+/**
+ * Normaliza el nombre del usuario (solo primer nombre)
+ * Ejemplos: "Agustin Iglesias" → "Agustin", "María José" → "María"
+ */
+function normalizeFirstName(fullName: string | null | undefined): string {
+  if (!fullName) return 'Usuario';
+  
+  const trimmed = fullName.trim();
+  const firstName = trimmed.split(' ')[0];
+  
+  // Capitalizar primera letra
+  return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,7 +57,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // ✅ NUEVO: Crear registro de EquipmentPayment
+    // Crear registro de EquipmentPayment
     if (formData.paymentMethod) {
       await prisma.equipmentPayment.create({
         data: {
@@ -57,7 +73,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ✅ NUEVO: Crear/actualizar FinancialService si puede facturar
+    // Crear/actualizar FinancialService si puede facturar
     if (formData.canInvoice === 'si') {
       await prisma.financialService.upsert({
         where: { formDriverId: submission.formDriverId },
@@ -86,6 +102,64 @@ export async function POST(request: NextRequest) {
         currentStep: 6,
       },
     });
+
+    // ===== 🎉 ENVIAR MENSAJE DE CONFIRMACIÓN AUTOMÁTICO =====
+    
+    const driver = submission.formDriver;
+    
+    if (driver && driver.phoneNumber && driver.fullName) {
+      try {
+        // Normalizar nombre (solo primer nombre)
+        const firstName = normalizeFirstName(driver.fullName);
+        
+        // Obtener IP del request
+        const ipAddress = request.headers.get('x-forwarded-for') || 
+                         request.headers.get('x-real-ip') || 
+                         'unknown';
+        const userAgent = request.headers.get('user-agent') || 'unknown';
+
+        // Enviar mensaje de confirmación
+        const messageResult = await messagesService.sendWhatsAppMessage({
+          phone: driver.phoneNumber,
+          name: firstName, // ← Nombre normalizado
+          type: WhatsAppMessageType.APPLICATION_RECEIVED,
+          formDriverId: driver.id,
+          source: WhatsAppMessageSource.TRIGGER, // ← Automático por evento
+          metadata: {
+            triggeredBy: 'form_completion',
+            sessionId: submission.id,
+            completedAt: new Date().toISOString(),
+          },
+          ipAddress,
+          userAgent,
+        });
+
+        // Log del resultado (no bloqueamos si falla)
+        if (messageResult.success) {
+          console.log('✅ Mensaje de confirmación enviado:', {
+            driver: driver.fullName,
+            phone: driver.phoneNumber,
+            messageId: messageResult.messageId,
+          });
+        } else {
+          console.error('⚠️ No se pudo enviar mensaje de confirmación:', {
+            driver: driver.fullName,
+            error: messageResult.error,
+            warning: messageResult.warning,
+          });
+        }
+      } catch (messageError) {
+        // No bloqueamos la finalización del form si falla el mensaje
+        console.error('❌ Error enviando mensaje de confirmación:', messageError);
+      }
+    } else {
+      console.warn('⚠️ No se puede enviar mensaje: faltan datos del driver', {
+        hasPhone: !!driver?.phoneNumber,
+        hasName: !!driver?.fullName,
+      });
+    }
+
+    // ===== FIN ENVÍO DE MENSAJE =====
 
     return NextResponse.json({
       success: true,

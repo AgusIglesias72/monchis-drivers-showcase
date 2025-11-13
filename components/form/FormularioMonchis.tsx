@@ -498,6 +498,11 @@ const validateCurrentStep = (): boolean => {
   };
 
   const handleSubmit = async () => {
+
+    if (!validateCurrentStep()) {
+      return;
+    }
+    
     setLoading(true);
     
     try {

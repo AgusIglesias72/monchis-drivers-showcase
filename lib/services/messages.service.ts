@@ -16,10 +16,10 @@ export interface SendWhatsAppMessageParams {
   type: WhatsAppMessageType;
   step?: string;
   metadata?: Record<string, any>;
-  customMessage?: string; // Para tipo CUSTOM
+  customMessage?: string;
   formDriverId?: string;
   source?: WhatsAppMessageSource;
-  sentBy?: string; // clerkId
+  sentBy?: string;
   ipAddress?: string;
   userAgent?: string;
 }
@@ -49,7 +49,7 @@ export interface MessageFilters {
   sentBy?: string;
   dateFrom?: Date;
   dateTo?: Date;
-  search?: string; // Buscar en recipientName, recipientPhone, message
+  search?: string;
 }
 
 export interface PaginationParams {
@@ -85,10 +85,8 @@ async function callWhatsAppBot(params: {
   customMessage?: string;
 }): Promise<WhatsAppBotResponse> {
   try {
-    // Convertir tipo de UPPERCASE a snake_case para el bot
     const botType = params.type.toLowerCase();
 
-    // Para mensajes CUSTOM, usar el endpoint /send-message
     if (params.type === 'CUSTOM' && params.customMessage) {
       const response = await fetch(`${WHATSAPP_BOT_URL}/send-message`, {
         method: 'POST',
@@ -112,7 +110,6 @@ async function callWhatsAppBot(params: {
         };
       }
 
-      // Adaptar la respuesta al formato esperado
       return {
         success: true,
         data: {
@@ -128,7 +125,6 @@ async function callWhatsAppBot(params: {
       };
     }
 
-    // Para mensajes contextuales, usar el endpoint existente
     const response = await fetch(`${WHATSAPP_BOT_URL}/send-contextual-message`, {
       method: 'POST',
       headers: {
@@ -138,7 +134,7 @@ async function callWhatsAppBot(params: {
       body: JSON.stringify({
         phone: params.phone,
         name: params.name,
-        type: botType, // ← Usar el tipo convertido a snake_case
+        type: botType,
         step: params.step,
         metadata: params.metadata,
       }),
@@ -168,22 +164,69 @@ async function callWhatsAppBot(params: {
 
 // ==================== HELPER FUNCTIONS ====================
 
+/**
+ * Formatea un número de teléfono al formato internacional correcto
+ * Soporta: Paraguay (595) y Argentina (54)
+ * 
+ * Ejemplos:
+ * "984039476" → "595984039476"
+ * "0984039476" → "595984039476"
+ * "595984039476" → "595984039476"
+ * "1158165977" → "541158165977"
+ */
 function formatPhoneNumber(phone: string): string {
   // Remover caracteres no numéricos
   let cleanPhone = phone.replace(/\D/g, '');
 
-  // Si no tiene código de país, asumir Argentina (54)
-  if (!cleanPhone.startsWith('54') && cleanPhone.length === 10) {
-    cleanPhone = '54' + cleanPhone;
+  // Si ya tiene código de país de Paraguay (595), retornar
+  if (cleanPhone.startsWith('595')) {
+    return cleanPhone;
   }
 
-  return cleanPhone;
+  // Si es argentino (54), mantener
+  if (cleanPhone.startsWith('54') && cleanPhone.length >= 12) {
+    return cleanPhone;
+  }
+
+  // Si tiene 9 dígitos, asumir Paraguay (595 + número)
+  if (cleanPhone.length === 9) {
+    return '595' + cleanPhone;
+  }
+
+  // Si empieza con 0 y tiene 10 dígitos, remover 0 y agregar 595 (Paraguay)
+  if (cleanPhone.startsWith('0') && cleanPhone.length === 10) {
+    return '595' + cleanPhone.substring(1);
+  }
+
+  // Si tiene 10 dígitos y NO empieza con 0, asumir Argentina sin código
+  if (cleanPhone.length === 10 && !cleanPhone.startsWith('0')) {
+    return '54' + cleanPhone;
+  }
+
+  // Si ya tiene longitud correcta (12-13 dígitos), retornar como está
+  if (cleanPhone.length >= 12) {
+    return cleanPhone;
+  }
+
+  // Último recurso: si tiene 9 dígitos sin código, asumir Paraguay
+  if (cleanPhone.length === 9) {
+    return '595' + cleanPhone;
+  }
+
+  // Default: agregar 595 (Paraguay es el país principal)
+  return '595' + cleanPhone;
 }
 
 function formatPhoneForDisplay(phone: string): string {
   const clean = formatPhoneNumber(phone);
 
-  // Si es argentino (54), formatear como +54 9 11 xxxx-xxxx
+  // Si es paraguayo (595)
+  if (clean.startsWith('595')) {
+    const number = clean.substring(3);
+    return `+595 ${number.substring(0, 3)} ${number.substring(3)}`;
+  }
+
+  // Si es argentino (54)
   if (clean.startsWith('54')) {
     const areaCode = clean.substring(2, 4);
     const firstPart = clean.substring(4, 8);
@@ -196,19 +239,24 @@ function formatPhoneForDisplay(phone: string): string {
 
 // ==================== SERVICE FUNCTIONS ====================
 
-/**
- * Envía un mensaje de WhatsApp y lo registra en la base de datos
- */
 export async function sendWhatsAppMessage(
   params: SendWhatsAppMessageParams
-): Promise<{ success: boolean; messageId?: string; error?: string }> {
+): Promise<{ 
+  success: boolean; 
+  messageId?: string; 
+  error?: string;
+  warning?: string;
+}> {
   const startTime = Date.now();
 
   try {
-    // 1. Formatear teléfono
     const formattedPhone = formatPhoneNumber(params.phone);
+    
+    console.log('📞 Formatting phone:', {
+      original: params.phone,
+      formatted: formattedPhone
+    });
 
-    // 2. Llamar al bot de WhatsApp
     const botResponse = await callWhatsAppBot({
       phone: formattedPhone,
       name: params.name,
@@ -221,7 +269,44 @@ export async function sendWhatsAppMessage(
     const endTime = Date.now();
     const responseTimeMs = endTime - startTime;
 
-    // 3. Preparar datos para guardar
+    if (!botResponse.success) {
+      try {
+        const errorMessage = await prisma.whatsAppMessage.create({
+          data: {
+            recipientPhone: formattedPhone,
+            recipientName: params.name,
+            chatId: `${formattedPhone}@c.us`,
+            messageType: params.type,
+            step: params.step,
+            message: '',
+            messageLength: 0,
+            metadata: params.metadata,
+            status: WhatsAppMessageStatus.FAILED,
+            errorMessage: botResponse.error,
+            source: params.source || WhatsAppMessageSource.MANUAL,
+            formDriver: params.formDriverId
+              ? { connect: { id: params.formDriverId } }
+              : undefined,
+            sentByUser: params.sentBy ? { connect: { id: params.sentBy } } : undefined,
+            ipAddress: params.ipAddress,
+            userAgent: params.userAgent,
+          },
+        });
+
+        return {
+          success: false,
+          messageId: errorMessage.id,
+          error: botResponse.error,
+        };
+      } catch (dbError) {
+        console.error('Error saving failed message to DB:', dbError);
+        return {
+          success: false,
+          error: botResponse.error,
+        };
+      }
+    }
+
     const messageData: Prisma.WhatsAppMessageCreateInput = {
       recipientPhone: formattedPhone,
       recipientName: params.name,
@@ -231,16 +316,14 @@ export async function sendWhatsAppMessage(
       message: botResponse.data?.message || '',
       messageLength: botResponse.data?.messageLength || 0,
       metadata: params.metadata,
-      status: botResponse.success ? WhatsAppMessageStatus.SENT : WhatsAppMessageStatus.FAILED,
+      status: WhatsAppMessageStatus.SENT,
       sentAt: botResponse.data?.sentAt ? new Date(botResponse.data.sentAt) : new Date(),
       responseTimeMs: botResponse.data?.responseTimeMs || responseTimeMs,
-      errorMessage: botResponse.error,
       source: params.source || WhatsAppMessageSource.MANUAL,
       ipAddress: params.ipAddress,
       userAgent: params.userAgent,
     };
 
-    // 4. Agregar relaciones si existen
     if (params.formDriverId) {
       messageData.formDriver = {
         connect: { id: params.formDriverId },
@@ -253,59 +336,33 @@ export async function sendWhatsAppMessage(
       };
     }
 
-    // 5. Guardar en base de datos
-    const savedMessage = await prisma.whatsAppMessage.create({
-      data: messageData,
-    });
-
-    return {
-      success: botResponse.success,
-      messageId: savedMessage.id,
-      error: botResponse.error,
-    };
-  } catch (error) {
-    console.error('Error in sendWhatsAppMessage:', error);
-
-    // Intentar guardar el error en DB de todos modos
     try {
-      const errorMessage = await prisma.whatsAppMessage.create({
-        data: {
-          recipientPhone: formatPhoneNumber(params.phone),
-          recipientName: params.name,
-          chatId: `${formatPhoneNumber(params.phone)}@c.us`,
-          messageType: params.type,
-          step: params.step,
-          message: '',
-          messageLength: 0,
-          metadata: params.metadata,
-          status: WhatsAppMessageStatus.FAILED,
-          errorMessage: error instanceof Error ? error.message : 'Unknown error',
-          source: params.source || WhatsAppMessageSource.MANUAL,
-          formDriver: params.formDriverId
-            ? { connect: { id: params.formDriverId } }
-            : undefined,
-          sentByUser: params.sentBy ? { connect: { id: params.sentBy } } : undefined,
-        },
+      const savedMessage = await prisma.whatsAppMessage.create({
+        data: messageData,
       });
 
       return {
-        success: false,
-        messageId: errorMessage.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        success: true,
+        messageId: savedMessage.id,
       };
     } catch (dbError) {
-      console.error('Error saving failed message to DB:', dbError);
+      console.error('⚠️ Message sent but NOT saved to DB:', dbError);
+      
       return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        success: true,
+        error: undefined,
+        warning: 'El mensaje se envió correctamente pero no se pudo registrar en la base de datos',
       };
     }
+  } catch (error) {
+    console.error('Error in sendWhatsAppMessage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
   }
 }
 
-/**
- * Obtiene mensajes con filtros y paginación
- */
 export async function getMessages(
   filters?: MessageFilters,
   pagination?: PaginationParams
@@ -316,37 +373,18 @@ export async function getMessages(
   const orderBy = pagination?.orderBy || 'sentAt';
   const orderDir = pagination?.orderDir || 'desc';
 
-  // Construir where clause
   const where: Prisma.WhatsAppMessageWhereInput = {};
 
-  if (filters?.type) {
-    where.messageType = filters.type;
-  }
-
-  if (filters?.status) {
-    where.status = filters.status;
-  }
-
-  if (filters?.source) {
-    where.source = filters.source;
-  }
-
-  if (filters?.formDriverId) {
-    where.formDriverId = filters.formDriverId;
-  }
-
-  if (filters?.sentBy) {
-    where.sentBy = filters.sentBy;
-  }
+  if (filters?.type) where.messageType = filters.type;
+  if (filters?.status) where.status = filters.status;
+  if (filters?.source) where.source = filters.source;
+  if (filters?.formDriverId) where.formDriverId = filters.formDriverId;
+  if (filters?.sentBy) where.sentBy = filters.sentBy;
 
   if (filters?.dateFrom || filters?.dateTo) {
     where.sentAt = {};
-    if (filters.dateFrom) {
-      where.sentAt.gte = filters.dateFrom;
-    }
-    if (filters.dateTo) {
-      where.sentAt.lte = filters.dateTo;
-    }
+    if (filters.dateFrom) where.sentAt.gte = filters.dateFrom;
+    if (filters.dateTo) where.sentAt.lte = filters.dateTo;
   }
 
   if (filters?.search) {
@@ -357,7 +395,6 @@ export async function getMessages(
     ];
   }
 
-  // Ejecutar queries
   const [messages, total] = await Promise.all([
     prisma.whatsAppMessage.findMany({
       where,
@@ -398,9 +435,6 @@ export async function getMessages(
   };
 }
 
-/**
- * Obtiene un mensaje por ID
- */
 export async function getMessageById(id: string) {
   return prisma.whatsAppMessage.findUnique({
     where: { id },
@@ -426,9 +460,6 @@ export async function getMessageById(id: string) {
   });
 }
 
-/**
- * Obtiene mensajes de un driver específico
- */
 export async function getMessagesByDriver(formDriverId: string, limit = 20) {
   return prisma.whatsAppMessage.findMany({
     where: { formDriverId },
@@ -445,9 +476,6 @@ export async function getMessagesByDriver(formDriverId: string, limit = 20) {
   });
 }
 
-/**
- * Obtiene estadísticas generales de mensajes
- */
 export async function getMessageStats(
   dateFrom?: Date,
   dateTo?: Date
@@ -460,10 +488,8 @@ export async function getMessageStats(
     if (dateTo) where.sentAt.lte = dateTo;
   }
 
-  // Total de mensajes
   const total = await prisma.whatsAppMessage.count({ where });
 
-  // Por tipo
   const byTypeRaw = await prisma.whatsAppMessage.groupBy({
     by: ['messageType'],
     where,
@@ -474,7 +500,6 @@ export async function getMessageStats(
     byTypeRaw.map((item) => [item.messageType, item._count])
   ) as Record<WhatsAppMessageType, number>;
 
-  // Por status
   const byStatusRaw = await prisma.whatsAppMessage.groupBy({
     by: ['status'],
     where,
@@ -485,7 +510,6 @@ export async function getMessageStats(
     byStatusRaw.map((item) => [item.status, item._count])
   ) as Record<WhatsAppMessageStatus, number>;
 
-  // Por source
   const bySourceRaw = await prisma.whatsAppMessage.groupBy({
     by: ['source'],
     where,
@@ -496,12 +520,10 @@ export async function getMessageStats(
     bySourceRaw.map((item) => [item.source, item._count])
   ) as Record<WhatsAppMessageSource, number>;
 
-  // Success rate
   const sent = byStatus[WhatsAppMessageStatus.SENT] || 0;
   const failed = byStatus[WhatsAppMessageStatus.FAILED] || 0;
   const successRate = total > 0 ? (sent / total) * 100 : 0;
 
-  // Average response time
   const avgResponseTimeResult = await prisma.whatsAppMessage.aggregate({
     where: {
       ...where,
@@ -514,7 +536,6 @@ export async function getMessageStats(
 
   const avgResponseTime = avgResponseTimeResult._avg.responseTimeMs || 0;
 
-  // Mensajes por período
   const now = new Date();
   const last24h = await prisma.whatsAppMessage.count({
     where: {
@@ -547,9 +568,6 @@ export async function getMessageStats(
   };
 }
 
-/**
- * Reintentar envío de mensaje fallido
- */
 export async function retryFailedMessage(messageId: string, sentBy?: string) {
   const message = await prisma.whatsAppMessage.findUnique({
     where: { id: messageId },
@@ -567,7 +585,6 @@ export async function retryFailedMessage(messageId: string, sentBy?: string) {
     throw new Error('Max retries reached');
   }
 
-  // Actualizar contador de reintentos
   await prisma.whatsAppMessage.update({
     where: { id: messageId },
     data: {
@@ -576,7 +593,6 @@ export async function retryFailedMessage(messageId: string, sentBy?: string) {
     },
   });
 
-  // Intentar reenviar
   return sendWhatsAppMessage({
     phone: message.recipientPhone,
     name: message.recipientName,
@@ -589,9 +605,6 @@ export async function retryFailedMessage(messageId: string, sentBy?: string) {
   });
 }
 
-/**
- * Obtener mensajes recientes (para dashboard)
- */
 export async function getRecentMessages(limit = 10) {
   return prisma.whatsAppMessage.findMany({
     take: limit,
@@ -607,9 +620,6 @@ export async function getRecentMessages(limit = 10) {
   });
 }
 
-/**
- * Marcar mensaje como entregado (para webhooks futuros)
- */
 export async function markMessageAsDelivered(messageId: string) {
   return prisma.whatsAppMessage.update({
     where: { id: messageId },
@@ -620,9 +630,6 @@ export async function markMessageAsDelivered(messageId: string) {
   });
 }
 
-/**
- * Marcar mensaje como leído (para webhooks futuros)
- */
 export async function markMessageAsRead(messageId: string) {
   return prisma.whatsAppMessage.update({
     where: { id: messageId },
@@ -632,8 +639,6 @@ export async function markMessageAsRead(messageId: string) {
     },
   });
 }
-
-// ==================== EXPORTS ====================
 
 export const messagesService = {
   sendWhatsAppMessage,

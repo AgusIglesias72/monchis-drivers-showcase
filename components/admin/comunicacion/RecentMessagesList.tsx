@@ -2,7 +2,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { messagesService } from '@/lib/services/messages.service';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
@@ -33,8 +32,14 @@ export function RecentMessagesList({ refreshTrigger }: RecentMessagesListProps) 
     }
 
     try {
-      const recentMessages = await messagesService.getRecentMessages(20);
-      setMessages(recentMessages);
+      const response = await fetch('/api/whatsapp/recent?limit=20');
+      
+      if (!response.ok) {
+        throw new Error('Error al cargar mensajes');
+      }
+
+      const data = await response.json();
+      setMessages(data.messages || []);
     } catch (error) {
       console.error('Error loading messages:', error);
     } finally {
@@ -50,10 +55,13 @@ export function RecentMessagesList({ refreshTrigger }: RecentMessagesListProps) 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'SENT':
+      case 'DELIVERED':
+      case 'READ':
         return <CheckCircle2 className="h-4 w-4 text-green-600" />;
       case 'FAILED':
         return <XCircle className="h-4 w-4 text-red-600" />;
       case 'SENDING':
+      case 'QUEUED':
         return <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />;
       default:
         return <Clock className="h-4 w-4 text-gray-600" />;
@@ -62,12 +70,14 @@ export function RecentMessagesList({ refreshTrigger }: RecentMessagesListProps) 
 
   const getTypeLabel = (type: string) => {
     switch (type) {
-      case 'WELCOME':
-        return 'Bienvenida';
       case 'APPLICATION_RECEIVED':
         return 'Postulación Recibida';
       case 'FORM_INCOMPLETE':
         return 'Formulario Incompleto';
+      case 'CUSTOM':
+        return 'Mensaje Personalizado';
+      case 'WELCOME':
+        return 'Bienvenida';
       case 'ONBOARDING_REMINDER':
         return 'Onboarding';
       case 'CAPACITATION_REMINDER':
@@ -79,18 +89,20 @@ export function RecentMessagesList({ refreshTrigger }: RecentMessagesListProps) 
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'WELCOME':
-        return 'bg-green-100 text-green-800';
       case 'APPLICATION_RECEIVED':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
       case 'FORM_INCOMPLETE':
-        return 'bg-orange-100 text-orange-800';
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400';
+      case 'CUSTOM':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+      case 'WELCOME':
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400';
       case 'ONBOARDING_REMINDER':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400';
       case 'CAPACITATION_REMINDER':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
     }
   };
 
@@ -141,7 +153,7 @@ export function RecentMessagesList({ refreshTrigger }: RecentMessagesListProps) 
               <div className="flex items-start justify-between gap-4">
                 {/* Info principal */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     {getStatusIcon(message.status)}
                     <p className="font-medium text-sm truncate">
                       {message.recipientName}
@@ -168,7 +180,7 @@ export function RecentMessagesList({ refreshTrigger }: RecentMessagesListProps) 
                 </div>
 
                 {/* Timestamp */}
-                <div className="text-right">
+                <div className="text-right flex-shrink-0">
                   <p className="text-xs text-muted-foreground">
                     {formatDistanceToNow(new Date(message.sentAt), {
                       addSuffix: true,
