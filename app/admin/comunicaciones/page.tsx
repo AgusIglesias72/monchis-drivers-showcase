@@ -1,9 +1,11 @@
 // app/admin/comunicaciones/page.tsx
 import { AdminHeader } from '@/components/admin/admin-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import WhatsAppQRScanner from '@/components/admin/comunicacion/WhatsAppQRScanner';
-import { Info, CheckCircle2, Server, MessageSquare } from 'lucide-react';
+import { Info, CheckCircle2, Server, MessageSquare, TestTube2, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 
 export default function ComunicacionesPage() {
   return (
@@ -18,11 +20,22 @@ export default function ComunicacionesPage() {
         <div className="flex-1 p-8 space-y-8">
           {/* Header */}
           <div className="flex flex-col gap-4">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Comunicaciones</h1>
-              <p className="text-muted-foreground mt-1">
-                Gestión del bot de WhatsApp para Monchis Drivers
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">Comunicaciones</h1>
+                <p className="text-muted-foreground mt-1">
+                  Gestión del bot de WhatsApp para Monchis Drivers
+                </p>
+              </div>
+              
+              {/* Botón de Pruebas */}
+              <Button asChild>
+                <Link href="/admin/comunicaciones/pruebas">
+                  <TestTube2 className="h-4 w-4 mr-2" />
+                  Panel de Pruebas
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Link>
+              </Button>
             </div>
           </div>
 
@@ -86,6 +99,16 @@ export default function ComunicacionesPage() {
                       <Badge variant="outline" className="text-xs">Postulación Recibida</Badge>
                       <Badge variant="outline" className="text-xs">Recordatorio de Capacitación</Badge>
                     </div>
+                  </div>
+
+                  {/* Nuevo: Link rápido a pruebas */}
+                  <div className="pt-4 border-t">
+                    <Button variant="outline" className="w-full" asChild>
+                      <Link href="/admin/comunicaciones/pruebas">
+                        <TestTube2 className="h-4 w-4 mr-2" />
+                        Probar envío de mensajes
+                      </Link>
+                    </Button>
                   </div>
                 </div>
               </CardContent>

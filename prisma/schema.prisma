@@ -56,6 +56,7 @@ model AdminUser {
   onboardingEventsCompleted       OnboardingEvent[]    @relation("EventCompletedBy")
   equipmentPaymentsVerified       EquipmentPayment[]   @relation("PaymentVerifiedBy")
   driverContactsCreated           DriverContact[]      @relation("ContactCreatedBy")
+  whatsappMessagesSent WhatsAppMessage[] @relation("WhatsAppMessagesSent")
 
   @@index([email])
   @@index([role])
@@ -206,6 +207,7 @@ model FormDriver {
   equipmentPayments     EquipmentPayment[]
   driverContacts        DriverContact[]
   financialService      FinancialService?
+  whatsappMessagesSent WhatsAppMessage[] 
 
   @@index([cedula])
   @@index([phoneNumber])
@@ -423,6 +425,62 @@ model FinancialService {
   @@unique([formDriverId])
   @@index([formDriverId])
   @@map("financial_services")
+}
+
+model WhatsAppMessage {
+  id String @id @default(cuid())
+
+  // Destinatario
+  recipientPhone String @map("recipient_phone") // 5491112345678
+  recipientName  String @map("recipient_name") // Juan Pérez
+  chatId         String @map("chat_id") // 5491112345678@c.us
+
+  // Tipo de mensaje y contenido
+  messageType   WhatsAppMessageType @map("message_type")
+  step          String?              // Para form_incomplete: personal_info, documents, etc
+  message       String              @db.Text // Mensaje completo enviado
+  messageLength Int                 @map("message_length") // Longitud del mensaje
+
+  // Metadata específica del tipo de mensaje (JSON flexible)
+  metadata Json? // { formUrl, date, time, location, meetingUrl, etc }
+
+  // Estado del envío
+  status         WhatsAppMessageStatus @default(SENT)
+  sentAt         DateTime              @default(now()) @map("sent_at")
+  deliveredAt    DateTime?             @map("delivered_at")
+  readAt         DateTime?             @map("read_at")
+  failedAt       DateTime?             @map("failed_at")
+  responseTimeMs Int?                  @map("response_time_ms") // Tiempo que tardó el bot en responder
+
+  // Manejo de errores
+  errorMessage String? @map("error_message") @db.Text
+  retryCount   Int     @default(0) @map("retry_count")
+  maxRetries   Int     @default(3) @map("max_retries")
+
+  // Relación opcional con FormDriver
+  formDriverId String?     @map("form_driver_id")
+  formDriver   FormDriver? @relation(fields: [formDriverId], references: [id], onDelete: SetNull)
+
+  // Auditoría y origen
+  source     WhatsAppMessageSource @default(MANUAL) // manual, cron, trigger, api
+  sentBy     String?                @map("sent_by") // clerkId del admin que lo envió (si es manual)
+  sentByUser AdminUser?             @relation("WhatsAppMessagesSent", fields: [sentBy], references: [id], onDelete: SetNull)
+
+  // Contexto de la request
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([recipientPhone])
+  @@index([formDriverId])
+  @@index([messageType])
+  @@index([status])
+  @@index([sentAt])
+  @@index([sentBy])
+  @@map("whatsapp_messages")
 }
 
 // ==================== ONBOARDING EVENTS ====================
@@ -738,4 +796,31 @@ enum PaymentStatus {
   VERIFIED // Verificado y aprobado
   REJECTED // Rechazado
   PARTIAL // Pago parcial recibido
+}
+
+enum WhatsAppMessageType {
+  ONBOARDING_REMINDER // Recordatorio de onboarding
+  FORM_INCOMPLETE // Formulario incompleto
+  WELCOME // Mensaje de bienvenida
+  APPLICATION_RECEIVED // Postulación recibida
+  CAPACITATION_REMINDER // Recordatorio de capacitación
+  CUSTOM // Mensaje personalizado/manual
+}
+
+enum WhatsAppMessageStatus {
+  QUEUED // En cola para enviar
+  SENDING // Enviando
+  SENT // Enviado exitosamente
+  DELIVERED // Entregado (si el bot soporta webhooks)
+  READ // Leído (si el bot soporta webhooks)
+  FAILED // Falló el envío
+  CANCELLED // Cancelado antes de enviar
+}
+
+enum WhatsAppMessageSource {
+  MANUAL // Enviado manualmente desde el admin
+  CRON // Enviado por cron job
+  TRIGGER // Enviado por evento automático (ej: formulario completado)
+  API // Enviado por API externa
+  TEST // Mensaje de prueba
 }
