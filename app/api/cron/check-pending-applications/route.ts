@@ -252,9 +252,13 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // 1. Verificar autenticación del cron
+    // 1. Verificar que viene de Vercel Cron
     const authHeader = request.headers.get('authorization');
-    if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+    const cronSecret = process.env.CRON_SECRET;
+    
+    // Si hay CRON_SECRET configurado, verificar
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      console.error('❌ [CRON] Unauthorized: Invalid or missing authorization');
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

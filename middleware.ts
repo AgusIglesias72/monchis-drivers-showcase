@@ -7,9 +7,10 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in',
   '/sign-up',
   '/reset-password',
-  '/sso-callback',  // ← Agregar esta línea
+  '/sso-callback',
   '/api/form(.*)',
   '/api/webhooks(.*)',
+  '/api/cron(.*)', // ← AGREGAR ESTA LÍNEA para los crons
   '/api/admin/postulaciones/export-json(.*)',
 ])
 
