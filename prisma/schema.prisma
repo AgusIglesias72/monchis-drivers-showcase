@@ -809,6 +809,7 @@ enum WhatsAppMessageType {
   APPLICATION_RECEIVED // Postulación recibida
   CAPACITATION_REMINDER // Recordatorio de capacitación
   CUSTOM // Mensaje personalizado/manual
+  CAPACITATION_NO_SHOW
 }
 
 enum WhatsAppMessageStatus {

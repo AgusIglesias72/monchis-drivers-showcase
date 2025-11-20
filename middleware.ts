@@ -12,6 +12,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/webhooks(.*)',
   '/api/cron(.*)', // ← AGREGAR ESTA LÍNEA para los crons
   '/api/admin/postulaciones/export-json(.*)',
+  '/api/onboarding/no-show(.*)',
 ])
 
 export default clerkMiddleware(async (auth, req) => {

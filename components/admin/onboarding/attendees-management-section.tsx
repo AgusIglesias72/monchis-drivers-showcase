@@ -108,14 +108,55 @@ export function AttendeesManagementSection({
 
   const handleMarkNoShow = async (attendeeId: string) => {
     setLoading(attendeeId)
-    const result = await markAttendeeNoShow(attendeeId)
-    if (result.success) {
-      toast.success('Marcado como no show')
+    
+    try {
+      // 1. Marcar como NO_SHOW en la BD
+      const result = await markAttendeeNoShow(attendeeId)
+      
+      if (!result.success) {
+        toast.error(result.error || 'Error al marcar no-show')
+        setLoading(null)
+        return
+      }
+  
+      // 2. Enviar mensaje automático de WhatsApp
+      try {
+        const messageResponse = await fetch('/api/onboarding/no-show', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            attendeeId: attendeeId,
+          }),
+        })
+  
+        const messageData = await messageResponse.json()
+  
+        if (messageResponse.ok && messageData.success) {
+          toast.success('No-show registrado y mensaje enviado', {
+            description: `Se enviaron ${messageData.upcomingEvents} capacitaciones disponibles`,
+          })
+        } else {
+          toast.success('No-show registrado', {
+            description: 'Advertencia: No se pudo enviar el mensaje de WhatsApp',
+          })
+          console.error('Error enviando mensaje:', messageData.error)
+        }
+      } catch (messageError) {
+        toast.success('No-show registrado', {
+          description: 'Advertencia: No se pudo enviar el mensaje de WhatsApp',
+        })
+        console.error('Error enviando mensaje:', messageError)
+      }
+  
       onRefresh()
-    } else {
-      toast.error(result.error || 'Error')
+    } catch (error) {
+      toast.error('Error al procesar no-show')
+      console.error('Error:', error)
+    } finally {
+      setLoading(null)
     }
-    setLoading(null)
   }
 
 
