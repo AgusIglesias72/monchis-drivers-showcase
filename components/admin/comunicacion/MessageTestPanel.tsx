@@ -9,6 +9,7 @@ import { MessagePreview } from './MessagePreview';
 import { RecentMessagesList } from './RecentMessagesList';
 import { BotStatusIndicator } from './BotStatusIndicator';
 import { TestTube2, History } from 'lucide-react';
+import { getActiveBots, type BotId } from '@/lib/config/whatsapp-bots.config';
 
 export interface MessageFormData {
   phone: string;
@@ -18,7 +19,17 @@ export interface MessageFormData {
   metadata?: Record<string, any>;
 }
 
-export function MessageTestPanel() {
+interface MessageTestPanelProps {
+  initialBotId?: BotId;
+}
+
+export function MessageTestPanel({ initialBotId }: MessageTestPanelProps) {
+  const activeBots = getActiveBots();
+  const [activeBot, setActiveBot] = useState<BotId>(
+    (initialBotId as BotId) || (activeBots[0]?.id as BotId) || 'bot-adquisicion-prod'
+  );
+  const [activeTab, setActiveTab] = useState('send');
+
   const [formData, setFormData] = useState<MessageFormData>({
     phone: '',
     name: '',
@@ -32,17 +43,40 @@ export function MessageTestPanel() {
   };
 
   const handleMessageSent = () => {
-    // Trigger refresh del historial
-    setRefreshTrigger(prev => prev + 1);
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   return (
     <div className="space-y-6">
-      {/* Estado del Bot */}
-      <BotStatusIndicator />
+      {/* Selector de Bot */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2">
+        {activeBots.map((bot) => (
+          <button
+            key={bot.id}
+            onClick={() => setActiveBot(bot.id as BotId)}
+            className={`
+              flex items-center gap-2 px-4 py-2 rounded-lg border transition-all
+              ${
+                activeBot === bot.id
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background hover:bg-muted border-border'
+              }
+            `}
+          >
+            <span className="text-xl">{bot.icon}</span>
+            <div className="text-left">
+              <div className="text-sm font-semibold">{bot.name}</div>
+              <div className="text-xs opacity-80">{bot.messageTypes.length} tipos</div>
+            </div>
+          </button>
+        ))}
+      </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="send" className="w-full">
+      {/* Estado del Bot Seleccionado */}
+      <BotStatusIndicator botId={activeBot} />
+
+      {/* Tabs de Funcionalidad */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="send" className="gap-2">
             <TestTube2 className="h-4 w-4" />
@@ -60,7 +94,8 @@ export function MessageTestPanel() {
             {/* Columna Izquierda: Formulario */}
             <Card>
               <CardContent className="pt-6">
-                <MessageTestForm 
+                <MessageTestForm
+                  botId={activeBot}
                   onChange={handleFormChange}
                   onMessageSent={handleMessageSent}
                 />
@@ -80,7 +115,7 @@ export function MessageTestPanel() {
         <TabsContent value="history">
           <Card>
             <CardContent className="pt-6">
-              <RecentMessagesList refreshTrigger={refreshTrigger} />
+              <RecentMessagesList refreshTrigger={refreshTrigger} botId={activeBot} />
             </CardContent>
           </Card>
         </TabsContent>

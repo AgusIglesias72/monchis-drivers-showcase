@@ -1,20 +1,18 @@
 // app/api/form/complete/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { messagesService } from "@/lib/services/messages.service";
-import { WhatsAppMessageType, WhatsAppMessageSource } from "@prisma/client";
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { messagesService } from '@/lib/services/messages.service';
+import { WhatsAppMessageType, WhatsAppMessageSource } from '@prisma/client';
 
 /**
  * Normaliza el nombre del usuario (solo primer nombre)
- * Ejemplos: "Agustin Iglesias" → "Agustin", "María José" → "María"
  */
 function normalizeFirstName(fullName: string | null | undefined): string {
   if (!fullName) return 'Usuario';
-  
+
   const trimmed = fullName.trim();
   const firstName = trimmed.split(' ')[0];
-  
-  // Capitalizar primera letra
+
   return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
 }
 
@@ -23,13 +21,9 @@ export async function POST(request: NextRequest) {
     const { sessionId } = await request.json();
 
     if (!sessionId) {
-      return NextResponse.json(
-        { error: "Session ID requerido" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Session ID requerido' }, { status: 400 });
     }
 
-    // Obtener submission
     const submission = await prisma.formSubmission.findUnique({
       where: { sessionId },
       include: {
@@ -39,25 +33,23 @@ export async function POST(request: NextRequest) {
 
     if (!submission || !submission.formDriverId) {
       return NextResponse.json(
-        { error: "Sesión no encontrada o FormDriver no creado" },
+        { error: 'Sesión no encontrada o FormDriver no creado' },
         { status: 404 }
       );
     }
 
     const formData = submission.formData as any;
 
-    // Actualizar FormDriver a COMPLETED
     await prisma.formDriver.update({
       where: { id: submission.formDriverId },
       data: {
-        status: "COMPLETED",
+        status: 'COMPLETED',
         completedAt: new Date(),
-        currentStep: 6, // Ahora son 6 steps
+        currentStep: 6,
         completedSteps: [1, 2, 3, 4, 5, 6],
       },
     });
 
-    // Crear registro de EquipmentPayment
     if (formData.paymentMethod) {
       await prisma.equipmentPayment.create({
         data: {
@@ -73,7 +65,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Crear/actualizar FinancialService si puede facturar
     if (formData.canInvoice === 'si') {
       await prisma.financialService.upsert({
         where: { formDriverId: submission.formDriverId },
@@ -93,7 +84,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Marcar submission como completa
     await prisma.formSubmission.update({
       where: { id: submission.id },
       data: {
@@ -103,28 +93,26 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // ===== 🎉 ENVIAR MENSAJE DE CONFIRMACIÓN AUTOMÁTICO =====
-    
+    // ===== 🎉 ENVIAR MENSAJE DE CONFIRMACIÓN =====
+
     const driver = submission.formDriver;
-    
+
     if (driver && driver.phoneNumber && driver.fullName) {
       try {
-        // Normalizar nombre (solo primer nombre)
         const firstName = normalizeFirstName(driver.fullName);
-        
-        // Obtener IP del request
-        const ipAddress = request.headers.get('x-forwarded-for') || 
-                         request.headers.get('x-real-ip') || 
-                         'unknown';
+
+        const ipAddress =
+          request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
         const userAgent = request.headers.get('user-agent') || 'unknown';
 
-        // Enviar mensaje de confirmación
+        // ✅ Especificar bot para confirmaciones
         const messageResult = await messagesService.sendWhatsAppMessage({
           phone: driver.phoneNumber,
-          name: firstName, // ← Nombre normalizado
+          name: firstName,
           type: WhatsAppMessageType.APPLICATION_RECEIVED,
           formDriverId: driver.id,
-          source: WhatsAppMessageSource.TRIGGER, // ← Automático por evento
+          source: WhatsAppMessageSource.TRIGGER,
+          botId: 'bot-adquisicion-prod', // ✅ NUEVO: Bot específico
           metadata: {
             triggeredBy: 'form_completion',
             sessionId: submission.id,
@@ -134,12 +122,12 @@ export async function POST(request: NextRequest) {
           userAgent,
         });
 
-        // Log del resultado (no bloqueamos si falla)
         if (messageResult.success) {
           console.log('✅ Mensaje de confirmación enviado:', {
             driver: driver.fullName,
             phone: driver.phoneNumber,
             messageId: messageResult.messageId,
+            botUsed: messageResult.botUsed,
           });
         } else {
           console.error('⚠️ No se pudo enviar mensaje de confirmación:', {
@@ -149,7 +137,6 @@ export async function POST(request: NextRequest) {
           });
         }
       } catch (messageError) {
-        // No bloqueamos la finalización del form si falla el mensaje
         console.error('❌ Error enviando mensaje de confirmación:', messageError);
       }
     } else {
@@ -159,17 +146,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ===== FIN ENVÍO DE MENSAJE =====
-
     return NextResponse.json({
       success: true,
       submissionId: submission.id,
       formDriverId: submission.formDriverId,
     });
   } catch (error: any) {
-    console.error("Error en complete:", error);
+    console.error('Error en complete:', error);
     return NextResponse.json(
-      { error: error.message || "Error al completar el formulario" },
+      { error: error.message || 'Error al completar el formulario' },
       { status: 500 }
     );
   }

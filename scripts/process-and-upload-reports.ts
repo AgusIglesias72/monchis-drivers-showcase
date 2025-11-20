@@ -25,8 +25,8 @@ const CONFIG = {
   downloadTimeout: 300000, // 5 minutos
   
   // Configuración de fechas
-  startDate: '2025-10-01', // YYYY-MM-DD
-  endDate: '2025-10-02',   // YYYY-MM-DD
+  startDate: '2025-11-11', // YYYY-MM-DD
+  endDate: '2025-11-17',   // YYYY-MM-DD
   daysPerRange: 1,         // Días por cada descarga
 };
 
@@ -234,6 +234,19 @@ class ReportProcessorAndUploader {
     console.log('✅ Click en ícono de Excel');
     
     await sleep(1500);
+    
+    // ⭐ NUEVO: Marcar checkbox para incluir drivers deshabilitados
+    console.log('☑️  Marcando checkbox de drivers deshabilitados...');
+    try {
+      const checkbox = await this.page.waitForSelector('input.ant-checkbox-input[type="checkbox"]', { 
+        timeout: 5000 
+      });
+      await checkbox.click();
+      console.log('✅ Checkbox marcado');
+      await sleep(500);
+    } catch (error) {
+      console.warn('⚠️  No se pudo encontrar/marcar el checkbox de drivers deshabilitados');
+    }
     
     // Buscar el botón de descarga
     const downloadButton = await this.page.waitForSelector(

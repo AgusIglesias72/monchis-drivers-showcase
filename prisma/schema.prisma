@@ -462,6 +462,8 @@ model WhatsAppMessage {
   formDriver   FormDriver? @relation(fields: [formDriverId], references: [id], onDelete: SetNull)
 
   // Auditoría y origen
+  botId      String?                @map("bot-adquisicion-id") // bot-adquisicion-prod, bot-reactivacion-prod
+  
   source     WhatsAppMessageSource @default(MANUAL) // manual, cron, trigger, api
   sentBy     String?                @map("sent_by") // clerkId del admin que lo envió (si es manual)
   sentByUser AdminUser?             @relation("WhatsAppMessagesSent", fields: [sentBy], references: [id], onDelete: SetNull)
@@ -475,11 +477,13 @@ model WhatsAppMessage {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([recipientPhone])
-  @@index([formDriverId])
   @@index([messageType])
   @@index([status])
-  @@index([sentAt])
+  @@index([source])
+  @@index([formDriverId])
   @@index([sentBy])
+  @@index([sentAt])
+  @@index([botId])  // ✅ NUEVO índice
   @@map("whatsapp_messages")
 }
 

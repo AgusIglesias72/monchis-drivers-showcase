@@ -30,15 +30,17 @@ import {
   getFormSteps,
   requiresStep,
 } from '@/lib/constants/whatsapp-messages';
+import { getBotConfig, type BotId } from '@/lib/config/whatsapp-bots.config';
 
 interface MessageTestFormProps {
+  botId: BotId;
   onChange?: (data: any) => void;
   onMessageSent?: () => void;
 }
 
 type ResultType = 'success' | 'error' | 'warning';
 
-export function MessageTestForm({ onChange, onMessageSent }: MessageTestFormProps) {
+export function MessageTestForm({ botId, onChange, onMessageSent }: MessageTestFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<{
     type: ResultType;
@@ -52,6 +54,13 @@ export function MessageTestForm({ onChange, onMessageSent }: MessageTestFormProp
   const [step, setStep] = useState('');
   const [customMessage, setCustomMessage] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const botConfig = getBotConfig(botId);
+
+  // Filtrar tipos de mensaje disponibles para este bot
+  const availableMessageTypes = getActiveMessageTypes().filter((msgType) =>
+    botConfig?.messageTypes.includes(msgType.value)
+  );
 
   const notifyChange = (updates: any) => {
     const formData = {
@@ -159,6 +168,7 @@ export function MessageTestForm({ onChange, onMessageSent }: MessageTestFormProp
         phone: phone.trim(),
         name: name.trim(),
         type: type,
+        botId: botId, // ✅ Incluir botId
       };
 
       if (requiresStep(type)) {
@@ -190,7 +200,7 @@ export function MessageTestForm({ onChange, onMessageSent }: MessageTestFormProp
           setResult({
             type: 'success',
             title: 'Mensaje enviado exitosamente',
-            message: 'El mensaje fue enviado y registrado correctamente',
+            message: `Enviado usando ${botConfig?.name || 'bot'}`,
           });
         }
 
@@ -247,9 +257,7 @@ export function MessageTestForm({ onChange, onMessageSent }: MessageTestFormProp
                     <li key={i}>• {example}</li>
                   ))}
                 </ul>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Sin espacios, guiones ni caracteres especiales
-                </p>
+                <p className="text-xs text-muted-foreground mt-2">Sin espacios, guiones ni caracteres especiales</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -257,15 +265,13 @@ export function MessageTestForm({ onChange, onMessageSent }: MessageTestFormProp
         <Input
           id="phone"
           type="text"
-          placeholder="5491158165977"
+          placeholder="5950984039476"
           value={phone}
           onChange={(e) => handlePhoneChange(e.target.value)}
           disabled={isLoading}
           className={errors.phone ? 'border-red-500' : ''}
         />
-        {errors.phone && (
-          <p className="text-sm text-red-500">{errors.phone}</p>
-        )}
+        {errors.phone && <p className="text-sm text-red-500">{errors.phone}</p>}
       </div>
 
       {/* Name */}
@@ -280,30 +286,21 @@ export function MessageTestForm({ onChange, onMessageSent }: MessageTestFormProp
           disabled={isLoading}
           className={errors.name ? 'border-red-500' : ''}
         />
-        {errors.name && (
-          <p className="text-sm text-red-500">{errors.name}</p>
-        )}
+        {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
       </div>
 
-      {/* Message Type */}
+      {/* Message Type - Filtrado por bot */}
       <div className="space-y-3">
-        <Label htmlFor="type" className="text-sm font-medium">Tipo de mensaje</Label>
+        <Label htmlFor="type" className="text-sm font-medium">
+          Tipo de mensaje
+        </Label>
         <Select value={type} onValueChange={handleTypeChange} disabled={isLoading}>
-          <SelectTrigger 
-            className={`h-auto min-h-[72px] py-3 px-4 ${errors.type ? 'border-red-500 focus:border-red-500' : ''}`}
-          >
+          <SelectTrigger className={`h-auto py-3 px-4 w-full cursor-pointer ${errors.type ? 'border-red-500' : ''}`}>
             {selectedMessageType ? (
-              <div className="flex items-center gap-3 w-full">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <div className="flex items-center gap-3 w-full cursor-pointer">
                   <MessageSquare className="h-5 w-5 text-primary" />
-                </div>
                 <div className="flex flex-col items-start flex-1 min-w-0">
-                  <span className="font-medium text-sm text-foreground">
-                    {selectedMessageType.label}
-                  </span>
-                  <span className="text-xs text-muted-foreground line-clamp-1">
-                    {selectedMessageType.description}
-                  </span>
+                  <span className="font-medium text-sm text-foreground">{selectedMessageType.label}</span>
                 </div>
               </div>
             ) : (
@@ -311,44 +308,22 @@ export function MessageTestForm({ onChange, onMessageSent }: MessageTestFormProp
             )}
           </SelectTrigger>
           <SelectContent className="max-h-[400px]">
-            {getActiveMessageTypes().map((messageType) => (
-              <SelectItem 
-                key={messageType.value} 
-                value={messageType.value}
-                className="py-3 px-4"
-              >
+            {availableMessageTypes.map((messageType) => (
+              <SelectItem key={messageType.value} value={messageType.value} className="p-2 cursor-pointer">
                 <div className="flex items-center gap-3 w-full">
                   <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                     <MessageSquare className="h-5 w-5 text-primary" />
                   </div>
                   <div className="flex flex-col items-start flex-1 min-w-0">
-                    <span className="font-medium text-sm">{messageType.label}</span>
-                    <span className="text-xs text-muted-foreground line-clamp-2">
-                      {messageType.description}
-                    </span>
+                    <span className="font-medium text-sm w-full">{messageType.label}</span>
+                    <span className="text-xs text-muted-foreground line-clamp-2">{messageType.description}</span>
                   </div>
                 </div>
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        
-        {selectedMessageType && (
-          <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg border border-primary/20 shadow-sm">
-            <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-              <Check className="h-4 w-4 text-primary" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-primary">
-                {selectedMessageType.label}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Tipo de mensaje seleccionado
-              </p>
-            </div>
-          </div>
-        )}
-        
+
         {errors.type && (
           <p className="text-sm text-red-500 flex items-center gap-1.5">
             <AlertCircle className="h-4 w-4" />
@@ -362,30 +337,24 @@ export function MessageTestForm({ onChange, onMessageSent }: MessageTestFormProp
         <div className="space-y-2">
           <Label htmlFor="step">Step del formulario</Label>
           <Select value={step} onValueChange={handleStepChange} disabled={isLoading}>
-            <SelectTrigger className={errors.step ? 'border-red-500' : ''}>
-              <SelectValue placeholder="Selecciona el step incompleto" />
+            <SelectTrigger className={`w-full cursor-pointer ${errors.step ? 'border-red-500' : ''}`}>
+              <SelectValue placeholder="Selecciona el step incompleto" className="cursor-pointer py-2" />
             </SelectTrigger>
             <SelectContent>
               {getFormSteps().map((formStep) => (
-                <SelectItem key={formStep.value} value={formStep.value}>
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center flex-shrink-0">
+                <SelectItem key={formStep.value} value={formStep.value} className="cursor-pointer h-[48px]">
+                  <div className="flex items-center gap-3 w-full">
                       <FileText className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                    </div>
                     <div className="flex flex-col items-start">
                       <span className="font-medium text-sm">{formStep.label}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formStep.description}
-                      </span>
+                      <span className="text-xs text-muted-foreground">{formStep.description}</span>
                     </div>
                   </div>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {errors.step && (
-            <p className="text-sm text-red-500">{errors.step}</p>
-          )}
+          {errors.step && <p className="text-sm text-red-500">{errors.step}</p>}
         </div>
       )}
 
@@ -406,49 +375,59 @@ export function MessageTestForm({ onChange, onMessageSent }: MessageTestFormProp
             {errors.customMessage ? (
               <p className="text-sm text-red-500">{errors.customMessage}</p>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                {customMessage.length}/1000 caracteres
-              </p>
+              <p className="text-xs text-muted-foreground">{customMessage.length}/1000 caracteres</p>
             )}
           </div>
         </div>
       )}
 
-      {/* Result Alert - Mejorado */}
+      {/* Result Alert */}
       {result && (
-        <Alert 
+        <Alert
           variant={result.type === 'error' ? 'destructive' : 'default'}
           className={
-            result.type === 'success' 
-              ? 'border-green-500 bg-green-50 dark:bg-green-950/20' 
+            result.type === 'success'
+              ? 'border-green-500 bg-green-50 dark:bg-green-950/20 flex w-full'
               : result.type === 'warning'
-              ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20'
+              ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 flex w-full'
               : ''
           }
         >
-          <div className="flex items-start gap-3">
-            <div className={`mt-0.5 ${
-              result.type === 'success' ? 'text-green-600 dark:text-green-400' :
-              result.type === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
-              'text-red-600 dark:text-red-400'
-            }`}>
+          <div className="flex items-start gap-3 w-full">
+            <div
+              className={`mt-0.5 ${
+                result.type === 'success'
+                  ? 'text-green-600 dark:text-green-400'
+                  : result.type === 'warning'
+                  ? 'text-yellow-600 dark:text-yellow-400'
+                  : 'text-red-600 dark:text-red-400'
+              }`}
+            >
               {result.type === 'success' && <CheckCircle2 className="h-5 w-5" />}
               {result.type === 'warning' && <AlertTriangle className="h-5 w-5" />}
               {result.type === 'error' && <AlertCircle className="h-5 w-5" />}
             </div>
             <div className="flex-1">
-              <AlertTitle className={
-                result.type === 'success' ? 'text-green-900 dark:text-green-100' :
-                result.type === 'warning' ? 'text-yellow-900 dark:text-yellow-100' :
-                ''
-              }>
+              <AlertTitle
+                className={
+                  result.type === 'success'
+                    ? 'text-green-900 dark:text-green-100'
+                    : result.type === 'warning'
+                    ? 'text-yellow-900 dark:text-yellow-100'
+                    : ''
+                }
+              >
                 {result.title}
               </AlertTitle>
-              <AlertDescription className={
-                result.type === 'success' ? 'text-green-800 dark:text-green-200' :
-                result.type === 'warning' ? 'text-yellow-800 dark:text-yellow-200' :
-                ''
-              }>
+              <AlertDescription
+                className={
+                  result.type === 'success'
+                    ? 'text-green-800 dark:text-green-200'
+                    : result.type === 'warning'
+                    ? 'text-yellow-800 dark:text-yellow-200'
+                    : ''
+                }
+              >
                 {result.message}
               </AlertDescription>
             </div>
