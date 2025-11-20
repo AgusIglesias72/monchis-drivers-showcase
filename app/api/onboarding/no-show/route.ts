@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
         type: WhatsAppMessageType.CAPACITATION_NO_SHOW,
         formDriverId: driver.id,
         source: WhatsAppMessageSource.TRIGGER,
-        botId: 'bot-principal-dev',
+        botId: 'bot-adquisicion-prod',
         metadata: {
           triggeredBy: 'onboarding_no_show',
           attendeeId: attendee.id,

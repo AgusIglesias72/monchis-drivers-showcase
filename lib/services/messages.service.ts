@@ -102,7 +102,7 @@ function formatPhoneNumber(phone: string): string {
   }
 
   if (cleanPhone.length === 10 && !cleanPhone.startsWith('0')) {
-    return '54' + cleanPhone;
+    return '549' + cleanPhone;
   }
 
   if (cleanPhone.length >= 12) {
@@ -142,6 +142,7 @@ function selectBotForMessageType(messageType: WhatsAppMessageType): BotId {
   const messageTypeToBotMap: Record<string, BotId> = {
     APPLICATION_RECEIVED: 'bot-adquisicion-prod',
     FORM_INCOMPLETE: 'bot-adquisicion-prod',
+    CAPACITATION_NO_SHOW: 'bot-adquisicion-prod', // ✅ NUEVO
     CUSTOM: 'bot-adquisicion-prod', // Default
     REACTIVATION_REMINDER: 'bot-reactivacion-prod',
     INCENTIVE_NOTIFICATION: 'bot-reactivacion-prod',
