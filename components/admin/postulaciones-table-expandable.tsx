@@ -35,7 +35,6 @@ import {
   CheckCircle,
   MoreVertical,
   XCircle,
-  Receipt,
 } from "lucide-react"
 import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
 import { ContactButton } from "@/components/admin/postulaciones/contact-button"
@@ -218,7 +217,7 @@ export function PostulacionesTableExpandable({
                     <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase min-w-[130px]">
                       Postulación
                     </th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-muted-foreground uppercase min-w-[120px]">
+                    <th className="px-3 py-3 text-center text-xs font-medium text-muted-foreground uppercase min-w-[100px]">
                       Estados
                     </th>
                     <th className="px-3 py-3 text-center text-xs font-medium text-muted-foreground uppercase min-w-[120px]">
@@ -243,77 +242,102 @@ export function PostulacionesTableExpandable({
                     // Calcular badges
                     const { badges } = calculatePostulacionBadges(postulacion)
 
-
-
-                    // ✅ Badge de estado de postulación (con soporte para REJECTED)
+                    // Badge de estado de postulación
                     const statusBadgeConfig = getPostulacionStatusBadge(
                       postulacion.status,
                       postulacion.currentStep,
                       postulacion.assistedCompletion
                     )
-                    // Iconos de estado
+
+                    // ✅ LÓGICA CORREGIDA DE DOCUMENTOS
                     const getDocumentIcon = () => {
                       const documents = postulacion.documents || []
 
+                      // Documentos de cédula
                       const cedulaDocs = documents.filter((doc: any) =>
                         doc.documentType === 'CEDULA' ||
                         doc.documentType === 'CEDULA_FRONT' ||
                         doc.documentType === 'CEDULA_BACK'
                       )
-                      const hasCedulaApproved = cedulaDocs.some((doc: any) => doc.status === 'APPROVED')
-                      const hasCedulaExists = cedulaDocs.length > 0
 
+                      // Documentos de antecedentes
                       const antecedentesDocs = documents.filter((doc: any) =>
                         doc.documentType === 'CRIMINAL_RECORD' ||
                         doc.documentType === 'ANTECEDENTES'
                       )
-                      const hasAntecedentesApproved = antecedentesDocs.some((doc: any) => doc.status === 'APPROVED')
-                      const hasAntecedentesExists = antecedentesDocs.length > 0
 
-                      if (!hasCedulaExists || !hasAntecedentesExists) {
+                      // Certificado tributario
+                      const taxDoc = documents.find((doc: any) => doc.documentType === 'TAX_COMPLIANCE')
+
+                      // Verificar si existen
+                      const hasCedulaDocs = cedulaDocs.length > 0
+                      const hasAntecedentesDocs = antecedentesDocs.length > 0
+
+                      // ⚪ GRIS: Documentos faltantes (no hay Cédula o no hay Antecedentes)
+                      if (!hasCedulaDocs || !hasAntecedentesDocs) {
                         return {
                           icon: FileText,
-                          bg: 'bg-red-100',
-                          text: 'text-red-700',
+                          bg: 'bg-gray-100',
+                          text: 'text-gray-500',
                           tooltip: 'Documentos Faltantes'
                         }
                       }
 
+                      // Verificar si hay AL MENOS UNO aprobado en cada categoría
+                      const hasCedulaApproved = cedulaDocs.some((doc: any) => doc.status === 'APPROVED')
+                      const hasAntecedentesApproved = antecedentesDocs.some((doc: any) => doc.status === 'APPROVED')
+
+                      // 🟡 AMARILLO: No hay ninguno aprobado aún (están en revisión o pendientes)
                       if (!hasCedulaApproved || !hasAntecedentesApproved) {
+                        // Verificar si hay rechazados SIN aprobados
+                        const hasRejectedCedula = cedulaDocs.some((doc: any) => doc.status === 'REJECTED')
+                        const hasRejectedAntecedentes = antecedentesDocs.some((doc: any) => doc.status === 'REJECTED')
+
+                        // 🔴 ROJO: Hay rechazados pero NO hay aprobados en alguna categoría
+                        if ((hasRejectedCedula && !hasCedulaApproved) || (hasRejectedAntecedentes && !hasAntecedentesApproved)) {
+                          return {
+                            icon: FileText,
+                            bg: 'bg-red-100',
+                            text: 'text-red-700',
+                            tooltip: 'Documentos Rechazados'
+                          }
+                        }
+
+                        // Sino, están en revisión
                         return {
                           icon: FileText,
                           bg: 'bg-yellow-100',
                           text: 'text-yellow-700',
-                          tooltip: 'Documentos pendientes de aprobación'
+                          tooltip: 'Documentos en Revisión'
                         }
                       }
 
+                      // ✅ En este punto: Cédula + Antecedentes tienen AL MENOS uno APROBADO cada uno
+                      // Ahora verificamos el Certificado Tributario
+
+                      // 🟢 VERDE: Cédula + Antecedentes + Cert. Tributario todos APROBADOS
+                      if (taxDoc && taxDoc.status === 'APPROVED') {
+                        return {
+                          icon: FileText,
+                          bg: 'bg-green-100',
+                          text: 'text-green-700',
+                          tooltip: 'Documentos Completos'
+                        }
+                      }
+
+                      // 🔵 AZUL: Cédula + Antecedentes APROBADOS, pero falta Cert. Tributario
                       return {
                         icon: FileText,
-                        bg: 'bg-green-100',
-                        text: 'text-green-700',
-                        tooltip: 'Documentos completos'
+                        bg: 'bg-blue-100',
+                        text: 'text-blue-700',
+                        tooltip: 'Falta Certificado Tributario'
                       }
                     }
 
                     const getPaymentIcon = () => {
-                      const payBadge = badges.find(b => b.includes('PAGO'))
-
-                      if (payBadge === 'PAGO_COMPLETO') {
-                        return {
-                          icon: CreditCard,
-                          bg: 'bg-green-100',
-                          text: 'text-green-700',
-                          tooltip: 'Pago completo'
-                        }
-                      } else if (payBadge === 'PAGO_EN_VERIFICACION') {
-                        return {
-                          icon: CreditCard,
-                          bg: 'bg-yellow-100',
-                          text: 'text-yellow-700',
-                          tooltip: 'Pago en verificación'
-                        }
-                      } else {
+                      const payment = postulacion.equipmentPayments?.[0]
+                      
+                      if (!payment) {
                         return {
                           icon: CreditCard,
                           bg: 'bg-red-100',
@@ -321,42 +345,40 @@ export function PostulacionesTableExpandable({
                           tooltip: 'Pago pendiente'
                         }
                       }
-                    }
-
-                    const getInvoiceIcon = () => {
-                      const invBadge = badges.find(b => b.includes('FACTURACION'))
-
-                      if (invBadge === 'FACTURACION_COMPLETA') {
+                      
+                      if (payment.status === 'VERIFIED') {
                         return {
-                          icon: Receipt,
+                          icon: CreditCard,
                           bg: 'bg-green-100',
                           text: 'text-green-700',
-                          tooltip: 'Facturación completa'
+                          tooltip: 'Pago verificado'
                         }
-                      } else if (invBadge === 'FACTURACION_NA') {
+                      }
+                      
+                      // 🔵 AZUL: Tiene archivo cargado
+                      if (payment.receiptUrl) { // O el campo que corresponda
                         return {
-                          icon: Receipt,
-                          bg: 'bg-gray-100',
-                          text: 'text-gray-500',
-                          tooltip: 'No aplica facturación'
+                          icon: CreditCard,
+                          bg: 'bg-blue-100',
+                          text: 'text-blue-700',
+                          tooltip: 'Pago cargado, en verificación'
                         }
-                      } else {
-                        return {
-                          icon: Receipt,
-                          bg: 'bg-orange-100',
-                          text: 'text-orange-700',
-                          tooltip: 'Facturación pendiente'
-                        }
+                      }
+                      
+                      // 🟡 AMARILLO: Completó paso pero sin archivo
+                      return {
+                        icon: CreditCard,
+                        bg: 'bg-yellow-100',
+                        text: 'text-yellow-700',
+                        tooltip: 'Pago en proceso, falta comprobante'
                       }
                     }
 
                     const docIcon = getDocumentIcon()
                     const payIcon = getPaymentIcon()
-                    const invIcon = getInvoiceIcon()
 
                     const DocIcon = docIcon.icon
                     const PayIcon = payIcon.icon
-                    const InvIcon = invIcon.icon
 
                     return (
                       <Fragment key={postulacion.id}>
@@ -398,27 +420,27 @@ export function PostulacionesTableExpandable({
                             </div>
                           </td>
 
-                          {/* POSTULACIÓN STATUS - ✅ CON SOPORTE PARA REJECTED */}
+                          {/* POSTULACIÓN STATUS */}
                           <td className="px-3 py-3">
-  <div className="flex flex-row items-center gap-1">
-    <Badge
-      variant={statusBadgeConfig.variant}
-      className={`text-xs ${statusBadgeConfig.className}`}
-    >
-      {statusBadgeConfig.label}
-    </Badge>
-    {postulacion.status === 'IN_PROGRESS' && (
-      <span className="text-xs text-muted-foreground">
-        {' '}{postulacion.currentStep}/6
-      </span>
-    )}
-  </div>
-</td>
+                            <div className="flex flex-row items-center gap-1">
+                              <Badge
+                                variant={statusBadgeConfig.variant}
+                                className={`text-xs ${statusBadgeConfig.className}`}
+                              >
+                                {statusBadgeConfig.label}
+                              </Badge>
+                              {postulacion.status === 'IN_PROGRESS' && (
+                                <span className="text-xs text-muted-foreground">
+                                  {' '}{postulacion.currentStep}/6
+                                </span>
+                              )}
+                            </div>
+                          </td>
 
-                          {/* ESTADOS - 3 ICONOS FIJOS */}
+                          {/* ESTADOS - ✅ SOLO 2 ICONOS AHORA */}
                           <td className="px-3 py-3">
                             <TooltipProvider>
-                              <div className="flex items-center justify-center gap-1.5">
+                              <div className="flex items-center justify-center gap-2">
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <div className={`flex items-center justify-center w-8 h-8 rounded-full ${docIcon.bg} ${docIcon.text}`}>
@@ -440,59 +462,53 @@ export function PostulacionesTableExpandable({
                                     <p className="text-xs">{payIcon.tooltip}</p>
                                   </TooltipContent>
                                 </Tooltip>
-
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className={`flex items-center justify-center w-8 h-8 rounded-full ${invIcon.bg} ${invIcon.text}`}>
-                                      <InvIcon className="h-4 w-4" />
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p className="text-xs">{invIcon.tooltip}</p>
-                                  </TooltipContent>
-                                </Tooltip>
                               </div>
                             </TooltipProvider>
                           </td>
 
                           {/* ONBOARDING */}
                           <td className="px-3 py-3 text-center">
-                            {hasOnboarding ? (
-                              <div className="flex flex-col items-center gap-1">
-                                <Badge
-                                  variant="outline"
-                                  className={`text-xs ${hasOnboarding.status === 'ATTENDED' || hasOnboarding.status === 'CONFIRMED'
-                                    ? 'bg-green-50 text-green-700 border-green-200'
-                                    : (hasOnboarding.status === 'SCHEDULED' || hasOnboarding.status === 'INVITED')
-                                      ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                      : 'bg-amber-50 text-amber-700 border-amber-200'
-                                    }`}
-                                >
-                                  {hasOnboarding.status === 'ATTENDED' ? 'Capacitado' :
-                                    hasOnboarding.status === 'CONFIRMED' ? 'Capacitado' :
-                                      hasOnboarding.status === 'SCHEDULED' || hasOnboarding.status === 'INVITED' ? 'Agendado' : 'Pendiente'}
-                                </Badge>
-                                {hasOnboarding.event?.scheduledDate && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {new Date(hasOnboarding.event.scheduledDate).toLocaleDateString('es-ES', {
-                                      day: '2-digit',
-                                      month: 'short'
-                                    })}
-                                  </span>
-                                )}
-                              </div>
-                            ) : onboardingStatus === 'SCHEDULED' ? (
-                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                                Agendado
-                              </Badge>
-                            ) : onboardingStatus === 'READY' ? (
-                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
-                                Pendiente
-                              </Badge>
-                            ) : (
-                              <span className="text-xs text-muted-foreground italic">Sin agendar</span>
-                            )}
-                          </td>
+  {hasOnboarding ? (
+    <div className="flex flex-col items-center gap-1">
+      <Badge
+        variant="outline"
+        className={`text-xs ${
+          hasOnboarding.status === 'ATTENDED' || hasOnboarding.status === 'CONFIRMED'
+            ? 'bg-green-50 text-green-700 border-green-200'
+            : hasOnboarding.status === 'SCHEDULED' || hasOnboarding.status === 'INVITED'
+            ? 'bg-blue-50 text-blue-700 border-blue-200'
+            : hasOnboarding.status === 'NO_SHOW' || hasOnboarding.status === 'ABSENT'
+            ? 'bg-red-50 text-red-700 border-red-200'
+            : 'bg-amber-50 text-amber-700 border-amber-200'
+        }`}
+      >
+        {hasOnboarding.status === 'ATTENDED' ? 'Capacitado' :
+          hasOnboarding.status === 'CONFIRMED' ? 'Capacitado' :
+          hasOnboarding.status === 'SCHEDULED' || hasOnboarding.status === 'INVITED' ? 'Agendado' :
+          hasOnboarding.status === 'NO_SHOW' || hasOnboarding.status === 'ABSENT' ? 'No Asistió' :
+          'Pendiente'}
+      </Badge>
+      {hasOnboarding.event?.scheduledDate && (
+        <span className="text-xs text-muted-foreground">
+          {new Date(hasOnboarding.event.scheduledDate).toLocaleDateString('es-ES', {
+            day: '2-digit',
+            month: 'short'
+          })}
+        </span>
+      )}
+    </div>
+  ) : onboardingStatus === 'SCHEDULED' ? (
+    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+      Agendado
+    </Badge>
+  ) : onboardingStatus === 'READY' ? (
+    <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+      Pendiente
+    </Badge>
+  ) : (
+    <span className="text-xs text-muted-foreground italic">Sin agendar</span>
+  )}
+</td>
 
                           {/* FECHA */}
                           <td className="px-3 py-3">
@@ -505,7 +521,7 @@ export function PostulacionesTableExpandable({
                             </div>
                           </td>
 
-                          {/* ACCIONES - ✅ CON NUEVO BOTÓN DE CONTACTO */}
+                          {/* ACCIONES */}
                           <td className="px-3 py-3">
                             <div className="flex items-center justify-end gap-2">
                               <Button
@@ -517,7 +533,6 @@ export function PostulacionesTableExpandable({
                                 <Eye className="h-4 w-4" />
                               </Button>
 
-                              {/* ✅ NUEVO: Botón de Contacto */}
                               <ContactButton
                                 driverId={postulacion.id}
                                 driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
@@ -549,7 +564,6 @@ export function PostulacionesTableExpandable({
 
                                   <DropdownMenuSeparator />
 
-                                  {/* ✅ Botón integrado directamente sin wrapper */}
                                   <RejectButton
                                     driverId={postulacion.id}
                                     driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
@@ -560,11 +574,11 @@ export function PostulacionesTableExpandable({
                                   <DropdownMenuSeparator />
 
                                   <AssistedCompletionButton
-  driverId={postulacion.id}
-  driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
-  isAssisted={postulacion.assistedCompletion || false}
-  onSuccess={() => window.location.reload()}
-/>
+                                    driverId={postulacion.id}
+                                    driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
+                                    isAssisted={postulacion.assistedCompletion || false}
+                                    onSuccess={() => window.location.reload()}
+                                  />
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>

@@ -707,9 +707,11 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                       title="Comprobante de Pago"
                     />
                   ) : (
-                    <img
+                    <Image
                       src={postulacion.equipmentPayments[0].paymentProofUrl}
                       alt="Comprobante de Pago"
+                      width={800}
+                      height={600}
                       className="w-full h-auto"
                     />
                   )}

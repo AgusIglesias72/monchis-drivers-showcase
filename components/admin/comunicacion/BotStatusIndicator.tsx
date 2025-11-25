@@ -1,7 +1,7 @@
 // components/admin/comunicacion/BotStatusIndicator.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +38,7 @@ export function BotStatusIndicator({ botId }: BotStatusIndicatorProps) {
   const botConfig = getBotConfig(botId);
   const botUrl = getBotUrl(botId);
 
-  const checkBotStatus = async (showLoading = true) => {
+  const checkBotStatus = useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
 
     if (!botUrl) {
@@ -64,7 +64,7 @@ export function BotStatusIndicator({ botId }: BotStatusIndicatorProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [botId, botUrl, botConfig?.urlKey]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -95,7 +95,7 @@ export function BotStatusIndicator({ botId }: BotStatusIndicatorProps) {
     checkBotStatus();
     const interval = setInterval(() => checkBotStatus(false), 10000);
     return () => clearInterval(interval);
-  }, [botId]);
+  }, [botId, checkBotStatus]);
 
   // Timeout para estado "initializing"
   useEffect(() => {

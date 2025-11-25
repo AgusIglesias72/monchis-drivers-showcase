@@ -99,6 +99,18 @@ export function getBotApiKey(): string {
   return process.env.NEXT_PUBLIC_WHATSAPP_BOT_API_KEY || '';
 }
 
+export function getAllBotConfigs(): Array<{
+  id: BotId;
+  name: string;
+  icon: string;
+  description: string;
+  urlKey: string;
+  apiKeyKey: string;
+}> {
+  return Object.values(WHATSAPP_BOTS_CONFIG);
+}
+
 // Tipos para TypeScript
 export type BotId = keyof typeof WHATSAPP_BOTS_CONFIG;
 export type MessageType = string;
+

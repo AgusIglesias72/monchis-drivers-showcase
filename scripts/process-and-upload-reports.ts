@@ -21,7 +21,7 @@ const CONFIG = {
   sheetName: 'Reporte Pagos',
   
   // Configuración de descarga
-  headless: false,
+  headless: true,
   downloadTimeout: 300000, // 5 minutos
   
   // Configuración de fechas
@@ -74,14 +74,8 @@ function generateDateRanges(startDate: string, endDate: string, daysPerRange: nu
 /**
  * Filtra filas vacías o que contienen "Total"
  */
-function filterInvalidRows(data: any[][], isFirstFile: boolean): any[][] {
+function filterInvalidRows(data: any[][]): any[][] {
   return data.filter((row, index) => {
-    // Siempre mantener los headers en el primer archivo
-    if (index === 0 && isFirstFile) return true;
-    
-    // Saltar headers en archivos subsecuentes
-    if (index === 0 && !isFirstFile) return false;
-    
     // Verificar si la fila está vacía
     const isEmpty = row.every(cell => 
       cell === null || 
@@ -235,7 +229,7 @@ class ReportProcessorAndUploader {
     
     await sleep(1500);
     
-    // ⭐ NUEVO: Marcar checkbox para incluir drivers deshabilitados
+    // Marcar checkbox para incluir drivers deshabilitados
     console.log('☑️  Marcando checkbox de drivers deshabilitados...');
     try {
       const checkbox = await this.page.waitForSelector('input.ant-checkbox-input[type="checkbox"]', { 
@@ -298,10 +292,22 @@ class ReportProcessorAndUploader {
     const rawData = readExcelFromBuffer(buffer);
     console.log(`   📊 ${rawData.length} filas leídas`);
     
-    // Filtrar filas inválidas
     const isFirstFile = this.allData.length === 0;
-    const cleanData = filterInvalidRows(rawData, isFirstFile);
-    const removedCount = rawData.length - cleanData.length;
+    
+    // 🔧 FIX: Primero separar headers de datos, LUEGO filtrar
+    let dataToFilter: any[][];
+    
+    if (isFirstFile) {
+      // Primer archivo: filtrar todo (mantendremos el header después)
+      dataToFilter = rawData;
+    } else {
+      // Archivos subsecuentes: remover header ANTES de filtrar
+      dataToFilter = rawData.slice(1);
+    }
+    
+    // Filtrar filas inválidas
+    const cleanData = filterInvalidRows(dataToFilter);
+    const removedCount = dataToFilter.length - cleanData.length;
     this.totalRowsFiltered += removedCount;
     
     if (removedCount > 0) {
@@ -314,10 +320,9 @@ class ReportProcessorAndUploader {
       this.allData = cleanData;
       console.log(`   ✅ ${cleanData.length} filas agregadas (incluyendo headers)`);
     } else {
-      // Archivos subsecuentes: agregar solo datos (sin headers)
-      const dataRows = cleanData.slice(1);
-      this.allData = this.allData.concat(dataRows);
-      console.log(`   ✅ ${dataRows.length} filas de datos agregadas`);
+      // Archivos subsecuentes: agregar solo datos (ya sin headers)
+      this.allData = this.allData.concat(cleanData);
+      console.log(`   ✅ ${cleanData.length} filas de datos agregadas`);
     }
     
     this.processedRanges++;

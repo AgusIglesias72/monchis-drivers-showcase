@@ -1,0 +1,438 @@
+// lib/services/reports-processor.service.ts
+import 'dotenv/config';
+import { chromium, Browser, Page, BrowserContext, Download } from 'playwright';
+import * as XLSX from 'xlsx';
+import { writeToSheet, clearSheet } from '@/scripts/utils/sheet-connection';
+
+export interface ReportsConfig {
+  loginUrl: string;
+  reportsUrl: string;
+  email: string;
+  password: string;
+  spreadsheetId: string;
+  sheetName: string;
+  startDate: string;
+  endDate: string;
+  daysPerRange: number;
+  headless: boolean;
+}
+
+interface DateRange {
+  start: string;
+  end: string;
+}
+
+interface ProcessStats {
+  totalRows: number;
+  dataRows: number;
+  processedRanges: number;
+  filteredRows: number;
+}
+
+// ============================================================================
+// UTILIDADES
+// ============================================================================
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function generateDateRanges(startDate: string, endDate: string, daysPerRange: number = 1): DateRange[] {
+  const ranges: DateRange[] = [];
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  let currentStart = new Date(start);
+  
+  while (currentStart <= end) {
+    const currentEnd = new Date(currentStart);
+    currentEnd.setDate(currentEnd.getDate() + daysPerRange - 1);
+    
+    if (currentEnd > end) {
+      currentEnd.setTime(end.getTime());
+    }
+    
+    ranges.push({
+      start: formatDate(currentStart),
+      end: formatDate(currentEnd),
+    });
+    
+    currentStart.setDate(currentStart.getDate() + daysPerRange);
+  }
+  
+  return ranges;
+}
+
+function filterInvalidRows(data: any[][]): any[][] {
+  return data.filter((row) => {
+    const isEmpty = row.every(cell => 
+      cell === null || 
+      cell === undefined || 
+      cell === '' || 
+      (typeof cell === 'string' && cell.trim() === '')
+    );
+    
+    if (isEmpty) return false;
+    
+    const hasTotal = row.some(cell => 
+      typeof cell === 'string' && 
+      cell.toLowerCase().includes('total')
+    );
+    
+    if (hasTotal) return false;
+    
+    const nonEmptyCells = row.filter(cell => 
+      cell !== null && 
+      cell !== undefined && 
+      cell !== '' && 
+      !(typeof cell === 'string' && cell.trim() === '')
+    ).length;
+    
+    const emptinessThreshold = 0.5;
+    const isMostlyEmpty = nonEmptyCells < (row.length * emptinessThreshold);
+    
+    if (isMostlyEmpty) return false;
+    
+    return true;
+  });
+}
+
+function readExcelFromBuffer(buffer: Buffer): any[][] {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+  return data;
+}
+
+// ============================================================================
+// CLASE DE AUTOMATIZACIÓN
+// ============================================================================
+
+class ReportProcessorAndUploader {
+  private browser: Browser | null = null;
+  private context: BrowserContext | null = null;
+  private page: Page | null = null;
+  private allData: any[][] = [];
+  private processedRanges: number = 0;
+  private totalRowsFiltered: number = 0;
+  private config: ReportsConfig;
+  private logCallback?: (message: string) => void;
+
+  constructor(config: ReportsConfig, logCallback?: (message: string) => void) {
+    this.config = config;
+    this.logCallback = logCallback;
+  }
+
+  private log(message: string): void {
+    console.log(message);
+    if (this.logCallback) {
+      this.logCallback(message);
+    }
+  }
+
+  async initialize(): Promise<void> {
+    this.log('🚀 Iniciando navegador...');
+    this.browser = await chromium.launch({
+      headless: this.config.headless,
+      slowMo: 50,
+    });
+
+    this.context = await this.browser.newContext({
+      acceptDownloads: true,
+      viewport: { width: 1920, height: 1080 },
+    });
+
+    this.page = await this.context.newPage();
+    this.page.setDefaultTimeout(60000);
+    
+    this.log('✅ Navegador inicializado');
+  }
+
+  async login(): Promise<void> {
+    if (!this.page) throw new Error('Página no inicializada');
+    
+    this.log('🔐 Iniciando sesión...');
+    
+    await this.page.goto(this.config.loginUrl, { waitUntil: 'networkidle' });
+    
+    await this.page.fill('#basic_email', this.config.email);
+    await this.page.fill('#basic_password', this.config.password);
+    
+    await Promise.all([
+      this.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }),
+      this.page.click('button[type="submit"]')
+    ]);
+    
+    await sleep(2000);
+    
+    this.log('✅ Sesión iniciada');
+  }
+
+  async navigateToReports(): Promise<void> {
+    if (!this.page) throw new Error('Página no inicializada');
+    
+    this.log('📊 Navegando a reportes...');
+    await this.page.goto(this.config.reportsUrl, { 
+      waitUntil: 'networkidle',
+      timeout: 30000 
+    });
+    
+    await this.page.waitForSelector('input[placeholder="Fecha desde"]', { timeout: 10000 });
+    this.log('✅ Página de reportes cargada');
+  }
+
+  async setDateRange(startDate: string, endDate: string): Promise<void> {
+    if (!this.page) throw new Error('Página no inicializada');
+    
+    this.log(`📅 Configurando rango: ${startDate} a ${endDate}`);
+    
+    const fechaDesdeInput = await this.page.waitForSelector('input[placeholder="Fecha desde"]', { timeout: 10000 });
+    await fechaDesdeInput.click();
+    await sleep(300);
+    await fechaDesdeInput.click({ clickCount: 3 });
+    await this.page.keyboard.press('Backspace');
+    await sleep(200);
+    await fechaDesdeInput.type(startDate, { delay: 50 });
+    await sleep(300);
+    await this.page.keyboard.press('Tab');
+    await sleep(300);
+    
+    const fechaHastaInput = await this.page.waitForSelector('input[placeholder="Fecha hasta"]', { timeout: 10000 });
+    await fechaHastaInput.click();
+    await sleep(300);
+    await fechaHastaInput.click({ clickCount: 3 });
+    await this.page.keyboard.press('Backspace');
+    await sleep(200);
+    await fechaHastaInput.type(endDate, { delay: 50 });
+    await sleep(300);
+    await this.page.keyboard.press('Tab');
+    await sleep(500);
+    
+    this.log('✅ Fechas configuradas');
+  }
+
+  async downloadAndProcessExcel(): Promise<void> {
+    if (!this.page) throw new Error('Página no inicializada');
+    
+    this.log('📥 Iniciando descarga y procesamiento...');
+    
+    const excelIcon = await this.page.waitForSelector('.anticon-file-excel', { timeout: 10000 });
+    await excelIcon.click();
+    this.log('✅ Click en ícono de Excel');
+    
+    await sleep(1500);
+    
+    this.log('☑️  Marcando checkbox de drivers deshabilitados...');
+    try {
+      const checkbox = await this.page.waitForSelector('input.ant-checkbox-input[type="checkbox"]', { 
+        timeout: 5000 
+      });
+      await checkbox.click();
+      this.log('✅ Checkbox marcado');
+      await sleep(500);
+    } catch (error) {
+      this.log('⚠️  No se pudo encontrar/marcar el checkbox de drivers deshabilitados');
+    }
+    
+    const downloadButton = await this.page.waitForSelector(
+      'span:has-text("Descargar de todos los drivers")',
+      { timeout: 10000 }
+    );
+    
+    if (!downloadButton) {
+      throw new Error('No se encontró el botón de descarga');
+    }
+    
+    this.log('⏳ Descargando Excel en memoria...');
+    
+    const downloadPromise = this.page.waitForEvent('download', { 
+      timeout: 300000 // 5 minutos
+    });
+    
+    await downloadButton.click();
+    
+    let download: Download;
+    try {
+      download = await downloadPromise;
+      this.log('✅ Descarga iniciada');
+    } catch (error: any) {
+      if (error.message.includes('Timeout')) {
+        throw new Error('Timeout en descarga - el servidor tardó más de 5 minutos');
+      }
+      throw error;
+    }
+    
+    this.log('📖 Leyendo Excel en memoria...');
+    const buffer = await download.createReadStream().then(stream => {
+      return new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        stream.on('data', (chunk) => chunks.push(chunk));
+        stream.on('end', () => resolve(Buffer.concat(chunks)));
+        stream.on('error', reject);
+      });
+    });
+    
+    this.log('✅ Excel leído en memoria');
+    
+    this.log('🔄 Procesando datos...');
+    const rawData = readExcelFromBuffer(buffer);
+    this.log(`   📊 ${rawData.length} filas leídas`);
+    
+    const isFirstFile = this.allData.length === 0;
+    
+    let dataToFilter: any[][];
+    
+    if (isFirstFile) {
+      dataToFilter = rawData;
+    } else {
+      dataToFilter = rawData.slice(1);
+    }
+    
+    const cleanData = filterInvalidRows(dataToFilter);
+    const removedCount = dataToFilter.length - cleanData.length;
+    this.totalRowsFiltered += removedCount;
+    
+    if (removedCount > 0) {
+      this.log(`   🗑️  ${removedCount} fila(s) filtrada(s)`);
+    }
+    
+    if (isFirstFile) {
+      this.allData = cleanData;
+      this.log(`   ✅ ${cleanData.length} filas agregadas (incluyendo headers)`);
+    } else {
+      this.allData = this.allData.concat(cleanData);
+      this.log(`   ✅ ${cleanData.length} filas de datos agregadas`);
+    }
+    
+    this.processedRanges++;
+    
+    await sleep(2000);
+    
+    try {
+      const closeSelectors = [
+        '.ant-modal-close',
+        'button:has-text("Cerrar")',
+        'button:has-text("Cancelar")',
+        '[aria-label="Close"]'
+      ];
+      
+      for (const selector of closeSelectors) {
+        const closeButton = await this.page.$(selector);
+        if (closeButton) {
+          await closeButton.click();
+          await sleep(500);
+          break;
+        }
+      }
+    } catch (error) {
+      // Ignorar
+    }
+  }
+
+  async processDateRange(startDate: string, endDate: string): Promise<void> {
+    this.log(`\n📊 PROCESANDO RANGO: ${startDate} → ${endDate}`);
+    
+    try {
+      await this.setDateRange(startDate, endDate);
+      await this.downloadAndProcessExcel();
+      this.log(`✅ Rango ${startDate} → ${endDate} procesado\n`);
+    } catch (error: any) {
+      this.log(`❌ Error en rango ${startDate} → ${endDate}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async uploadToSheets(): Promise<void> {
+    this.log('\n📝 SUBIENDO DATOS A GOOGLE SHEETS');
+    
+    this.log(`📊 Total de filas a subir: ${this.allData.length}`);
+    this.log(`   (1 fila de headers + ${this.allData.length - 1} filas de datos)\n`);
+    
+    this.log('🧹 Limpiando hoja...');
+    await clearSheet(this.config.spreadsheetId, this.config.sheetName, false);
+    this.log('✅ Hoja limpiada\n');
+    
+    this.log('📝 Escribiendo datos...');
+    await writeToSheet(
+      this.config.spreadsheetId,
+      this.config.sheetName,
+      this.allData,
+      'A1'
+    );
+    this.log('✅ Datos escritos exitosamente');
+  }
+
+  async close(): Promise<void> {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+      this.log('🔒 Navegador cerrado');
+    }
+  }
+
+  getStats(): ProcessStats {
+    return {
+      totalRows: this.allData.length,
+      dataRows: this.allData.length - 1,
+      processedRanges: this.processedRanges,
+      filteredRows: this.totalRowsFiltered,
+    };
+  }
+
+  getData(): any[][] {
+    return this.allData;
+  }
+}
+
+// ============================================================================
+// EXPORTAR SERVICE
+// ============================================================================
+
+export const reportsProcessorService = {
+  async processAndUpload(
+    config: ReportsConfig,
+    logCallback?: (message: string) => void
+  ): Promise<ProcessStats> {
+    const processor = new ReportProcessorAndUploader(config, logCallback);
+    
+    try {
+      const dateRanges = generateDateRanges(config.startDate, config.endDate, config.daysPerRange);
+      
+      if (logCallback) {
+        logCallback(`📋 Se procesarán ${dateRanges.length} rangos de fechas\n`);
+      }
+
+      await processor.initialize();
+      await processor.login();
+      await processor.navigateToReports();
+
+      for (let i = 0; i < dateRanges.length; i++) {
+        const range = dateRanges[i];
+        if (logCallback) {
+          logCallback(`[${i + 1}/${dateRanges.length}]`);
+        }
+        
+        await processor.processDateRange(range.start, range.end);
+        
+        if (i < dateRanges.length - 1) {
+          await sleep(5000);
+        }
+      }
+
+      await processor.uploadToSheets();
+
+      return processor.getStats();
+      
+    } finally {
+      await processor.close();
+    }
+  },
+};

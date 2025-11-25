@@ -1,12 +1,12 @@
 // app/api/reports/external-drivers/start/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { backgroundJobsService } from '@/lib/services/background-jobs.service';
 import { externalDriversProcessor } from '@/lib/services/external-drivers-processor.service';
+import { emailService } from '@/lib/services/email.service';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // 5 minutos para la función (el proceso real continúa en background)
+export const maxDuration = 300;
 
 interface StartJobRequest {
   startDate: string;
@@ -17,18 +17,8 @@ interface StartJobRequest {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
-
     const body: StartJobRequest = await request.json();
     
-    // Validaciones
     if (!body.startDate || !body.endDate) {
       return NextResponse.json(
         { success: false, error: 'startDate y endDate son requeridos' },
@@ -54,18 +44,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Crear job en DB
     const job = await backgroundJobsService.create({
       type: 'DRIVER_PROCESSING',
-      userId,
+      userId: '1',
       metadata: {
         startDate: body.startDate,
         endDate: body.endDate,
         concurrency: body.concurrency || 3,
         maxDrivers: body.maxDrivers || null,
-        spreadsheetsId: process.env.GOOGLE_SHEETS_DRIVERS_EXTERNOS!,
+        spreadsheetsId: process.env.GOOGLE_SHEETS_ID || '1EvjPf4TUzu7qxMWUy1cjUDGY4FBbCgO8tMYlcOUOt2M',
+        reportSheetName: 'Reporte Pagos', // ✅ NUEVO: Leer de aquí
         driveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID!,
-        loginUrl: process.env.APP_LOGIN_URL || 'https://pr-721.durgl9xxo9p82.amplifyapp.com/auth/login',
+        loginUrl: process.env.APP_LOGIN_URL || 'https://pr-721.durgl9xxo9p82.amplifyapp.com/login',
         driversPageUrl: process.env.APP_DRIVERS_URL || 'https://pr-721.durgl9xxo9p82.amplifyapp.com/reports/driverpayment',
         email: process.env.APP_EMAIL!,
         password: process.env.APP_PASSWORD!,
@@ -75,15 +65,33 @@ export async function POST(request: NextRequest) {
 
     console.log(`🚀 Job ${job.id} creado, iniciando procesamiento...`);
 
-    // Iniciar procesamiento en background de forma INMEDIATA
-    // NO usar await aquí - queremos que se ejecute en paralelo
-    externalDriversProcessor.processJob(job.id).catch((error) => {
-      console.error(`❌ Error crítico procesando job ${job.id}:`, error);
-      // Intentar marcar como fallido
-      backgroundJobsService.markAsFailed(job.id, error.message).catch(console.error);
+    // Procesar en background
+    externalDriversProcessor.processJob(job.id).then(async () => {
+      // Enviar email cuando termine
+      const jobResult = await backgroundJobsService.getById(job.id);
+      if (jobResult?.result) {
+        const stats = jobResult.result as any;
+        await emailService.sendProcessCompletedEmail({
+          startDate: body.startDate,
+          endDate: body.endDate,
+          driversStats: {
+            successful: stats.successful,
+            failed: stats.failed,
+            total: stats.total,
+            errors: stats.errors,
+          },
+        });
+      }
+    }).catch(async (error) => {
+      console.error(`❌ Error procesando job ${job.id}:`, error);
+      await backgroundJobsService.markAsFailed(job.id, error.message);
+      await emailService.sendProcessFailedEmail({
+        startDate: body.startDate,
+        endDate: body.endDate,
+        error: error.message,
+      });
     });
 
-    // Dar un pequeño delay para que el job empiece
     await new Promise(resolve => setTimeout(resolve, 100));
 
     return NextResponse.json({

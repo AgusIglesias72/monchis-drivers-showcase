@@ -3,6 +3,7 @@
 
 import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
+import Script from 'next/script'
 
 interface GoogleTagManagerProps {
   gtmId: string
@@ -25,7 +26,7 @@ export function GoogleTagManager({ gtmId }: GoogleTagManagerProps) {
         event: 'gtm.js',
       })
     }
-  }, [])
+  }, [pathname])
 
   useEffect(() => {
     // Trackear cambios de página solo en rutas no-admin
@@ -47,8 +48,9 @@ export function GoogleTagManager({ gtmId }: GoogleTagManagerProps) {
   return (
     <>
       {/* Google Tag Manager - Script */}
-      <script
+      <Script
         id="gtm-script"
+        strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `
             (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':

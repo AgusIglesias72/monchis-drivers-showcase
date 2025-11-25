@@ -8,7 +8,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { whatsappMultiBotService } from './whatsapp-multi-bot.service';
-import { getBotConfig, type BotId } from '@/lib/config/whatsapp-bots.config';
+import { getBotConfig, getBotUrl, getBotApiKey, type BotId } from '@/lib/config/whatsapp-bots.config';
 
 // ==================== TYPES ====================
 
@@ -24,7 +24,7 @@ export interface SendWhatsAppMessageParams {
   sentBy?: string;
   ipAddress?: string;
   userAgent?: string;
-  botId?: BotId; // ✅ NUEVO: Especificar bot manualmente
+  botId?: BotId;
 }
 
 export interface WhatsAppBotResponse {
@@ -42,7 +42,7 @@ export interface WhatsAppBotResponse {
     metadata?: Record<string, any>;
   };
   error?: string;
-  botUsed?: string; // ✅ NUEVO: Qué bot se usó
+  botUsed?: string;
 }
 
 export interface MessageFilters {
@@ -54,7 +54,7 @@ export interface MessageFilters {
   dateFrom?: Date;
   dateTo?: Date;
   search?: string;
-  botId?: string; // ✅ NUEVO: Filtrar por bot
+  botId?: string;
 }
 
 export interface PaginationParams {
@@ -69,7 +69,7 @@ export interface MessageStats {
   byType: Record<WhatsAppMessageType, number>;
   byStatus: Record<WhatsAppMessageStatus, number>;
   bySource: Record<WhatsAppMessageSource, number>;
-  byBot: Record<string, number>; // ✅ NUEVO: Stats por bot
+  byBot: Record<string, number>;
   successRate: number;
   avgResponseTime: number;
   last24h: number;
@@ -79,9 +79,6 @@ export interface MessageStats {
 
 // ==================== HELPER FUNCTIONS ====================
 
-/**
- * Formatea un número de teléfono al formato internacional correcto
- */
 function formatPhoneNumber(phone: string): string {
   let cleanPhone = phone.replace(/\D/g, '');
 
@@ -109,10 +106,6 @@ function formatPhoneNumber(phone: string): string {
     return cleanPhone;
   }
 
-  if (cleanPhone.length === 9) {
-    return '595' + cleanPhone;
-  }
-
   return '595' + cleanPhone;
 }
 
@@ -134,16 +127,12 @@ function formatPhoneForDisplay(phone: string): string {
   return `+${clean}`;
 }
 
-/**
- * ✅ NUEVO: Selecciona el mejor bot según el tipo de mensaje
- */
 function selectBotForMessageType(messageType: WhatsAppMessageType): BotId {
-  // Mapeo de tipos de mensaje a bots
   const messageTypeToBotMap: Record<string, BotId> = {
     APPLICATION_RECEIVED: 'bot-adquisicion-prod',
     FORM_INCOMPLETE: 'bot-adquisicion-prod',
-    CAPACITATION_NO_SHOW: 'bot-adquisicion-prod', // ✅ NUEVO
-    CUSTOM: 'bot-adquisicion-prod', // Default
+    CAPACITATION_NO_SHOW: 'bot-adquisicion-prod',
+    CUSTOM: 'bot-adquisicion-prod',
     REACTIVATION_REMINDER: 'bot-reactivacion-prod',
     INCENTIVE_NOTIFICATION: 'bot-reactivacion-prod',
   };
@@ -153,9 +142,6 @@ function selectBotForMessageType(messageType: WhatsAppMessageType): BotId {
 
 // ==================== SERVICE FUNCTIONS ====================
 
-/**
- * ✅ ACTUALIZADO: Envía mensajes usando el sistema multi-bot
- */
 export async function sendWhatsAppMessage(
   params: SendWhatsAppMessageParams
 ): Promise<{
@@ -175,18 +161,15 @@ export async function sendWhatsAppMessage(
       formatted: formattedPhone,
     });
 
-    // ✅ Seleccionar bot: manual o automático
     console.log('🔍 botId received:', params.botId);
     const botId = params.botId || selectBotForMessageType(params.type);
     const botConfig = getBotConfig(botId);
 
     console.log(`🤖 Using bot: ${botConfig?.name} (${botId}) - Manual: ${!!params.botId}`);
 
-    // ✅ Enviar mensaje usando el bot seleccionado
     let botResponse: WhatsAppBotResponse & { botUsed?: string };
 
     if (params.type === WhatsAppMessageType.CUSTOM && params.customMessage) {
-      // Mensaje personalizado
       botResponse = await whatsappMultiBotService.sendMessage(botId, {
         phone: formattedPhone,
         message: params.customMessage,
@@ -194,7 +177,6 @@ export async function sendWhatsAppMessage(
       });
       botResponse.botUsed = botId;
     } else {
-      // Mensaje contextual
       botResponse = await whatsappMultiBotService.sendContextualMessage(botId, {
         phone: formattedPhone,
         name: params.name,
@@ -223,7 +205,7 @@ export async function sendWhatsAppMessage(
             status: WhatsAppMessageStatus.FAILED,
             errorMessage: botResponse.error,
             source: params.source || WhatsAppMessageSource.MANUAL,
-            botId: botId, // ✅ Guardar qué bot se usó
+            botId: botId,
             formDriver: params.formDriverId ? { connect: { id: params.formDriverId } } : undefined,
             sentByUser: params.sentBy ? { connect: { id: params.sentBy } } : undefined,
             ipAddress: params.ipAddress,
@@ -260,7 +242,7 @@ export async function sendWhatsAppMessage(
       sentAt: botResponse.data?.sentAt ? new Date(botResponse.data.sentAt) : new Date(),
       responseTimeMs: botResponse.data?.responseTimeMs || responseTimeMs,
       source: params.source || WhatsAppMessageSource.MANUAL,
-      botId: botId, // ✅ Guardar qué bot se usó
+      botId: botId,
       ipAddress: params.ipAddress,
       userAgent: params.userAgent,
     };
@@ -320,7 +302,7 @@ export async function getMessages(filters?: MessageFilters, pagination?: Paginat
   if (filters?.source) where.source = filters.source;
   if (filters?.formDriverId) where.formDriverId = filters.formDriverId;
   if (filters?.sentBy) where.sentBy = filters.sentBy;
-  if (filters?.botId) where.botId = filters.botId; // ✅ NUEVO
+  if (filters?.botId) where.botId = filters.botId;
 
   if (filters?.dateFrom || filters?.dateTo) {
     where.sentAt = {};
@@ -458,7 +440,6 @@ export async function getMessageStats(dateFrom?: Date, dateTo?: Date): Promise<M
     bySourceRaw.map((item) => [item.source, item._count])
   ) as Record<WhatsAppMessageSource, number>;
 
-  // ✅ NUEVO: Stats por bot
   const byBotRaw = await prisma.whatsAppMessage.groupBy({
     by: ['botId'],
     where,
@@ -470,7 +451,6 @@ export async function getMessageStats(dateFrom?: Date, dateTo?: Date): Promise<M
   ) as Record<string, number>;
 
   const sent = byStatus[WhatsAppMessageStatus.SENT] || 0;
-  const failed = byStatus[WhatsAppMessageStatus.FAILED] || 0;
   const successRate = total > 0 ? (sent / total) * 100 : 0;
 
   const avgResponseTimeResult = await prisma.whatsAppMessage.aggregate({
@@ -509,7 +489,7 @@ export async function getMessageStats(dateFrom?: Date, dateTo?: Date): Promise<M
     byType,
     byStatus,
     bySource,
-    byBot, // ✅ NUEVO
+    byBot,
     successRate,
     avgResponseTime,
     last24h,
@@ -552,7 +532,7 @@ export async function retryFailedMessage(messageId: string, sentBy?: string) {
     formDriverId: message.formDriverId || undefined,
     source: WhatsAppMessageSource.MANUAL,
     sentBy,
-    botId: (message.botId as BotId) || undefined, // ✅ Usar el mismo bot
+    botId: (message.botId as BotId) || undefined,
   });
 }
 
@@ -591,6 +571,485 @@ export async function markMessageAsRead(messageId: string) {
   });
 }
 
+// ==================== BULK MESSAGING ====================
+
+export interface BulkRecipient {
+  phone: string;
+  name?: string;
+  variables: Record<string, string>;
+}
+
+export interface ParsedRecipientsResult {
+  recipients: BulkRecipient[];
+  headers: string[];
+  errors: string[];
+}
+
+export interface BulkSendResult {
+  phone: string;
+  name?: string;
+  success: boolean;
+  messageId?: string;
+  botUsed?: string;
+  error?: string;
+  sentAt?: string;
+  hasImage?: boolean;
+  warning?: string;
+}
+
+export interface SendBulkMessagesParams {
+  recipients: BulkRecipient[];
+  message: string;
+  imageUrl?: string;
+  botId?: BotId;
+  delayMs?: number;
+  sentBy?: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+/**
+ * Parsea entrada de destinatarios con soporte para:
+ * - Solo números (uno por línea)
+ * - CSV con headers (primera línea = nombres de columnas)
+ * - CSV sin headers (asume: telefono, nombre)
+ * 
+ * Headers especiales:
+ * - telefono, phone, numero, number → campo de teléfono (requerido)
+ * - nombre, name → se usa también como fallback para {nombre}
+ * - Cualquier otro header → variable disponible
+ */
+export function parseRecipients(input: string): ParsedRecipientsResult {
+  const lines = input.trim().split('\n').map(line => line.trim()).filter(Boolean);
+  const recipients: BulkRecipient[] = [];
+  const errors: string[] = [];
+  
+  if (lines.length === 0) {
+    return { recipients: [], headers: [], errors: ['No hay datos para procesar'] };
+  }
+
+  // Detectar si la primera línea es un header
+  const firstLine = lines[0];
+  const firstLineParts = firstLine.split(',').map(p => p.trim().toLowerCase());
+  
+  // Palabras clave que indican que es un header
+  const phoneKeywords = ['telefono', 'teléfono', 'phone', 'numero', 'número', 'number', 'cel', 'celular', 'mobile', 'whatsapp'];
+  const hasHeader = firstLineParts.some(part => phoneKeywords.includes(part));
+  
+  let headers: string[] = [];
+  let phoneIndex = 0;
+  let startIndex = 0;
+
+  if (hasHeader) {
+    // Primera línea es header
+    headers = firstLine.split(',').map(h => h.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+    phoneIndex = headers.findIndex(h => phoneKeywords.includes(h));
+    
+    if (phoneIndex === -1) {
+      return { recipients: [], headers: [], errors: ['No se encontró columna de teléfono en el header'] };
+    }
+    
+    startIndex = 1; // Empezar desde la segunda línea
+  } else {
+    // Sin header - detectar formato
+    const hasComma = firstLine.includes(',');
+    
+    if (hasComma) {
+      // Asumir formato: telefono, nombre, ...otras columnas
+      const sampleParts = firstLine.split(',');
+      headers = ['telefono', 'nombre'];
+      
+      // Agregar columnas genéricas si hay más
+      for (let i = 2; i < sampleParts.length; i++) {
+        headers.push(`columna${i + 1}`);
+      }
+    } else {
+      // Solo números
+      headers = ['telefono'];
+    }
+    
+    phoneIndex = 0;
+    startIndex = 0;
+  }
+
+  // Procesar líneas de datos
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i];
+    const lineNumber = i + 1;
+    
+    if (!line.includes(',') && headers.length === 1) {
+      // Solo número de teléfono
+      const phone = line.replace(/\D/g, '');
+      
+      if (phone.length < 8) {
+        errors.push(`Línea ${lineNumber}: Número muy corto "${line}"`);
+        continue;
+      }
+      
+      recipients.push({
+        phone,
+        name: undefined,
+        variables: { nombre: 'Usuario' },
+      });
+    } else {
+      // CSV con columnas
+      const parts = line.split(',').map(p => p.trim());
+      
+      if (parts.length < headers.length) {
+        // Rellenar con vacíos si faltan columnas
+        while (parts.length < headers.length) {
+          parts.push('');
+        }
+      }
+      
+      const phone = parts[phoneIndex]?.replace(/\D/g, '');
+      
+      if (!phone || phone.length < 8) {
+        errors.push(`Línea ${lineNumber}: Teléfono inválido "${parts[phoneIndex] || '(vacío)'}"`);
+        continue;
+      }
+      
+      // Construir variables desde todas las columnas
+      const variables: Record<string, string> = {};
+      
+      headers.forEach((header, idx) => {
+        if (idx !== phoneIndex && parts[idx]) {
+          variables[header] = parts[idx];
+        }
+      });
+      
+      // Asegurar que siempre exista {nombre}
+      const nameIndex = headers.findIndex(h => ['nombre', 'name'].includes(h));
+      const name = nameIndex !== -1 ? parts[nameIndex] : undefined;
+      
+      if (!variables['nombre']) {
+        variables['nombre'] = name || 'Usuario';
+      }
+      
+      recipients.push({
+        phone,
+        name,
+        variables,
+      });
+    }
+  }
+
+  // Filtrar headers para no incluir el de teléfono en las variables disponibles
+  const variableHeaders = headers.filter((_, idx) => idx !== phoneIndex);
+
+  return { 
+    recipients, 
+    headers: variableHeaders,
+    errors,
+  };
+}
+
+/**
+ * Reemplaza todas las variables en el mensaje
+ */
+export function replaceMessageVariables(
+  template: string,
+  variables: Record<string, string>
+): string {
+  let message = template;
+
+  Object.entries(variables).forEach(([key, value]) => {
+    const regex = new RegExp(`\\{${key}\\}`, 'gi');
+    message = message.replace(regex, value || '');
+  });
+
+  // Limpiar variables no reemplazadas (opcional: dejar o quitar)
+  // message = message.replace(/\{[^}]+\}/g, '');
+
+  return message;
+}
+
+/**
+ * Extrae las variables usadas en un template
+ */
+export function extractVariablesFromTemplate(template: string): string[] {
+  const matches = template.match(/\{([^}]+)\}/g) || [];
+  return matches.map(m => m.slice(1, -1).toLowerCase());
+}
+
+export async function validateBulkRecipients(params: {
+  recipients: BulkRecipient[];
+  message: string;
+  imageUrl?: string;
+  delayMs?: number;
+}): Promise<{
+  success: boolean;
+  recipients: Array<{
+    phone: string;
+    name?: string;
+    message: string;
+    variables: Record<string, string>;
+    hasImage: boolean;
+  }>;
+  total: number;
+  estimatedTimeMinutes: number;
+  variablesUsed: string[];
+  variablesAvailable: string[];
+  error?: string;
+}> {
+  const { recipients, message, imageUrl, delayMs = 2000 } = params;
+
+  if (recipients.length === 0) {
+    return {
+      success: false,
+      recipients: [],
+      total: 0,
+      estimatedTimeMinutes: 0,
+      variablesUsed: [],
+      variablesAvailable: [],
+      error: 'No hay destinatarios válidos',
+    };
+  }
+
+  if (recipients.length > 100) {
+    return {
+      success: false,
+      recipients: [],
+      total: 0,
+      estimatedTimeMinutes: 0,
+      variablesUsed: [],
+      variablesAvailable: [],
+      error: 'Máximo 100 destinatarios por envío',
+    };
+  }
+
+  const variablesUsed = extractVariablesFromTemplate(message);
+  
+  // Obtener todas las variables disponibles de los recipients
+  const variablesAvailable = [...new Set(
+    recipients.flatMap(r => Object.keys(r.variables))
+  )];
+
+  const validatedRecipients = recipients.map((recipient) => ({
+    phone: formatPhoneNumber(recipient.phone),
+    name: recipient.name,
+    message: replaceMessageVariables(message, recipient.variables),
+    variables: recipient.variables,
+    hasImage: !!imageUrl,
+  }));
+
+  const estimatedTimeMinutes = Math.ceil((recipients.length * (delayMs / 1000)) / 60);
+
+  return {
+    success: true,
+    recipients: validatedRecipients,
+    total: recipients.length,
+    estimatedTimeMinutes,
+    variablesUsed,
+    variablesAvailable,
+  };
+}
+
+/**
+ * Envía mensajes en masa - Delega TODO al backend
+ */
+export async function sendBulkMessages(
+  params: SendBulkMessagesParams
+): Promise<{
+  success: boolean;
+  summary: {
+    total: number;
+    successful: number;
+    failed: number;
+    successRate: string;
+    withImage?: number;
+    textOnly?: number;
+  };
+  results: BulkSendResult[];
+  completedAt: string;
+  error?: string;
+}> {
+  const {
+    recipients,
+    message: messageTemplate,
+    imageUrl,
+    botId,
+    delayMs = 2000,
+    sentBy,
+    ipAddress,
+    userAgent,
+  } = params;
+
+  if (recipients.length === 0) {
+    return {
+      success: false,
+      summary: { total: 0, successful: 0, failed: 0, successRate: '0' },
+      results: [],
+      completedAt: new Date().toISOString(),
+      error: 'No hay destinatarios válidos',
+    };
+  }
+
+  console.log(`📤 Iniciando envío masivo a ${recipients.length} destinatarios`);
+  console.log(`📷 Con imagen: ${!!imageUrl}`);
+
+  const selectedBotId: BotId = botId || 'bot-adquisicion-prod';
+
+  try {
+    // Preparar mensajes con personalización
+    const messages = recipients.map((recipient) => {
+      const formattedPhone = formatPhoneNumber(recipient.phone);
+      const personalizedMessage = replaceMessageVariables(messageTemplate, recipient.variables);
+
+      return {
+        phone: formattedPhone,
+        message: personalizedMessage,
+        name: recipient.name,
+        botId: botId || undefined,
+      };
+    });
+
+    const botUrl = getBotUrl(selectedBotId);
+    const apiKey = getBotApiKey();
+
+    if (!botUrl) {
+      return {
+        success: false,
+        summary: { total: recipients.length, successful: 0, failed: recipients.length, successRate: '0' },
+        results: [],
+        completedAt: new Date().toISOString(),
+        error: 'URL del bot no configurada',
+      };
+    }
+
+    const endpoint = imageUrl ? '/send-bulk-media' : '/send-bulk';
+    
+    const requestBody = imageUrl 
+      ? { messages, imageUrl, distributeAcrossBots: !botId, delayMs }
+      : { messages, distributeAcrossBots: !botId, delayMs };
+
+    console.log(`📡 Llamando a ${endpoint}...`);
+
+    const response = await fetch(`${botUrl}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiKey && { 'x-api-key': apiKey }),
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Error en ${endpoint}:`, errorText);
+      return {
+        success: false,
+        summary: { total: recipients.length, successful: 0, failed: recipients.length, successRate: '0' },
+        results: [],
+        completedAt: new Date().toISOString(),
+        error: `Error del bot: ${errorText}`,
+      };
+    }
+
+    const bulkResult = await response.json();
+
+    // Guardar en BD
+    const results: BulkSendResult[] = [];
+    
+    for (let i = 0; i < recipients.length; i++) {
+      const recipient = recipients[i];
+      const result = bulkResult.results?.[i];
+
+      if (result && result.success) {
+        try {
+          const messageData: Prisma.WhatsAppMessageCreateInput = {
+            recipientPhone: formatPhoneNumber(recipient.phone),
+            recipientName: recipient.name || 'Usuario',
+            chatId: result.chatId || `${formatPhoneNumber(recipient.phone)}@c.us`,
+            messageType: WhatsAppMessageType.CUSTOM,
+            message: messages[i].message,
+            messageLength: messages[i].message.length,
+            metadata: {
+              bulkSend: true,
+              bulkIndex: i + 1,
+              bulkTotal: recipients.length,
+              hasImage: result.hasImage ?? !!imageUrl,
+              variables: recipient.variables,
+              ...(imageUrl && { imageUrl }),
+              ...(result.warning && { warning: result.warning }),
+            },
+            status: WhatsAppMessageStatus.SENT,
+            sentAt: result.sentAt ? new Date(result.sentAt) : new Date(),
+            source: WhatsAppMessageSource.MANUAL,
+            botId: result.botId || selectedBotId,
+            sentByUser: sentBy ? { connect: { id: sentBy } } : undefined,
+            ipAddress,
+            userAgent,
+          };
+
+          const savedMessage = await prisma.whatsAppMessage.create({ data: messageData });
+
+          results.push({
+            phone: recipient.phone,
+            name: recipient.name,
+            success: true,
+            messageId: savedMessage.id,
+            botUsed: result.botId || selectedBotId,
+            sentAt: result.sentAt || new Date().toISOString(),
+            hasImage: result.hasImage,
+            warning: result.warning,
+          });
+        } catch (dbError) {
+          console.error('⚠️ Mensaje enviado pero no guardado en BD:', dbError);
+          results.push({
+            phone: recipient.phone,
+            name: recipient.name,
+            success: true,
+            botUsed: result.botId || selectedBotId,
+            sentAt: result.sentAt || new Date().toISOString(),
+            hasImage: result.hasImage,
+            warning: result.warning,
+          });
+        }
+      } else {
+        results.push({
+          phone: recipient.phone,
+          name: recipient.name,
+          success: false,
+          error: result?.error || 'Error desconocido',
+        });
+      }
+    }
+
+    const summary = {
+      total: bulkResult.summary?.total || recipients.length,
+      successful: bulkResult.summary?.successful || results.filter(r => r.success).length,
+      failed: bulkResult.summary?.failed || results.filter(r => !r.success).length,
+      successRate: (((bulkResult.summary?.successful || results.filter(r => r.success).length) / recipients.length) * 100).toFixed(2),
+      ...(imageUrl && {
+        withImage: bulkResult.summary?.withImage || results.filter(r => r.success && r.hasImage).length,
+        textOnly: bulkResult.summary?.textOnly || results.filter(r => r.success && !r.hasImage).length,
+      }),
+    };
+
+    console.log(`📊 Envío masivo completado: ${summary.successful}/${summary.total} exitosos`);
+
+    return {
+      success: true,
+      summary,
+      results,
+      completedAt: new Date().toISOString(),
+    };
+
+  } catch (error: any) {
+    console.error('❌ Error en sendBulkMessages:', error);
+    return {
+      success: false,
+      summary: { total: recipients.length, successful: 0, failed: recipients.length, successRate: '0' },
+      results: [],
+      completedAt: new Date().toISOString(),
+      error: error.message || 'Error desconocido',
+    };
+  }
+}
+
+// ==================== EXPORT ====================
+
 export const messagesService = {
   sendWhatsAppMessage,
   getMessages,
@@ -603,4 +1062,11 @@ export const messagesService = {
   markMessageAsRead,
   formatPhoneNumber,
   formatPhoneForDisplay,
+  
+  // Envío masivo
+  parseRecipients,
+  replaceMessageVariables,
+  extractVariablesFromTemplate,
+  validateBulkRecipients,
+  sendBulkMessages,
 };

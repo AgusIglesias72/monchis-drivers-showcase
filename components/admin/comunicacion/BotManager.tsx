@@ -37,6 +37,7 @@ import { whatsappMultiBotService, type BotStatusResponse } from '@/lib/services/
 import { getBotConfig } from '@/lib/config/whatsapp-bots.config';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 interface BotManagerProps {
   botId: string;
@@ -189,6 +190,35 @@ export function BotManager({ botId, autoRefresh = true, refreshInterval = 5000 }
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
+            <Button
+  variant="destructive"
+  size="sm"
+  onClick={async () => {
+    if (!confirm('¿Seguro? Esto eliminará la sesión y requerirá escanear un nuevo QR')) return;
+    
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BOT_URL}/restart/${botId}/fresh`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': process.env.NEXT_PUBLIC_BOT_API_KEY || '',
+        },
+      });
+      
+      if (!response.ok) throw new Error('Error al reiniciar');
+      
+      toast.success('Bot reiniciado. Generando nuevo QR...');
+      setTimeout(() => fetchBotStatus(), 5000);
+    } catch (error) {
+      toast.error('Error al reiniciar el bot');
+    } finally {
+      setIsLoading(false);
+    }
+  }}
+>
+  <AlertTriangle className="h-4 w-4 mr-2" />
+  Reinicio Completo (Fresh)
+</Button>
           </div>
         </CardHeader>
 

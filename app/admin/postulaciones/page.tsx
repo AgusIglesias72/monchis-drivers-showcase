@@ -11,6 +11,67 @@ interface PageProps {
   searchParams: Promise<PostulacionFilters>
 }
 
+// ✅ HELPER: Calcular color de documentos
+type DocColorStatus = 'green' | 'blue' | 'yellow' | 'red' | 'gray'
+
+function calculateDocumentColorStatus(postulacion: any): DocColorStatus {
+  const documents = postulacion.documents || []
+
+  // Documentos de cédula
+  const cedulaDocs = documents.filter((doc: any) =>
+    doc.documentType === 'CEDULA' ||
+    doc.documentType === 'CEDULA_FRONT' ||
+    doc.documentType === 'CEDULA_BACK'
+  )
+  
+  // Documentos de antecedentes
+  const antecedentesDocs = documents.filter((doc: any) =>
+    doc.documentType === 'CRIMINAL_RECORD' ||
+    doc.documentType === 'ANTECEDENTES'
+  )
+
+  // Certificado tributario
+  const taxDoc = documents.find((doc: any) => doc.documentType === 'TAX_COMPLIANCE')
+
+  // Verificar si existen
+  const hasCedulaDocs = cedulaDocs.length > 0
+  const hasAntecedentesDocs = antecedentesDocs.length > 0
+
+  // ⚪ GRIS: Documentos faltantes
+  if (!hasCedulaDocs || !hasAntecedentesDocs) {
+    return 'gray'
+  }
+
+  // Verificar si hay AL MENOS UNO aprobado en cada categoría
+  const hasCedulaApproved = cedulaDocs.some((doc: any) => doc.status === 'APPROVED')
+  const hasAntecedentesApproved = antecedentesDocs.some((doc: any) => doc.status === 'APPROVED')
+
+  // Si no hay aprobados en alguna categoría
+  if (!hasCedulaApproved || !hasAntecedentesApproved) {
+    // Verificar si hay rechazados SIN aprobados
+    const hasRejectedCedula = cedulaDocs.some((doc: any) => doc.status === 'REJECTED')
+    const hasRejectedAntecedentes = antecedentesDocs.some((doc: any) => doc.status === 'REJECTED')
+    
+    // 🔴 ROJO: Hay rechazados pero NO hay aprobados
+    if ((hasRejectedCedula && !hasCedulaApproved) || (hasRejectedAntecedentes && !hasAntecedentesApproved)) {
+      return 'red'
+    }
+    
+    // 🟡 AMARILLO: En revisión
+    return 'yellow'
+  }
+
+  // En este punto: Cédula + Antecedentes tienen AL MENOS uno APROBADO
+  
+  // 🟢 VERDE: Cert. Tributario también aprobado
+  if (taxDoc && taxDoc.status === 'APPROVED') {
+    return 'green'
+  }
+
+  // 🔵 AZUL: Falta Cert. Tributario
+  return 'blue'
+}
+
 // ✅ INCLUDE OPTIMIZADO
 const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
   documents: {
@@ -79,7 +140,8 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   const sortOrder = params.sortOrder || 'desc'
   
   const orderBy: any = {}
-  if (sortBy === 'fullName' || sortBy === 'city' || sortBy === 'createdAt' || sortBy === 'currentStep') {    orderBy[sortBy] = sortOrder
+  if (sortBy === 'fullName' || sortBy === 'city' || sortBy === 'createdAt' || sortBy === 'currentStep') {
+    orderBy[sortBy] = sortOrder
   } else {
     orderBy.createdAt = 'desc'
   }
@@ -90,7 +152,6 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   // Filtro de status general (incluye ASISTIDA)
   if (params.status && params.status !== 'all') {
     if (params.status === 'ASISTIDA') {
-      // Filtrar por postulaciones asistidas
       where.assistedCompletion = true
       where.status = 'IN_PROGRESS'
     } else {
@@ -98,7 +159,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     }
   }
 
-  // ✅ Filtro de PASO ACTUAL
+  // Filtro de PASO ACTUAL
   if (params.currentStep && params.currentStep !== 'all') {
     where.currentStep = parseInt(params.currentStep)
   }
@@ -139,14 +200,12 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
 
   // Filtro de fechas
   if (params.startDate) {
-    // Crear fecha al inicio del día en zona horaria local (00:00:00)
     const startDate = new Date(params.startDate)
     startDate.setHours(0, 0, 0, 0)
     where.createdAt = { ...where.createdAt as any, gte: startDate }
   }
 
   if (params.endDate) {
-    // Crear fecha al final del día en zona horaria local (23:59:59.999)
     const endDate = new Date(params.endDate)
     endDate.setHours(23, 59, 59, 999)
     where.createdAt = { ...where.createdAt as any, lte: endDate }
@@ -156,8 +215,24 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   const treintaDiasAtras = new Date()
   treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30)
 
+  // ✅ Detectar quick filters que necesitan filtrado por color de documentos
+  const isPendingScheduleFilter = 
+    params.onboardingStatus === 'pending' && 
+    params.status === 'COMPLETED' &&
+    !params.documentStatus // Para asegurar que viene del quick filter
+
+  const isReviewFilter = 
+    params.status === 'COMPLETED' && 
+    !params.onboardingStatus &&
+    !params.documentStatus // Para asegurar que es el quick filter "Revisar Postulación"
+
+  const isRejectedFilter = params.status === 'REJECTED'
+
   // Verificar si hay filtros POST-PROCESSING que requieren traer todos los datos
   const hasPostProcessingFilters = 
+    isPendingScheduleFilter ||
+    isReviewFilter ||
+    isRejectedFilter ||
     (params.contactStatus && params.contactStatus !== 'all') ||
     (params.documentStatus && params.documentStatus !== 'all') ||
     (params.paymentStatus && params.paymentStatus !== 'all') ||
@@ -178,7 +253,6 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     prisma.formDriver.count({ where: { status: 'ABANDONED' } }),
     prisma.formDriver.count({ where: { createdAt: { gte: treintaDiasAtras } } }),
     prisma.formDriver.count({ where }),
-    // Si hay filtros POST-PROCESSING, traer todos los datos; si no, solo la página actual
     hasPostProcessingFilters
       ? prisma.formDriver.findMany({
           where,
@@ -195,25 +269,46 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   ])
 
   // ==================== POST-PROCESSING FILTERS ====================
-  // Filtros que requieren cálculo después de traer los datos
   
   let postulaciones = postulacionesRaw
 
-  // ✅ Filtro de CONTACTO
+  // ✅ NUEVO: Filtro "Pendiente de Agendar" - Docs verde o azul
+  if (isPendingScheduleFilter) {
+    postulaciones = postulaciones.filter(p => {
+      const colorStatus = calculateDocumentColorStatus(p)
+      return colorStatus === 'green' || colorStatus === 'blue'
+    })
+  }
+
+  // ✅ NUEVO: Filtro "Revisar Postulación" - Docs amarillo
+  if (isReviewFilter) {
+    postulaciones = postulaciones.filter(p => {
+      const colorStatus = calculateDocumentColorStatus(p)
+      return colorStatus === 'yellow'
+    })
+  }
+
+  // ✅ NUEVO: Filtro "Rechazados" - Status REJECTED O docs rojos
+  if (isRejectedFilter) {
+    postulaciones = postulaciones.filter(p => {
+      const colorStatus = calculateDocumentColorStatus(p)
+      return p.status === 'REJECTED' || colorStatus === 'red'
+    })
+  }
+
+  // Filtro de CONTACTO
   if (params.contactStatus && params.contactStatus !== 'all') {
     postulaciones = postulaciones.filter(p => {
       const hasBeenContacted = (p.driverContacts?.length ?? 0) > 0
       const isRejected = p.status === 'REJECTED'
       const completedSteps = p.completedSteps?.length ?? 0
       
-      // Calcular contactStatus
       let contactStatus = 'not-applicable'
       if (isRejected) {
         contactStatus = 'not-applicable'
       } else if (hasBeenContacted) {
         contactStatus = 'contacted'
       } else if (completedSteps > 0) {
-        // Pendiente engloba tanto los casos urgentes (>=3 pasos) como los pendientes normales (>0 pasos)
         contactStatus = 'pending'
       }
       
@@ -221,7 +316,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     })
   }
 
-  // ✅ Filtro de DOCUMENTOS
+  // Filtro de DOCUMENTOS
   if (params.documentStatus && params.documentStatus !== 'all') {
     postulaciones = postulaciones.filter(p => {
       const documents = p.documents || []
@@ -260,7 +355,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     })
   }
 
-  // ✅ Filtro de PAGO
+  // Filtro de PAGO
   if (params.paymentStatus && params.paymentStatus !== 'all') {
     postulaciones = postulaciones.filter(p => {
       const payment = p.equipmentPayments?.[0]
@@ -281,7 +376,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     })
   }
 
-  // ✅ Filtro de FACTURACIÓN
+  // Filtro de FACTURACIÓN
   if (params.invoiceStatus && params.invoiceStatus !== 'all') {
     postulaciones = postulaciones.filter(p => {
       const financial = p.financialService
@@ -323,19 +418,15 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   let postulacionesToShow = postulaciones
 
   if (hasPostProcessingFilters) {
-    // Si hay filtros POST-PROCESSING, ya trajimos todos los datos
-    // El total real es el número de resultados después del filtrado POST-PROCESSING
     finalTotal = postulaciones.length
     totalPages = Math.ceil(finalTotal / limit)
     
-    // Aplicar paginación en memoria
     const startIndex = (page - 1) * limit
     const endIndex = startIndex + limit
     postulacionesToShow = postulaciones.slice(startIndex, endIndex)
     
     hasMore = endIndex < postulaciones.length
   } else {
-    // Si no hay filtros POST-PROCESSING, usamos el totalFiltered de la BD
     finalTotal = totalFiltered
     totalPages = Math.ceil(finalTotal / limit)
     hasMore = page < totalPages

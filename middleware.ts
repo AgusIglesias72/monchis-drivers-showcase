@@ -13,6 +13,9 @@ const isPublicRoute = createRouteMatcher([
   '/api/cron(.*)', // ← AGREGAR ESTA LÍNEA para los crons
   '/api/admin/postulaciones/export-json(.*)',
   '/api/onboarding/no-show(.*)',
+  '/api/reports/external-drivers(.*)',
+  '/api/reports/process-all(.*)',
+  '/api/reports/upload-only(.*)',
 ])
 
 export default clerkMiddleware(async (auth, req) => {

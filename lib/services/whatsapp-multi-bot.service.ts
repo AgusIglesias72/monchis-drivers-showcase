@@ -1,6 +1,6 @@
 // lib/services/whatsapp-multi-bot.service.ts
 
-import { getBotUrl, getBotApiKey, type BotId } from '@/lib/config/whatsapp-bots.config';
+import { getBotUrl, getBotApiKey, type BotId, getAllBotConfigs } from '@/lib/config/whatsapp-bots.config';
 
 // ==================== TYPES ====================
 
@@ -21,6 +21,7 @@ export interface SendMessageParams {
   phone: string;
   message: string;
   type?: string;
+  imageUrl?: string; // ✅ NUEVO: Soporte de imágenes
 }
 
 export interface SendContextualMessageParams {
@@ -35,6 +36,12 @@ export interface BotApiResponse {
   success: boolean;
   data?: any;
   error?: string;
+}
+
+export interface AvailableBot {
+  clientId: string;
+  ready: boolean;
+  name: string;
 }
 
 // ==================== HELPER FUNCTIONS ====================
@@ -130,7 +137,7 @@ function mapBackendStatus(backendStatus: string): BotStatusResponse['status'] {
 // ==================== SEND MESSAGES ====================
 
 /**
- * Envía un mensaje simple
+ * Envía un mensaje simple (con soporte de imagen)
  */
 export async function sendMessage(
   botId: BotId,
@@ -146,7 +153,10 @@ export async function sendMessage(
       };
     }
 
-    const response = await fetch(`${botUrl}/send-message`, {
+    // Si hay imagen, usar endpoint con media
+    const endpoint = params.imageUrl ? '/send-message-with-media' : '/send-message';
+
+    const response = await fetch(`${botUrl}${endpoint}`, {
       method: 'POST',
       headers: getCommonHeaders(),
       body: JSON.stringify({
@@ -168,6 +178,24 @@ export async function sendMessage(
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
+}
+
+/**
+ * Envía un mensaje con imagen
+ */
+export async function sendMessageWithImage(
+  botId: BotId,
+  params: {
+    phone: string;
+    message: string;
+    imageUrl: string;
+  }
+): Promise<BotApiResponse> {
+  return sendMessage(botId, {
+    phone: params.phone,
+    message: params.message,
+    imageUrl: params.imageUrl,
+  });
 }
 
 /**
@@ -300,12 +328,145 @@ export async function restartBot(botId: BotId): Promise<BotApiResponse> {
   }
 }
 
+// ==================== BULK OPERATIONS ====================
+
+/**
+ * Obtiene lista de bots disponibles y conectados
+ */
+export async function getAvailableBots(): Promise<AvailableBot[]> {
+  try {
+    // Obtener configs de todos los bots
+    const botConfigs = getAllBotConfigs();
+    
+    const availableBots: AvailableBot[] = [];
+    
+    for (const config of botConfigs) {
+      const status = await getBotStatus(config.id);
+      
+      if (status.status === 'connected') {
+        availableBots.push({
+          clientId: config.id,
+          ready: true,
+          name: config.name,
+        });
+      }
+    }
+    
+    return availableBots;
+  } catch (error) {
+    console.error('Error getting available bots:', error);
+    return [];
+  }
+}
+
+/**
+ * Envía mensajes en masa
+ * @deprecated - Usar directamente el endpoint /api/whatsapp/send-bulk
+ */
+export async function sendBulkMessages(params: {
+  recipients: Array<{ phone: string; name?: string }>;
+  message: string;
+  imageUrl?: string;
+  botId?: BotId;
+  delaySeconds?: number;
+}): Promise<{
+  success: boolean;
+  summary?: {
+    total: number;
+    successful: number;
+    failed: number;
+  };
+  results?: Array<{
+    phone: string;
+    success: boolean;
+    error?: string;
+  }>;
+  error?: string;
+}> {
+  console.warn('⚠️ sendBulkMessages está deprecado. Usa el endpoint /api/whatsapp/send-bulk');
+  
+  try {
+    const { recipients, message, imageUrl, botId, delaySeconds = 2 } = params;
+
+    // Obtener bots disponibles si no se especificó uno
+    const availableBots = botId ? [{ clientId: botId, ready: true, name: '' }] : await getAvailableBots();
+    
+    if (availableBots.length === 0) {
+      return {
+        success: false,
+        error: 'No hay bots disponibles',
+      };
+    }
+
+    const results: Array<{ phone: string; success: boolean; error?: string }> = [];
+    let botIndex = 0;
+
+    for (const recipient of recipients) {
+      try {
+        const selectedBot = availableBots[botIndex % availableBots.length];
+        
+        const result = await sendMessage(selectedBot.clientId as BotId, {
+          phone: recipient.phone,
+          message: message,
+          imageUrl: imageUrl,
+        });
+
+        results.push({
+          phone: recipient.phone,
+          success: result.success,
+          error: result.error,
+        });
+
+        botIndex++;
+
+        // Delay entre mensajes
+        if (botIndex < recipients.length) {
+          await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+        }
+      } catch (error) {
+        results.push({
+          phone: recipient.phone,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    const summary = {
+      total: recipients.length,
+      successful: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length,
+    };
+
+    return {
+      success: true,
+      summary,
+      results,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 // ==================== EXPORT SERVICE ====================
 
 export const whatsappMultiBotService = {
+  // Status
   getBotStatus,
+  
+  // Mensajes
   sendMessage,
+  sendMessageWithImage,
   sendContextualMessage,
+  
+  // Gestión de bots
   logoutBot,
   restartBot,
+  
+  // Operaciones masivas
+  getAvailableBots,
+  sendBulkMessages, // Deprecado pero disponible
 };

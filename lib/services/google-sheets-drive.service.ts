@@ -3,6 +3,7 @@
 
 import { google } from 'googleapis';
 import * as fs from 'fs';
+import { Readable } from 'stream';
 
 export interface ExternalDriver {
   nombre: string;
@@ -243,6 +244,48 @@ export async function uploadFileToDrive(
 }
 
 /**
+ * Sube un archivo a Drive desde un Buffer (sin guardarlo en disco)
+ */
+export async function uploadBufferToDrive(
+  buffer: Buffer,
+  fileName: string,
+  folderId: string,
+  mimeType: string = 'application/pdf'
+): Promise<string> {
+  try {
+    const auth = await getDriveAuth();
+    const drive = google.drive({ version: 'v3', auth });
+
+    const fileMetadata = {
+      name: fileName,
+      parents: [folderId],
+    };
+
+    // Crear stream desde el buffer
+    const bufferStream = new Readable();
+    bufferStream.push(buffer);
+    bufferStream.push(null);
+
+    const media = {
+      mimeType: mimeType,
+      body: bufferStream,
+    };
+
+    const response = await drive.files.create({
+      requestBody: fileMetadata,
+      media: media,
+      fields: 'id, webViewLink',
+    });
+
+    console.log(`✅ Archivo subido a Drive: ${fileName} (${response.data.id})`);
+    return response.data.id!;
+  } catch (error: any) {
+    console.error(`❌ Error subiendo "${fileName}":`, error.message);
+    throw new Error(`Error subiendo archivo: ${error.message}`);
+  }
+}
+
+/**
  * Genera nombre de carpeta semanal
  * IMPORTANTE: Parsea las fechas sin conversión de zona horaria
  */
@@ -255,4 +298,108 @@ export function generateWeekFolderName(startDate: string, endDate: string): stri
   const monthName = months[endMonth - 1]; // -1 porque el array es 0-indexed
 
   return `${startDay}-${endDay} ${monthName}`;
+}
+
+// Agregar al final de lib/services/google-sheets-drive.service.ts
+
+export interface ReportDriver {
+  nombre: string;      // Columna A
+  apellido: string;    // Columna B
+  fecha: string;       // Columna E (YYYY-MM-DD)
+  fullName: string;    // "nombre apellido" en minúscula para búsqueda
+  type: 'JS' | 'M&G';  // Determinado por apellido
+}
+
+/**
+ * Lee drivers desde la hoja "Reporte Pagos" 
+ * Filtra solo los que terminan en "js" o "m&g" y están en el rango de fechas
+ */
+export async function getDriversFromReportePagos(
+  spreadsheetId: string,
+  sheetName: string,
+  startDate: string,
+  endDate: string
+): Promise<ReportDriver[]> {
+  console.log(`📊 Leyendo drivers desde "${sheetName}"...`);
+  console.log(`   Rango de fechas: ${startDate} → ${endDate}`);
+  
+  try {
+    const auth = getSheetsAuth();
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    // Leer columnas A (Nombre), B (Apellido), E (Fecha)
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!A2:E`, // Desde fila 2 (saltar header)
+    });
+
+    const rows = response.data.values;
+
+    if (!rows || rows.length === 0) {
+      console.log('⚠️  No se encontraron datos en la hoja');
+      return [];
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    const drivers: ReportDriver[] = [];
+    const seen = new Set<string>();
+
+    for (const row of rows) {
+      const nombre = row[0] ? String(row[0]).trim() : '';
+      const apellido = row[1] ? String(row[1]).trim() : '';
+      const fecha = row[4] ? String(row[4]).trim() : ''; // Columna E
+
+      // Validar que tenemos nombre y apellido
+      if (!nombre || !apellido) continue;
+
+      // Verificar que el apellido termina en "js" o "m&g" (case insensitive)
+      const apellidoLower = apellido.toLowerCase();
+      const isExternal = apellidoLower.endsWith(' js') || 
+                        apellidoLower.endsWith(' m&g') ||
+                        apellidoLower.endsWith('js') ||
+                        apellidoLower.endsWith('m&g');
+
+      if (!isExternal) continue;
+
+      // Verificar fecha
+      if (!fecha || !fecha.match(/^\d{4}-\d{2}-\d{2}$/)) continue;
+
+      const rowDate = new Date(fecha);
+      if (rowDate < start || rowDate > end) continue;
+
+      // Determinar tipo
+      const type: 'JS' | 'M&G' = apellidoLower.includes('m&g') ? 'M&G' : 'JS';
+
+      // Crear fullName para búsqueda (nombre + apellido en minúscula, sin "js" ni "m&g")
+      const cleanApellido = apellido
+        .replace(/\s+(js|JS|Js)$/i, '')
+        .replace(/\s+(m&g|M&G|M\&G)$/i, '')
+        .trim();
+      
+      const fullName = `${nombre} ${cleanApellido}`.toLowerCase();
+
+      // Evitar duplicados
+      if (seen.has(fullName)) continue;
+      seen.add(fullName);
+
+      drivers.push({
+        nombre,
+        apellido,
+        fecha,
+        fullName,
+        type,
+      });
+    }
+
+    console.log(`✅ ${drivers.length} drivers externos encontrados`);
+    console.log(`   JS: ${drivers.filter(d => d.type === 'JS').length}`);
+    console.log(`   M&G: ${drivers.filter(d => d.type === 'M&G').length}`);
+
+    return drivers;
+  } catch (error: any) {
+    console.error('❌ Error leyendo Reporte Pagos:', error.message);
+    throw new Error(`Error leyendo Reporte Pagos: ${error.message}`);
+  }
 }

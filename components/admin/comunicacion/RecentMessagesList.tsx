@@ -1,7 +1,7 @@
 // components/admin/comunicacion/RecentMessagesList.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,7 +26,7 @@ export function RecentMessagesList({ refreshTrigger, botId }: RecentMessagesList
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadMessages = async (showRefreshing = false) => {
+  const loadMessages = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) {
       setIsRefreshing(true);
     } else {
@@ -53,11 +53,11 @@ export function RecentMessagesList({ refreshTrigger, botId }: RecentMessagesList
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [botId]);
 
   useEffect(() => {
     loadMessages();
-  }, [refreshTrigger, botId]); // ✅ Recargar cuando cambie el bot
+  }, [refreshTrigger, botId, loadMessages]); // ✅ Recargar cuando cambie el bot
 
   const getStatusIcon = (status: string) => {
     switch (status) {

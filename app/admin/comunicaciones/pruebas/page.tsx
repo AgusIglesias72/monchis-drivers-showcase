@@ -5,7 +5,9 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { MessageTestPanel } from '@/components/admin/comunicacion/MessageTestPanel';
-import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, Send, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 import { type BotId } from '@/lib/config/whatsapp-bots.config';
 
 function PruebasMensajesContent() {
@@ -15,11 +17,22 @@ function PruebasMensajesContent() {
   return (
     <div className="flex-1 p-8 space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">Panel de Pruebas</h1>
-        <p className="text-muted-foreground">
-          Envía mensajes de prueba y visualiza el resultado en tiempo real
-        </p>
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">Panel de Pruebas</h1>
+          <p className="text-muted-foreground">
+            Envía mensajes de prueba y visualiza el resultado en tiempo real
+          </p>
+        </div>
+
+        {/* Botón de Envío Masivo */}
+        <Button asChild>
+          <Link href="/admin/comunicaciones/masivo">
+            <Send className="h-4 w-4 mr-2" />
+            Envío Masivo
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </Link>
+        </Button>
       </div>
 
       {/* Panel de pruebas */}
