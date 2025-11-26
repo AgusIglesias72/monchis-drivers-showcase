@@ -11,8 +11,19 @@ RUN npm ci
 # Copiar el resto del código
 COPY . .
 
-# Generar Prisma client (si usás Prisma)
-RUN npx prisma generate || true
+# Variables de entorno necesarias para el build
+ARG GOOGLE_SERVICE_ACCOUNT_EMAIL
+ARG GOOGLE_PRIVATE_KEY
+ARG GOOGLE_SHEETS_ID
+ARG DATABASE_URL
+
+ENV GOOGLE_SERVICE_ACCOUNT_EMAIL=$GOOGLE_SERVICE_ACCOUNT_EMAIL
+ENV GOOGLE_PRIVATE_KEY=$GOOGLE_PRIVATE_KEY
+ENV GOOGLE_SHEETS_ID=$GOOGLE_SHEETS_ID
+ENV DATABASE_URL=$DATABASE_URL
+
+# Generar Prisma client
+RUN npx prisma generate
 
 # Build de Next.js
 RUN npm run build
