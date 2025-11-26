@@ -1,0 +1,26 @@
+FROM mcr.microsoft.com/playwright:v1.40.0-jammy
+
+WORKDIR /app
+
+# Copiar package files
+COPY package*.json ./
+
+# Instalar dependencias
+RUN npm ci
+
+# Copiar el resto del código
+COPY . .
+
+# Generar Prisma client (si usás Prisma)
+RUN npx prisma generate || true
+
+# Build de Next.js
+RUN npm run build
+
+# Exponer puerto
+EXPOSE 3000
+
+ENV PORT=3000
+
+# Iniciar
+CMD ["npm", "start"]
