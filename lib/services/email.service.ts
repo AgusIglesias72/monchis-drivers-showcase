@@ -1,9 +1,9 @@
 // lib/services/email.service.ts
 import { google } from 'googleapis';
 
-const NOTIFICATION_EMAILS = [
+const DEFAULT_NOTIFICATION_EMAILS = [
   'agusiglesias72@gmail.com',
-  'agusiglesiast@gmail.com',
+  'agustin.iglesias@itti.digital', // ✅ Actualizado
 ];
 
 function getGmailAuth() {
@@ -51,15 +51,22 @@ export const emailService = {
       errors?: Array<{ driver: string; error: string }>;
     };
     spreadsheetUrl?: string;
+    notificationEmails?: string[]; // ✅ NUEVO
   }): Promise<void> {
     try {
       const auth = getGmailAuth();
       const gmail = google.gmail({ version: 'v1', auth });
 
+      // ✅ Combinar emails por defecto con los adicionales
+      const recipients = [
+        ...DEFAULT_NOTIFICATION_EMAILS,
+        ...(data.notificationEmails || [])
+      ];
+
       let html = `
         <html>
           <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">✅ Proceso Completado</h2>
+            <h2 style="color: #16a34a;">✅ Proceso Completado</h2>
             
             <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
               <h3 style="margin-top: 0;">📅 Rango de Fechas</h3>
@@ -133,8 +140,8 @@ export const emailService = {
       `;
 
       const encodedMessage = createEmailMessage(
-        NOTIFICATION_EMAILS,
-        `✅ Proceso Completado - ${data.startDate} a ${data.endDate}`,
+        recipients,
+        `Proceso Completado: ${data.startDate} al ${data.endDate}`, // ✅ Título mejorado
         html
       );
 
@@ -145,7 +152,7 @@ export const emailService = {
         },
       });
 
-      console.log('✅ Email de notificación enviado');
+      console.log(`✅ Email de notificación enviado a: ${recipients.join(', ')}`);
     } catch (error: any) {
       console.error('❌ Error enviando email:', error.message);
     }
@@ -155,10 +162,17 @@ export const emailService = {
     startDate: string;
     endDate: string;
     error: string;
+    notificationEmails?: string[]; // ✅ NUEVO
   }): Promise<void> {
     try {
       const auth = getGmailAuth();
       const gmail = google.gmail({ version: 'v1', auth });
+
+      // ✅ Combinar emails por defecto con los adicionales
+      const recipients = [
+        ...DEFAULT_NOTIFICATION_EMAILS,
+        ...(data.notificationEmails || [])
+      ];
 
       const html = `
         <html>
@@ -184,8 +198,8 @@ export const emailService = {
       `;
 
       const encodedMessage = createEmailMessage(
-        NOTIFICATION_EMAILS,
-        `❌ Proceso Fallido - ${data.startDate} a ${data.endDate}`,
+        recipients,
+        `Proceso Fallido: ${data.startDate} al ${data.endDate}`, // ✅ Título mejorado
         html
       );
 
@@ -196,7 +210,7 @@ export const emailService = {
         },
       });
 
-      console.log('✅ Email de error enviado');
+      console.log(`✅ Email de error enviado a: ${recipients.join(', ')}`);
     } catch (error: any) {
       console.error('❌ Error enviando email de error:', error.message);
     }

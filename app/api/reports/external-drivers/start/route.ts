@@ -13,6 +13,7 @@ interface StartJobRequest {
   endDate: string;
   concurrency?: number;
   maxDrivers?: number | null;
+  notificationEmails?: string[]; // ✅ NUEVO
 }
 
 export async function POST(request: NextRequest) {
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
         email: process.env.APP_EMAIL!,
         password: process.env.APP_PASSWORD!,
         ownerEmail: process.env.OWNER_EMAIL,
+        notificationEmails: body.notificationEmails || [],
       },
     });
 
@@ -80,6 +82,7 @@ export async function POST(request: NextRequest) {
             total: stats.total,
             errors: stats.errors,
           },
+          notificationEmails: body.notificationEmails || [],
         });
       }
     }).catch(async (error) => {
@@ -88,7 +91,8 @@ export async function POST(request: NextRequest) {
       await emailService.sendProcessFailedEmail({
         startDate: body.startDate,
         endDate: body.endDate,
-        error: error.message,
+        error: error.message, 
+        notificationEmails: body.notificationEmails || [],
       });
     });
 

@@ -7,11 +7,16 @@ import {
   getDriversFromReportePagos,
   ReportDriver,
   createDriveFolder,
-  uploadBufferToDrive, // ✅ NUEVO
+  uploadBufferToDrive,
   generateWeekFolderName,
 } from './google-sheets-drive.service';
 
 const DELAY_BETWEEN_DOWNLOADS = 3000;
+
+const RETRY_CONFIG = {
+  maxRetryAttempts: 2,
+  delayBeforeRetry: 10000,
+};
 
 interface ProcessJobMetadata {
   startDate: string;
@@ -19,7 +24,7 @@ interface ProcessJobMetadata {
   concurrency: number;
   maxDrivers: number | null;
   spreadsheetsId: string;
-  reportSheetName: string; // ✅ NUEVO
+  reportSheetName: string;
   driveFolderId: string;
   loginUrl: string;
   driversPageUrl: string;
@@ -35,7 +40,6 @@ interface ProcessJobMetadata {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
 
 function cleanDriverName(nombre: string, apellido: string): string {
   const cleanApellido = apellido
@@ -116,6 +120,7 @@ class PDFDownloadAutomation {
     
     console.log(`✅ [Worker ${this.workerId}] Sesión iniciada`);
   }
+
   async downloadPDFToBuffer(
     driver: ReportDriver,
     startDate: string,
@@ -155,67 +160,41 @@ class PDFDownloadAutomation {
     await this.page.keyboard.press('Tab');
     await sleep(500);
     
-    // ✅ LIMPIAR EL SELECT DEL DRIVER
     console.log(`🔍 [Worker ${this.workerId}] Buscando conductor: ${driver.fullName}`);
     
-    // ✅ MÉTODO 1: Buscar el botón "clear" del select de Ant Design
-    try {
-      // Hover sobre el select para que aparezca el botón clear
-      const selectContainer = await this.page.waitForSelector('#filtersDriverPaymentForm_driver', { timeout: 5000 });
-      await selectContainer.hover();
-      await sleep(300);
-      
-      // Buscar el icono de clear (Ant Design muestra un "x" al hacer hover)
-      const clearButton = await this.page.$('.ant-select-clear');
-      if (clearButton) {
-        console.log(`🧹 [Worker ${this.workerId}] Limpiando select con botón clear`);
-        await clearButton.click();
-        await sleep(500);
-      }
-    } catch (error) {
-      console.log(`⚠️  [Worker ${this.workerId}] No se encontró botón clear, usando método alternativo`);
-    }
-    
-    // ✅ MÉTODO 2: Si hay un chip/tag, hacer click en su "x"
-    try {
-      const removeIcon = await this.page.$('.ant-select-selection-item-remove');
-      if (removeIcon) {
-        console.log(`🧹 [Worker ${this.workerId}] Removiendo chip del conductor anterior`);
-        await removeIcon.click();
-        await sleep(500);
-      }
-    } catch (error) {
-      // Ignorar
-    }
-    
-    // ✅ MÉTODO 3: Click en el select mismo (no en el input)
-    const driverSelect = await this.page.waitForSelector('.ant-select-selector', { timeout: 10000 });
+    const driverSelect = await this.page.waitForSelector('.ant-select-selector', { 
+      timeout: 10000 
+    });
     await driverSelect.click();
     await sleep(500);
     
-    // Ahora sí, buscar el input dentro del select
-    const driverInput = await this.page.waitForSelector('#filtersDriverPaymentForm_driver', { timeout: 10000 });
+    const driverInput = await this.page.waitForSelector('#filtersDriverPaymentForm_driver', { 
+      timeout: 10000 
+    });
     
-    // Limpiar cualquier texto que quede
-    await driverInput.fill('');
-    await sleep(300);
+    await driverInput.fill(driver.fullName);
+    await sleep(2000);
     
-    // Escribir el nuevo nombre
-    await driverInput.type(driver.fullName, { delay: 50 });
-    await sleep(1500);
+    console.log(`⏳ [Worker ${this.workerId}] Esperando dropdown...`);
     
-    // Esperar el dropdown
-    const dropdown = await this.page.waitForSelector('.rc-virtual-list-holder-inner', { timeout: 10000 });
+    const dropdown = await this.page.waitForSelector('.rc-virtual-list-holder-inner', { 
+      timeout: 15000,
+      state: 'visible'
+    });
+    
+    console.log(`✅ [Worker ${this.workerId}] Dropdown apareció`);
+    
     const firstOption = await dropdown.$('div:first-child');
     
     if (!firstOption) {
-      throw new Error(`No se encontró el conductor: ${driver.fullName}`);
+      throw new Error(`No se encontró ninguna opción para: ${driver.fullName}`);
     }
     
     await firstOption.click();
     await sleep(500);
     
-    // Ejecutar búsqueda
+    console.log(`✅ [Worker ${this.workerId}] Conductor seleccionado: ${driver.fullName}`);
+    
     const submitButtonSelectors = [
       'button:has-text("Buscar")',
       'button[type="submit"]',
@@ -375,7 +354,6 @@ class PDFDownloadAutomation {
         throw new Error('No se pudo capturar un PDF válido');
       }
       
-      // Cerrar modal
       try {
         const closeSelectors = [
           '.ant-modal-close',
@@ -460,20 +438,11 @@ export const externalDriversProcessor = {
         hasPassword: !!metadata.password,
       });
       
-      if (!metadata.spreadsheetsId) {
-        throw new Error('Missing spreadsheetsId in metadata');
-      }
-      if (!metadata.reportSheetName) {
-        throw new Error('Missing reportSheetName in metadata');
-      }
-      if (!metadata.driveFolderId) {
-        throw new Error('Missing driveFolderId in metadata');
-      }
-      if (!metadata.email || !metadata.password) {
-        throw new Error('Missing email or password in metadata');
-      }
+      if (!metadata.spreadsheetsId) throw new Error('Missing spreadsheetsId in metadata');
+      if (!metadata.reportSheetName) throw new Error('Missing reportSheetName in metadata');
+      if (!metadata.driveFolderId) throw new Error('Missing driveFolderId in metadata');
+      if (!metadata.email || !metadata.password) throw new Error('Missing email or password in metadata');
       
-      // ✅ CAMBIO: Obtener conductores desde Reporte Pagos
       console.log(`[${jobId}] Obteniendo conductores desde Reporte Pagos...`);
       await backgroundJobsService.addLog(jobId, '');
       await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
@@ -551,10 +520,11 @@ export const externalDriversProcessor = {
         workerQueues.map((q, i) => `Worker ${i + 1}: ${q.length}`).join(', ')
       );
 
+      // ✅ CAMBIO: Guardar objeto driver completo en errors
       const results = {
         successful: 0,
         failed: 0,
-        errors: [] as Array<{ driver: string; error: string }>,
+        errors: [] as Array<{ driver: ReportDriver; error: string }>,
       };
 
       let processed = 0;
@@ -571,7 +541,6 @@ export const externalDriversProcessor = {
             const cleanName = cleanDriverName(driver.nombre, driver.apellido);
             console.log(`[${jobId}] Worker ${workerIndex + 1} procesando: ${cleanName}`);
             
-            // ✅ OBTENER PDF COMO BUFFER
             const pdfBuffer = await worker.downloadPDFToBuffer(
               driver,
               metadata.startDate,
@@ -599,7 +568,7 @@ export const externalDriversProcessor = {
             console.error(`❌ [${jobId}] Worker ${workerIndex + 1} error con ${cleanName}:`, error.message);
             
             results.failed++;
-            results.errors.push({ driver: cleanName, error: error.message });
+            results.errors.push({ driver: driver, error: error.message }); // ✅ Guardar objeto completo
             processed++;
             
             await backgroundJobsService.updateProgress(jobId, processed, driversToProcess.length);
@@ -618,6 +587,94 @@ export const externalDriversProcessor = {
       await Promise.all(workers.map((worker, index) => workerProcess(worker, workerQueues[index], index)));
       console.log(`✅ [${jobId}] Todos los workers completaron su trabajo`);
 
+      // ✅ SISTEMA DE RETRY AUTOMÁTICO
+      let retryAttempt = 0;
+      let failedDrivers = results.errors.map(e => e.driver);
+      
+      while (failedDrivers.length > 0 && retryAttempt < RETRY_CONFIG.maxRetryAttempts) {
+        retryAttempt++;
+        
+        console.log(`\n🔄🔄🔄 [${jobId}] REINTENTANDO ${failedDrivers.length} CONDUCTORES FALLIDOS (Intento ${retryAttempt}/${RETRY_CONFIG.maxRetryAttempts}) 🔄🔄🔄\n`);
+        
+        await backgroundJobsService.addLog(jobId, '');
+        await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
+        await backgroundJobsService.addLog(jobId, `🔄 REINTENTO ${retryAttempt}/${RETRY_CONFIG.maxRetryAttempts}`);
+        await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
+        await backgroundJobsService.addLog(jobId, `⚠️  ${failedDrivers.length} conductores a reintentar`);
+        await backgroundJobsService.addLog(jobId, '');
+        
+        console.log(`[${jobId}] Esperando ${RETRY_CONFIG.delayBeforeRetry / 1000} segundos antes de reintentar...`);
+        await sleep(RETRY_CONFIG.delayBeforeRetry);
+        
+        const retryQueues: ReportDriver[][] = Array.from({ length: metadata.concurrency }, () => []);
+        
+        for (let i = 0; i < failedDrivers.length; i++) {
+          retryQueues[i % metadata.concurrency].push(failedDrivers[i]);
+        }
+        
+        console.log(`[${jobId}] Distribución retry:`, 
+          retryQueues.map((q, i) => `Worker ${i + 1}: ${q.length}`).join(', ')
+        );
+        
+        const retryErrors: Array<{ driver: ReportDriver; error: string }> = [];
+        
+        const retryWorkerProcess = async (worker: PDFDownloadAutomation, driversList: ReportDriver[], workerIndex: number) => {
+          for (const driver of driversList) {
+            const targetFolderId = driver.type === 'M&G' ? mgWeekFolderId : jsWeekFolderId;
+            
+            try {
+              const cleanName = cleanDriverName(driver.nombre, driver.apellido);
+              console.log(`[${jobId}] Worker ${workerIndex + 1} reintentando: ${cleanName}`);
+              
+              const pdfBuffer = await worker.downloadPDFToBuffer(
+                driver,
+                metadata.startDate,
+                metadata.endDate,
+                metadata.driversPageUrl,
+                false
+              );
+              
+              const fileName = generatePdfFileName(driver, metadata.startDate, metadata.endDate);
+              await uploadBufferToDrive(pdfBuffer, fileName, targetFolderId);
+              
+              results.successful++;
+              results.failed--;
+              
+              const errorIndex = results.errors.findIndex(e => e.driver.fullName === driver.fullName);
+              if (errorIndex > -1) {
+                results.errors.splice(errorIndex, 1);
+              }
+              
+              await backgroundJobsService.addLog(
+                jobId, 
+                `✅ [Retry] ${cleanName} → ${driver.type} (recuperado)`
+              );
+              
+              console.log(`✅ [${jobId}] Worker ${workerIndex + 1}: ${cleanName} recuperado exitosamente`);
+              
+            } catch (error: any) {
+              const cleanName = cleanDriverName(driver.nombre, driver.apellido);
+              console.error(`❌ [${jobId}] Worker ${workerIndex + 1} falló nuevamente: ${cleanName}`);
+              
+              retryErrors.push({ driver: driver, error: error.message });
+              
+              await backgroundJobsService.addLog(
+                jobId, 
+                `❌ [Retry] ${cleanName} - Falló nuevamente`
+              );
+            }
+            
+            await sleep(DELAY_BETWEEN_DOWNLOADS);
+          }
+        };
+        
+        await Promise.all(workers.map((worker, index) => retryWorkerProcess(worker, retryQueues[index], index)));
+        
+        failedDrivers = retryErrors.map(e => e.driver);
+        
+        console.log(`[${jobId}] Retry ${retryAttempt} completado. Quedan ${failedDrivers.length} fallidos`);
+      }
+
       console.log(`[${jobId}] Cerrando navegadores...`);
       await backgroundJobsService.addLog(jobId, '');
       await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
@@ -630,9 +687,10 @@ export const externalDriversProcessor = {
         successful: results.successful,
         failed: results.failed,
         total: driversToProcess.length,
-        errors: results.errors,
+        errors: results.errors.map(e => ({ driver: cleanDriverName(e.driver.nombre, e.driver.apellido), error: e.error })),
         jsFolder: `JS/${weekName}`,
         mgFolder: `M&G/${weekName}`,
+        retriesPerformed: retryAttempt,
       };
 
       console.log(`[${jobId}] Guardando resultado final...`);
@@ -643,19 +701,23 @@ export const externalDriversProcessor = {
       await backgroundJobsService.addLog(jobId, `   ✅ Exitosos: ${results.successful}`);
       await backgroundJobsService.addLog(jobId, `   ❌ Fallidos: ${results.failed}`);
       await backgroundJobsService.addLog(jobId, `   📁 Total: ${driversToProcess.length}`);
+      await backgroundJobsService.addLog(jobId, `   🔄 Reintentos realizados: ${retryAttempt}`);
       
       if (results.errors.length > 0) {
         await backgroundJobsService.addLog(jobId, '');
-        await backgroundJobsService.addLog(jobId, '⚠️  CONDUCTORES CON ERRORES:');
+        await backgroundJobsService.addLog(jobId, `⚠️  CONDUCTORES QUE NO SE PUDIERON RECUPERAR (${results.errors.length}):`);
         for (const err of results.errors) {
-          await backgroundJobsService.addLog(jobId, `   • ${err.driver}`);
+          await backgroundJobsService.addLog(jobId, `   • ${cleanDriverName(err.driver.nombre, err.driver.apellido)}`);
         }
         await backgroundJobsService.addLog(jobId, '');
-        await backgroundJobsService.addLog(jobId, '💡 Tip: Puedes reintentar los fallidos manualmente desde la app');
+        await backgroundJobsService.addLog(jobId, '💡 Tip: Estos conductores necesitan revisión manual');
+      } else {
+        await backgroundJobsService.addLog(jobId, '');
+        await backgroundJobsService.addLog(jobId, '🎉 ¡Todos los conductores procesados exitosamente!');
       }
       
       await backgroundJobsService.addLog(jobId, '');
-      await backgroundJobsService.addLog(jobId, '✅ Proceso completado exitosamente');
+      await backgroundJobsService.addLog(jobId, '✅ Proceso completado');
       
       console.log(`✅✅✅ [${jobId}] Proceso completado exitosamente ✅✅✅`);
 

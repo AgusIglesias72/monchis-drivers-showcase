@@ -45,30 +45,36 @@ function formatDate(date: Date): string {
 }
 
 function generateDateRanges(startDate: string, endDate: string, daysPerRange: number = 1): DateRange[] {
-  const ranges: DateRange[] = [];
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  
-  let currentStart = new Date(start);
-  
-  while (currentStart <= end) {
-    const currentEnd = new Date(currentStart);
-    currentEnd.setDate(currentEnd.getDate() + daysPerRange - 1);
+    const ranges: DateRange[] = [];
     
-    if (currentEnd > end) {
-      currentEnd.setTime(end.getTime());
+    // ✅ Parsear manualmente para evitar conversión de zona horaria
+    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+    
+    // ✅ Usar constructor Date(year, month, day) - month es 0-indexed
+    const start = new Date(startYear, startMonth - 1, startDay);
+    const end = new Date(endYear, endMonth - 1, endDay);
+    
+    let currentStart = new Date(start);
+    
+    while (currentStart <= end) {
+      const currentEnd = new Date(currentStart);
+      currentEnd.setDate(currentEnd.getDate() + daysPerRange - 1);
+      
+      if (currentEnd > end) {
+        currentEnd.setTime(end.getTime());
+      }
+      
+      ranges.push({
+        start: formatDate(currentStart),
+        end: formatDate(currentEnd),
+      });
+      
+      currentStart.setDate(currentStart.getDate() + daysPerRange);
     }
     
-    ranges.push({
-      start: formatDate(currentStart),
-      end: formatDate(currentEnd),
-    });
-    
-    currentStart.setDate(currentStart.getDate() + daysPerRange);
+    return ranges;
   }
-  
-  return ranges;
-}
 
 function filterInvalidRows(data: any[][]): any[][] {
   return data.filter((row) => {
@@ -357,7 +363,7 @@ class ReportProcessorAndUploader {
     this.log(`   (1 fila de headers + ${this.allData.length - 1} filas de datos)\n`);
     
     this.log('🧹 Limpiando hoja...');
-    await clearSheet(this.config.spreadsheetId, this.config.sheetName, false);
+    await clearSheet(this.config.spreadsheetId, this.config.sheetName, true); // 
     this.log('✅ Hoja limpiada\n');
     
     this.log('📝 Escribiendo datos...');

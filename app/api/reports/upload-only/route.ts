@@ -7,22 +7,14 @@ import { emailService } from '@/lib/services/email.service';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-interface UploadOnlyRequest {
+interface UploadOnlyRequest { 
   startDate: string;
   endDate: string;
+  notificationEmails?: string[]; // ✅ NUEVO
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
-
     const body: UploadOnlyRequest = await request.json();
     
     if (!body.startDate || !body.endDate) {
@@ -56,6 +48,7 @@ export async function POST(request: NextRequest) {
           endDate: body.endDate,
           daysPerRange: 1,
           headless: true,
+
         });
 
         await emailService.sendProcessCompletedEmail({
@@ -67,6 +60,7 @@ export async function POST(request: NextRequest) {
             processedRanges: stats.processedRanges,
           },
           spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${process.env.GOOGLE_SHEETS_ID}`,
+          notificationEmails: body.notificationEmails || [],
         });
 
         console.log('✅ Reportes procesados exitosamente');
@@ -76,6 +70,7 @@ export async function POST(request: NextRequest) {
           startDate: body.startDate,
           endDate: body.endDate,
           error: error.message,
+          notificationEmails: body.notificationEmails || [],
         });
       }
     })();

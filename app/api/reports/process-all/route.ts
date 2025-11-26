@@ -10,24 +10,17 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 interface ProcessAllRequest {
-  startDate: string;
-  endDate: string;
-  processExternalDrivers?: boolean; // ✅ Nuevo parámetro
-  concurrency?: number;
-  maxDrivers?: number | null;
-}
+    startDate: string;
+    endDate: string;
+    processExternalDrivers?: boolean;
+    concurrency?: number;
+    maxDrivers?: number | null;
+    notificationEmails?: string[]; // ✅ NUEVO
+  }
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
-
+  
     const body: ProcessAllRequest = await request.json();
     
     // Validaciones
@@ -80,6 +73,7 @@ export async function POST(request: NextRequest) {
           endDate: body.endDate,
           daysPerRange: 1,
           headless: true,
+            
         });
 
         console.log('✅ Reportes procesados y subidos exitosamente');
@@ -92,7 +86,7 @@ export async function POST(request: NextRequest) {
           
           const job = await backgroundJobsService.create({
             type: 'DRIVER_PROCESSING',
-            userId,
+            userId: '1',
             metadata: {
               startDate: body.startDate,
               endDate: body.endDate,
@@ -126,8 +120,8 @@ export async function POST(request: NextRequest) {
         // 3. ENVIAR EMAIL DE ÉXITO
         console.log('\n📧 Enviando email de notificación...');
         await emailService.sendProcessCompletedEmail({
-          startDate: body.startDate,
-          endDate: body.endDate,
+            startDate: body.startDate,
+            endDate: body.endDate,
           reportsStats: {
             totalRows: reportsStats.totalRows,
             dataRows: reportsStats.dataRows,
@@ -140,6 +134,7 @@ export async function POST(request: NextRequest) {
             errors: driversStats.errors,
           } : undefined,
           spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${process.env.GOOGLE_SHEETS_ID}`,
+          notificationEmails: body.notificationEmails || [],
         });
 
         console.log('✅ Proceso completo finalizado exitosamente');
@@ -152,6 +147,7 @@ export async function POST(request: NextRequest) {
           startDate: body.startDate,
           endDate: body.endDate,
           error: error.message,
+          notificationEmails: body.notificationEmails || [],
         });
       }
     })();
