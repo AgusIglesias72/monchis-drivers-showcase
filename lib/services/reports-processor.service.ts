@@ -30,6 +30,18 @@ interface ProcessStats {
 }
 
 // ============================================================================
+// CONFIGURACIÓN
+// ============================================================================
+
+const CONFIG = {
+  downloadTimeout: 600000, // 10 minutos
+  retry: {
+    maxAttempts: 3,
+    delayBetweenRetries: 10000, // 10 segundos
+  },
+};
+
+// ============================================================================
 // UTILIDADES
 // ============================================================================
 
@@ -45,36 +57,34 @@ function formatDate(date: Date): string {
 }
 
 function generateDateRanges(startDate: string, endDate: string, daysPerRange: number = 1): DateRange[] {
-    const ranges: DateRange[] = [];
+  const ranges: DateRange[] = [];
+  
+  const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+  const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+  
+  const start = new Date(startYear, startMonth - 1, startDay);
+  const end = new Date(endYear, endMonth - 1, endDay);
+  
+  let currentStart = new Date(start);
+  
+  while (currentStart <= end) {
+    const currentEnd = new Date(currentStart);
+    currentEnd.setDate(currentEnd.getDate() + daysPerRange - 1);
     
-    // ✅ Parsear manualmente para evitar conversión de zona horaria
-    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
-    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
-    
-    // ✅ Usar constructor Date(year, month, day) - month es 0-indexed
-    const start = new Date(startYear, startMonth - 1, startDay);
-    const end = new Date(endYear, endMonth - 1, endDay);
-    
-    let currentStart = new Date(start);
-    
-    while (currentStart <= end) {
-      const currentEnd = new Date(currentStart);
-      currentEnd.setDate(currentEnd.getDate() + daysPerRange - 1);
-      
-      if (currentEnd > end) {
-        currentEnd.setTime(end.getTime());
-      }
-      
-      ranges.push({
-        start: formatDate(currentStart),
-        end: formatDate(currentEnd),
-      });
-      
-      currentStart.setDate(currentStart.getDate() + daysPerRange);
+    if (currentEnd > end) {
+      currentEnd.setTime(end.getTime());
     }
     
-    return ranges;
+    ranges.push({
+      start: formatDate(currentStart),
+      end: formatDate(currentEnd),
+    });
+    
+    currentStart.setDate(currentStart.getDate() + daysPerRange);
   }
+  
+  return ranges;
+}
 
 function filterInvalidRows(data: any[][]): any[][] {
   return data.filter((row) => {
@@ -257,10 +267,10 @@ class ReportProcessorAndUploader {
       throw new Error('No se encontró el botón de descarga');
     }
     
-    this.log('⏳ Descargando Excel en memoria...');
+    this.log('⏳ Descargando Excel en memoria (timeout: 10 min)...');
     
     const downloadPromise = this.page.waitForEvent('download', { 
-      timeout: 300000 // 5 minutos
+      timeout: CONFIG.downloadTimeout // 10 minutos
     });
     
     await downloadButton.click();
@@ -271,7 +281,7 @@ class ReportProcessorAndUploader {
       this.log('✅ Descarga iniciada');
     } catch (error: any) {
       if (error.message.includes('Timeout')) {
-        throw new Error('Timeout en descarga - el servidor tardó más de 5 minutos');
+        throw new Error('TIMEOUT'); // Error específico para retry
       }
       throw error;
     }
@@ -322,6 +332,7 @@ class ReportProcessorAndUploader {
     
     await sleep(2000);
     
+    // Cerrar modal
     try {
       const closeSelectors = [
         '.ant-modal-close',
@@ -346,13 +357,66 @@ class ReportProcessorAndUploader {
   async processDateRange(startDate: string, endDate: string): Promise<void> {
     this.log(`\n📊 PROCESANDO RANGO: ${startDate} → ${endDate}`);
     
-    try {
-      await this.setDateRange(startDate, endDate);
-      await this.downloadAndProcessExcel();
-      this.log(`✅ Rango ${startDate} → ${endDate} procesado\n`);
-    } catch (error: any) {
-      this.log(`❌ Error en rango ${startDate} → ${endDate}: ${error.message}`);
-      throw error;
+    const { maxAttempts, delayBetweenRetries } = CONFIG.retry;
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        if (attempt > 1) {
+          this.log(`\n🔄 REINTENTO ${attempt}/${maxAttempts} para ${startDate} → ${endDate}`);
+        }
+        
+        await this.setDateRange(startDate, endDate);
+        await this.downloadAndProcessExcel();
+        
+        this.log(`✅ Rango ${startDate} → ${endDate} procesado exitosamente\n`);
+        return; // Éxito, salir del loop
+        
+      } catch (error: any) {
+        const isTimeout = error.message === 'TIMEOUT';
+        const isLastAttempt = attempt === maxAttempts;
+        
+        if (isTimeout) {
+          this.log(`⏰ Timeout en descarga (intento ${attempt}/${maxAttempts})`);
+          
+          if (!isLastAttempt) {
+            this.log(`⏳ Esperando ${delayBetweenRetries / 1000} segundos antes de reintentar...`);
+            await sleep(delayBetweenRetries);
+            
+            // Recargar página para empezar fresco
+            try {
+              this.log('🔄 Recargando página...');
+              await this.page?.reload({ waitUntil: 'networkidle' });
+              await sleep(2000);
+              this.log('✅ Página recargada');
+            } catch (reloadError) {
+              this.log('⚠️  Error recargando página, continuando...');
+            }
+          } else {
+            this.log(`❌ Timeout después de ${maxAttempts} intentos`);
+            throw new Error(`Timeout en descarga después de ${maxAttempts} intentos para ${startDate} → ${endDate}`);
+          }
+        } else {
+          // Error no relacionado con timeout - también reintentar
+          this.log(`❌ Error (intento ${attempt}/${maxAttempts}): ${error.message}`);
+          
+          if (!isLastAttempt) {
+            this.log(`⏳ Esperando ${delayBetweenRetries / 1000} segundos antes de reintentar...`);
+            await sleep(delayBetweenRetries);
+            
+            try {
+              this.log('🔄 Recargando página...');
+              await this.page?.reload({ waitUntil: 'networkidle' });
+              await sleep(2000);
+              this.log('✅ Página recargada');
+            } catch (reloadError) {
+              this.log('⚠️  Error recargando página, continuando...');
+            }
+          } else {
+            this.log(`❌ Error después de ${maxAttempts} intentos`);
+            throw error;
+          }
+        }
+      }
     }
   }
 
@@ -363,7 +427,7 @@ class ReportProcessorAndUploader {
     this.log(`   (1 fila de headers + ${this.allData.length - 1} filas de datos)\n`);
     
     this.log('🧹 Limpiando hoja...');
-    await clearSheet(this.config.spreadsheetId, this.config.sheetName, true); // 
+    await clearSheet(this.config.spreadsheetId, this.config.sheetName, true);
     this.log('✅ Hoja limpiada\n');
     
     this.log('📝 Escribiendo datos...');
