@@ -16,6 +16,8 @@ const isPublicRoute = createRouteMatcher([
   '/api/reports/external-drivers(.*)',
   '/api/reports/process-all(.*)',
   '/api/reports/upload-only(.*)',
+  '/api/cron/capacitacion-reminder(.*)',
+  '/api/cron/capacitacion-reminder/preview(.*)',
 ])
 
 export default clerkMiddleware(async (auth, req) => {
