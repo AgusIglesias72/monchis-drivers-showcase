@@ -40,6 +40,9 @@ import {
   XCircle,
   HelpCircle,
   GraduationCap,
+  ChevronDown,
+  ChevronUp,
+  UserX,
 } from "lucide-react"
 import {
   Tooltip,
@@ -66,10 +69,19 @@ interface PostulacionesPageContentProps {
   currentPage: number
   totalPages: number
   hasMore: boolean
+  quickFilterCounts?: {
+    'scheduled-no-show': number
+    'scheduled-pending': number
+    trained: number
+    'pending-schedule': number
+    review: number
+    'pending-completion': number
+    rejected: number
+  }
   currentFilters: PostulacionFilters
 }
 
-type QuickFilter = 'all' | 'scheduled' | 'trained' | 'pending-schedule' | 'review' | 'pending-completion' | 'rejected'
+type QuickFilter = 'all' | 'scheduled-no-show' | 'scheduled-pending' | 'trained' | 'pending-schedule' | 'review' | 'pending-completion' | 'rejected'
 
 export function PostulacionesPageContent({
   stats,
@@ -78,6 +90,7 @@ export function PostulacionesPageContent({
   currentPage,
   totalPages,
   hasMore,
+  quickFilterCounts,
   currentFilters
 }: PostulacionesPageContentProps) {
   const router = useRouter()
@@ -98,6 +111,7 @@ export function PostulacionesPageContent({
   const [sortBy, setSortBy] = useState(currentFilters.sortBy || 'createdAt')
   const [sortOrder, setSortOrder] = useState(currentFilters.sortOrder || 'desc')
   const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all')
+  const [showMoreFilters, setShowMoreFilters] = useState(false)
 
   const postulacionesWithContactStatus = useMemo(() => {
     return postulaciones.map(post => {
@@ -116,8 +130,10 @@ export function PostulacionesPageContent({
   useEffect(() => {
     if (statusFilter === 'REJECTED') {
       setActiveQuickFilter('rejected')
-    } else if (onboardingStatusFilter === 'scheduled') {
-      setActiveQuickFilter('scheduled')
+    } else if (onboardingStatusFilter === 'scheduled-no-show') {
+      setActiveQuickFilter('scheduled-no-show')
+    } else if (onboardingStatusFilter === 'scheduled-pending') {
+      setActiveQuickFilter('scheduled-pending')
     } else if (onboardingStatusFilter === 'completed') {
       setActiveQuickFilter('trained')
     } else if (onboardingStatusFilter === 'pending' && statusFilter === 'COMPLETED') {
@@ -136,8 +152,12 @@ export function PostulacionesPageContent({
 
     if (quickFilter) {
       switch (quickFilter) {
-        case 'scheduled':
-          params.set('onboardingStatus', 'scheduled')
+        case 'scheduled-no-show':
+          params.set('onboardingStatus', 'scheduled-no-show')
+          params.set('status', 'COMPLETED')
+          break
+        case 'scheduled-pending':
+          params.set('onboardingStatus', 'scheduled-pending')
           params.set('status', 'COMPLETED')
           break
         case 'trained':
@@ -684,106 +704,184 @@ export function PostulacionesPageContent({
           </div>
         </div>
 
-        {/* ✅ QUICK FILTERS MEJORADOS */}
+        {/* ✅ QUICK FILTERS MEJORADOS - RESPONSIVE */}
         <div className="relative">
-          <div className="flex flex-wrap items-end gap-1 pb-0">
+          <div className="flex items-end gap-1 overflow-x-auto pb-2 -mb-2 sm:flex-wrap sm:overflow-x-visible sm:pb-0 sm:-mb-0 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
             <button
               onClick={() => handleQuickFilter('all')}
               disabled={isPending}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
-                cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
+                cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                 ${activeQuickFilter === 'all'
                   ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
-              <ClipboardCheck className="h-4 w-4" />
+              <ClipboardCheck className="h-4 w-4 flex-shrink-0" />
               <span>Todas</span>
             </button>
             
+            {/* No Asistieron */}
             <button
-              onClick={() => handleQuickFilter('scheduled')}
+              onClick={() => handleQuickFilter('scheduled-no-show')}
               disabled={isPending}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
-                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
-                ${activeQuickFilter === 'scheduled'
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
+                ${activeQuickFilter === 'scheduled-no-show'
                   ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
-              <CalendarIcon className="h-4 w-4" />
+              <UserX className="h-4 w-4 flex-shrink-0" />
+              <span>No Asistieron</span>
+              {quickFilterCounts && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs font-semibold flex-shrink-0">
+                  {quickFilterCounts['scheduled-no-show']}
+                </Badge>
+              )}
+            </button>
+
+            {/* Agendados */}
+            <button
+              onClick={() => handleQuickFilter('scheduled-pending')}
+              disabled={isPending}
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
+                ${activeQuickFilter === 'scheduled-pending'
+                  ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <CalendarIcon className="h-4 w-4 flex-shrink-0" />
               <span>Agendados</span>
+              {quickFilterCounts && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs font-semibold flex-shrink-0">
+                  {quickFilterCounts['scheduled-pending']}
+                </Badge>
+              )}
             </button>
 
             <button
               onClick={() => handleQuickFilter('trained')}
               disabled={isPending}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
-                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                 ${activeQuickFilter === 'trained'
                   ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
-              <GraduationCap className="h-4 w-4" />
-              <span>Capacitados</span>
+              <GraduationCap className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden sm:inline">Capacitados</span>
+              {quickFilterCounts && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs font-semibold flex-shrink-0">
+                  {quickFilterCounts.trained}
+                </Badge>
+              )}
             </button>
             
             <button
               onClick={() => handleQuickFilter('pending-schedule')}
               disabled={isPending}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
-                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                 ${activeQuickFilter === 'pending-schedule'
                   ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
-              <Clock className="h-4 w-4" />
-              <span>Pendiente de Agendar</span>
+              <Clock className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden md:inline">Pendiente de Agendar</span>
+              <span className="md:hidden">Pend. Agendar</span>
+              {quickFilterCounts && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs font-semibold flex-shrink-0">
+                  {quickFilterCounts['pending-schedule']}
+                </Badge>
+              )}
             </button>
             
             <button
               onClick={() => handleQuickFilter('review')}
               disabled={isPending}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
-                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                 ${activeQuickFilter === 'review'
                   ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
-              <FileCheck className="h-4 w-4" />
-              <span>Revisar Postulación</span>
+              <FileCheck className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden md:inline">Revisar Postulación</span>
+              <span className="md:hidden">Revisar</span>
+              {quickFilterCounts && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs font-semibold flex-shrink-0">
+                  {quickFilterCounts.review}
+                </Badge>
+              )}
             </button>
-            
+
+            {/* Botón Ver Más / Ver Menos */}
             <button
-              onClick={() => handleQuickFilter('pending-completion')}
-              disabled={isPending}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
-                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
-                ${activeQuickFilter === 'pending-completion'
-                  ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
-                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
-                }`}
+              onClick={() => setShowMoreFilters(!showMoreFilters)}
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
+                whitespace-nowrap cursor-pointer flex-shrink-0 bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50"
             >
-              <Loader2 className="h-4 w-4" />
-              <span>Postulación Pendiente</span>
+              {showMoreFilters ? (
+                <>
+                  <ChevronUp className="h-4 w-4 flex-shrink-0" />
+                  <span>Ver Menos</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4 flex-shrink-0" />
+                  <span>Ver Más</span>
+                </>
+              )}
             </button>
-            
-            <button
-              onClick={() => handleQuickFilter('rejected')}
-              disabled={isPending}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
-                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
-                ${activeQuickFilter === 'rejected'
-                  ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
-                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
-                }`}
-            >
-              <XCircle className="h-4 w-4" />
-              <span>Rechazados</span>
-            </button>
+
+            {/* Filtros adicionales (ocultos por defecto) */}
+            {showMoreFilters && (
+              <>
+                <button
+                  onClick={() => handleQuickFilter('pending-completion')}
+                  disabled={isPending}
+                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
+                    whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
+                    ${activeQuickFilter === 'pending-completion'
+                      ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
+                      : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                    }`}
+                >
+                  <Loader2 className="h-4 w-4 flex-shrink-0" />
+                  <span className="hidden md:inline">Postulación Pendiente</span>
+                  <span className="md:hidden">Pendiente</span>
+                  {quickFilterCounts && (
+                    <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs font-semibold flex-shrink-0">
+                      {quickFilterCounts['pending-completion']}
+                    </Badge>
+                  )}
+                </button>
+                
+                <button
+                  onClick={() => handleQuickFilter('rejected')}
+                  disabled={isPending}
+                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
+                    whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
+                    ${activeQuickFilter === 'rejected'
+                      ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
+                      : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                    }`}
+                >
+                  <XCircle className="h-4 w-4 flex-shrink-0" />
+                  <span className="hidden sm:inline">Rechazados</span>
+                  {quickFilterCounts && (
+                    <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs font-semibold flex-shrink-0">
+                      {quickFilterCounts.rejected}
+                    </Badge>
+                  )}
+                </button>
+              </>
+            )}
           </div>
           
           {isPending ? (

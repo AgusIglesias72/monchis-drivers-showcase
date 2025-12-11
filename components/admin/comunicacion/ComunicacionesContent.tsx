@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Info, TestTube2, ArrowRight, Send, Users, Zap } from 'lucide-react';
+import { Info, TestTube2, ArrowRight, Send, Users, Zap, History, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
 import { BotManager } from './BotManager';
 import { getActiveBots } from '@/lib/config/whatsapp-bots.config';
@@ -28,7 +28,7 @@ export function ComunicacionesContent() {
       </div>
 
       {/* Acciones destacadas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="border-2 hover:border-primary/50 transition-all cursor-pointer group">
           <Link href="/admin/comunicaciones/masivo" className="block">
             <CardHeader>
@@ -51,7 +51,7 @@ export function ComunicacionesContent() {
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary" className="gap-1">
                   <Users className="h-3 w-3" />
-                  Hasta 100 contactos
+                  Múltiples contactos
                 </Badge>
                 <Badge variant="secondary" className="gap-1">
                   <Zap className="h-3 w-3" />
@@ -87,6 +87,38 @@ export function ComunicacionesContent() {
                 </Badge>
                 <Badge variant="outline" className="border-blue-200">
                   Todos los tipos
+                </Badge>
+              </div>
+            </CardContent>
+          </Link>
+        </Card>
+
+        <Card className="border-2 hover:border-purple-500/50 transition-all cursor-pointer group">
+          <Link href="/admin/comunicaciones/historial" className="block">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-lg bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
+                    <History className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Historial</CardTitle>
+                    <CardDescription>
+                      Analiza mensajes enviados y estadísticas
+                    </CardDescription>
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-purple-600 transition-colors" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="border-purple-200 gap-1">
+                  <BarChart3 className="h-3 w-3" />
+                  KPIs detallados
+                </Badge>
+                <Badge variant="outline" className="border-purple-200">
+                  Filtros avanzados
                 </Badge>
               </div>
             </CardContent>

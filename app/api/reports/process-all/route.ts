@@ -15,7 +15,7 @@ interface ProcessAllRequest {
     processExternalDrivers?: boolean;
     concurrency?: number;
     maxDrivers?: number | null;
-    notificationEmails?: string[]; // ✅ NUEVO
+    notificationEmails?: string[];
   }
 
 export async function POST(request: NextRequest) {
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
               concurrency: body.concurrency || 3,
               maxDrivers: body.maxDrivers || null,
               spreadsheetsId: process.env.GOOGLE_SHEETS_ID || '1EvjPf4TUzu7qxMWUy1cjUDGY4FBbCgO8tMYlcOUOt2M',
-              reportSheetName: 'Reporte Pagos', // ✅ Leer de aquí
+              reportSheetName: 'Reporte Pagos',
               driveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID!,
               loginUrl: process.env.APP_LOGIN_URL || 'https://pr-721.durgl9xxo9p82.amplifyapp.com/login',
               driversPageUrl: process.env.APP_DRIVERS_URL || 'https://pr-721.durgl9xxo9p82.amplifyapp.com/reports/driverpayment',

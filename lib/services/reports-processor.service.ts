@@ -87,7 +87,11 @@ function generateDateRanges(startDate: string, endDate: string, daysPerRange: nu
 }
 
 function filterInvalidRows(data: any[][]): any[][] {
-  return data.filter((row) => {
+  return data.filter((row, index) => {
+    // Nunca filtrar el header (primera fila)
+    if (index === 0) return true;
+    
+    // 1. FILTRAR FILAS COMPLETAMENTE VACÍAS
     const isEmpty = row.every(cell => 
       cell === null || 
       cell === undefined || 
@@ -97,13 +101,29 @@ function filterInvalidRows(data: any[][]): any[][] {
     
     if (isEmpty) return false;
     
-    const hasTotal = row.some(cell => 
-      typeof cell === 'string' && 
-      cell.toLowerCase().includes('total')
+    // 2. FILTRAR FILAS DE TOTAL (LÓGICA ROBUSTA)
+    // Verificar si las primeras 4 columnas (A, B, C, D = índices 0, 1, 2, 3) están TODAS vacías
+    const firstFourColumns = row.slice(0, 4);
+    const allFirstFourEmpty = firstFourColumns.every(cell => 
+      cell === null || 
+      cell === undefined || 
+      cell === '' || 
+      (typeof cell === 'string' && cell.trim() === '')
     );
     
-    if (hasTotal) return false;
+    // Si las primeras 4 columnas están vacías, verificar si hay "Total" en la fila
+    if (allFirstFourEmpty) {
+      const hasTotal = row.some(cell => 
+        typeof cell === 'string' && 
+        cell.toLowerCase().includes('total')
+      );
+      
+      if (hasTotal) {
+        return false; // Filtrar esta fila de resumen
+      }
+    }
     
+    // 3. FILTRAR FILAS MAYORMENTE VACÍAS
     const nonEmptyCells = row.filter(cell => 
       cell !== null && 
       cell !== undefined && 

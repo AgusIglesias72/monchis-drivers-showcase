@@ -7,6 +7,7 @@ import {
   CheckCircle, 
   Clock, 
   XCircle,
+  GraduationCap,
 } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -17,6 +18,8 @@ interface PostulacionesStats {
   abandonadas: number
   nuevasUltimos30Dias: number
   tasaCompletado: number
+  capacitados: number
+  rechazados: number
 }
 
 export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
@@ -46,17 +49,17 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
   const kpiCards = [
     {
       title: "Total Postulaciones",
-      subtitle: "Últimos 30 días",
-      value: stats.nuevasUltimos30Dias,
+      subtitle: `${stats.completadas} completadas`,
+      value: stats.totalPostulaciones,
       icon: Users,
       iconColor: "text-blue-500",
       glowColor: "rgba(59, 130, 246, 0.1)",
     },
     {
-      title: "Completadas",
-      subtitle: `${stats.tasaCompletado}% del total`,
-      value: stats.completadas,
-      icon: CheckCircle,
+      title: "Capacitados",
+      subtitle: "Onboarding completado",
+      value: stats.capacitados,
+      icon: GraduationCap,
       iconColor: "text-green-500",
       glowColor: "rgba(34, 197, 94, 0.1)",
     },
@@ -69,9 +72,9 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
       glowColor: "rgba(245, 158, 11, 0.1)",
     },
     {
-      title: "Abandonadas",
-      subtitle: "Requieren seguimiento",
-      value: stats.abandonadas,
+      title: "Rechazados",
+      subtitle: "Requieren revisión",
+      value: stats.rechazados,
       icon: XCircle,
       iconColor: "text-red-500",
       glowColor: "rgba(239, 68, 68, 0.1)",
@@ -79,7 +82,7 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
   ]
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
       {kpiCards.map((card, index) => (
         <motion.div
           key={card.title}
@@ -111,8 +114,8 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
               {/* Subtle gradient overlay */}
               <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-background/5 pointer-events-none" />
               
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5">
+                <CardTitle className="text-xs font-medium">
                   {card.title}
                 </CardTitle>
                 <motion.div
@@ -126,13 +129,13 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
                     delay: index * 0.2
                   }}
                 >
-                  <card.icon className={`h-4 w-4 ${card.iconColor}`} />
+                  <card.icon className={`h-3.5 w-3.5 ${card.iconColor}`} />
                 </motion.div>
               </CardHeader>
               
-              <CardContent>
+              <CardContent className="pt-0">
                 <motion.div
-                  className="text-2xl font-bold"
+                  className="text-xl font-bold"
                   initial={{ scale: 0.5, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{
@@ -144,7 +147,7 @@ export function PostulacionesKPIs({ stats }: { stats: PostulacionesStats }) {
                 >
                   {card.value?.toLocaleString() || '0'}
                 </motion.div>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   {card.subtitle}
                 </p>
               </CardContent>

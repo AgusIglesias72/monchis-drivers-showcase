@@ -265,7 +265,8 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
     'Lambaré',
     'Fdo/San Lorenzo',
     'Luque',
-    'Mariano'
+    'Mariano',
+    'San Bernardino'
   ];
 
   const handleWorkZoneToggle = (zone: string) => {

@@ -174,6 +174,16 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
       ]
     } else if (params.onboardingStatus === 'scheduled') {
       where.onboardingStatus = 'SCHEDULED'
+    } else if (params.onboardingStatus === 'scheduled-no-show') {
+      // Para "No Asistieron", traemos todas las completadas y filtramos en post-processing
+      // porque necesitamos verificar también el status de attendance
+      // No agregamos filtro aquí, se filtra en post-processing
+    } else if (params.onboardingStatus === 'scheduled-pending') {
+      // Postulaciones agendadas pero pendientes (SCHEDULED o IN_PROGRESS, pero no NO_SHOW ni COMPLETED)
+      where.OR = [
+        { onboardingStatus: 'SCHEDULED' },
+        { onboardingStatus: 'IN_PROGRESS' },
+      ]
     } else if (params.onboardingStatus === 'completed') {
       where.onboardingStatus = 'COMPLETED'
     }
@@ -215,11 +225,19 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   const treintaDiasAtras = new Date()
   treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30)
 
-  // ✅ Detectar quick filters que necesitan filtrado por color de documentos
+  // ✅ Detectar quick filters que necesitan filtrado por color de documentos o attendance
   const isPendingScheduleFilter = 
     params.onboardingStatus === 'pending' && 
     params.status === 'COMPLETED' &&
     !params.documentStatus // Para asegurar que viene del quick filter
+
+  const isScheduledNoShowFilter = 
+    params.onboardingStatus === 'scheduled-no-show' && 
+    params.status === 'COMPLETED'
+
+  const isScheduledPendingFilter = 
+    params.onboardingStatus === 'scheduled-pending' && 
+    params.status === 'COMPLETED'
 
   const isReviewFilter = 
     params.status === 'COMPLETED' && 
@@ -231,12 +249,88 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   // Verificar si hay filtros POST-PROCESSING que requieren traer todos los datos
   const hasPostProcessingFilters = 
     isPendingScheduleFilter ||
+    isScheduledNoShowFilter ||
+    isScheduledPendingFilter ||
     isReviewFilter ||
     isRejectedFilter ||
     (params.contactStatus && params.contactStatus !== 'all') ||
     (params.documentStatus && params.documentStatus !== 'all') ||
     (params.paymentStatus && params.paymentStatus !== 'all') ||
     (params.invoiceStatus && params.invoiceStatus !== 'all')
+
+  // ✅ Calcular conteos de filtros rápidos
+  // Necesitamos traer todas las postulaciones completadas y rechazadas para calcular conteos basados en documentos
+  const [completadasForCounts, rechazadasForCounts] = await Promise.all([
+    prisma.formDriver.findMany({
+      where: { status: 'COMPLETED' },
+      include: {
+        ...POSTULACION_INCLUDE,
+        onboardingAttendances: {
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            event: {
+              select: {
+                id: true,
+                scheduledDate: true,
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          // Traemos todas las asistencias para calcular correctamente NO_SHOW
+        }
+      },
+    }),
+    prisma.formDriver.findMany({
+      where: { status: 'REJECTED' },
+      include: POSTULACION_INCLUDE,
+    }),
+  ])
+
+  // Calcular conteos de filtros rápidos
+  const quickFilterCounts = {
+    'scheduled-no-show': completadasForCounts.filter(p => {
+      // Excluir los que ya completaron el onboarding
+      if (p.onboardingStatus === 'COMPLETED') return false
+      
+      // Postulaciones con onboardingStatus = 'NO_SHOW'
+      if (p.onboardingStatus === 'NO_SHOW') return true
+      // O que tengan alguna asistencia marcada como NO_SHOW
+      const attendances = p.onboardingAttendances || []
+      return attendances.some((att: any) => att.status === 'NO_SHOW')
+    }).length,
+    'scheduled-pending': completadasForCounts.filter(p => {
+      // Postulaciones agendadas pero que aún no completaron ni son no-show
+      const isScheduled = p.onboardingStatus === 'SCHEDULED' || p.onboardingStatus === 'IN_PROGRESS'
+      const isNoShow = p.onboardingStatus === 'NO_SHOW'
+      const isCompleted = p.onboardingStatus === 'COMPLETED'
+      const attendance = p.onboardingAttendances?.[0]
+      const attendanceIsNoShow = attendance?.status === 'NO_SHOW'
+      
+      return isScheduled && !isNoShow && !isCompleted && !attendanceIsNoShow
+    }).length,
+    trained: completadasForCounts.filter(p => p.onboardingStatus === 'COMPLETED').length,
+    'pending-schedule': completadasForCounts.filter(p => {
+      const hasPendingOnboarding = !p.onboardingStatus || 
+        p.onboardingStatus === 'NOT_READY' || 
+        p.onboardingStatus === 'READY'
+      if (!hasPendingOnboarding) return false
+      const colorStatus = calculateDocumentColorStatus(p)
+      return colorStatus === 'green' || colorStatus === 'blue'
+    }).length,
+    review: completadasForCounts.filter(p => {
+      const colorStatus = calculateDocumentColorStatus(p)
+      return colorStatus === 'yellow'
+    }).length,
+    'pending-completion': 0, // Se calcula con count directo
+    rejected: rechazadasForCounts.length + completadasForCounts.filter(p => {
+      const colorStatus = calculateDocumentColorStatus(p)
+      return colorStatus === 'red'
+    }).length,
+  }
 
   const [
     total,
@@ -256,7 +350,28 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     hasPostProcessingFilters
       ? prisma.formDriver.findMany({
           where,
-          include: POSTULACION_INCLUDE,
+          include: isScheduledNoShowFilter
+            ? {
+                ...POSTULACION_INCLUDE,
+                onboardingAttendances: {
+                  select: {
+                    id: true,
+                    status: true,
+                    createdAt: true,
+                    event: {
+                      select: {
+                        id: true,
+                        scheduledDate: true,
+                      }
+                    }
+                  },
+                  orderBy: {
+                    createdAt: 'desc'
+                  },
+                  // Para NO_SHOW, traemos todas las asistencias para verificar correctamente
+                }
+              }
+            : POSTULACION_INCLUDE,
           orderBy: orderBy,
         })
       : prisma.formDriver.findMany({
@@ -268,11 +383,13 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
         }),
   ])
 
+  quickFilterCounts['pending-completion'] = enProgreso
+
   // ==================== POST-PROCESSING FILTERS ====================
   
   let postulaciones = postulacionesRaw
 
-  // ✅ NUEVO: Filtro "Pendiente de Agendar" - Docs verde o azul
+  // ✅ Filtro "Pendiente de Agendar" - Docs verde o azul
   if (isPendingScheduleFilter) {
     postulaciones = postulaciones.filter(p => {
       const colorStatus = calculateDocumentColorStatus(p)
@@ -280,7 +397,38 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     })
   }
 
-  // ✅ NUEVO: Filtro "Revisar Postulación" - Docs amarillo
+  // ✅ Filtro "Agendados - No Asistieron" - NO_SHOW o attendance con NO_SHOW
+  if (isScheduledNoShowFilter) {
+    postulaciones = postulaciones.filter(p => {
+      // Excluir los que ya completaron el onboarding (ya están capacitados)
+      if (p.onboardingStatus === 'COMPLETED') return false
+      
+      // Postulaciones con onboardingStatus = 'NO_SHOW'
+      if (p.onboardingStatus === 'NO_SHOW') return true
+      
+      // O que tengan alguna asistencia marcada como NO_SHOW
+      const attendances = p.onboardingAttendances || []
+      const hasNoShowAttendance = attendances.some((att: any) => att.status === 'NO_SHOW')
+      if (hasNoShowAttendance) return true
+      
+      return false
+    })
+  }
+
+  // ✅ Filtro "Agendados - Pendiente Capacitación" - SCHEDULED/IN_PROGRESS pero no NO_SHOW ni COMPLETED
+  if (isScheduledPendingFilter) {
+    postulaciones = postulaciones.filter(p => {
+      const isScheduled = p.onboardingStatus === 'SCHEDULED' || p.onboardingStatus === 'IN_PROGRESS'
+      const isNoShow = p.onboardingStatus === 'NO_SHOW'
+      const isCompleted = p.onboardingStatus === 'COMPLETED'
+      const attendance = p.onboardingAttendances?.[0]
+      const attendanceIsNoShow = attendance?.status === 'NO_SHOW'
+      
+      return isScheduled && !isNoShow && !isCompleted && !attendanceIsNoShow
+    })
+  }
+
+  // ✅ Filtro "Revisar Postulación" - Docs amarillo
   if (isReviewFilter) {
     postulaciones = postulaciones.filter(p => {
       const colorStatus = calculateDocumentColorStatus(p)
@@ -288,7 +436,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     })
   }
 
-  // ✅ NUEVO: Filtro "Rechazados" - Status REJECTED O docs rojos
+  // ✅ Filtro "Rechazados" - Status REJECTED O docs rojos
   if (isRejectedFilter) {
     postulaciones = postulaciones.filter(p => {
       const colorStatus = calculateDocumentColorStatus(p)
@@ -401,6 +549,8 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   }
 
   const tasaCompletado = total > 0 ? Math.round((completadas / total) * 100) : 0
+  const capacitados = quickFilterCounts.trained
+  const rechazados = quickFilterCounts.rejected
 
   const stats = {
     totalPostulaciones: total,
@@ -409,6 +559,8 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     abandonadas,
     nuevasUltimos30Dias,
     tasaCompletado,
+    capacitados,
+    rechazados,
   }
 
   // Calcular total y paginación correctamente
@@ -441,6 +593,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
       currentPage={page}
       totalPages={totalPages}
       hasMore={hasMore}
+      quickFilterCounts={quickFilterCounts}
       currentFilters={{
         status: params.status,
         search: params.search,

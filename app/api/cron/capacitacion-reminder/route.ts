@@ -15,7 +15,7 @@ const DELAY_BETWEEN_BATCHES_MS = 30000;
 const BOT_ID = 'bot-adquisicion-prod';
 
 // Máximo de recordatorios por attendee por evento
-const MAX_REMINDERS_PER_ATTENDEE = 1;
+const MAX_REMINDERS_PER_ATTENDEE = 2;
 
 // ==================== TYPES ====================
 

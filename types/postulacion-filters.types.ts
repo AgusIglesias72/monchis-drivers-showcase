@@ -2,7 +2,7 @@
 
 export type PostulacionStatusFilter = 'all' | 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED' | 'REJECTED' | 'ASISTIDA'
 
-export type OnboardingStatusFilter = 'all' | 'pending' | 'scheduled' | 'completed'
+export type OnboardingStatusFilter = 'all' | 'pending' | 'scheduled' | 'scheduled-no-show' | 'scheduled-pending' | 'completed'
 
 export type CurrentStepFilter = 'all' | '1' | '2' | '3' | '4' | '5' | '6'
 
