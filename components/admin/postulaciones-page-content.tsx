@@ -43,6 +43,7 @@ import {
   ChevronDown,
   ChevronUp,
   UserX,
+  Receipt,
 } from "lucide-react"
 import {
   Tooltip,
@@ -77,11 +78,12 @@ interface PostulacionesPageContentProps {
     review: number
     'pending-completion': number
     rejected: number
+    'payment-proof': number
   }
   currentFilters: PostulacionFilters
 }
 
-type QuickFilter = 'all' | 'scheduled-no-show' | 'scheduled-pending' | 'trained' | 'pending-schedule' | 'review' | 'pending-completion' | 'rejected'
+type QuickFilter = 'all' | 'scheduled-no-show' | 'scheduled-pending' | 'trained' | 'pending-schedule' | 'review' | 'pending-completion' | 'rejected' | 'payment-proof'
 
 export function PostulacionesPageContent({
   stats,
@@ -106,6 +108,7 @@ export function PostulacionesPageContent({
   const [documentStatusFilter, setDocumentStatusFilter] = useState(currentFilters.documentStatus || 'all')
   const [paymentStatusFilter, setPaymentStatusFilter] = useState(currentFilters.paymentStatus || 'all')
   const [invoiceStatusFilter, setInvoiceStatusFilter] = useState(currentFilters.invoiceStatus || 'all')
+  const [workZoneFilter, setWorkZoneFilter] = useState(currentFilters.workZone || 'all')
   const [startDate, setStartDate] = useState(currentFilters.startDate || '')
   const [endDate, setEndDate] = useState(currentFilters.endDate || '')
   const [sortBy, setSortBy] = useState(currentFilters.sortBy || 'createdAt')
@@ -127,9 +130,28 @@ export function PostulacionesPageContent({
     })
   }, [postulaciones])
 
+  // Sincronizar estados locales con currentFilters de la URL
+  useEffect(() => {
+    setSearchTerm(currentFilters.search || '')
+    setStatusFilter(currentFilters.status || 'all')
+    setOnboardingStatusFilter(currentFilters.onboardingStatus || 'all')
+    setCurrentStepFilter(currentFilters.currentStep || 'all')
+    setContactStatusFilter(currentFilters.contactStatus || 'all')
+    setDocumentStatusFilter(currentFilters.documentStatus || 'all')
+    setPaymentStatusFilter(currentFilters.paymentStatus || 'all')
+    setInvoiceStatusFilter(currentFilters.invoiceStatus || 'all')
+    setWorkZoneFilter(currentFilters.workZone || 'all')
+    setStartDate(currentFilters.startDate || '')
+    setEndDate(currentFilters.endDate || '')
+    setSortBy(currentFilters.sortBy || 'createdAt')
+    setSortOrder(currentFilters.sortOrder || 'desc')
+  }, [currentFilters])
+
   useEffect(() => {
     if (statusFilter === 'REJECTED') {
       setActiveQuickFilter('rejected')
+    } else if (paymentStatusFilter === 'payment-proof') {
+      setActiveQuickFilter('payment-proof')
     } else if (onboardingStatusFilter === 'scheduled-no-show') {
       setActiveQuickFilter('scheduled-no-show')
     } else if (onboardingStatusFilter === 'scheduled-pending') {
@@ -138,19 +160,19 @@ export function PostulacionesPageContent({
       setActiveQuickFilter('trained')
     } else if (onboardingStatusFilter === 'pending' && statusFilter === 'COMPLETED') {
       setActiveQuickFilter('pending-schedule')
-    } else if (statusFilter === 'COMPLETED' && onboardingStatusFilter === 'all') {
+    } else if (statusFilter === 'COMPLETED' && onboardingStatusFilter === 'all' && !documentStatusFilter) {
       setActiveQuickFilter('review')
     } else if (statusFilter === 'IN_PROGRESS') {
       setActiveQuickFilter('pending-completion')
     } else {
       setActiveQuickFilter('all')
     }
-  }, [statusFilter, onboardingStatusFilter])
+  }, [statusFilter, onboardingStatusFilter, paymentStatusFilter, documentStatusFilter])
 
   const applyFilters = useCallback((page: number = 1, quickFilter?: QuickFilter) => {
     const params = new URLSearchParams()
 
-    if (quickFilter) {
+    if (quickFilter && quickFilter !== 'all') {
       switch (quickFilter) {
         case 'scheduled-no-show':
           params.set('onboardingStatus', 'scheduled-no-show')
@@ -177,8 +199,13 @@ export function PostulacionesPageContent({
         case 'rejected':
           params.set('status', 'REJECTED')
           break
+        case 'payment-proof':
+          params.set('paymentStatus', 'payment-proof')
+          params.set('status', 'COMPLETED')
+          break
       }
     } else {
+      // ✅ FIX: Usar filtros del estado local cuando no hay quick filter activo
       if (statusFilter !== 'all') params.set('status', statusFilter)
       if (onboardingStatusFilter !== 'all') params.set('onboardingStatus', onboardingStatusFilter)
       if (currentStepFilter !== 'all') params.set('currentStep', currentStepFilter)
@@ -188,7 +215,9 @@ export function PostulacionesPageContent({
       if (invoiceStatusFilter !== 'all') params.set('invoiceStatus', invoiceStatusFilter)
     }
 
+    // Estos filtros se aplican siempre, incluso con quick filters activos
     if (searchTerm) params.set('search', searchTerm)
+    if (workZoneFilter !== 'all') params.set('workZone', workZoneFilter)
     if (startDate) params.set('startDate', startDate)
     if (endDate) params.set('endDate', endDate)
     if (sortBy !== 'createdAt') params.set('sortBy', sortBy)
@@ -200,7 +229,7 @@ export function PostulacionesPageContent({
     startTransition(() => {
       router.push(`/admin/postulaciones${queryString ? `?${queryString}` : ''}`, { scroll: false })
     })
-  }, [router, statusFilter, onboardingStatusFilter, currentStepFilter, contactStatusFilter, documentStatusFilter, paymentStatusFilter, invoiceStatusFilter, searchTerm, startDate, endDate, sortBy, sortOrder])
+  }, [router, statusFilter, onboardingStatusFilter, currentStepFilter, contactStatusFilter, documentStatusFilter, paymentStatusFilter, invoiceStatusFilter, workZoneFilter, searchTerm, startDate, endDate, sortBy, sortOrder])
 
   const handleQuickFilter = (filter: QuickFilter) => {
     setActiveQuickFilter(filter)
@@ -213,6 +242,7 @@ export function PostulacionesPageContent({
       setDocumentStatusFilter('all')
       setPaymentStatusFilter('all')
       setInvoiceStatusFilter('all')
+      setWorkZoneFilter('all')
     }
 
     applyFilters(1, filter)
@@ -236,12 +266,13 @@ export function PostulacionesPageContent({
     setDocumentStatusFilter('all')
     setPaymentStatusFilter('all')
     setInvoiceStatusFilter('all')
+    setWorkZoneFilter('all')
     setStartDate('')
     setEndDate('')
     setSortBy('createdAt')
     setSortOrder('desc')
     setActiveQuickFilter('all')
-    
+
     startTransition(() => {
       router.push('/admin/postulaciones', { scroll: false })
     })
@@ -256,24 +287,31 @@ export function PostulacionesPageContent({
     documentStatusFilter !== 'all',
     paymentStatusFilter !== 'all',
     invoiceStatusFilter !== 'all',
+    workZoneFilter !== 'all',
     startDate !== '',
     endDate !== '',
   ].filter(Boolean).length
 
-  const hasActiveFilters = 
-    searchTerm || 
-    statusFilter !== 'all' || 
-    onboardingStatusFilter !== 'all' || 
+  const hasActiveFilters =
+    searchTerm ||
+    statusFilter !== 'all' ||
+    onboardingStatusFilter !== 'all' ||
     currentStepFilter !== 'all' ||
     contactStatusFilter !== 'all' ||
     documentStatusFilter !== 'all' ||
     paymentStatusFilter !== 'all' ||
     invoiceStatusFilter !== 'all' ||
-    startDate || 
+    workZoneFilter !== 'all' ||
+    startDate ||
     endDate
 
   const handlePageChange = (newPage: number) => {
-    applyFilters(newPage, activeQuickFilter === 'all' ? undefined : activeQuickFilter)
+    // ✅ FIX: Solo pasar quickFilter si hay uno activo, sino usa filtros del estado local
+    if (activeQuickFilter !== 'all') {
+      applyFilters(newPage, activeQuickFilter)
+    } else {
+      applyFilters(newPage)
+    }
   }
 
   return (
@@ -500,6 +538,45 @@ export function PostulacionesPageContent({
                           <SelectItem value="pending" className="cursor-pointer">Pendiente</SelectItem>
                           <SelectItem value="scheduled" className="cursor-pointer">Agendado</SelectItem>
                           <SelectItem value="completed" className="cursor-pointer">Completado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Sección: Zona de Trabajo */}
+                  <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Zona de Trabajo</h3>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="sheet-workzone" className="text-xs font-medium text-gray-600">
+                          Zona Preferida
+                        </Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Filtra por la zona donde el driver quiere trabajar</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Select
+                        value={workZoneFilter}
+                        onValueChange={(value) => setWorkZoneFilter(value as any)}
+                      >
+                        <SelectTrigger id="sheet-workzone" className="h-9 text-sm w-full cursor-pointer">
+                          <SelectValue placeholder="Todas las zonas" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all" className="cursor-pointer">Todas las zonas</SelectItem>
+                          <SelectItem value="Carmelitas" className="cursor-pointer">Carmelitas</SelectItem>
+                          <SelectItem value="Centro" className="cursor-pointer">Centro</SelectItem>
+                          <SelectItem value="Lambaré" className="cursor-pointer">Lambaré</SelectItem>
+                          <SelectItem value="Fdo/San Lorenzo" className="cursor-pointer">Fdo/San Lorenzo</SelectItem>
+                          <SelectItem value="Luque" className="cursor-pointer">Luque</SelectItem>
+                          <SelectItem value="Mariano" className="cursor-pointer">Mariano</SelectItem>
+                          <SelectItem value="San Bernardino" className="cursor-pointer">San Bernardino</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -820,6 +897,26 @@ export function PostulacionesPageContent({
               )}
             </button>
 
+            <button
+              onClick={() => handleQuickFilter('payment-proof')}
+              disabled={isPending}
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
+                whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
+                ${activeQuickFilter === 'payment-proof'
+                  ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
+                  : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
+                }`}
+            >
+              <Receipt className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden md:inline">Con Comprobante de Pago</span>
+              <span className="md:hidden">Con Pago</span>
+              {quickFilterCounts && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs font-semibold flex-shrink-0">
+                  {quickFilterCounts['payment-proof']}
+                </Badge>
+              )}
+            </button>
+
             {/* Botón Ver Más / Ver Menos */}
             <button
               onClick={() => setShowMoreFilters(!showMoreFilters)}
@@ -861,7 +958,7 @@ export function PostulacionesPageContent({
                     </Badge>
                   )}
                 </button>
-                
+
                 <button
                   onClick={() => handleQuickFilter('rejected')}
                   disabled={isPending}

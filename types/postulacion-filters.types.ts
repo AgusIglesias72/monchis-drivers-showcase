@@ -10,7 +10,7 @@ export type ContactStatusFilter = 'all' | 'contacted' | 'pending' | 'not-applica
 
 export type DocumentStatusFilter = 'all' | 'completos' | 'en-revision' | 'pendientes'
 
-export type PaymentStatusFilter = 'all' | 'verificado' | 'en-verificacion' | 'pendiente'
+export type PaymentStatusFilter = 'all' | 'verificado' | 'en-verificacion' | 'pendiente' | 'payment-proof'
 
 export type InvoiceStatusFilter = 'all' | 'completa' | 'pendiente' | 'na'
 
@@ -23,6 +23,7 @@ export interface PostulacionFilters {
   search?: string
   onboardingStatus?: OnboardingStatusFilter
   hasVehicle?: string
+  workZone?: string
   startDate?: string
   endDate?: string
   currentStep?: CurrentStepFilter

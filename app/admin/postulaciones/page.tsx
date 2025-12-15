@@ -196,6 +196,13 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     where.hasVehicle = false
   }
 
+  // Filtro de zona de trabajo
+  if (params.workZone && params.workZone !== 'all') {
+    where.workZone = {
+      contains: params.workZone
+    }
+  }
+
   // Filtro de búsqueda
   if (params.search) {
     where.OR = [
@@ -246,13 +253,18 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
 
   const isRejectedFilter = params.status === 'REJECTED'
 
+  const isPaymentProofFilter =
+    params.paymentStatus === 'payment-proof' &&
+    params.status === 'COMPLETED'
+
   // Verificar si hay filtros POST-PROCESSING que requieren traer todos los datos
-  const hasPostProcessingFilters = 
+  const hasPostProcessingFilters =
     isPendingScheduleFilter ||
     isScheduledNoShowFilter ||
     isScheduledPendingFilter ||
     isReviewFilter ||
     isRejectedFilter ||
+    isPaymentProofFilter ||
     (params.contactStatus && params.contactStatus !== 'all') ||
     (params.documentStatus && params.documentStatus !== 'all') ||
     (params.paymentStatus && params.paymentStatus !== 'all') ||
@@ -329,6 +341,10 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     rejected: rechazadasForCounts.length + completadasForCounts.filter(p => {
       const colorStatus = calculateDocumentColorStatus(p)
       return colorStatus === 'red'
+    }).length,
+    'payment-proof': completadasForCounts.filter(p => {
+      // Postulaciones que tienen comprobante de pago subido
+      return (p as any).paymentProofUrl && (p as any).paymentProofUrl.trim() !== ''
     }).length,
   }
 
@@ -441,6 +457,13 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     postulaciones = postulaciones.filter(p => {
       const colorStatus = calculateDocumentColorStatus(p)
       return p.status === 'REJECTED' || colorStatus === 'red'
+    })
+  }
+
+  // ✅ Filtro "Con Comprobante de Pago" - Tienen paymentProofUrl
+  if (isPaymentProofFilter) {
+    postulaciones = postulaciones.filter(p => {
+      return (p as any).paymentProofUrl && (p as any).paymentProofUrl.trim() !== ''
     })
   }
 
