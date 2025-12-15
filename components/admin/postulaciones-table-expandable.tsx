@@ -399,8 +399,27 @@ export function PostulacionesTableExpandable({
                           {/* POSTULANTE */}
                           <td className="px-3 py-3">
                             <div className="space-y-1">
-                              <div className="font-medium text-sm">
-                                {postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
+                              <div className="flex items-center gap-2">
+                                <div className="font-medium text-sm">
+                                  {postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
+                                </div>
+                                {postulacion.workZone?.includes('San Bernardino') && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge
+                                          variant="outline"
+                                          className="text-xs px-1.5 py-0 h-5 bg-purple-50 text-purple-700 border-purple-300 font-semibold"
+                                        >
+                                          SB
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="text-xs">Zona preferida: San Bernardino</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
                               </div>
                               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                 <span>CI: {postulacion.cedula}</span>
