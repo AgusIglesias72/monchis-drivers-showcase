@@ -16,11 +16,11 @@ export function SEOStructuredData() {
       "addressLocality": "Asunción",
       "addressCountry": "PY"
     },
-    "sameAs": [
-      "https://www.facebook.com/monchisparaguay",
-      "https://www.instagram.com/monchis.py",
-      // Agregar más redes sociales si existen
-    ]
+    // "sameAs": [
+      // Agregar redes sociales cuando estén disponibles:
+      // "https://www.facebook.com/monchis",
+      // "https://www.instagram.com/monchis.py",
+    // ]
   }
 
   // Datos del negocio local
@@ -30,13 +30,13 @@ export function SEOStructuredData() {
     "name": "Monchis",
     "image": "https://drivers.monchis.com.py/monchis-logo-red.png",
     "url": "https://drivers.monchis.com.py",
-    "telephone": "+595-XXX-XXXXXX", // Reemplazar con número real
+    // "telephone": "+595-XXX-XXXXXX", // Agregar cuando esté disponible
     "address": {
       "@type": "PostalAddress",
-      "streetAddress": "Dirección de Monchis", // Reemplazar con dirección real
+      // "streetAddress": "Por definir", // Agregar dirección específica cuando esté disponible
       "addressLocality": "Asunción",
       "addressRegion": "Asunción",
-      "postalCode": "XXXX", // Reemplazar con código postal real
+      // "postalCode": "XXXX", // Agregar cuando esté disponible
       "addressCountry": "PY"
     },
     "geo": {
@@ -73,7 +73,7 @@ export function SEOStructuredData() {
       "name": "Monchis",
       "value": "DRIVER-2025"
     },
-    "datePosted": "2025-01-01", // Actualizar con fecha real
+    "datePosted": new Date().toISOString().split('T')[0], // Fecha actual
     "validThrough": "2025-12-31", // La oferta está vigente todo el año
     "employmentType": ["CONTRACTOR", "PART_TIME", "FULL_TIME"],
     "hiringOrganization": {
