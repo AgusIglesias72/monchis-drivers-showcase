@@ -16,7 +16,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata = {
-  metadataBase: new URL('https://drivers.monchis.com.py'),
+  metadataBase: new URL('https://monchis-drivers.vercel.app'),
   title: {
     default: 'Monchis Drivers - Trabaja como Repartidor en Paraguay',
     template: '%s | Monchis Drivers'
@@ -36,7 +36,7 @@ export const metadata = {
   openGraph: {
     type: 'website',
     locale: 'es_PY',
-    url: 'https://drivers.monchis.com.py',
+    url: 'https://monchis-drivers.vercel.app',
     siteName: 'Monchis Drivers',
     title: 'Monchis Drivers - Trabaja como Repartidor en Paraguay',
     description: 'Únete al equipo de drivers de Monchis y gana dinero haciendo entregas en Paraguay.',

@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://drivers.monchis.com.py'
+  const baseUrl = 'https://monchis-drivers.vercel.app'
   const currentDate = new Date()
 
   return [

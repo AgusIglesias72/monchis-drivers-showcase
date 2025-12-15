@@ -64,7 +64,7 @@ NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION=tu-codigo-de-verificacion
 
 **Pasos**:
 1. Ir a [Google Search Console](https://search.google.com/search-console)
-2. Agregar propiedad: `https://drivers.monchis.com.py`
+2. Agregar propiedad: `https://monchis-drivers.vercel.app`
 3. Verificar mediante meta tag
 4. Copiar el código y agregarlo a `.env.local`
 
@@ -100,7 +100,7 @@ Archivo: `/components/SEOStructuredData.tsx`
 
 #### 3. **Configurar Google Search Console**
 1. Verificar sitio (paso 1 completado)
-2. Enviar sitemap: `https://drivers.monchis.com.py/sitemap.xml`
+2. Enviar sitemap: `https://monchis-drivers.vercel.app/sitemap.xml`
 3. Solicitar indexación de la página principal
 4. Monitorear errores de rastreo
 

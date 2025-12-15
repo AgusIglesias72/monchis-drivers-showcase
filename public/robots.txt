@@ -52,4 +52,4 @@ User-agent: MJ12bot
 Disallow: /
 
 # Sitemap
-Sitemap: https://drivers.monchis.com.py/sitemap.xml
+Sitemap: https://monchis-drivers.vercel.app/sitemap.xml

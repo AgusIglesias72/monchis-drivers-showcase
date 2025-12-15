@@ -28,8 +28,8 @@ export function SEOStructuredData() {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
     "name": "Monchis",
-    "image": "https://drivers.monchis.com.py/monchis-logo-red.png",
-    "url": "https://drivers.monchis.com.py",
+    "image": "https://monchis-drivers.vercel.app/monchis-logo-red.png",
+    "url": "https://monchis-drivers.vercel.app",
     // "telephone": "+595-XXX-XXXXXX", // Agregar cuando esté disponible
     "address": {
       "@type": "PostalAddress",
@@ -80,7 +80,7 @@ export function SEOStructuredData() {
       "@type": "Organization",
       "name": "Monchis",
       "sameAs": "https://monchis.com.py",
-      "logo": "https://drivers.monchis.com.py/monchis-logo-red.png"
+      "logo": "https://monchis-drivers.vercel.app/monchis-logo-red.png"
     },
     "jobLocation": {
       "@type": "Place",
@@ -109,7 +109,7 @@ export function SEOStructuredData() {
     "applicationContact": {
       "@type": "ContactPoint",
       "contactType": "Recruitment",
-      "url": "https://drivers.monchis.com.py"
+      "url": "https://monchis-drivers.vercel.app"
     },
     "jobLocationType": "FIELD_WORK",
     "applicantLocationRequirements": {
@@ -123,12 +123,12 @@ export function SEOStructuredData() {
     "@context": "https://schema.org",
     "@type": "WebSite",
     "name": "Monchis Drivers",
-    "url": "https://drivers.monchis.com.py",
+    "url": "https://monchis-drivers.vercel.app",
     "potentialAction": {
       "@type": "SearchAction",
       "target": {
         "@type": "EntryPoint",
-        "urlTemplate": "https://drivers.monchis.com.py?search={search_term_string}"
+        "urlTemplate": "https://monchis-drivers.vercel.app?search={search_term_string}"
       },
       "query-input": "required name=search_term_string"
     }

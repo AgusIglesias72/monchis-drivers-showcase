@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'es_PY',
-    url: 'https://drivers.monchis.com.py',
+    url: 'https://monchis-drivers.vercel.app',
     siteName: 'Monchis Drivers',
     title: 'Trabaja como Driver en Monchis Paraguay - Gana Dinero Entregando',
     description: '¿Buscas trabajo como driver en Paraguay? Únete a Monchis y gana dinero haciendo entregas. Horarios flexibles, pagos semanales, y beneficios exclusivos.',
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     images: ['/monchis-logo-red.png'],
   },
   alternates: {
-    canonical: 'https://drivers.monchis.com.py',
+    canonical: 'https://monchis-drivers.vercel.app',
   },
   verification: {
     google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
