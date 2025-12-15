@@ -1,0 +1,27 @@
+{
+  "name": "Monchis Drivers - Plataforma de Postulación",
+  "short_name": "Monchis Drivers",
+  "description": "Plataforma oficial para postular como driver en Monchis Paraguay",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#EF4444",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/monchis-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/monchis-logo-red.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "es",
+  "dir": "ltr",
+  "scope": "/"
+}

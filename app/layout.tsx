@@ -16,17 +16,66 @@ const montserrat = Montserrat({
 });
 
 export const metadata = {
-  title: 'Monchis - Postulación Driver',
-  description: 'Únete al equipo de drivers de Monchis',
+  metadataBase: new URL('https://drivers.monchis.com.py'),
+  title: {
+    default: 'Monchis Drivers - Trabaja como Repartidor en Paraguay',
+    template: '%s | Monchis Drivers'
+  },
+  description: 'Únete al equipo de drivers de Monchis y gana dinero haciendo entregas en Paraguay. Horarios flexibles, pagos semanales y beneficios exclusivos.',
+  applicationName: 'Monchis Drivers',
+  referrer: 'origin-when-cross-origin',
+  keywords: ['monchis', 'driver', 'delivery', 'paraguay', 'asuncion', 'trabajo', 'repartidor', 'entregas', 'gana dinero'],
+  authors: [{ name: 'Monchis', url: 'https://monchis.com.py' }],
+  creator: 'Monchis',
+  publisher: 'Monchis',
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
   openGraph: {
-    title: 'Monchis - Postulación Driver',
+    type: 'website',
+    locale: 'es_PY',
+    url: 'https://drivers.monchis.com.py',
+    siteName: 'Monchis Drivers',
+    title: 'Monchis Drivers - Trabaja como Repartidor en Paraguay',
+    description: 'Únete al equipo de drivers de Monchis y gana dinero haciendo entregas en Paraguay.',
+    images: [
+      {
+        url: '/monchis-logo-red.png',
+        width: 1200,
+        height: 630,
+        alt: 'Monchis Drivers',
+      }
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Monchis Drivers - Trabaja como Repartidor en Paraguay',
     description: 'Únete al equipo de drivers de Monchis',
-    images: '/monchis-icon.svg',
+    images: ['/monchis-logo-red.png'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
   icons: {
-    icon: '/monchis-icon.svg',
-    apple: '/monchis-icon.svg',
-  }
+    icon: [
+      { url: '/monchis-icon.svg' },
+      { url: '/monchis-icon.svg', sizes: '32x32', type: 'image/svg+xml' },
+    ],
+    apple: [
+      { url: '/monchis-icon.svg' },
+    ],
+  },
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({
