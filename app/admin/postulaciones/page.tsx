@@ -343,8 +343,11 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
       return colorStatus === 'red'
     }).length,
     'payment-proof': completadasForCounts.filter(p => {
-      // Postulaciones que tienen comprobante de pago subido
-      return (p as any).paymentProofUrl && (p as any).paymentProofUrl.trim() !== ''
+      // Postulaciones que tienen comprobante de pago subido en equipmentPayments
+      const hasPaymentProof = p.equipmentPayments && p.equipmentPayments.some(
+        payment => payment.paymentProofUrl && payment.paymentProofUrl.trim() !== ''
+      )
+      return hasPaymentProof
     }).length,
   }
 
@@ -460,10 +463,13 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     })
   }
 
-  // ✅ Filtro "Con Comprobante de Pago" - Tienen paymentProofUrl
+  // ✅ Filtro "Con Comprobante de Pago" - Tienen paymentProofUrl en equipmentPayments
   if (isPaymentProofFilter) {
     postulaciones = postulaciones.filter(p => {
-      return (p as any).paymentProofUrl && (p as any).paymentProofUrl.trim() !== ''
+      const hasPaymentProof = p.equipmentPayments && p.equipmentPayments.some(
+        payment => payment.paymentProofUrl && payment.paymentProofUrl.trim() !== ''
+      )
+      return hasPaymentProof
     })
   }
 

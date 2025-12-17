@@ -44,6 +44,7 @@ import {
   ChevronUp,
   UserX,
   Receipt,
+  Download,
 } from "lucide-react"
 import {
   Tooltip,
@@ -115,6 +116,46 @@ export function PostulacionesPageContent({
   const [sortOrder, setSortOrder] = useState(currentFilters.sortOrder || 'desc')
   const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all')
   const [showMoreFilters, setShowMoreFilters] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+
+  // Función para exportar a XLSX
+  const handleExportToXLSX = async () => {
+    setIsExporting(true)
+    try {
+      const response = await fetch('/api/admin/postulaciones/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: statusFilter !== 'all' ? statusFilter : undefined,
+          searchTerm: searchTerm || undefined,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al exportar datos')
+      }
+
+      // Descargar el archivo
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `postulaciones_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast.success('Exportación completada exitosamente')
+    } catch (error) {
+      console.error('Error al exportar:', error)
+      toast.error('Error al exportar datos')
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   const postulacionesWithContactStatus = useMemo(() => {
     return postulaciones.map(post => {
@@ -323,11 +364,31 @@ export function PostulacionesPageContent({
       />
 
       <div className="w-full p-4 sm:p-6 lg:p-8 space-y-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Postulaciones</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-            Gestiona y revisa todas las postulaciones de drivers
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Postulaciones</h1>
+            <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+              Gestiona y revisa todas las postulaciones de drivers
+            </p>
+          </div>
+          <Button
+            onClick={handleExportToXLSX}
+            disabled={isExporting || isPending}
+            variant="outline"
+            className="gap-2 whitespace-nowrap"
+          >
+            {isExporting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Exportando...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" />
+                Exportar a Excel
+              </>
+            )}
+          </Button>
         </div>
 
         <PostulacionesKPIs stats={stats} />

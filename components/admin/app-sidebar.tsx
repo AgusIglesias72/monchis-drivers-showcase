@@ -17,6 +17,7 @@ import {
   ChevronUp,
   LogOut,
   UserCog,
+  CreditCard,
 } from "lucide-react"
 
 import {
@@ -69,6 +70,11 @@ const menuItems = [
         title: "Drivers Activos",
         url: "/admin/drivers",
         icon: BikeIcon,
+      },
+      {
+        title: "Pagos",
+        url: "/admin/pagos",
+        icon: CreditCard,
       },
       {
         title: "Comunicaciones",
