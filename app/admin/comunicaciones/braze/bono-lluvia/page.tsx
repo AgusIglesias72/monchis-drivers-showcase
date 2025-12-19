@@ -16,7 +16,7 @@ export default function BonoPorLluviaPage() {
 
   // TODO: Obtener estos valores de la base de datos o variables de entorno
   // Por ahora hardcodeados, pero deberías tener un trigger configurado en tu DB
-  const BONO_LLUVIA_TRIGGER_ID = process.env.NEXT_PUBLIC_BRAZE_BONO_LLUVIA_TRIGGER_ID || 'trigger-bono-lluvia'
+  const BONO_LLUVIA_TRIGGER_ID = process.env.NEXT_PUBLIC_BRAZE_BONO_LLUVIA_TRIGGER_ID
   const BONO_LLUVIA_CAMPAIGN_ID = process.env.NEXT_PUBLIC_BRAZE_BONO_LLUVIA_CAMPAIGN_ID || ''
 
   return (
@@ -39,18 +39,18 @@ export default function BonoPorLluviaPage() {
         </div>
 
         {/* Layout de dos columnas */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {/* Columna Izquierda - Formulario */}
-          <div>
+          <div className="flex flex-col">
             <BonoPorLluviaExecute
-              triggerId={BONO_LLUVIA_TRIGGER_ID}
-              campaignId={BONO_LLUVIA_CAMPAIGN_ID}
+              triggerId={BONO_LLUVIA_TRIGGER_ID || ''}
+              campaignId={BONO_LLUVIA_CAMPAIGN_ID || ''}
               onValuesChange={setPreviewValues}
             />
           </div>
 
           {/* Columna Derecha - Preview permanente */}
-          <div className="lg:sticky lg:top-6 lg:self-start">
+          <div className="lg:sticky lg:top-6">
             <BonoPorLluviaPreview
               horaInicio={previewValues.horaInicio}
               horaFinal={previewValues.horaFinal}

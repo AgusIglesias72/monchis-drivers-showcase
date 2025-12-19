@@ -25,7 +25,7 @@ export function BonoPorLluviaPreview({ horaInicio, horaFinal, monto }: BonoPorLl
   const hasData = horaInicio && horaFinal && monto
 
   return (
-    <Card className={!hasData ? 'border-dashed border-2 border-blue-300' : ''}>
+    <Card className={!hasData ? 'border-dashed border-2 border-blue-300 h-full' : 'h-full'}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Smartphone className="h-5 w-5" />
@@ -33,7 +33,7 @@ export function BonoPorLluviaPreview({ horaInicio, horaFinal, monto }: BonoPorLl
           {!hasData && <span className="text-xs font-normal text-muted-foreground ml-2">(Ejemplo)</span>}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col items-center">
+      <CardContent className="flex flex-col items-center justify-center">
         {/* Phone mockup */}
         <div className="relative mx-auto" style={{ width: '320px' }}>
           {/* Phone frame */}
