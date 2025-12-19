@@ -254,23 +254,6 @@ export function BonoPorLluviaExecute({ triggerId, campaignId, onExecuted, onValu
         </Alert>
       )}
 
-      {/* Información adicional */}
-      <Card className="bg-blue-50 border-blue-200">
-        <CardContent className="pt-4">
-          <div className="flex gap-2">
-            <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-blue-900 space-y-1">
-              <p className="font-medium">Importante:</p>
-              <ul className="list-disc list-inside space-y-1 text-blue-800">
-                <li>La audiencia objetivo se define en la campaña de Braze</li>
-                <li>Solo recibirán el bono los drivers que cumplan los criterios configurados</li>
-                <li>Los parámetros (hora_inicio, hora_final, monto) estarán disponibles como variables en el mensaje</li>
-                <li>Verifica los datos antes de enviar, esta acción no se puede deshacer</li>
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }
