@@ -20,6 +20,7 @@ import {
   CreditCard,
   Mail,
   ChevronRight,
+  CloudRain,
 } from "lucide-react"
 
 import {
@@ -100,6 +101,16 @@ const menuItems = [
         title: "Braze",
         url: "/admin/comunicaciones/braze",
         icon: Mail,
+      },
+    ],
+  },
+  {
+    title: "Bonos y Compensaciones",
+    items: [
+      {
+        title: "Bono por Lluvia",
+        url: "/admin/comunicaciones/braze/bono-lluvia",
+        icon: CloudRain,
       },
     ],
   },

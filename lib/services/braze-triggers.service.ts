@@ -32,6 +32,7 @@ export interface UpdateBrazeTriggerData {
 export interface ExecuteBrazeTriggerData {
   triggerId: string
   executedBy: string // AdminUser id
+  triggerProperties?: Record<string, string | number | boolean> // Propiedades dinámicas para el mensaje
   ipAddress?: string
   userAgent?: string
 }
@@ -290,7 +291,7 @@ export async function executeBrazeTrigger(data: ExecuteBrazeTriggerData) {
     data: {
       triggerId: data.triggerId,
       recipientCount: 0, // Se desconoce hasta que Braze procese
-      triggerProperties: undefined,
+      triggerProperties: data.triggerProperties || undefined,
       status: 'PENDING',
       executedBy: data.executedBy,
       formDriverId: undefined,
@@ -311,6 +312,7 @@ export async function executeBrazeTrigger(data: ExecuteBrazeTriggerData) {
       brazeResult = await brazeService.triggerCampaign({
         campaign_id: trigger.campaignId,
         broadcast: true,
+        trigger_properties: data.triggerProperties, // Pasar propiedades dinámicas
       })
     } else if (trigger.triggerType === 'CANVAS') {
       if (!trigger.canvasId) {
@@ -320,6 +322,7 @@ export async function executeBrazeTrigger(data: ExecuteBrazeTriggerData) {
       brazeResult = await brazeService.triggerCanvas({
         canvas_id: trigger.canvasId,
         broadcast: true,
+        trigger_properties: data.triggerProperties, // Pasar propiedades dinámicas
       })
     } else {
       throw new Error(`Tipo de trigger no soportado: ${trigger.triggerType}`)

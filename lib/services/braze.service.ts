@@ -4,14 +4,20 @@ import { getBrazeApiKey, getBrazeRestEndpoint, BRAZE_ENDPOINTS } from '@/lib/con
 
 // ==================== TYPES ====================
 
+export interface BrazeTriggerProperties {
+  [key: string]: string | number | boolean
+}
+
 export interface BrazeCampaignPayload {
   campaign_id: string
   broadcast: boolean
+  trigger_properties?: BrazeTriggerProperties
 }
 
 export interface BrazeCanvasPayload {
   canvas_id: string
   broadcast: boolean
+  trigger_properties?: BrazeTriggerProperties
 }
 
 export interface BrazeApiResponse {
@@ -68,20 +74,26 @@ async function handleBrazeError(response: Response, context: string): Promise<ne
 // ==================== CAMPAIGN TRIGGER ====================
 
 /**
- * Dispara una campaña de Braze en modo broadcast
+ * Dispara una campaña de Braze en modo broadcast con propiedades dinámicas
  *
  * La audiencia se gestiona directamente en Braze. Esta función
- * simplemente dispara la campaña a todos los usuarios que cumplan
- * con los criterios definidos en la campaña.
+ * dispara la campaña a todos los usuarios que cumplan con los criterios
+ * definidos en la campaña, opcionalmente con propiedades personalizadas.
  *
- * @param payload - campaign_id y broadcast: true
+ * @param payload - campaign_id, broadcast: true, y trigger_properties opcionales
  * @returns Response de Braze con send_id y dispatch_id
  *
  * @example
  * ```typescript
+ * // Bono por lluvia
  * const result = await triggerCampaign({
  *   campaign_id: 'c6801563-d398-4cf5-95cd-1104e5ed5282',
- *   broadcast: true
+ *   broadcast: true,
+ *   trigger_properties: {
+ *     hora_inicio: '14:00',
+ *     hora_final: '18:00',
+ *     monto: 50000
+ *   }
  * })
  *
  * if (result.success) {
