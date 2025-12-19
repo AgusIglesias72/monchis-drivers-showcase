@@ -74,34 +74,95 @@ export default function BonoPorLluviaPage() {
         </div>
 
         {/* Instrucciones para configurar en Braze */}
-        <Card className="mt-6">
+        <Card className="mt-8 border-t-4 border-t-purple-500">
           <CardContent className="pt-6">
-            <h3 className="font-semibold mb-3">Configuración en Braze</h3>
-            <div className="space-y-3 text-sm text-muted-foreground">
-              <p>Para usar esta función, necesitás tener configurado en Braze:</p>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                <span className="text-white text-2xl">⚙️</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Configuración en Braze</h3>
+                <p className="text-sm text-gray-500">Guía paso a paso para configurar la campaña</p>
+              </div>
+            </div>
 
-              <ol className="list-decimal list-inside space-y-2 ml-2">
-                <li>
-                  <strong>Campaña API-Triggered</strong>: Crea una campaña con delivery type &quot;API-Triggered&quot;
-                </li>
-                <li>
-                  <strong>Audiencia</strong>: Define los criterios de elegibilidad (ej: drivers activos en zona específica)
-                </li>
-                <li>
-                  <strong>Mensaje personalizado</strong>: Usa las variables Liquid en tu mensaje:
-                  <ul className="list-disc list-inside ml-6 mt-1 space-y-1">
-                    <li><code className="bg-muted px-1 py-0.5 rounded">{'{{trigger_properties.${hora_inicio}}}'}</code> - Formato: &quot;19hs&quot;</li>
-                    <li><code className="bg-muted px-1 py-0.5 rounded">{'{{trigger_properties.${hora_final}}}'}</code> - Formato: &quot;23hs&quot;</li>
-                    <li><code className="bg-muted px-1 py-0.5 rounded">{'{{trigger_properties.${monto}}}'}</code> - Número sin formato: 50000</li>
-                  </ul>
-                </li>
-                <li>
-                  <strong>Ejemplo de mensaje en Braze</strong>:
-                  <div className="bg-muted p-3 rounded-lg mt-2 font-mono text-xs leading-relaxed">
+            <div className="space-y-6">
+              {/* Step 1 */}
+              <div className="relative pl-8 pb-6 border-l-2 border-purple-200">
+                <div className="absolute -left-[13px] top-0 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center shadow-md">
+                  <span className="text-white text-xs font-bold">1</span>
+                </div>
+                <div className="bg-gradient-to-br from-purple-50 to-transparent p-4 rounded-xl border border-purple-100">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <span>📱</span> Campaña API-Triggered
+                  </h4>
+                  <p className="text-sm text-gray-600">
+                    Crea una campaña en Braze con delivery type <code className="bg-purple-100 text-purple-700 px-2 py-1 rounded font-mono text-xs">&quot;API-Triggered&quot;</code>
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="relative pl-8 pb-6 border-l-2 border-purple-200">
+                <div className="absolute -left-[13px] top-0 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center shadow-md">
+                  <span className="text-white text-xs font-bold">2</span>
+                </div>
+                <div className="bg-gradient-to-br from-blue-50 to-transparent p-4 rounded-xl border border-blue-100">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <span>👥</span> Audiencia
+                  </h4>
+                  <p className="text-sm text-gray-600">
+                    Define los criterios de elegibilidad (ej: drivers activos en zona específica, drivers con X entregas en el día, etc.)
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="relative pl-8 pb-6 border-l-2 border-purple-200">
+                <div className="absolute -left-[13px] top-0 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center shadow-md">
+                  <span className="text-white text-xs font-bold">3</span>
+                </div>
+                <div className="bg-gradient-to-br from-green-50 to-transparent p-4 rounded-xl border border-green-100">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span>✏️</span> Variables Liquid en el Mensaje
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm">
+                      <code className="text-xs font-mono text-green-700 bg-green-50 px-2 py-1 rounded flex-1">
+                        {'{{trigger_properties.${hora_inicio}}}'}
+                      </code>
+                      <span className="text-xs text-gray-500">→ Ej: &quot;19hs&quot;</span>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm">
+                      <code className="text-xs font-mono text-green-700 bg-green-50 px-2 py-1 rounded flex-1">
+                        {'{{trigger_properties.${hora_final}}}'}
+                      </code>
+                      <span className="text-xs text-gray-500">→ Ej: &quot;23hs&quot;</span>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm">
+                      <code className="text-xs font-mono text-green-700 bg-green-50 px-2 py-1 rounded flex-1">
+                        {'{{trigger_properties.${monto}}}'}
+                      </code>
+                      <span className="text-xs text-gray-500">→ Ej: 50000</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div className="relative pl-8 pb-6 border-l-2 border-purple-200">
+                <div className="absolute -left-[13px] top-0 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center shadow-md">
+                  <span className="text-white text-xs font-bold">4</span>
+                </div>
+                <div className="bg-gradient-to-br from-amber-50 to-transparent p-4 rounded-xl border border-amber-100">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span>💬</span> Ejemplo de Mensaje en Braze
+                  </h4>
+                  <div className="bg-white border-2 border-amber-200 rounded-lg p-4 font-mono text-xs leading-relaxed text-gray-700 shadow-sm">
                     PROMO IMPERDIBLE SOLO POR HOY<br />
                     🔥 *ACTIVÁ TU DÍA DE GANANCIAS EXTRA*<br />
                     <br />
-                    💰 De {'{{trigger_properties.${hora_inicio}}}'} a {'{{trigger_properties.${hora_final}}}'} ¡TODOS tus pedidos suman un BONO EXTRA de ₲{'{{trigger_properties.${monto}}}'} por cada entrega!<br />
+                    💰 De <span className="bg-green-100 text-green-700 px-1">{'{{trigger_properties.${hora_inicio}}}'}</span> a <span className="bg-green-100 text-green-700 px-1">{'{{trigger_properties.${hora_final}}}'}</span> ¡TODOS tus pedidos suman un BONO EXTRA de ₲<span className="bg-green-100 text-green-700 px-1">{'{{trigger_properties.${monto}}}'}</span> por cada entrega!<br />
                     <br />
                     👍 ¡No dejes pasar esta oportunidad única para multiplicar tus ingresos y cerrar el día a lo grande! 💸<br />
                     <br />
@@ -111,15 +172,33 @@ export default function BonoPorLluviaPage() {
                     <br />
                     Equipo Monchis
                   </div>
-                </li>
-                <li>
-                  <strong>Variables de entorno</strong>: Configura en tu archivo <code className="bg-muted px-1 py-0.5 rounded">.env</code>:
-                  <div className="bg-muted p-3 rounded-lg mt-2 font-mono text-xs">
-                    NEXT_PUBLIC_BRAZE_BONO_LLUVIA_TRIGGER_ID=cly...<br />
-                    NEXT_PUBLIC_BRAZE_BONO_LLUVIA_CAMPAIGN_ID=c6801563-d398-4cf5-95cd-1104e5ed5282
+                </div>
+              </div>
+
+              {/* Step 5 */}
+              <div className="relative pl-8">
+                <div className="absolute -left-[13px] top-0 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center shadow-md">
+                  <span className="text-white text-xs font-bold">5</span>
+                </div>
+                <div className="bg-gradient-to-br from-slate-50 to-transparent p-4 rounded-xl border border-slate-200">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span>🔐</span> Variables de Entorno
+                  </h4>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Configura estas variables en tu archivo <code className="bg-slate-100 text-slate-700 px-2 py-1 rounded font-mono text-xs">.env</code>:
+                  </p>
+                  <div className="bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-xs shadow-lg">
+                    <div className="flex items-start gap-2">
+                      <span className="text-slate-500 select-none">1</span>
+                      <code>NEXT_PUBLIC_BRAZE_BONO_LLUVIA_TRIGGER_ID=<span className="text-yellow-300">cly...</span></code>
+                    </div>
+                    <div className="flex items-start gap-2 mt-1">
+                      <span className="text-slate-500 select-none">2</span>
+                      <code>NEXT_PUBLIC_BRAZE_BONO_LLUVIA_CAMPAIGN_ID=<span className="text-yellow-300">c6801563-d398-4cf5-95cd-1104e5ed5282</span></code>
+                    </div>
                   </div>
-                </li>
-              </ol>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
