@@ -19,9 +19,7 @@ export function useOnboardingEvents() {
     try {
       setLoading(true)
       setError(null)
-      console.log('Fetching events with params:', params)
       const data = await api.getEvents(params)
-      console.log('Events fetched successfully:', data)
       setEvents(data)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error al cargar eventos'

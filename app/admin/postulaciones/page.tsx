@@ -86,6 +86,7 @@ const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
       id: true,
       status: true,
       paymentDate: true,
+      paymentProofUrl: true,
     },
     orderBy: {
       createdAt: 'desc'
@@ -138,7 +139,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   // ==================== ORDENAMIENTO ====================
   const sortBy = params.sortBy || 'createdAt'
   const sortOrder = params.sortOrder || 'desc'
-  
+
   const orderBy: any = {}
   if (sortBy === 'fullName' || sortBy === 'city' || sortBy === 'createdAt' || sortBy === 'currentStep') {
     orderBy[sortBy] = sortOrder
@@ -146,11 +147,15 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     orderBy.createdAt = 'desc'
   }
 
+  // ✅ Detectar filtro payment-proof temprano
+  const isPaymentProofFilter = params.paymentStatus === 'payment-proof'
+
   // ==================== WHERE CLAUSE ====================
   const where: Prisma.FormDriverWhereInput = {}
 
   // Filtro de status general (incluye ASISTIDA)
-  if (params.status && params.status !== 'all') {
+  // ⚠️ NO filtrar por status si es payment-proof (queremos todas las postulaciones)
+  if (params.status && params.status !== 'all' && !isPaymentProofFilter) {
     if (params.status === 'ASISTIDA') {
       where.assistedCompletion = true
       where.status = 'IN_PROGRESS'
@@ -246,16 +251,13 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     params.onboardingStatus === 'scheduled-pending' && 
     params.status === 'COMPLETED'
 
-  const isReviewFilter = 
-    params.status === 'COMPLETED' && 
+  const isReviewFilter =
+    params.status === 'COMPLETED' &&
     !params.onboardingStatus &&
-    !params.documentStatus // Para asegurar que es el quick filter "Revisar Postulación"
+    !params.documentStatus &&
+    !params.paymentStatus // Para asegurar que es el quick filter "Revisar Postulación"
 
   const isRejectedFilter = params.status === 'REJECTED'
-
-  const isPaymentProofFilter =
-    params.paymentStatus === 'payment-proof' &&
-    params.status === 'COMPLETED'
 
   // Verificar si hay filtros POST-PROCESSING que requieren traer todos los datos
   const hasPostProcessingFilters =
@@ -271,8 +273,8 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     (params.invoiceStatus && params.invoiceStatus !== 'all')
 
   // ✅ Calcular conteos de filtros rápidos
-  // Necesitamos traer todas las postulaciones completadas y rechazadas para calcular conteos basados en documentos
-  const [completadasForCounts, rechazadasForCounts] = await Promise.all([
+  // Necesitamos traer todas las postulaciones completadas, rechazadas y TODAS (para payment-proof)
+  const [completadasForCounts, rechazadasForCounts, todasForPaymentProof] = await Promise.all([
     prisma.formDriver.findMany({
       where: { status: 'COMPLETED' },
       include: {
@@ -298,6 +300,10 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     }),
     prisma.formDriver.findMany({
       where: { status: 'REJECTED' },
+      include: POSTULACION_INCLUDE,
+    }),
+    // Para payment-proof, traemos TODAS las postulaciones
+    prisma.formDriver.findMany({
       include: POSTULACION_INCLUDE,
     }),
   ])
@@ -342,12 +348,12 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
       const colorStatus = calculateDocumentColorStatus(p)
       return colorStatus === 'red'
     }).length,
-    'payment-proof': completadasForCounts.filter(p => {
-      // Postulaciones que tienen comprobante de pago subido en equipmentPayments
-      const hasPaymentProof = p.equipmentPayments && p.equipmentPayments.some(
-        payment => payment.paymentProofUrl && payment.paymentProofUrl.trim() !== ''
-      )
-      return hasPaymentProof
+    'payment-proof': todasForPaymentProof.filter(p => {
+      // Postulaciones que tienen comprobante de pago en estado PENDING
+      const payment = p.equipmentPayments?.[0]
+      const hasPaymentProof = payment?.paymentProofUrl && payment.paymentProofUrl.trim() !== ''
+      const isPending = payment?.status === 'PENDING'
+      return hasPaymentProof && isPending
     }).length,
   }
 
@@ -405,7 +411,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   quickFilterCounts['pending-completion'] = enProgreso
 
   // ==================== POST-PROCESSING FILTERS ====================
-  
+
   let postulaciones = postulacionesRaw
 
   // ✅ Filtro "Pendiente de Agendar" - Docs verde o azul
@@ -421,15 +427,15 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     postulaciones = postulaciones.filter(p => {
       // Excluir los que ya completaron el onboarding (ya están capacitados)
       if (p.onboardingStatus === 'COMPLETED') return false
-      
+
       // Postulaciones con onboardingStatus = 'NO_SHOW'
       if (p.onboardingStatus === 'NO_SHOW') return true
-      
+
       // O que tengan alguna asistencia marcada como NO_SHOW
       const attendances = p.onboardingAttendances || []
       const hasNoShowAttendance = attendances.some((att: any) => att.status === 'NO_SHOW')
       if (hasNoShowAttendance) return true
-      
+
       return false
     })
   }
@@ -442,7 +448,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
       const isCompleted = p.onboardingStatus === 'COMPLETED'
       const attendance = p.onboardingAttendances?.[0]
       const attendanceIsNoShow = attendance?.status === 'NO_SHOW'
-      
+
       return isScheduled && !isNoShow && !isCompleted && !attendanceIsNoShow
     })
   }
@@ -463,13 +469,14 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     })
   }
 
-  // ✅ Filtro "Con Comprobante de Pago" - Tienen paymentProofUrl en equipmentPayments
+  // ✅ Filtro "Con Comprobante de Pago" - Tienen paymentProofUrl en estado PENDING
   if (isPaymentProofFilter) {
     postulaciones = postulaciones.filter(p => {
-      const hasPaymentProof = p.equipmentPayments && p.equipmentPayments.some(
-        payment => payment.paymentProofUrl && payment.paymentProofUrl.trim() !== ''
-      )
-      return hasPaymentProof
+      const payment = p.equipmentPayments?.[0]
+      // Tiene comprobante de pago subido Y está en estado PENDING (para revisión)
+      const hasPaymentProof = payment?.paymentProofUrl && payment.paymentProofUrl.trim() !== ''
+      const isPending = payment?.status === 'PENDING'
+      return hasPaymentProof && isPending
     })
   }
 
@@ -532,23 +539,23 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     })
   }
 
-  // Filtro de PAGO
-  if (params.paymentStatus && params.paymentStatus !== 'all') {
+  // Filtro de PAGO (solo si no es payment-proof, que ya se filtró arriba)
+  if (params.paymentStatus && params.paymentStatus !== 'all' && params.paymentStatus !== 'payment-proof') {
     postulaciones = postulaciones.filter(p => {
       const payment = p.equipmentPayments?.[0]
-      
+
       if (!payment) {
         return params.paymentStatus === 'pendiente'
       }
-      
+
       if (payment.status === 'VERIFIED') {
         return params.paymentStatus === 'verificado'
       }
-      
+
       if (payment.status === 'PENDING' || payment.status === 'PARTIAL') {
         return params.paymentStatus === 'en-verificacion'
       }
-      
+
       return params.paymentStatus === 'pendiente'
     })
   }

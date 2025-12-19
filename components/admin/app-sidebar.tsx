@@ -18,6 +18,8 @@ import {
   LogOut,
   UserCog,
   CreditCard,
+  Mail,
+  ChevronRight,
 } from "lucide-react"
 
 import {
@@ -31,7 +33,15 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,10 +86,20 @@ const menuItems = [
         url: "/admin/pagos",
         icon: CreditCard,
       },
+    ],
+  },
+  {
+    title: "Comunicaciones",
+    items: [
       {
-        title: "Comunicaciones",
+        title: "WhatsApp",
         url: "/admin/comunicaciones",
         icon: MessageSquare,
+      },
+      {
+        title: "Braze",
+        url: "/admin/comunicaciones/braze",
+        icon: Mail,
       },
     ],
   },
@@ -140,12 +160,55 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {section.items.map((item) => {
+                  // Si tiene subItems, es un item colapsible
+                  if ('subItems' in item && item.subItems && Array.isArray(item.subItems)) {
+                    const hasActiveSubItem = item.subItems.some(
+                      (subItem) => pathname === subItem.url || pathname.startsWith(subItem.url + '/')
+                    )
+
+                    return (
+                      <Collapsible
+                        key={item.title}
+                        asChild
+                        defaultOpen={hasActiveSubItem}
+                        className="group/collapsible"
+                      >
+                        <SidebarMenuItem>
+                          <CollapsibleTrigger asChild>
+                            <SidebarMenuButton tooltip={item.title}>
+                              {item.icon && <item.icon />}
+                              <span>{item.title}</span>
+                              <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                            </SidebarMenuButton>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <SidebarMenuSub>
+                              {item.subItems.map((subItem) => {
+                                const isActive = pathname === subItem.url || pathname.startsWith(subItem.url + '/')
+                                return (
+                                  <SidebarMenuSubItem key={subItem.title}>
+                                    <SidebarMenuSubButton asChild isActive={isActive}>
+                                      <Link href={subItem.url}>
+                                        <span>{subItem.title}</span>
+                                      </Link>
+                                    </SidebarMenuSubButton>
+                                  </SidebarMenuSubItem>
+                                )
+                              })}
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        </SidebarMenuItem>
+                      </Collapsible>
+                    )
+                  }
+
+                  // Item normal sin subItems
                   const isActive = pathname === item.url
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
                         <Link href={item.url}>
-                          <item.icon />
+                          {item.icon && <item.icon />}
                           <span>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>

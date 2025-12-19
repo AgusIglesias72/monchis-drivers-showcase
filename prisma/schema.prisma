@@ -4,6 +4,7 @@
  * ├── 📝 Form System (FormDriver, FormSubmission, FormDocument, etc)
  * ├── 💰 Payment & Financial (EquipmentPayment, FinancialService)
  * ├── 🎓 Onboarding Events (OnboardingEvent, OnboardingAttendee)
+ * ├── 📧 Braze Integration (BrazeTrigger, BrazeExecution)
  * └── 📋 Enums (todos al final)
  */
 
@@ -57,6 +58,8 @@ model AdminUser {
   equipmentPaymentsVerified       EquipmentPayment[]   @relation("PaymentVerifiedBy")
   driverContactsCreated           DriverContact[]      @relation("ContactCreatedBy")
   whatsappMessagesSent WhatsAppMessage[] @relation("WhatsAppMessagesSent")
+  brazeTriggerCreated     BrazeTrigger[]     @relation("BrazeTriggerCreatedBy")
+  brazeExecutionsExecuted BrazeExecution[]   @relation("BrazeExecutionExecutedBy")
 
   @@index([email])
   @@index([role])
@@ -207,7 +210,8 @@ model FormDriver {
   equipmentPayments     EquipmentPayment[]
   driverContacts        DriverContact[]
   financialService      FinancialService?
-  whatsappMessagesSent WhatsAppMessage[] 
+  whatsappMessagesSent WhatsAppMessage[]
+  brazeExecutions      BrazeExecution[]
 
   @@index([cedula])
   @@index([phoneNumber])
@@ -637,6 +641,89 @@ model BackgroundJob {
   @@index([createdAt])
 }
 
+// ==================== BRAZE INTEGRATION ====================
+
+model BrazeTrigger {
+  id String @id @default(cuid())
+
+  // Información básica
+  title           String
+  description     String?   @db.Text
+
+  // Configuración de Braze
+  triggerType     BrazeTriggerType
+  campaignId      String?   @map("campaign_id")
+  canvasId        String?   @map("canvas_id")
+
+  // Documentación
+  targetAudience  String?   @map("target_audience") @db.Text
+  defaultProperties Json?   @map("default_properties")
+
+  // Estado
+  isActive        Boolean   @default(true) @map("is_active")
+  tags            String[]  @default([])
+  metadata        Json?
+
+  // Auditoría
+  createdBy       String    @map("created_by")
+  createdByUser   AdminUser @relation("BrazeTriggerCreatedBy", fields: [createdBy], references: [id])
+
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relaciones
+  executions      BrazeExecution[]
+
+  @@index([isActive])
+  @@index([triggerType])
+  @@index([createdBy])
+  @@map("braze_triggers")
+}
+
+model BrazeExecution {
+  id String @id @default(cuid())
+
+  // Relación con trigger
+  triggerId       String        @map("trigger_id")
+  trigger         BrazeTrigger  @relation(fields: [triggerId], references: [id], onDelete: Cascade)
+
+  // Ejecución
+  recipientCount  Int           @map("recipient_count")
+  triggerProperties Json?       @map("trigger_properties")
+  status          BrazeExecutionStatus @default(PENDING)
+
+  // Respuesta de Braze
+  brazeResponse   Json?         @map("braze_response")
+  brazeMessageId  String?       @map("braze_message_id") // dispatch_id
+  errorMessage    String?       @map("error_message") @db.Text
+  retryCount      Int           @default(0) @map("retry_count")
+
+  // Relación opcional con driver
+  formDriverId    String?       @map("form_driver_id")
+  formDriver      FormDriver?   @relation(fields: [formDriverId], references: [id], onDelete: SetNull)
+
+  // Auditoría
+  executedBy      String        @map("executed_by")
+  executedByUser  AdminUser     @relation("BrazeExecutionExecutedBy", fields: [executedBy], references: [id])
+  ipAddress       String?       @map("ip_address")
+  userAgent       String?       @map("user_agent")
+
+  // Timestamps
+  executedAt      DateTime      @default(now()) @map("executed_at")
+  completedAt     DateTime?     @map("completed_at")
+  failedAt        DateTime?     @map("failed_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([triggerId])
+  @@index([status])
+  @@index([executedBy])
+  @@index([executedAt])
+  @@index([formDriverId])
+  @@map("braze_executions")
+}
+
 // ==================== ENUMS ====================
 
 enum JobType {
@@ -706,6 +793,15 @@ enum AuditAction {
   USER_LOGIN
   USER_LOGOUT
   SETTINGS_CHANGED
+
+  // Braze
+  BRAZE_TRIGGER_CREATED
+  BRAZE_TRIGGER_UPDATED
+  BRAZE_TRIGGER_DELETED
+  BRAZE_TRIGGER_ACTIVATED
+  BRAZE_TRIGGER_DEACTIVATED
+  BRAZE_CAMPAIGN_EXECUTED
+  BRAZE_CANVAS_EXECUTED
 
   // Otros
   OTHER
@@ -828,4 +924,17 @@ enum WhatsAppMessageSource {
   TRIGGER // Enviado por evento automático (ej: formulario completado)
   API // Enviado por API externa
   TEST // Mensaje de prueba
+}
+
+enum BrazeTriggerType {
+  CAMPAIGN
+  CANVAS
+}
+
+enum BrazeExecutionStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  CANCELLED
 }

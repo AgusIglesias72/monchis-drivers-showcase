@@ -241,8 +241,7 @@ export function ProcessWeekButton({
           jobId={currentJobId}
           jobType="DRIVER_PROCESSING"
           onJobComplete={() => {
-            // Aquí podrías actualizar la tabla de historial
-            console.log('Job completado:', currentJobId)
+            // Job completado - la tabla de historial se actualiza automáticamente
           }}
         />
       )}

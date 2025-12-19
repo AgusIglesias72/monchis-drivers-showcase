@@ -165,7 +165,6 @@ function parseFormattedDate(formattedDate: string): Date | null {
  * @returns String formateado con fecha y edad
  */
 export function formatBirthDateWithAge(birthDate: string | Date): string {
-  console.log('birthDate', birthDate)
   if (!birthDate) return ''
   
   try {

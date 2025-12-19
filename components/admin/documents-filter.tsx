@@ -6,7 +6,7 @@ import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils/utils"
+import { cn } from "@/lib/utils"
 
 interface DocumentsFiltersProps {
   counts: Record<string, number>

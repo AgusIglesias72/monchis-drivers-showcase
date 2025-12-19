@@ -189,10 +189,10 @@ export function PostulacionesPageContent({
   }, [currentFilters])
 
   useEffect(() => {
-    if (statusFilter === 'REJECTED') {
-      setActiveQuickFilter('rejected')
-    } else if (paymentStatusFilter === 'payment-proof') {
+    if (paymentStatusFilter === 'payment-proof') {
       setActiveQuickFilter('payment-proof')
+    } else if (statusFilter === 'REJECTED') {
+      setActiveQuickFilter('rejected')
     } else if (onboardingStatusFilter === 'scheduled-no-show') {
       setActiveQuickFilter('scheduled-no-show')
     } else if (onboardingStatusFilter === 'scheduled-pending') {
@@ -201,7 +201,7 @@ export function PostulacionesPageContent({
       setActiveQuickFilter('trained')
     } else if (onboardingStatusFilter === 'pending' && statusFilter === 'COMPLETED') {
       setActiveQuickFilter('pending-schedule')
-    } else if (statusFilter === 'COMPLETED' && onboardingStatusFilter === 'all' && !documentStatusFilter) {
+    } else if (statusFilter === 'COMPLETED' && onboardingStatusFilter === 'all' && !documentStatusFilter && !paymentStatusFilter) {
       setActiveQuickFilter('review')
     } else if (statusFilter === 'IN_PROGRESS') {
       setActiveQuickFilter('pending-completion')
@@ -242,7 +242,7 @@ export function PostulacionesPageContent({
           break
         case 'payment-proof':
           params.set('paymentStatus', 'payment-proof')
-          params.set('status', 'COMPLETED')
+          // No filtrar por status - queremos TODAS las postulaciones con comprobante
           break
       }
     } else {
@@ -256,11 +256,14 @@ export function PostulacionesPageContent({
       if (invoiceStatusFilter !== 'all') params.set('invoiceStatus', invoiceStatusFilter)
     }
 
-    // Estos filtros se aplican siempre, incluso con quick filters activos
-    if (searchTerm) params.set('search', searchTerm)
-    if (workZoneFilter !== 'all') params.set('workZone', workZoneFilter)
-    if (startDate) params.set('startDate', startDate)
-    if (endDate) params.set('endDate', endDate)
+    // Estos filtros solo se aplican si NO hay quick filter activo
+    if (!quickFilter || quickFilter === 'all') {
+      if (searchTerm) params.set('search', searchTerm)
+      if (workZoneFilter !== 'all') params.set('workZone', workZoneFilter)
+      if (startDate) params.set('startDate', startDate)
+      if (endDate) params.set('endDate', endDate)
+    }
+
     if (sortBy !== 'createdAt') params.set('sortBy', sortBy)
     if (sortOrder !== 'desc') params.set('sortOrder', sortOrder)
     if (page > 1) params.set('page', page.toString())
@@ -276,6 +279,7 @@ export function PostulacionesPageContent({
     setActiveQuickFilter(filter)
 
     if (filter !== 'all') {
+      // Limpiar TODOS los filtros para que el quick filter funcione correctamente
       setStatusFilter('all')
       setOnboardingStatusFilter('all')
       setCurrentStepFilter('all')
@@ -284,6 +288,9 @@ export function PostulacionesPageContent({
       setPaymentStatusFilter('all')
       setInvoiceStatusFilter('all')
       setWorkZoneFilter('all')
+      setSearchTerm('')
+      setStartDate('')
+      setEndDate('')
     }
 
     applyFilters(1, filter)

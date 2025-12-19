@@ -21,7 +21,7 @@ export function ComunicacionesContent() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Comunicaciones WhatsApp</h1>
+        <h1 className="text-3xl font-bold tracking-tight">WhatsApp</h1>
         <p className="text-muted-foreground mt-1">
           Gestión de múltiples bots para diferentes casos de uso
         </p>

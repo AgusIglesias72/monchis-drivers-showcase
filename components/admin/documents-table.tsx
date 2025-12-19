@@ -23,7 +23,7 @@ import {
   ChevronRight,
   User
 } from "lucide-react"
-import { cn } from "@/lib/utils/utils"
+import { cn } from "@/lib/utils"
 
 interface Document {
   id: string
