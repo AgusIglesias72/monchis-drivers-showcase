@@ -18,35 +18,19 @@ const formatHoraParaBraze = (hora: string) => {
 }
 
 export function BonoPorLluviaPreview({ horaInicio, horaFinal, monto }: BonoPorLluviaPreviewProps) {
+  // Usar valores de ejemplo si no hay datos
+  const displayHoraInicio = horaInicio || '19:00'
+  const displayHoraFinal = horaFinal || '23:00'
+  const displayMonto = monto || '50000'
   const hasData = horaInicio && horaFinal && monto
 
-  if (!hasData) {
-    return (
-      <Card className="border-dashed">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Smartphone className="h-5 w-5" />
-            Vista Previa del Mensaje
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Smartphone className="h-16 w-16 text-muted-foreground mb-4 opacity-50" />
-            <p className="text-muted-foreground text-sm">
-              Completá los campos del formulario para ver una vista previa del mensaje
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
-    <Card>
+    <Card className={!hasData ? 'border-dashed border-2 border-blue-300' : ''}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Smartphone className="h-5 w-5" />
           Vista Previa del Mensaje
+          {!hasData && <span className="text-xs font-normal text-muted-foreground ml-2">(Ejemplo)</span>}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-center">
@@ -79,11 +63,11 @@ export function BonoPorLluviaPreview({ horaInicio, horaFinal, monto }: BonoPorLl
                   </p>
 
                   <p className="text-center font-semibold leading-tight">
-                    🔥 *ACTIVÁ TU DÍA DE GANANCIAS EXTRA*
+                    🔥 ACTIVÁ TU DÍA DE GANANCIAS EXTRA
                   </p>
 
                   <p className="leading-relaxed">
-                    💰 De <span className="line-through">{formatHoraParaBraze(horaInicio)}</span> a <span className="line-through">{formatHoraParaBraze(horaFinal)}</span> ¡TODOS tus pedidos suman un BONO EXTRA de <span className="font-bold text-green-700">{parseFloat(monto).toLocaleString('es-PY')} Gs</span> por cada entrega!
+                    💰 De {formatHoraParaBraze(displayHoraInicio)} a {formatHoraParaBraze(displayHoraFinal)} ¡TODOS tus pedidos suman un BONO EXTRA de <span className="font-bold text-green-700">{parseFloat(displayMonto).toLocaleString('es-PY')} Gs</span> por cada entrega!
                   </p>
 
                   <p className="leading-relaxed">
@@ -99,7 +83,7 @@ export function BonoPorLluviaPreview({ horaInicio, horaFinal, monto }: BonoPorLl
                   </p>
 
                   <p className="text-center font-semibold leading-tight">
-                    💥 *SALÍ A REPARTIR Y HACÉ LA DIFERENCIA* 💥
+                    💥 SALÍ A REPARTIR Y HACÉ LA DIFERENCIA 💥
                   </p>
 
                   <div className="pt-2 border-t border-gray-100 flex justify-between items-end">

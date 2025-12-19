@@ -162,7 +162,7 @@ export default function BonoPorLluviaPage() {
                     PROMO IMPERDIBLE SOLO POR HOY<br />
                     🔥 *ACTIVÁ TU DÍA DE GANANCIAS EXTRA*<br />
                     <br />
-                    💰 De <span className="bg-green-100 text-green-700 px-1">{'{{trigger_properties.${hora_inicio}}}'}</span> a <span className="bg-green-100 text-green-700 px-1">{'{{trigger_properties.${hora_final}}}'}</span> ¡TODOS tus pedidos suman un BONO EXTRA de ₲<span className="bg-green-100 text-green-700 px-1">{'{{trigger_properties.${monto}}}'}</span> por cada entrega!<br />
+                    💰 De <span className="bg-green-100 text-green-700 px-1">{'{{trigger_properties.${hora_inicio}}}'}</span> a <span className="bg-green-100 text-green-700 px-1">{'{{trigger_properties.${hora_final}}}'}</span> ¡TODOS tus pedidos suman un BONO EXTRA de <span className="bg-green-100 text-green-700 px-1">{'{{trigger_properties.${monto}}}'}</span> Gs por cada entrega!<br />
                     <br />
                     👍 ¡No dejes pasar esta oportunidad única para multiplicar tus ingresos y cerrar el día a lo grande! 💸<br />
                     <br />
