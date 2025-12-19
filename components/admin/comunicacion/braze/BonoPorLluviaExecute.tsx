@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, CloudRain, Send, AlertCircle, CheckCircle, DollarSign, Clock } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Loader2, CloudRain, Send, AlertCircle, CheckCircle, DollarSign, Clock, ExternalLink } from 'lucide-react'
 
 interface BonoPorLluviaProps {
   triggerId: string
@@ -34,6 +35,7 @@ export function BonoPorLluviaExecute({ triggerId, campaignId, onExecuted, onValu
   const [monto, setMonto] = useState('')
   const [executing, setExecuting] = useState(false)
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
   // Notificar cambios al padre
   React.useEffect(() => {
@@ -71,9 +73,13 @@ export function BonoPorLluviaExecute({ triggerId, campaignId, onExecuted, onValu
     return `${parseInt(hh)}hs`
   }
 
-  const handleExecute = async () => {
+  const handleOpenConfirmDialog = () => {
     if (!isFormValid()) return
+    setShowConfirmDialog(true)
+  }
 
+  const handleConfirmExecute = async () => {
+    setShowConfirmDialog(false)
     setExecuting(true)
     setExecutionResult(null)
 
@@ -217,7 +223,7 @@ export function BonoPorLluviaExecute({ triggerId, campaignId, onExecuted, onValu
 
           {/* Botón de ejecución */}
           <Button
-            onClick={handleExecute}
+            onClick={handleOpenConfirmDialog}
             disabled={!isFormValid() || executing}
             className="w-full"
             size="lg"
@@ -271,6 +277,90 @@ export function BonoPorLluviaExecute({ triggerId, campaignId, onExecuted, onValu
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Modal de confirmación */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar envío de Bono por Lluvia</DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro de que deseas enviar esta campaña a todos los drivers activos?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Resumen de la campaña */}
+            <div className="border rounded-lg p-4 space-y-3 bg-muted/50">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Horario</p>
+                  <p className="text-sm font-medium">
+                    {formatHoraParaBraze(horaInicio)} - {formatHoraParaBraze(horaFinal)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Monto</p>
+                  <p className="text-sm font-medium">
+                    {parseFloat(monto).toLocaleString('es-PY')} Gs
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t">
+                <p className="text-xs text-muted-foreground mb-1">Mensaje que se enviará:</p>
+                <p className="text-xs">
+                  De {formatHoraParaBraze(horaInicio)} a {formatHoraParaBraze(horaFinal)} ¡TODOS tus pedidos suman un BONO EXTRA de {parseFloat(monto).toLocaleString('es-PY')} Gs por cada entrega!
+                </p>
+              </div>
+            </div>
+
+            {/* Link a la campaña */}
+            <a
+              href="https://dashboard-07.braze.com/engagement/campaigns/694572d58dd5da0063d54af7/68ee9989e738fd0080ea76b4"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Ver campaña en Braze Dashboard
+            </a>
+
+            {/* Advertencia */}
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-sm">
+                Esta acción enviará el mensaje a todos los drivers activos que cumplan con los criterios de la campaña. Asegúrate de que los datos sean correctos antes de continuar.
+              </AlertDescription>
+            </Alert>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowConfirmDialog(false)}
+              disabled={executing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmExecute}
+              disabled={executing}
+            >
+              {executing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Confirmar y Enviar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   )
