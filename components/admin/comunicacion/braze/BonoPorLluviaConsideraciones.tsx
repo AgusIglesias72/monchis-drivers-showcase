@@ -25,7 +25,7 @@ export function BonoPorLluviaConsideraciones() {
           <div className="flex items-start gap-2">
             <div className="min-w-[6px] h-[6px] rounded-full bg-blue-600 mt-2" />
             <p className="text-sm text-muted-foreground">
-              El bono se aplica <span className="font-semibold text-foreground">solo a drivers activos</span> con al menos una entrega en el período especificado.
+              El bono se aplica <span className="font-semibold text-foreground">solo a drivers activos</span>.
             </p>
           </div>
 

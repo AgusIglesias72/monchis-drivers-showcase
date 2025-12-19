@@ -143,7 +143,7 @@ export function BonoPorLluviaHistorial({ triggerId, refreshKey = 0 }: BonoPorLlu
 
                 {/* Detalles */}
                 {execution.triggerProperties && (
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t">
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t">
                     <div>
                       <p className="text-xs text-muted-foreground">Horario</p>
                       <p className="text-sm font-medium">
@@ -155,10 +155,6 @@ export function BonoPorLluviaHistorial({ triggerId, refreshKey = 0 }: BonoPorLlu
                       <p className="text-sm font-medium">
                         {execution.triggerProperties.monto?.toLocaleString('es-PY')} Gs
                       </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Destinatarios</p>
-                      <p className="text-sm font-medium">{execution.recipientCount}</p>
                     </div>
                   </div>
                 )}
