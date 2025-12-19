@@ -11,7 +11,11 @@ import { es } from 'date-fns/locale'
 interface BrazeExecution {
   id: string
   triggerId: string
-  triggerTitle: string
+  trigger: {
+    id: string
+    title: string
+    triggerType: string
+  }
   recipientCount: number
   triggerProperties: {
     hora_inicio?: string
@@ -21,9 +25,10 @@ interface BrazeExecution {
   status: string
   brazeMessageId: string | null
   executedAt: string
-  executedBy: {
+  executedByUser: {
+    id: string
     email: string
-    name: string
+    fullName: string | null
   }
   errorMessage: string | null
 }
@@ -125,7 +130,7 @@ export function BonoPorLluviaHistorial({ triggerId, refreshKey = 0 }: BonoPorLlu
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Enviado por {execution.executedBy.name}
+                      Enviado por {execution.executedByUser.fullName || execution.executedByUser.email}
                     </p>
                   </div>
                   <div className="text-right">
