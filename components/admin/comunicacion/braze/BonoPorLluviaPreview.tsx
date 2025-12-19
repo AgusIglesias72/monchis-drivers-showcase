@@ -83,7 +83,7 @@ export function BonoPorLluviaPreview({ horaInicio, horaFinal, monto }: BonoPorLl
                   </p>
 
                   <p className="leading-relaxed">
-                    💰 De <span className="line-through">{formatHoraParaBraze(horaInicio)}</span> a <span className="line-through">{formatHoraParaBraze(horaFinal)}</span> ¡TODOS tus pedidos suman un BONO EXTRA de <span className="font-bold text-green-700">₲{parseFloat(monto).toLocaleString('es-PY')}</span> por cada entrega!
+                    💰 De <span className="line-through">{formatHoraParaBraze(horaInicio)}</span> a <span className="line-through">{formatHoraParaBraze(horaFinal)}</span> ¡TODOS tus pedidos suman un BONO EXTRA de <span className="font-bold text-green-700">{parseFloat(monto).toLocaleString('es-PY')} Gs</span> por cada entrega!
                   </p>
 
                   <p className="leading-relaxed">
@@ -116,32 +116,6 @@ export function BonoPorLluviaPreview({ horaInicio, horaFinal, monto }: BonoPorLl
           </div>
         </div>
 
-        {/* Info sobre variables */}
-        <div className="mt-6 w-full p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-              <span className="text-blue-600 font-mono text-sm">{ }</span>
-            </div>
-            <p className="text-sm font-semibold text-blue-900">Variables enviadas a Braze</p>
-          </div>
-          <div className="space-y-2">
-            <div className="bg-white rounded-lg p-2.5 shadow-sm">
-              <code className="text-xs font-mono text-blue-600">hora_inicio</code>
-              <span className="text-xs text-gray-500 mx-2">→</span>
-              <span className="text-xs font-semibold text-gray-900">{formatHoraParaBraze(horaInicio)}</span>
-            </div>
-            <div className="bg-white rounded-lg p-2.5 shadow-sm">
-              <code className="text-xs font-mono text-blue-600">hora_final</code>
-              <span className="text-xs text-gray-500 mx-2">→</span>
-              <span className="text-xs font-semibold text-gray-900">{formatHoraParaBraze(horaFinal)}</span>
-            </div>
-            <div className="bg-white rounded-lg p-2.5 shadow-sm">
-              <code className="text-xs font-mono text-blue-600">monto</code>
-              <span className="text-xs text-gray-500 mx-2">→</span>
-              <span className="text-xs font-semibold text-gray-900">{parseFloat(monto).toLocaleString('es-PY')}</span>
-            </div>
-          </div>
-        </div>
       </CardContent>
     </Card>
   )

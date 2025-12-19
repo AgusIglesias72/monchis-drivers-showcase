@@ -240,7 +240,7 @@ export function BonoPorLluviaExecute({ triggerId, campaignId, onExecuted, onValu
                   <p className="text-sm">Dispatch ID: {executionResult.dispatchId}</p>
                 )}
                 <p className="text-sm mt-2">
-                  Los drivers elegibles recibirán el bono de ₲{parseFloat(monto).toLocaleString('es-PY')}
+                  Los drivers elegibles recibirán el bono de {parseFloat(monto).toLocaleString('es-PY')} Gs
                   {' '}por cada entrega realizada de {formatHoraParaBraze(horaInicio)} a {formatHoraParaBraze(horaFinal)}.
                 </p>
               </div>

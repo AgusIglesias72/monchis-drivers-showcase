@@ -194,7 +194,7 @@ export default function BonoPorLluviaPage() {
                     </div>
                     <div className="flex items-start gap-2 mt-1">
                       <span className="text-slate-500 select-none">2</span>
-                      <code>NEXT_PUBLIC_BRAZE_BONO_LLUVIA_CAMPAIGN_ID=<span className="text-yellow-300">c6801563-d398-4cf5-95cd-1104e5ed5282</span></code>
+                      <code>NEXT_PUBLIC_BRAZE_BONO_LLUVIA_CAMPAIGN_ID=<span className="text-yellow-300">256172f0-20f7-43d2-80d8-3a29daf71be9</span></code>
                     </div>
                   </div>
                 </div>
