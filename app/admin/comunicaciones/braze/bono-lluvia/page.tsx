@@ -5,6 +5,8 @@ import { useState } from 'react'
 import { AdminHeader } from '@/components/admin/admin-header'
 import { BonoPorLluviaExecute } from '@/components/admin/comunicacion/braze/BonoPorLluviaExecute'
 import { BonoPorLluviaPreview } from '@/components/admin/comunicacion/braze/BonoPorLluviaPreview'
+import { BonoPorLluviaConsideraciones } from '@/components/admin/comunicacion/braze/BonoPorLluviaConsideraciones'
+import { BonoPorLluviaHistorial } from '@/components/admin/comunicacion/braze/BonoPorLluviaHistorial'
 
 export default function BonoPorLluviaPage() {
   // State para la preview
@@ -13,6 +15,9 @@ export default function BonoPorLluviaPage() {
     horaFinal: '',
     monto: ''
   })
+
+  // Key para refrescar el historial después de un envío exitoso
+  const [historialRefreshKey, setHistorialRefreshKey] = useState(0)
 
   // TODO: Obtener estos valores de la base de datos o variables de entorno
   // Por ahora hardcodeados, pero deberías tener un trigger configurado en tu DB
@@ -41,20 +46,28 @@ export default function BonoPorLluviaPage() {
         {/* Layout de dos columnas */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {/* Columna Izquierda - Formulario */}
-          <div className="flex flex-col">
+          <div className="flex flex-col space-y-6">
             <BonoPorLluviaExecute
               triggerId={BONO_LLUVIA_TRIGGER_ID || ''}
               campaignId={BONO_LLUVIA_CAMPAIGN_ID || ''}
               onValuesChange={setPreviewValues}
+              onExecuted={() => setHistorialRefreshKey(prev => prev + 1)}
             />
+
+            <BonoPorLluviaConsideraciones />
           </div>
 
           {/* Columna Derecha - Preview permanente */}
-          <div className="lg:sticky lg:top-6">
+          <div className="lg:sticky lg:top-6 space-y-6">
             <BonoPorLluviaPreview
               horaInicio={previewValues.horaInicio}
               horaFinal={previewValues.horaFinal}
               monto={previewValues.monto}
+            />
+
+            <BonoPorLluviaHistorial
+              triggerId={BONO_LLUVIA_TRIGGER_ID || ''}
+              refreshKey={historialRefreshKey}
             />
           </div>
         </div>

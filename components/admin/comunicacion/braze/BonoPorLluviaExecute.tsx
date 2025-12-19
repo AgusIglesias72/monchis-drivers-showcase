@@ -21,6 +21,11 @@ interface ExecutionResult {
   sendId?: string
   dispatchId?: string
   error?: string
+  executedValues?: {
+    horaInicio: string
+    horaFinal: string
+    monto: string
+  }
 }
 
 export function BonoPorLluviaExecute({ triggerId, campaignId, onExecuted, onValuesChange }: BonoPorLluviaProps) {
@@ -89,7 +94,18 @@ export function BonoPorLluviaExecute({ triggerId, campaignId, onExecuted, onValu
       })
 
       const data = await response.json()
-      setExecutionResult(data)
+
+      // Guardar los valores ejecutados antes de limpiar
+      const executedValues = {
+        horaInicio,
+        horaFinal,
+        monto,
+      }
+
+      setExecutionResult({
+        ...data,
+        executedValues,
+      })
 
       if (data.success) {
         // Limpiar formulario después de ejecución exitosa
@@ -239,10 +255,12 @@ export function BonoPorLluviaExecute({ triggerId, campaignId, onExecuted, onValu
                 {executionResult.dispatchId && (
                   <p className="text-sm">Dispatch ID: {executionResult.dispatchId}</p>
                 )}
-                <p className="text-sm mt-2">
-                  Los drivers elegibles recibirán el bono de {parseFloat(monto).toLocaleString('es-PY')} Gs
-                  {' '}por cada entrega realizada de {formatHoraParaBraze(horaInicio)} a {formatHoraParaBraze(horaFinal)}.
-                </p>
+                {executionResult.executedValues && (
+                  <p className="text-sm mt-2">
+                    Los drivers elegibles recibirán el bono de {parseFloat(executionResult.executedValues.monto).toLocaleString('es-PY')} Gs
+                    {' '}por cada entrega realizada de {formatHoraParaBraze(executionResult.executedValues.horaInicio)} a {formatHoraParaBraze(executionResult.executedValues.horaFinal)}.
+                  </p>
+                )}
               </div>
             ) : (
               <div>
