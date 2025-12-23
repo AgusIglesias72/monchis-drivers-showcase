@@ -10,10 +10,18 @@ interface BonoPorLluviaPreviewProps {
   monto: string
 }
 
-// Convertir formato HH:MM a "HHhs"
+// Convertir formato HH:MM a "HHhs" o "HH:MMhs" si tiene minutos
 const formatHoraParaBraze = (hora: string) => {
   if (!hora) return ''
-  const [hh] = hora.split(':')
+  const [hh, mm] = hora.split(':')
+  const minutos = parseInt(mm)
+
+  // Si tiene minutos diferentes de 00, mostrarlos
+  if (minutos > 0) {
+    return `${parseInt(hh)}:${mm}hs`
+  }
+
+  // Si es 00hs, mostrarlo como 00hs (no 24hs)
   return `${parseInt(hh)}hs`
 }
 

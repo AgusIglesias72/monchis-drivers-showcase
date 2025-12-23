@@ -56,20 +56,22 @@ export function BonoPorLluviaExecute({ triggerId, campaignId, onExecuted, onValu
     const montoNum = parseFloat(monto)
     if (isNaN(montoNum) || montoNum <= 0) return false
 
-    // Validar que hora_final sea después de hora_inicio
-    const [hInicio, mInicio] = horaInicio.split(':').map(Number)
-    const [hFinal, mFinal] = horaFinal.split(':').map(Number)
-    const minutosInicio = hInicio * 60 + mInicio
-    const minutosFinal = hFinal * 60 + mFinal
-
-    if (minutosFinal <= minutosInicio) return false
+    // No validamos que hora_final > hora_inicio para permitir casos como 22:00 a 00:00
 
     return true
   }
 
-  // Convertir formato HH:MM a "HHhs"
+  // Convertir formato HH:MM a "HHhs" o "HH:MMhs" si tiene minutos
   const formatHoraParaBraze = (hora: string) => {
-    const [hh] = hora.split(':')
+    const [hh, mm] = hora.split(':')
+    const minutos = parseInt(mm)
+
+    // Si tiene minutos diferentes de 00, mostrarlos
+    if (minutos > 0) {
+      return `${parseInt(hh)}:${mm}hs`
+    }
+
+    // Si es 00hs, mostrarlo como 00hs (no 24hs)
     return `${parseInt(hh)}hs`
   }
 
