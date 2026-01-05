@@ -178,6 +178,20 @@ export function DocumentActionsModal({
 
   // Si está mostrando formulario de rechazo
   if (showRejectForm) {
+    // Verificar si es un documento de Antecedentes Penales
+    const isCriminalRecord = document.documentType === 'CRIMINAL_RECORD' ||
+                             document.documentType === 'ANTECEDENTES'
+
+    // Motivos rápidos predefinidos para Antecedentes Penales
+    const quickRejectionReasons = [
+      'Documento Vencido',
+      'No corresponde a lo solicitado'
+    ]
+
+    const handleQuickReject = (reason: string) => {
+      setRejectionReason(reason)
+    }
+
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md">
@@ -197,9 +211,36 @@ export function DocumentActionsModal({
               <p className="text-xs text-muted-foreground mt-1">{document.fileName}</p>
             </div>
 
+            {/* Botones de rechazo rápido para Antecedentes Penales */}
+            {isCriminalRecord && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  Motivos rápidos
+                </Label>
+                <div className="grid grid-cols-1 gap-2">
+                  {quickRejectionReasons.map((reason) => (
+                    <Button
+                      key={reason}
+                      type="button"
+                      variant={rejectionReason === reason ? "default" : "outline"}
+                      onClick={() => handleQuickReject(reason)}
+                      className={`w-full justify-start text-left cursor-pointer ${
+                        rejectionReason === reason
+                          ? 'bg-red-600 hover:bg-red-700'
+                          : 'hover:bg-muted'
+                      }`}
+                      disabled={isLoading || isProcessing}
+                    >
+                      {reason}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="rejection-reason" className="text-sm font-medium">
-                Motivo del rechazo <span className="text-red-500">*</span>
+                {isCriminalRecord ? 'O escribe un motivo personalizado' : 'Motivo del rechazo'} <span className="text-red-500">*</span>
               </Label>
               <Textarea
                 id="rejection-reason"

@@ -906,6 +906,7 @@ enum WhatsAppMessageType {
   CAPACITATION_REMINDER // Recordatorio de capacitación
   CUSTOM // Mensaje personalizado/manual
   CAPACITATION_NO_SHOW
+  DOCUMENT_REJECTED // Documento rechazado
 }
 
 enum WhatsAppMessageStatus {
