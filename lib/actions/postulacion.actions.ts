@@ -5,6 +5,8 @@ import { auth } from '@clerk/nextjs/server'
 import { postulacionService } from '@/lib/services/postulacion.service'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
+import { messagesService } from '@/lib/services/messages.service'
+import { WhatsAppMessageType, WhatsAppMessageSource } from '@prisma/client'
 
 /**
  * Actualiza datos básicos de una postulación
@@ -286,6 +288,54 @@ export async function rejectDocument(documentId: string, reason: string) {
         metadata: { documentId, reason }
       }
     })
+
+    // Enviar notificación de WhatsApp si es un documento de Antecedentes Penales
+    const isCriminalRecord = document.documentType === 'CRIMINAL_RECORD'
+
+    if (isCriminalRecord) {
+      try {
+        // Obtener información del conductor para enviar el mensaje
+        const driver = await prisma.formDriver.findUnique({
+          where: { id: document.formDriverId },
+          select: {
+            id: true,
+            phoneNumber: true,
+            fullName: true,
+          }
+        })
+
+        if (driver && driver.phoneNumber && driver.fullName) {
+          // Extraer primer nombre
+          const firstName = driver.fullName.split(' ')[0]
+
+          // Enviar mensaje de WhatsApp
+          const messageResult = await messagesService.sendWhatsAppMessage({
+            phone: driver.phoneNumber,
+            name: firstName,
+            type: WhatsAppMessageType.DOCUMENT_REJECTED,
+            formDriverId: driver.id,
+            source: WhatsAppMessageSource.TRIGGER,
+            botId: 'bot-adquisicion-prod',
+            metadata: {
+              documentType: document.documentType,
+              documentTypeName: 'Certificado de Antecedentes Penales',
+              rejectionReason: reason,
+              rejectedAt: new Date().toISOString(),
+              documentId: document.id,
+              triggeredBy: 'document_rejection',
+              adminId: userId,
+            },
+          })
+
+          console.log('✅ WhatsApp message sent for document rejection:', messageResult)
+        } else {
+          console.warn('⚠️ No se pudo enviar WhatsApp: conductor sin teléfono o nombre')
+        }
+      } catch (whatsappError) {
+        // No fallar el rechazo si falla el envío de WhatsApp
+        console.error('❌ Error al enviar mensaje de WhatsApp:', whatsappError)
+      }
+    }
 
     // ✅ Solo revalidar la lista
     revalidatePath('/admin/postulaciones')
