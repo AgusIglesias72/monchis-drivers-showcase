@@ -75,8 +75,7 @@ export async function PATCH(
     });
 
     // Enviar notificación de WhatsApp si es un documento de Antecedentes Penales
-    const isCriminalRecord = updatedDoc.documentType === 'CRIMINAL_RECORD' ||
-                             updatedDoc.documentType === 'ANTECEDENTES';
+    const isCriminalRecord = updatedDoc.documentType === 'CRIMINAL_RECORD';
 
     if (isCriminalRecord) {
       try {

@@ -179,8 +179,7 @@ export function DocumentActionsModal({
   // Si está mostrando formulario de rechazo
   if (showRejectForm) {
     // Verificar si es un documento de Antecedentes Penales
-    const isCriminalRecord = document.documentType === 'CRIMINAL_RECORD' ||
-                             document.documentType === 'ANTECEDENTES'
+    const isCriminalRecord = document.documentType === 'CRIMINAL_RECORD'
 
     // Motivos rápidos predefinidos para Antecedentes Penales
     const quickRejectionReasons = [
