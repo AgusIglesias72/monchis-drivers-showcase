@@ -16,7 +16,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,8 +43,6 @@ interface ContactButtonProps {
   showLabel?: boolean // Si es true, muestra el texto del botón
   size?: 'sm' | 'default' // Tamaño del botón
   inDropdown?: boolean // ✅ NUEVO: Si está dentro de un dropdown "Acciones"
-  reminderCount?: number // ✅ Cantidad de mensajes FORM_INCOMPLETE enviados
-  isFormIncomplete?: boolean // ✅ Si el formulario está incompleto
 }
 
 export function ContactButton({
@@ -55,9 +52,7 @@ export function ContactButton({
   contactStatus,
   showLabel = false,
   size = 'sm',
-  inDropdown = false, // ✅ NUEVO
-  reminderCount = 0,
-  isFormIncomplete = false
+  inDropdown = false // ✅ NUEVO
 }: ContactButtonProps) {
   const router = useRouter()
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
@@ -284,9 +279,6 @@ export function ContactButton({
   }
 
   // ✅ CASO 3: Sin label, en la tabla (botón simple con tooltip)
-  // Determinar si mostrar el badge
-  const showBadge = isFormIncomplete && reminderCount > 0
-
   return (
     <>
       {isPending && (
@@ -303,34 +295,15 @@ export function ContactButton({
           <DropdownMenu>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <div className="relative">
-                  <Button
-                    variant="ghost"
-                    size={size}
-                    disabled={isDisabled || isPending}
-                    className={`h-8 w-8 p-0 rounded-full ${config.bg} ${config.text} ${config.hoverBg}`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                  </Button>
-                  {showBadge && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            variant="default"
-                            className="absolute -top-1 -right-1 h-5 min-w-5 px-1 text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 flex items-center justify-center cursor-help"
-                          >
-                            {reminderCount}
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">
-                          <p>{reminderCount} recordatorio{reminderCount > 1 ? 's' : ''} automático{reminderCount > 1 ? 's' : ''} enviado{reminderCount > 1 ? 's' : ''}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                </div>
+                <Button
+                  variant="ghost"
+                  size={size}
+                  disabled={isDisabled || isPending}
+                  className={`h-8 w-8 p-0 rounded-full ${config.bg} ${config.text} ${config.hoverBg}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
             
