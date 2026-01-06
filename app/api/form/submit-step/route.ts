@@ -1,6 +1,7 @@
 // app/api/form/submit-step/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { WhatsAppMessageType } from '@prisma/client';
 
 // Función para parsear fecha de formato dd/MM/yyyy a Date
 function parseBirthDate(dateStr: string | null): Date | null {
@@ -152,6 +153,21 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // ✨ RESET CONTADOR: Si el conductor avanza en el formulario,
+    // resetear contador de recordatorios eliminando mensajes FORM_INCOMPLETE previos
+    if (submission!.formDriverId && step > 1) {
+      // Eliminar solo mensajes FORM_INCOMPLETE para resetear el contador
+      // Los otros mensajes (APPLICATION_RECEIVED, etc.) se mantienen
+      await prisma.whatsAppMessage.deleteMany({
+        where: {
+          formDriverId: submission!.formDriverId,
+          type: WhatsAppMessageType.FORM_INCOMPLETE
+        }
+      });
+
+      console.log(`🔄 [FORM] Reset reminder counter for driver ${submission!.formDriverId} (step ${step} completed)`);
+    }
+
     return NextResponse.json({
       success: true,
       submissionId: submission!.id,
@@ -282,6 +298,19 @@ export async function PATCH(request: NextRequest) {
         editCount: { increment: 1 }
       }
     });
+
+    // ✨ RESET CONTADOR: Si el conductor avanza en el formulario,
+    // resetear contador de recordatorios eliminando mensajes FORM_INCOMPLETE previos
+    if (submission.formDriverId && step > 1) {
+      await prisma.whatsAppMessage.deleteMany({
+        where: {
+          formDriverId: submission.formDriverId,
+          type: WhatsAppMessageType.FORM_INCOMPLETE
+        }
+      });
+
+      console.log(`🔄 [FORM] Reset reminder counter for driver ${submission.formDriverId} (step ${step} updated)`);
+    }
 
     return NextResponse.json({
       success: true,
