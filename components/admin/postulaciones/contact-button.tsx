@@ -314,12 +314,21 @@ export function ContactButton({
                     <MessageCircle className="h-4 w-4" />
                   </Button>
                   {showBadge && (
-                    <Badge
-                      variant="default"
-                      className="absolute -top-1 -right-1 h-5 min-w-5 px-1 text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 flex items-center justify-center"
-                    >
-                      {reminderCount}
-                    </Badge>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="default"
+                            className="absolute -top-1 -right-1 h-5 min-w-5 px-1 text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 flex items-center justify-center cursor-help"
+                          >
+                            {reminderCount}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          <p>{reminderCount} recordatorio{reminderCount > 1 ? 's' : ''} automático{reminderCount > 1 ? 's' : ''} enviado{reminderCount > 1 ? 's' : ''}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
                 </div>
               </DropdownMenuTrigger>
