@@ -127,7 +127,7 @@ async function getPendingDrivers(): Promise<PendingDriver[]> {
   const lastMessages = await prisma.whatsAppMessage.findMany({
     where: {
       formDriverId: { in: driverIds },
-      type: WhatsAppMessageType.FORM_INCOMPLETE,
+      messageType: WhatsAppMessageType.FORM_INCOMPLETE,
       status: { in: ['SENT', 'DELIVERED', 'READ'] }, // Solo mensajes exitosos
     },
     orderBy: {

@@ -557,6 +557,8 @@ export function PostulacionesTableExpandable({
                                 driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
                                 phoneNumber={postulacion.phoneNumber}
                                 contactStatus={postulacion.contactStatus}
+                                reminderCount={postulacion.whatsappMessagesSent?.length || 0}
+                                isFormIncomplete={postulacion.status === 'IN_PROGRESS'}
                               />
 
                               <DropdownMenu>

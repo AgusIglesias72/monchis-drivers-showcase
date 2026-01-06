@@ -127,6 +127,14 @@ const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
       contactedAt: 'desc'
     },
     take: 1
+  },
+  whatsappMessagesSent: {
+    select: {
+      id: true,
+    },
+    where: {
+      messageType: 'FORM_INCOMPLETE'
+    }
   }
 }
 

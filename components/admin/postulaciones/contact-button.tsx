@@ -16,6 +16,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,16 +44,20 @@ interface ContactButtonProps {
   showLabel?: boolean // Si es true, muestra el texto del botón
   size?: 'sm' | 'default' // Tamaño del botón
   inDropdown?: boolean // ✅ NUEVO: Si está dentro de un dropdown "Acciones"
+  reminderCount?: number // ✅ Cantidad de mensajes FORM_INCOMPLETE enviados
+  isFormIncomplete?: boolean // ✅ Si el formulario está incompleto
 }
 
-export function ContactButton({ 
-  driverId, 
-  driverName, 
+export function ContactButton({
+  driverId,
+  driverName,
   phoneNumber,
   contactStatus,
   showLabel = false,
   size = 'sm',
-  inDropdown = false // ✅ NUEVO
+  inDropdown = false, // ✅ NUEVO
+  reminderCount = 0,
+  isFormIncomplete = false
 }: ContactButtonProps) {
   const router = useRouter()
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
@@ -279,6 +284,9 @@ export function ContactButton({
   }
 
   // ✅ CASO 3: Sin label, en la tabla (botón simple con tooltip)
+  // Determinar si mostrar el badge
+  const showBadge = isFormIncomplete && reminderCount > 0
+
   return (
     <>
       {isPending && (
@@ -295,15 +303,25 @@ export function ContactButton({
           <DropdownMenu>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size={size}
-                  disabled={isDisabled || isPending}
-                  className={`h-8 w-8 p-0 rounded-full ${config.bg} ${config.text} ${config.hoverBg}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MessageCircle className="h-4 w-4" />
-                </Button>
+                <div className="relative">
+                  <Button
+                    variant="ghost"
+                    size={size}
+                    disabled={isDisabled || isPending}
+                    className={`h-8 w-8 p-0 rounded-full ${config.bg} ${config.text} ${config.hoverBg}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                  </Button>
+                  {showBadge && (
+                    <Badge
+                      variant="default"
+                      className="absolute -top-1 -right-1 h-5 min-w-5 px-1 text-xs font-semibold bg-blue-600 hover:bg-blue-700 flex items-center justify-center"
+                    >
+                      {reminderCount}
+                    </Badge>
+                  )}
+                </div>
               </DropdownMenuTrigger>
             </TooltipTrigger>
             

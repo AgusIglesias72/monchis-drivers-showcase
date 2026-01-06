@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
       await prisma.whatsAppMessage.deleteMany({
         where: {
           formDriverId: submission!.formDriverId,
-          type: WhatsAppMessageType.FORM_INCOMPLETE
+          messageType: WhatsAppMessageType.FORM_INCOMPLETE
         }
       });
 
@@ -305,7 +305,7 @@ export async function PATCH(request: NextRequest) {
       await prisma.whatsAppMessage.deleteMany({
         where: {
           formDriverId: submission.formDriverId,
-          type: WhatsAppMessageType.FORM_INCOMPLETE
+          messageType: WhatsAppMessageType.FORM_INCOMPLETE
         }
       });
 
