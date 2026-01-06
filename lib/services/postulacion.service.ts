@@ -47,7 +47,18 @@ export class PostulacionService {
           orderBy: { invitedAt: 'desc' },
           take: 1
         },
-        financialService: true
+        financialService: true,
+        whatsappMessagesSent: {
+          orderBy: { sentAt: 'desc' },
+          select: {
+            id: true,
+            messageType: true,
+            sentAt: true,
+            status: true,
+            source: true,
+            metadata: true,
+          }
+        }
       }
     })
 

@@ -48,6 +48,7 @@ import { DocumentPreview } from "@/components/admin/document-preview"
 import { ManageOnboardingModal } from "@/components/admin/manage-onboarding-modal"
 import { PersonalInfoCard } from "@/components/admin/personal-info-card"
 import { InternalNotesCard } from "@/components/admin/internal-notes-card"
+import { WhatsAppMessagesHistory } from "@/components/admin/whatsapp-messages-history"
 import {
   PaymentSection,
   OnboardingSection,
@@ -750,6 +751,9 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
             </CardContent>
           </Card>
         </div>
+
+        {/* Historial de Mensajes de WhatsApp */}
+        <WhatsAppMessagesHistory messages={postulacion.whatsappMessagesSent || []} />
       </div>
 
       <ManageOnboardingModal

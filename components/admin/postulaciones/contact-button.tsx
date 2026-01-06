@@ -316,7 +316,7 @@ export function ContactButton({
                   {showBadge && (
                     <Badge
                       variant="default"
-                      className="absolute -top-1 -right-1 h-5 min-w-5 px-1 text-xs font-semibold bg-blue-600 hover:bg-blue-700 flex items-center justify-center"
+                      className="absolute -top-1 -right-1 h-5 min-w-5 px-1 text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 flex items-center justify-center"
                     >
                       {reminderCount}
                     </Badge>

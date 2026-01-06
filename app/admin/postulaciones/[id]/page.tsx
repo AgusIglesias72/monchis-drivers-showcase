@@ -69,6 +69,12 @@ async function getPostulacion(id: string) {
         completedAt: step.completedAt?.toISOString() || null,
       })),
 
+      // Transformar mensajes de WhatsApp
+      whatsappMessagesSent: postulacion.whatsappMessagesSent.map(msg => ({
+        ...msg,
+        sentAt: msg.sentAt.toISOString(),
+      })),
+
       // ✅ Agregar eventos disponibles con fechas transformadas
       availableOnboardingEvents: availableEvents.map(event => ({
         ...event,
