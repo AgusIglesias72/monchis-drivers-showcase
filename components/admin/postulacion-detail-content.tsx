@@ -71,7 +71,6 @@ import {
   deleteDocument,
 } from "@/lib/actions/postulacion.actions"
 import { AssistedCompletionButton } from "./postulaciones/assisted-completion-button"
-import { ValidateDocumentsButton } from "./postulaciones/validate-documents-button"
 import { DropdownMenu, DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuSeparator } from "../ui/dropdown-menu"
 
 interface PostulacionDetailContentProps {
@@ -639,16 +638,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                       </DropdownMenuItem>
                     </>
                   )}
-
-                  <DropdownMenuSeparator />
-
-                  {/* Validar Documentos con IA */}
-                  <ValidateDocumentsButton
-                    driverId={postulacion.id}
-                    driverName={postulacion.fullName || 'Driver'}
-                    hasIdentityDocs={hasIdentityDocs}
-                    onSuccess={handleActionSuccess}
-                  />
 
                   <DropdownMenuSeparator />
 
