@@ -30,6 +30,7 @@ import {
   FileText,
   Clock,
   MessageSquare,
+  MessageCircle,
   Edit,
   Save,
   X,
@@ -49,6 +50,7 @@ import { ManageOnboardingModal } from "@/components/admin/manage-onboarding-moda
 import { PersonalInfoCard } from "@/components/admin/personal-info-card"
 import { InternalNotesCard } from "@/components/admin/internal-notes-card"
 import { WhatsAppMessagesHistory } from "@/components/admin/whatsapp-messages-history"
+import { QuickWhatsAppMessages } from "@/components/admin/quick-whatsapp-messages"
 import {
   PaymentSection,
   OnboardingSection,
@@ -69,6 +71,7 @@ import {
   deleteDocument,
 } from "@/lib/actions/postulacion.actions"
 import { AssistedCompletionButton } from "./postulaciones/assisted-completion-button"
+import { ValidateDocumentsButton } from "./postulaciones/validate-documents-button"
 import { DropdownMenu, DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuSeparator } from "../ui/dropdown-menu"
 
 interface PostulacionDetailContentProps {
@@ -100,6 +103,15 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
   const [documents, setDocuments] = useState(postulacion.documents || [])
 
   const regularDocuments = documents.filter((doc: any) => doc.documentType !== 'PAYMENT_PROOF')
+
+  // Verificar si tiene documentos de identidad pendientes
+  const hasIdentityDocs = documents.some((doc: any) =>
+    (doc.documentType === 'CEDULA_FRONT' || doc.documentType === 'CEDULA_BACK') &&
+    doc.status === 'PENDING'
+  ) && documents.some((doc: any) =>
+    doc.documentType === 'CRIMINAL_RECORD' &&
+    doc.status === 'PENDING'
+  )
 
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showProofPreview, setShowProofPreview] = useState(false)
@@ -509,6 +521,22 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </div>
 
           <div className="flex flex-wrap justify-end items-center gap-2">
+            {/* Botón de WhatsApp - Siempre visible */}
+            {!isEditing && postulacion.phoneNumber && (
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const cleanPhone = postulacion.phoneNumber.replace(/\D/g, '')
+                  window.open(`https://wa.me/595${cleanPhone}`, '_blank')
+                }}
+                variant="outline"
+                className="gap-2 cursor-pointer bg-green-50 text-green-700 hover:bg-green-100 border-green-200"
+              >
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp
+              </Button>
+            )}
+
             {/* Botón principal: Onboarding */}
             {!isEditing && hasScheduledOnboarding ? (
               <Button
@@ -611,6 +639,16 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                       </DropdownMenuItem>
                     </>
                   )}
+
+                  <DropdownMenuSeparator />
+
+                  {/* Validar Documentos con IA */}
+                  <ValidateDocumentsButton
+                    driverId={postulacion.id}
+                    driverName={postulacion.fullName || 'Driver'}
+                    hasIdentityDocs={hasIdentityDocs}
+                    onSuccess={handleActionSuccess}
+                  />
 
                   <DropdownMenuSeparator />
 
@@ -752,8 +790,16 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </Card>
         </div>
 
-        {/* Historial de Mensajes de WhatsApp */}
-        <WhatsAppMessagesHistory messages={postulacion.whatsappMessagesSent || []} />
+        {/* Grid de Mensajes: Envío rápido + Historial */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+          <QuickWhatsAppMessages
+            driverId={postulacion.id}
+            driverName={postulacion.fullName || 'Conductor'}
+            phoneNumber={postulacion.phoneNumber || ''}
+          />
+
+          <WhatsAppMessagesHistory messages={postulacion.whatsappMessagesSent || []} />
+        </div>
       </div>
 
       <ManageOnboardingModal
