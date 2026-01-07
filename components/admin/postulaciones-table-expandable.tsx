@@ -35,6 +35,7 @@ import {
   CheckCircle,
   MoreVertical,
   XCircle,
+  MessageSquare,
 } from "lucide-react"
 import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
 import { ContactButton } from "@/components/admin/postulaciones/contact-button"
@@ -416,6 +417,26 @@ export function PostulacionesTableExpandable({
                                       </TooltipTrigger>
                                       <TooltipContent>
                                         <p className="text-xs">Zona preferida: San Bernardino</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                                {postulacion.notes && postulacion.notes.length > 0 && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge
+                                          variant="outline"
+                                          className="text-xs px-1.5 py-0 h-5 bg-blue-50 text-blue-700 border-blue-300 font-semibold flex items-center gap-1"
+                                        >
+                                          <MessageSquare className="h-3 w-3" />
+                                          {postulacion.notes.length}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="text-xs">
+                                          {postulacion.notes.length} nota{postulacion.notes.length > 1 ? 's' : ''} interna{postulacion.notes.length > 1 ? 's' : ''}
+                                        </p>
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>

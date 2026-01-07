@@ -50,7 +50,6 @@ import { ManageOnboardingModal } from "@/components/admin/manage-onboarding-moda
 import { PersonalInfoCard } from "@/components/admin/personal-info-card"
 import { InternalNotesCard } from "@/components/admin/internal-notes-card"
 import { WhatsAppMessagesHistory } from "@/components/admin/whatsapp-messages-history"
-import { QuickWhatsAppMessages } from "@/components/admin/quick-whatsapp-messages"
 import {
   PaymentSection,
   OnboardingSection,
@@ -69,6 +68,7 @@ import {
   approveDocument,
   rejectDocument,
   deleteDocument,
+  updateDocumentType,
 } from "@/lib/actions/postulacion.actions"
 import { AssistedCompletionButton } from "./postulaciones/assisted-completion-button"
 import { DropdownMenu, DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuSeparator } from "../ui/dropdown-menu"
@@ -779,16 +779,8 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </Card>
         </div>
 
-        {/* Grid de Mensajes: Envío rápido + Historial */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-          <QuickWhatsAppMessages
-            driverId={postulacion.id}
-            driverName={postulacion.fullName || 'Conductor'}
-            phoneNumber={postulacion.phoneNumber || ''}
-          />
-
-          <WhatsAppMessagesHistory messages={postulacion.whatsappMessagesSent || []} />
-        </div>
+        {/* Historial de Mensajes WhatsApp */}
+        <WhatsAppMessagesHistory messages={postulacion.whatsappMessagesSent || []} />
       </div>
 
       <ManageOnboardingModal

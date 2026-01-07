@@ -6,37 +6,53 @@ import { FormDocumentStatus } from '@prisma/client';
 export class DocumentsService {
   
   /**
-   * Obtiene documentos con filtros opcionales
+   * Obtiene documentos con filtros opcionales y paginación
    */
   async getDocuments(filters?: {
     status?: FormDocumentStatus;
     formDriverId?: string;
+    page?: number;
     limit?: number;
   }) {
-    const { status, formDriverId, limit = 50 } = filters || {};
+    const { status, formDriverId, page = 1, limit = 20 } = filters || {};
+    const skip = (page - 1) * limit;
 
-    return prisma.formDocument.findMany({
-      where: {
-        ...(status && { status }),
-        ...(formDriverId && { formDriverId }),
-      },
-      include: {
-        formDriver: {
-          select: {
-            id: true,
-            fullName: true,
-            cedula: true,
-            phoneNumber: true,
-            documentsStatus: true,
+    const where = {
+      ...(status && { status }),
+      ...(formDriverId && { formDriverId }),
+    };
+
+    const [documents, totalDocuments] = await Promise.all([
+      prisma.formDocument.findMany({
+        where,
+        include: {
+          formDriver: {
+            select: {
+              id: true,
+              fullName: true,
+              cedula: true,
+              phoneNumber: true,
+              documentsStatus: true,
+            }
           }
-        }
-      },
-      orderBy: [
-        { status: 'asc' }, // IN_REVIEW primero
-        { updatedAt: 'desc' }
-      ],
-      take: limit
-    });
+        },
+        orderBy: [
+          { status: 'asc' }, // IN_REVIEW primero
+          { updatedAt: 'desc' }
+        ],
+        skip,
+        take: limit
+      }),
+      prisma.formDocument.count({ where })
+    ]);
+
+    return {
+      documents,
+      totalDocuments,
+      totalPages: Math.ceil(totalDocuments / limit),
+      currentPage: page,
+      limit
+    };
   }
 
   /**

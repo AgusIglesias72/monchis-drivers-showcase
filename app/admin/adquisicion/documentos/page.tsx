@@ -10,6 +10,8 @@ export const revalidate = 10 // Revalidar cada 10 segundos
 interface PageProps {
   searchParams: {
     status?: string
+    page?: string
+    limit?: string
   }
 }
 
@@ -25,10 +27,17 @@ function isValidDocumentStatus(status: string | undefined): FormDocumentStatus |
 
 export default async function DocumentosPage({ searchParams }: PageProps) {
   const status = searchParams.status
+  const page = parseInt(searchParams.page || '1')
+  const limit = parseInt(searchParams.limit || '20')
+
   const validStatus = isValidDocumentStatus(status)
 
-  const [documents, counts] = await Promise.all([
-    documentsService.getDocuments({ status: validStatus }),
+  const [result, counts] = await Promise.all([
+    documentsService.getDocuments({
+      status: validStatus,
+      page,
+      limit
+    }),
     documentsService.getDocumentCountsByStatus()
   ])
 
@@ -45,7 +54,12 @@ export default async function DocumentosPage({ searchParams }: PageProps) {
       <DocumentsFilters counts={counts} currentStatus={status} />
 
       {/* Tabla de documentos */}
-      <DocumentsTable documents={documents} />
+      <DocumentsTable
+        documents={result.documents}
+        totalPages={result.totalPages}
+        currentPage={page}
+        totalDocuments={result.totalDocuments}
+      />
     </div>
   )
 }

@@ -384,5 +384,45 @@ export async function deleteDocument(documentId: string) {
   }
 }
 
+/**
+ * Actualiza el tipo de un documento
+ * ✅ Solo revalida la lista
+ */
+export async function updateDocumentType(documentId: string, newDocumentType: string) {
+  try {
+    const { userId } = await auth()
+    if (!userId) throw new Error('No autorizado')
+
+    const document = await prisma.formDocument.update({
+      where: { id: documentId },
+      data: {
+        documentType: newDocumentType as any,
+      }
+    })
+
+    // Log de auditoría
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        userEmail: 'admin',
+        action: 'DOCUMENT_TYPE_UPDATED' as any,
+        actionType: 'UPDATE',
+        entityType: 'FormDocument',
+        entityId: documentId,
+        description: `Tipo de documento actualizado a: ${newDocumentType}`,
+        metadata: { documentId, newDocumentType }
+      }
+    })
+
+    // ✅ Solo revalidar la lista
+    revalidatePath('/admin/postulaciones')
+
+    return { success: true, document }
+  } catch (error: any) {
+    console.error('Error al actualizar tipo de documento:', error)
+    return { success: false, error: error.message || 'Error al actualizar tipo de documento' }
+  }
+}
+
 // ✅ NOTA: La función uploadDocument fue ELIMINADA
 // Ahora usamos el API route: /api/postulaciones/documents/upload

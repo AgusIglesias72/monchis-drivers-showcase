@@ -23,9 +23,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { 
-  FileText, 
-  Upload, 
+import {
+  FileText,
+  Upload,
   Download,
   Eye,
   Trash2,
@@ -38,8 +38,18 @@ import {
   Car,
   IdCard,
   FileCheck,
+  MoreVertical,
+  FileEdit,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { DocumentActionsModal } from "@/components/admin/document-actions-modal"
+import { EditDocumentTypeModal } from "@/components/admin/edit-document-type-modal"
 
 interface DocumentPreviewProps {
   documents: any[]
@@ -143,6 +153,8 @@ export function DocumentPreview({
 }: DocumentPreviewProps) {
   const [selectedDocument, setSelectedDocument] = useState<any>(null)
   const [showActionsModal, setShowActionsModal] = useState(false)
+  const [showEditTypeModal, setShowEditTypeModal] = useState(false)
+  const [documentToEdit, setDocumentToEdit] = useState<any>(null)
   const [uploadType, setUploadType] = useState('')
   const [deleteDocumentId, setDeleteDocumentId] = useState<string | null>(null)
 
@@ -337,16 +349,6 @@ export function DocumentPreview({
                             <Eye className="h-4 w-4" />
                           </Button>
 
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleDownload(doc.blobUrl, doc.fileName)}
-                            className="h-8 w-8"
-                            title="Descargar"
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
-
                           {isEditing && (
                             <>
                               <Button
@@ -375,6 +377,41 @@ export function DocumentPreview({
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               )}
+
+                              {/* Botón de tres puntos con más acciones */}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    title="Más acciones"
+                                    disabled={isLoading}
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => handleDownload(doc.blobUrl, doc.fileName)}
+                                    className="cursor-pointer"
+                                  >
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Descargar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setDocumentToEdit(doc)
+                                      setShowEditTypeModal(true)
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    <FileEdit className="h-4 w-4 mr-2" />
+                                    Modificar tipo
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </>
                           )}
                         </div>
@@ -487,6 +524,17 @@ export function DocumentPreview({
           }
         }}
         isLoading={isLoading}
+      />
+
+      {/* ✅ Modal de edición de tipo de documento */}
+      <EditDocumentTypeModal
+        open={showEditTypeModal}
+        onOpenChange={setShowEditTypeModal}
+        document={documentToEdit}
+        onSuccess={() => {
+          // Recargar la página para ver los cambios
+          window.location.reload()
+        }}
       />
 
       {/* ✅ Dialog de confirmación de eliminación */}

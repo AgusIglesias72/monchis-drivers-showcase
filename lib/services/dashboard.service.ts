@@ -250,63 +250,81 @@ export class DashboardService {
   async getVisitasPorSemana(startDate?: Date, endDate?: Date) {
     const end = endDate || new Date()
     const start = startDate || subDays(end, 30)
-    
+
     // Obtener todas las semanas en el rango
     const weeks = eachWeekOfInterval(
       { start, end },
       { weekStartsOn: 1 } // Lunes
     )
-    
+
     const semanas = await Promise.all(
       weeks.map(async (weekStart) => {
         const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
+
+        // Ajustar weekStart y weekEnd para que estén dentro del rango del filtro
+        const actualWeekStart = weekStart < start ? start : weekStart
         const actualWeekEnd = weekEnd > end ? end : weekEnd
-        
-        const count = await prisma.formDriver.count({
-          where: {
-            createdAt: {
-              gte: startOfDay(weekStart),
-              lte: endOfDay(actualWeekEnd)
+
+        const [iniciadas, completadas] = await Promise.all([
+          // Iniciadas en este período
+          prisma.formDriver.count({
+            where: {
+              createdAt: {
+                gte: startOfDay(actualWeekStart),
+                lte: endOfDay(actualWeekEnd)
+              }
             }
-          }
-        })
-        
-        // Formatear rango de fechas: "3-09 Nov" o "3 Nov" si es la misma semana
-        const startDay = format(weekStart, 'd', { locale: es })
+          }),
+          // Completadas en este período
+          prisma.formDriver.count({
+            where: {
+              completedAt: {
+                gte: startOfDay(actualWeekStart),
+                lte: endOfDay(actualWeekEnd)
+              },
+              status: 'COMPLETED'
+            }
+          })
+        ])
+
+        // Formatear rango de fechas con las fechas reales (no las de la semana completa)
+        const startDay = format(actualWeekStart, 'd', { locale: es })
         const endDay = format(actualWeekEnd, 'd', { locale: es })
-        const month = format(weekStart, 'MMM', { locale: es })
-        const semanaLabel = startDay === endDay 
+        const month = format(actualWeekStart, 'MMM', { locale: es })
+        const semanaLabel = startDay === endDay
           ? `${startDay} ${month}`
           : `${startDay}-${endDay} ${month}`
-        
+
         return {
           semana: semanaLabel,
-          visitas: count
+          visitas: iniciadas,
+          completados: completadas
         }
       })
     )
-    
+
     return semanas
   }
-  
+
   /**
    * Obtiene completados por semana
+   * @deprecated Usar getVisitasPorSemana que ahora incluye ambos datos
    */
   async getCompletadosPorSemana(startDate?: Date, endDate?: Date) {
     const end = endDate || new Date()
     const start = startDate || subDays(end, 30)
-    
+
     // Obtener todas las semanas en el rango
     const weeks = eachWeekOfInterval(
       { start, end },
       { weekStartsOn: 1 } // Lunes
     )
-    
+
     const semanas = await Promise.all(
       weeks.map(async (weekStart) => {
         const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
         const actualWeekEnd = weekEnd > end ? end : weekEnd
-        
+
         const count = await prisma.formDriver.count({
           where: {
             completedAt: {
@@ -316,22 +334,22 @@ export class DashboardService {
             status: 'COMPLETED'
           }
         })
-        
+
         // Formatear rango de fechas: "3-09 Nov" o "3 Nov" si es la misma semana
         const startDay = format(weekStart, 'd', { locale: es })
         const endDay = format(actualWeekEnd, 'd', { locale: es })
         const month = format(weekStart, 'MMM', { locale: es })
-        const semanaLabel = startDay === endDay 
+        const semanaLabel = startDay === endDay
           ? `${startDay} ${month}`
           : `${startDay}-${endDay} ${month}`
-        
+
         return {
           semana: semanaLabel,
           completados: count
         }
       })
     )
-    
+
     return semanas
   }
   
@@ -432,7 +450,7 @@ export class DashboardService {
     const end = endDate || new Date()
     const start = startDate || subDays(end, 30)
     const treintaDiasAtras = subDays(end, 30)
-    
+
     const [
       upcomingEvents,
       pendingDrivers,
@@ -452,7 +470,7 @@ export class DashboardService {
           }
         }
       }),
-      
+
       // Drivers pendientes de agendar
       prisma.formDriver.count({
         where: {
@@ -462,7 +480,7 @@ export class DashboardService {
           }
         }
       }),
-      
+
       // Drivers en proceso de onboarding
       prisma.formDriver.count({
         where: {
@@ -471,7 +489,7 @@ export class DashboardService {
           }
         }
       }),
-      
+
       // Completados según fecha del evento
       prisma.onboardingAttendee.count({
         where: {
@@ -484,7 +502,7 @@ export class DashboardService {
           }
         }
       }),
-      
+
       // No Shows según fecha del evento
       prisma.onboardingAttendee.count({
         where: {
@@ -497,7 +515,7 @@ export class DashboardService {
           }
         }
       }),
-      
+
       // Drivers pendientes de asistencia (agendados pero aún no asistieron ni fueron marcados como no show)
       // Basado en eventos dentro del rango de fechas
       prisma.onboardingAttendee.count({
@@ -514,11 +532,11 @@ export class DashboardService {
         }
       }),
     ])
-    
+
     const attendanceRate = (completedThisMonth + noShowsThisMonth) > 0
       ? Math.round((completedThisMonth / (completedThisMonth + noShowsThisMonth)) * 100)
       : 0
-    
+
     return {
       upcomingEvents,
       pendingDrivers,
@@ -529,13 +547,439 @@ export class DashboardService {
       pendingAttendance,
     }
   }
+
+  /**
+   * Obtiene evolución temporal de asistencias (por día, semana o mes)
+   */
+  async getAsistenciasPorPeriodo(startDate?: Date, endDate?: Date, groupBy: 'day' | 'week' | 'month' = 'week') {
+    const end = endDate || new Date()
+    const start = startDate || subDays(end, 30)
+
+    // Obtener todos los attendees en el rango de fechas
+    const attendees = await prisma.onboardingAttendee.findMany({
+      where: {
+        event: {
+          scheduledDate: {
+            gte: startOfDay(start),
+            lte: endOfDay(end)
+          }
+        }
+      },
+      include: {
+        event: {
+          select: {
+            scheduledDate: true
+          }
+        }
+      }
+    })
+
+    // Agrupar según el período
+    const grouped = new Map<string, { attended: number; noShow: number; scheduled: number; total: number }>()
+
+    attendees.forEach(attendee => {
+      let key: string
+      const eventDate = attendee.event.scheduledDate
+
+      if (groupBy === 'day') {
+        key = format(eventDate, 'dd MMM', { locale: es })
+      } else if (groupBy === 'week') {
+        const weekStart = startOfWeek(eventDate, { weekStartsOn: 1 })
+        const weekEnd = endOfWeek(eventDate, { weekStartsOn: 1 })
+        const startDay = format(weekStart, 'd', { locale: es })
+        const endDay = format(weekEnd, 'd', { locale: es })
+        const month = format(weekStart, 'MMM', { locale: es })
+        key = `${startDay}-${endDay} ${month}`
+      } else {
+        key = format(eventDate, 'MMM yyyy', { locale: es })
+      }
+
+      if (!grouped.has(key)) {
+        grouped.set(key, { attended: 0, noShow: 0, scheduled: 0, total: 0 })
+      }
+
+      const data = grouped.get(key)!
+      data.total++
+
+      if (attendee.status === 'ATTENDED') {
+        data.attended++
+      } else if (attendee.status === 'NO_SHOW') {
+        data.noShow++
+      } else if (['INVITED', 'CONFIRMED', 'SCHEDULED'].includes(attendee.status)) {
+        data.scheduled++
+      }
+    })
+
+    return Array.from(grouped.entries()).map(([periodo, data]) => ({
+      periodo,
+      asistieron: data.attended,
+      noAsistieron: data.noShow,
+      programados: data.scheduled,
+      total: data.total,
+      tasaPresentismo: data.attended + data.noShow > 0
+        ? Math.round((data.attended / (data.attended + data.noShow)) * 100)
+        : 0
+    }))
+  }
+
+  /**
+   * Obtiene distribución de estados de asistencias
+   */
+  async getDistribucionEstadosAsistencias(startDate?: Date, endDate?: Date) {
+    const end = endDate || new Date()
+    const start = startDate || subDays(end, 30)
+
+    // Obtener eventos en el rango de fechas
+    const events = await prisma.onboardingEvent.findMany({
+      where: {
+        scheduledDate: {
+          gte: startOfDay(start),
+          lte: endOfDay(end)
+        }
+      },
+      select: {
+        id: true
+      }
+    })
+
+    const eventIds = events.map(e => e.id)
+
+    // Agrupar attendees por status
+    const statusGroups = await prisma.onboardingAttendee.groupBy({
+      by: ['status'],
+      where: {
+        eventId: {
+          in: eventIds
+        }
+      },
+      _count: {
+        _all: true
+      }
+    })
+
+    const statusLabels: Record<string, string> = {
+      'INVITED': 'Invitados',
+      'CONFIRMED': 'Confirmados',
+      'SCHEDULED': 'Agendados',
+      'ATTENDED': 'Asistieron',
+      'NO_SHOW': 'No Asistieron',
+      'CANCELLED': 'Cancelados',
+      'RESCHEDULED': 'Reagendados'
+    }
+
+    const statusColors: Record<string, string> = {
+      'INVITED': '#94a3b8',
+      'CONFIRMED': '#3b82f6',
+      'SCHEDULED': '#f59e0b',
+      'ATTENDED': '#10b981',
+      'NO_SHOW': '#ef4444',
+      'CANCELLED': '#6b7280',
+      'RESCHEDULED': '#8b5cf6'
+    }
+
+    const total = statusGroups.reduce((sum, item) => sum + item._count._all, 0)
+
+    return statusGroups.map(item => ({
+      status: item.status,
+      label: statusLabels[item.status] || item.status,
+      cantidad: item._count._all,
+      porcentaje: total > 0 ? Math.round((item._count._all / total) * 100) : 0,
+      fill: statusColors[item.status] || '#64748b'
+    }))
+  }
+
+  /**
+   * Obtiene métricas de asistencias programadas vs realizadas
+   */
+  async getAsistenciasProgramadasVsRealizadas(startDate?: Date, endDate?: Date) {
+    const end = endDate || new Date()
+    const start = startDate || subDays(end, 30)
+
+    const [
+      totalProgramadas,
+      asistieron,
+      noAsistieron,
+      canceladas,
+      pendientes
+    ] = await Promise.all([
+      // Total programadas (todos los attendees)
+      prisma.onboardingAttendee.count({
+        where: {
+          event: {
+            scheduledDate: {
+              gte: startOfDay(start),
+              lte: endOfDay(end)
+            }
+          }
+        }
+      }),
+
+      // Asistieron
+      prisma.onboardingAttendee.count({
+        where: {
+          status: 'ATTENDED',
+          event: {
+            scheduledDate: {
+              gte: startOfDay(start),
+              lte: endOfDay(end)
+            }
+          }
+        }
+      }),
+
+      // No asistieron
+      prisma.onboardingAttendee.count({
+        where: {
+          status: 'NO_SHOW',
+          event: {
+            scheduledDate: {
+              gte: startOfDay(start),
+              lte: endOfDay(end)
+            }
+          }
+        }
+      }),
+
+      // Canceladas
+      prisma.onboardingAttendee.count({
+        where: {
+          status: 'CANCELLED',
+          event: {
+            scheduledDate: {
+              gte: startOfDay(start),
+              lte: endOfDay(end)
+            }
+          }
+        }
+      }),
+
+      // Pendientes
+      prisma.onboardingAttendee.count({
+        where: {
+          status: {
+            in: ['INVITED', 'CONFIRMED', 'SCHEDULED']
+          },
+          event: {
+            scheduledDate: {
+              gte: startOfDay(start),
+              lte: endOfDay(end)
+            }
+          }
+        }
+      })
+    ])
+
+    const tasaPresentismo = (asistieron + noAsistieron) > 0
+      ? Math.round((asistieron / (asistieron + noAsistieron)) * 100)
+      : 0
+
+    return {
+      totalProgramadas,
+      asistieron,
+      noAsistieron,
+      canceladas,
+      pendientes,
+      tasaPresentismo,
+      resueltas: asistieron + noAsistieron,
+      porResolver: pendientes
+    }
+  }
   
+  /**
+   * Obtiene evolución diaria de postulaciones
+   */
+  async getEvolucionDiariaPostulaciones(startDate?: Date, endDate?: Date) {
+    const end = endDate || new Date()
+    const start = startDate || subDays(end, 30)
+
+    // Obtener todas las postulaciones en el rango
+    const postulaciones = await prisma.formDriver.findMany({
+      where: {
+        createdAt: {
+          gte: startOfDay(start),
+          lte: endOfDay(end)
+        }
+      },
+      select: {
+        createdAt: true,
+        completedAt: true,
+        status: true,
+      }
+    })
+
+    // Agrupar por día
+    const grouped = new Map<string, { iniciadas: number; completadas: number }>()
+
+    postulaciones.forEach(postulacion => {
+      const diaInicio = format(postulacion.createdAt, 'dd MMM', { locale: es })
+
+      if (!grouped.has(diaInicio)) {
+        grouped.set(diaInicio, { iniciadas: 0, completadas: 0 })
+      }
+
+      grouped.get(diaInicio)!.iniciadas++
+
+      if (postulacion.completedAt && postulacion.status === 'COMPLETED') {
+        const diaCompletado = format(postulacion.completedAt, 'dd MMM', { locale: es })
+        if (!grouped.has(diaCompletado)) {
+          grouped.set(diaCompletado, { iniciadas: 0, completadas: 0 })
+        }
+        grouped.get(diaCompletado)!.completadas++
+      }
+    })
+
+    // Generar todos los días en el rango (para tener continuidad)
+    const allDays: Array<{ dia: string; date: Date; iniciadas: number; completadas: number }> = []
+    const currentDate = new Date(start)
+
+    while (currentDate <= end) {
+      const diaLabel = format(currentDate, 'dd MMM', { locale: es })
+      const data = grouped.get(diaLabel) || { iniciadas: 0, completadas: 0 }
+
+      allDays.push({
+        dia: diaLabel,
+        date: new Date(currentDate),
+        iniciadas: data.iniciadas,
+        completadas: data.completadas,
+      })
+
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+
+    return allDays.map(({ dia, iniciadas, completadas }) => ({
+      dia,
+      iniciadas,
+      completadas,
+    }))
+  }
+
+  /**
+   * Obtiene evolución diaria de postulaciones por etapa
+   */
+  async getEvolucionPorEtapa(startDate?: Date, endDate?: Date) {
+    const end = endDate || new Date()
+    const start = startDate || subDays(end, 30)
+
+    // Obtener todas las postulaciones en el rango con sus steps completados
+    const postulaciones = await prisma.formDriver.findMany({
+      where: {
+        createdAt: {
+          gte: startOfDay(start),
+          lte: endOfDay(end)
+        }
+      },
+      select: {
+        createdAt: true,
+        completedSteps: true,
+        currentStep: true,
+        status: true,
+      }
+    })
+
+    // Agrupar por día y calcular cuántas están en cada etapa
+    const grouped = new Map<string, {
+      total: number
+      step1: number
+      step2: number
+      step3: number
+      step4: number
+      step5: number
+      step6: number
+      completadas: number
+    }>()
+
+    postulaciones.forEach(postulacion => {
+      const dia = format(postulacion.createdAt, 'dd MMM', { locale: es })
+
+      if (!grouped.has(dia)) {
+        grouped.set(dia, {
+          total: 0,
+          step1: 0,
+          step2: 0,
+          step3: 0,
+          step4: 0,
+          step5: 0,
+          step6: 0,
+          completadas: 0,
+        })
+      }
+
+      const data = grouped.get(dia)!
+      data.total++
+
+      // Contar TODAS las etapas que completó (no solo donde se quedó)
+      if (postulacion.completedSteps && postulacion.completedSteps.length > 0) {
+        postulacion.completedSteps.forEach(step => {
+          if (step === 1) data.step1++
+          else if (step === 2) data.step2++
+          else if (step === 3) data.step3++
+          else if (step === 4) data.step4++
+          else if (step === 5) data.step5++
+          else if (step === 6) data.step6++
+        })
+      }
+
+      if (postulacion.status === 'COMPLETED') {
+        data.completadas++
+      }
+    })
+
+    // Generar todos los días en el rango (para tener continuidad)
+    const allDays: Array<{
+      dia: string
+      date: Date
+      total: number
+      step1: number
+      step2: number
+      step3: number
+      step4: number
+      step5: number
+      step6: number
+      completadas: number
+    }> = []
+    const currentDate = new Date(start)
+
+    while (currentDate <= end) {
+      const diaLabel = format(currentDate, 'dd MMM', { locale: es })
+      const data = grouped.get(diaLabel) || {
+        total: 0,
+        step1: 0,
+        step2: 0,
+        step3: 0,
+        step4: 0,
+        step5: 0,
+        step6: 0,
+        completadas: 0,
+      }
+
+      allDays.push({
+        dia: diaLabel,
+        date: new Date(currentDate),
+        ...data,
+      })
+
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+
+    return allDays.map(({ dia, total, step1, step2, step3, step4, step5, step6, completadas }) => ({
+      dia,
+      total,
+      '1. Contacto Básico': step1,
+      '2. Datos Personales': step2,
+      '3. Trabajo y Vehículo': step3,
+      '4. Documentos': step4,
+      '5. Info Adicional': step5,
+      '6. Pago de Equipamiento': step6,
+      'Completadas': completadas,
+    }))
+  }
+
   /**
    * Obtiene todas las estadísticas del dashboard de una vez
    */
-  async getAllStats(options?: { startDate?: Date; endDate?: Date }) {
-    const { startDate, endDate } = options || {}
-    
+  async getAllStats(options?: { startDate?: Date; endDate?: Date; groupBy?: 'day' | 'week' | 'month' }) {
+    const { startDate, endDate, groupBy = 'week' } = options || {}
+
     const [
       mainStats,
       postulacionesStats,
@@ -545,6 +989,11 @@ export class DashboardService {
       abandonoPorStep,
       edadesPorRango,
       onboardingStats,
+      asistenciasPorPeriodo,
+      distribucionEstadosAsistencias,
+      asistenciasProgramadasVsRealizadas,
+      evolucionDiariaPostulaciones,
+      evolucionPorEtapa,
     ] = await Promise.all([
       this.getMainStats(),
       this.getPostulacionesStats(startDate, endDate),
@@ -554,8 +1003,13 @@ export class DashboardService {
       this.getAbandonoPorStep(),
       this.getEdadesPorRango(),
       this.getOnboardingStats(startDate, endDate),
+      this.getAsistenciasPorPeriodo(startDate, endDate, groupBy),
+      this.getDistribucionEstadosAsistencias(startDate, endDate),
+      this.getAsistenciasProgramadasVsRealizadas(startDate, endDate),
+      this.getEvolucionDiariaPostulaciones(startDate, endDate),
+      this.getEvolucionPorEtapa(startDate, endDate),
     ])
-    
+
     return {
       mainStats,
       postulacionesStats,
@@ -565,6 +1019,11 @@ export class DashboardService {
       abandonoPorStep,
       edadesPorRango,
       onboardingStats,
+      asistenciasPorPeriodo,
+      distribucionEstadosAsistencias,
+      asistenciasProgramadasVsRealizadas,
+      evolucionDiariaPostulaciones,
+      evolucionPorEtapa,
     }
   }
 }

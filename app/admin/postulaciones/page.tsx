@@ -127,6 +127,14 @@ const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
       contactedAt: 'desc'
     },
     take: 1
+  },
+  notes: {
+    select: {
+      id: true,
+    },
+    orderBy: {
+      createdAt: 'desc'
+    }
   }
 }
 

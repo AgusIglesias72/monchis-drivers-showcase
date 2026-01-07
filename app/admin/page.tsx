@@ -1,53 +1,46 @@
 // app/admin/page.tsx
 
 import { dashboardService } from "@/lib/services/dashboard.service"
-import { DashboardContent } from "@/components/admin/dashboard-content"
+import { DashboardContentV2 } from "@/components/admin/dashboard-content-v2"
 
 export const revalidate = 60 // Revalidar cada minuto
 
 interface PageProps {
   searchParams: Promise<{
-    dateRange?: string
     startDate?: string
     endDate?: string
+    filterType?: 'created' | 'completed' | 'event'
+    groupBy?: 'day' | 'week' | 'month'
   }>
 }
 
 export default async function AdminDashboard({ searchParams }: PageProps) {
   const params = await searchParams
-  
+
   // Determinar el rango de fechas
   let startDate: Date | undefined
   let endDate: Date | undefined
-  
+
   if (params.startDate && params.endDate) {
     // Filtro personalizado
     startDate = new Date(params.startDate)
     endDate = new Date(params.endDate)
     startDate.setHours(0, 0, 0, 0)
     endDate.setHours(23, 59, 59, 999)
-  } else if (params.dateRange) {
-    // Botón rápido
-    const today = new Date()
-    endDate = new Date(today)
-    endDate.setHours(23, 59, 59, 999)
-    
-    const days = parseInt(params.dateRange)
-    if (!isNaN(days)) {
-      startDate = new Date(today)
-      startDate.setDate(today.getDate() - days)
-      startDate.setHours(0, 0, 0, 0)
-    }
   }
-  
-  // Obtener todas las stats en paralelo con filtros de fecha
+
+  // Determinar el tipo de agrupación (día, semana, mes)
+  const groupBy = params.groupBy || 'week'
+
+  // Obtener todas las stats en paralelo con filtros de fecha y agrupación
   const allStats = await dashboardService.getAllStats({
     startDate,
     endDate,
+    groupBy,
   })
-  
+
   return (
-    <DashboardContent
+    <DashboardContentV2
       mainStats={allStats.mainStats}
       postulacionesStats={allStats.postulacionesStats}
       funnelData={allStats.funnelData}
@@ -56,9 +49,15 @@ export default async function AdminDashboard({ searchParams }: PageProps) {
       abandonoPorStep={allStats.abandonoPorStep}
       edadesPorRango={allStats.edadesPorRango}
       onboardingStats={allStats.onboardingStats}
-      currentDateRange={params.dateRange || '30'}
-      customStartDate={params.startDate}
-      customEndDate={params.endDate}
+      asistenciasPorPeriodo={allStats.asistenciasPorPeriodo}
+      distribucionEstadosAsistencias={allStats.distribucionEstadosAsistencias}
+      asistenciasProgramadasVsRealizadas={allStats.asistenciasProgramadasVsRealizadas}
+      evolucionDiariaPostulaciones={allStats.evolucionDiariaPostulaciones}
+      evolucionPorEtapa={allStats.evolucionPorEtapa}
+      currentStartDate={params.startDate}
+      currentEndDate={params.endDate}
+      currentFilterType={params.filterType}
+      currentGroupBy={groupBy}
     />
   )
 }
