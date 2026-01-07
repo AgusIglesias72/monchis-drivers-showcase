@@ -58,6 +58,8 @@ model AdminUser {
   equipmentPaymentsVerified       EquipmentPayment[]   @relation("PaymentVerifiedBy")
   driverContactsCreated           DriverContact[]      @relation("ContactCreatedBy")
   whatsappMessagesSent WhatsAppMessage[] @relation("WhatsAppMessagesSent")
+  whatsappTemplatesCreated WhatsAppTemplate[] @relation("TemplatesCreated")
+  whatsappTemplatesUpdated WhatsAppTemplate[] @relation("TemplatesUpdated")
   brazeTriggerCreated     BrazeTrigger[]     @relation("BrazeTriggerCreatedBy")
   brazeExecutionsExecuted BrazeExecution[]   @relation("BrazeExecutionExecutedBy")
 
@@ -489,6 +491,45 @@ model WhatsAppMessage {
   @@index([sentAt])
   @@index([botId])  // ✅ NUEVO índice
   @@map("whatsapp_messages")
+}
+
+model WhatsAppTemplate {
+  id String @id @default(cuid())
+
+  // Identificador único para referenciar en código
+  key String @unique // capacitaciones, seguimiento_documentos, etc.
+
+  // Información de la plantilla
+  name        String // "Info sobre Capacitaciones"
+  description String? @db.Text // Descripción de cuándo usar esta plantilla
+
+  // Contenido del mensaje (puede usar {name} como placeholder)
+  content String @db.Text
+
+  // Estado
+  isActive Boolean @default(true) @map("is_active")
+  order    Int     @default(0) // Para ordenar en el UI
+
+  // Categoría opcional
+  category String? // general, documentos, capacitacion, pago, etc
+
+  // Estadísticas de uso
+  usageCount Int @default(0) @map("usage_count")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  // Auditoría
+  createdBy     String?    @map("created_by")
+  createdByUser AdminUser? @relation("TemplatesCreated", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedBy     String?    @map("updated_by")
+  updatedByUser AdminUser? @relation("TemplatesUpdated", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@index([order])
+  @@index([category])
+  @@map("whatsapp_templates")
 }
 
 // ==================== ONBOARDING EVENTS ====================

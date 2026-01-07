@@ -4,17 +4,19 @@
 import { prisma } from "@/lib/prisma"
 import { sendMessage } from "@/lib/services/whatsapp-multi-bot.service"
 import { WhatsAppMessageType, WhatsAppMessageSource } from "@prisma/client"
+import { incrementTemplateUsage } from "@/lib/services/whatsapp-templates.service"
 
 interface SendQuickWhatsAppMessageParams {
   driverId: string
   driverName: string
   phoneNumber: string
   message: string
+  templateId?: string // ID de la plantilla usada (opcional)
 }
 
 export async function sendQuickWhatsAppMessage(params: SendQuickWhatsAppMessageParams) {
   try {
-    const { driverId, driverName, phoneNumber, message } = params
+    const { driverId, driverName, phoneNumber, message, templateId } = params
 
     // Validar que el conductor existe
     const driver = await prisma.formDriver.findUnique({
@@ -73,10 +75,16 @@ export async function sendQuickWhatsAppMessage(params: SendQuickWhatsAppMessageP
         metadata: {
           sentBy: 'admin',
           messageCategory: 'quick_reply',
+          templateId: templateId || null,
           sentAt: new Date().toISOString()
         }
       }
     })
+
+    // Incrementar contador de uso de la plantilla
+    if (templateId) {
+      await incrementTemplateUsage(templateId)
+    }
 
     return {
       success: true,
