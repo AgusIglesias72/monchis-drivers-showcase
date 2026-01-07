@@ -520,20 +520,15 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </div>
 
           <div className="flex flex-wrap justify-end items-center gap-2">
-            {/* Botón de WhatsApp - Siempre visible */}
+            {/* Botón de Contactar con mensajes rápidos */}
             {!isEditing && postulacion.phoneNumber && (
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  const cleanPhone = postulacion.phoneNumber.replace(/\D/g, '')
-                  window.open(`https://wa.me/595${cleanPhone}`, '_blank')
-                }}
-                variant="outline"
-                className="gap-2 cursor-pointer bg-green-50 text-green-700 hover:bg-green-100 border-green-200"
-              >
-                <MessageCircle className="h-4 w-4" />
-                WhatsApp
-              </Button>
+              <ContactButton
+                driverId={postulacion.id}
+                driverName={postulacion.fullName || 'Driver'}
+                phoneNumber={postulacion.phoneNumber}
+                contactStatus={contactStatus}
+                showLabel={true}
+              />
             )}
 
             {/* Botón principal: Onboarding */}
