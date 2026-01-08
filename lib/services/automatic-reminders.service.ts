@@ -4,12 +4,67 @@ import { prisma } from '@/lib/prisma'
 import { subDays } from 'date-fns'
 
 /**
+ * Calcula el color del estado de documentos (igual que en admin/postulaciones)
+ */
+function calculateDocumentColorStatus(documents: any[]): 'gray' | 'red' | 'yellow' | 'blue' | 'green' {
+  const cedulaDocs = documents.filter(doc =>
+    doc.documentType === 'CEDULA' ||
+    doc.documentType === 'CEDULA_FRONT' ||
+    doc.documentType === 'CEDULA_BACK'
+  )
+
+  const antecedentesDocs = documents.filter(doc =>
+    doc.documentType === 'CRIMINAL_RECORD' ||
+    doc.documentType === 'ANTECEDENTES'
+  )
+
+  const taxDoc = documents.find(doc => doc.documentType === 'TAX_COMPLIANCE')
+
+  const hasCedulaDocs = cedulaDocs.length > 0
+  const hasAntecedentesDocs = antecedentesDocs.length > 0
+
+  // ⚪ GRIS: Documentos faltantes
+  if (!hasCedulaDocs || !hasAntecedentesDocs) {
+    return 'gray'
+  }
+
+  // Verificar si hay AL MENOS UNO aprobado en cada categoría
+  const hasCedulaApproved = cedulaDocs.some(doc => doc.status === 'APPROVED')
+  const hasAntecedentesApproved = antecedentesDocs.some(doc => doc.status === 'APPROVED')
+
+  // Si no hay aprobados en alguna categoría
+  if (!hasCedulaApproved || !hasAntecedentesApproved) {
+    const hasRejectedCedula = cedulaDocs.some(doc => doc.status === 'REJECTED')
+    const hasRejectedAntecedentes = antecedentesDocs.some(doc => doc.status === 'REJECTED')
+
+    // 🔴 ROJO: Hay rechazados pero NO hay aprobados
+    if ((hasRejectedCedula && !hasCedulaApproved) || (hasRejectedAntecedentes && !hasAntecedentesApproved)) {
+      return 'red'
+    }
+
+    // 🟡 AMARILLO: En revisión
+    return 'yellow'
+  }
+
+  // En este punto: Cédula + Antecedentes tienen AL MENOS uno APROBADO
+
+  // 🟢 VERDE: Cert. Tributario también aprobado
+  if (taxDoc && taxDoc.status === 'APPROVED') {
+    return 'green'
+  }
+
+  // 🔵 AZUL: Cédula + Antecedentes aprobados (sin tributario o tributario no aprobado)
+  return 'blue'
+}
+
+/**
  * Obtiene conductores elegibles para recibir recordatorio automático de capacitación
  *
  * Criterios:
  * - Status: COMPLETED
  * - onboardingStatus: null, NOT_READY, o READY (Pendiente de Agendar)
  * - EXCLUYE: SCHEDULED, IN_PROGRESS, COMPLETED (ya tienen capacitación agendada o completada)
+ * - Documentos: Cédula + Antecedentes aprobados (color green o blue)
  * - No han recibido mensaje personalizado en los últimos 5 días
  * - Postulación completada hace más de 10 días
  * - Límite: configurable (por defecto 10 conductores por ejecución)
@@ -41,6 +96,14 @@ export async function getEligibleDriversForReminder(limit: number = 10) {
         fullName: true,
         phoneNumber: true,
         createdAt: true,
+        // Incluir documentos para validar color
+        documents: {
+          select: {
+            id: true,
+            documentType: true,
+            status: true,
+          },
+        },
         // Incluir mensajes de WhatsApp para filtrar
         whatsappMessagesSent: {
           where: {
@@ -65,9 +128,16 @@ export async function getEligibleDriversForReminder(limit: number = 10) {
       },
     })
 
-    // Filtrar conductores que NO han recibido mensajes personalizados en los últimos 5 días
+    // Filtrar conductores que cumplen todos los criterios
     const eligibleDrivers = drivers
-      .filter((driver) => driver.whatsappMessagesSent.length === 0)
+      .filter((driver) => {
+        // 1. No han recibido mensajes personalizados en los últimos 5 días
+        if (driver.whatsappMessagesSent.length > 0) return false
+
+        // 2. Tienen documentos aprobados (color green o blue)
+        const colorStatus = calculateDocumentColorStatus(driver.documents)
+        return colorStatus === 'green' || colorStatus === 'blue'
+      })
       .slice(0, limit) // Limitar a la cantidad especificada
       .map((driver) => ({
         id: driver.id,
