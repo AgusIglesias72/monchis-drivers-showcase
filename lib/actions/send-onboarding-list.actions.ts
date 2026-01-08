@@ -65,19 +65,11 @@ export async function sendOnboardingListMessage(params: SendOnboardingListParams
 }
 
 /**
- * Envía un mensaje de recordatorio con el listado de capacitaciones
- * Para conductores que ya fueron verificados pero no se agendaron
+ * Envía un mensaje de recordatorio con el listado de capacitaciones (versión interna sin auth)
+ * Usada por el cron job automático
  */
-export async function sendOnboardingReminderMessage(params: SendOnboardingListParams) {
+export async function sendOnboardingReminderMessageInternal(params: SendOnboardingListParams) {
   try {
-    const { userId } = await auth()
-    if (!userId) {
-      return {
-        success: false,
-        error: "No autorizado",
-      }
-    }
-
     // Obtener capacitaciones disponibles en los próximos 7 días
     const events = await getUpcomingOnboardingEvents(7)
 
@@ -104,6 +96,32 @@ export async function sendOnboardingReminderMessage(params: SendOnboardingListPa
       message: "Recordatorio con capacitaciones enviado correctamente",
       eventsCount: events.length,
     }
+  } catch (error) {
+    console.error("Error sending onboarding reminder message (internal):", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error desconocido",
+    }
+  }
+}
+
+/**
+ * Envía un mensaje de recordatorio con el listado de capacitaciones
+ * Para conductores que ya fueron verificados pero no se agendaron
+ * Requiere autenticación (uso manual desde UI)
+ */
+export async function sendOnboardingReminderMessage(params: SendOnboardingListParams) {
+  try {
+    const { userId } = await auth()
+    if (!userId) {
+      return {
+        success: false,
+        error: "No autorizado",
+      }
+    }
+
+    // Delegar a la versión interna
+    return await sendOnboardingReminderMessageInternal(params)
   } catch (error) {
     console.error("Error sending onboarding reminder message:", error)
     return {

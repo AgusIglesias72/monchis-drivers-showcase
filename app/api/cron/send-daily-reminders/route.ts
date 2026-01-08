@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getEligibleDriversForReminder, logReminderExecution } from '@/lib/services/automatic-reminders.service'
-import { sendOnboardingReminderMessage } from '@/lib/actions/send-onboarding-list.actions'
+import { sendOnboardingReminderMessageInternal } from '@/lib/actions/send-onboarding-list.actions'
 
 /**
  * Cron job endpoint para enviar recordatorios automáticos de capacitación
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
           `   → [${i + 1}/${drivers.length}] Sending reminder to ${driverName} (${driver.id})...`
         )
 
-        const result = await sendOnboardingReminderMessage({
+        const result = await sendOnboardingReminderMessageInternal({
           driverId: driver.id,
           driverName: driver.firstName || driverName,
           phoneNumber: driver.phoneNumber,
