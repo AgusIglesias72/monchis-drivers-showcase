@@ -86,13 +86,15 @@ export async function GET(request: NextRequest) {
       const driver = drivers[i]
 
       try {
+        const driverName = driver.fullName || driver.firstName || 'Conductor'
+
         console.log(
-          `   → [${i + 1}/${drivers.length}] Sending reminder to ${driver.fullName} (${driver.id})...`
+          `   → [${i + 1}/${drivers.length}] Sending reminder to ${driverName} (${driver.id})...`
         )
 
         const result = await sendOnboardingReminderMessage({
           driverId: driver.id,
-          driverName: driver.firstName || driver.fullName || 'Conductor',
+          driverName: driver.firstName || driverName,
           phoneNumber: driver.phoneNumber,
         })
 
@@ -101,18 +103,18 @@ export async function GET(request: NextRequest) {
           console.log(`   ✓ Message sent successfully`)
           details.push({
             driverId: driver.id,
-            name: driver.fullName,
+            name: driverName,
             phone: driver.phoneNumber,
             status: 'sent',
           })
         } else {
           failureCount++
-          const errorMsg = `Driver ${driver.id} (${driver.fullName}): ${result.error}`
+          const errorMsg = `Driver ${driver.id} (${driverName}): ${result.error}`
           errors.push(errorMsg)
           console.error(`   ✗ Failed to send:`, result.error)
           details.push({
             driverId: driver.id,
-            name: driver.fullName,
+            name: driverName,
             phone: driver.phoneNumber,
             status: 'failed',
             error: result.error,
@@ -124,13 +126,14 @@ export async function GET(request: NextRequest) {
           await new Promise((resolve) => setTimeout(resolve, 5000))
         }
       } catch (error) {
+        const driverName = driver.fullName || driver.firstName || 'Conductor'
         failureCount++
-        const errorMsg = `Driver ${driver.id} (${driver.fullName}): ${error instanceof Error ? error.message : 'Unknown error'}`
+        const errorMsg = `Driver ${driver.id} (${driverName}): ${error instanceof Error ? error.message : 'Unknown error'}`
         errors.push(errorMsg)
         console.error(`   ✗ Exception occurred:`, error)
         details.push({
           driverId: driver.id,
-          name: driver.fullName,
+          name: driverName,
           phone: driver.phoneNumber,
           status: 'failed',
           error: error instanceof Error ? error.message : 'Unknown error',

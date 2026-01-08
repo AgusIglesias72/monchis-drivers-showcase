@@ -42,13 +42,13 @@ export async function getEligibleDriversForReminder(limit: number = 10) {
         phoneNumber: true,
         createdAt: true,
         // Incluir mensajes de WhatsApp para filtrar
-        whatsappMessages: {
+        whatsappMessagesSent: {
           where: {
             createdAt: {
               gte: fiveDaysAgo,
             },
-            // Filtrar solo mensajes personalizados (sin templateId)
-            templateId: null,
+            // Filtrar solo mensajes personalizados (messageType: CUSTOM)
+            messageType: 'CUSTOM',
           },
           select: {
             id: true,
@@ -67,7 +67,7 @@ export async function getEligibleDriversForReminder(limit: number = 10) {
 
     // Filtrar conductores que NO han recibido mensajes personalizados en los últimos 5 días
     const eligibleDrivers = drivers
-      .filter((driver) => driver.whatsappMessages.length === 0)
+      .filter((driver) => driver.whatsappMessagesSent.length === 0)
       .slice(0, limit) // Limitar a la cantidad especificada
       .map((driver) => ({
         id: driver.id,
