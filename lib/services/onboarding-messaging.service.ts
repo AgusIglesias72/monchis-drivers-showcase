@@ -6,11 +6,14 @@ import { es } from 'date-fns/locale'
 
 /**
  * Obtiene las capacitaciones disponibles en los próximos N días
+ * IMPORTANTE: Solo muestra capacitaciones desde mañana en adelante (no incluye hoy)
  */
 export async function getUpcomingOnboardingEvents(daysAhead: number = 7) {
   const now = new Date()
-  const startDate = startOfDay(now)
-  const endDate = endOfDay(addDays(now, daysAhead))
+  // Comenzar desde mañana, no desde hoy
+  const tomorrow = addDays(now, 1)
+  const startDate = startOfDay(tomorrow)
+  const endDate = endOfDay(addDays(tomorrow, daysAhead - 1))
 
   const events = await prisma.onboardingEvent.findMany({
     where: {
