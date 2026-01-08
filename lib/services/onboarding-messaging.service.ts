@@ -84,10 +84,6 @@ ${eventsList}
 
 💳 *Costo:* Gs. 100.000 en concepto de entrega de equipos (solo POS o transferencia, no efectivo)
 
-*Descargar antes:*
-📲 Monchis Express: https://play.google.com/store/apps/details?id=com.hanoisa.drivers&hl=es_PY
-📲 Ueno Bank: https://play.google.com/store/apps/details?id=py.com.elcomercio.retailbanking&hl=es_PY
-
 ¿Alguna de estas fechas te viene bien? 😊`
 }
 
@@ -134,10 +130,6 @@ ${eventsList}
 ⏱ *Tolerancia máxima:* 10 minutos
 
 💳 *Costo:* Gs. 100.000 en concepto de entrega de equipos (solo POS o transferencia, no efectivo)
-
-*Descargar antes:*
-📲 Monchis Express: https://play.google.com/store/apps/details?id=com.hanoisa.drivers&hl=es_PY
-📲 Ueno Bank: https://play.google.com/store/apps/details?id=py.com.elcomercio.retailbanking&hl=es_PY
 
 ¿Alguna de estas fechas te viene bien? 😊`
 }
