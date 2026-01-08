@@ -119,9 +119,9 @@ export async function GET(request: NextRequest) {
           })
         }
 
-        // Pequeña pausa entre mensajes para evitar rate limiting
+        // Pausa de 5 segundos entre mensajes para evitar rate limiting
         if (i < drivers.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 1000))
+          await new Promise((resolve) => setTimeout(resolve, 5000))
         }
       } catch (error) {
         failureCount++

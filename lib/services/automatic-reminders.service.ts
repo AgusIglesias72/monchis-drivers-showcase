@@ -9,9 +9,10 @@ import { subDays } from 'date-fns'
  * Criterios:
  * - Status: COMPLETED
  * - onboardingStatus: null, NOT_READY, o READY (Pendiente de Agendar)
+ * - EXCLUYE: SCHEDULED, IN_PROGRESS, COMPLETED (ya tienen capacitación agendada o completada)
  * - No han recibido mensaje personalizado en los últimos 5 días
  * - Postulación completada hace más de 10 días
- * - Límite: 20 conductores por ejecución
+ * - Límite: configurable (por defecto 10 conductores por ejecución)
  */
 export async function getEligibleDriversForReminder(limit: number = 10) {
   const now = new Date()
@@ -23,9 +24,13 @@ export async function getEligibleDriversForReminder(limit: number = 10) {
     const drivers = await prisma.formDriver.findMany({
       where: {
         status: 'COMPLETED',
-        onboardingStatus: {
-          in: [null, 'NOT_READY', 'READY'], // Estados que corresponden a "Pendiente de Agendar"
-        },
+        // Pendiente de Agendar: solo NOT_READY, READY o null
+        // Explícitamente NO incluir SCHEDULED, IN_PROGRESS ni COMPLETED
+        OR: [
+          { onboardingStatus: 'NOT_READY' },
+          { onboardingStatus: 'READY' },
+          { onboardingStatus: null },
+        ],
         createdAt: {
           lte: tenDaysAgo, // Postulación completada hace más de 10 días
         },
