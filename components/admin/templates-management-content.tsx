@@ -40,17 +40,26 @@ export function TemplatesManagementContent({ initialTemplates }: TemplatesManage
     <div className="flex flex-col min-h-screen">
       {/* Header */}
       <AdminHeader
-        title="Plantillas de WhatsApp"
-        description="Gestiona los mensajes rápidos para el equipo de ejecución"
-        action={
+        breadcrumbs={[
+          { label: "Comunicaciones", href: "/admin/comunicaciones" },
+          { label: "Plantillas WhatsApp" },
+        ]}
+      />
+
+      <div className="flex-1 space-y-6 p-6">
+        {/* Page Title */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Plantillas de WhatsApp</h1>
+            <p className="text-muted-foreground mt-1">
+              Gestiona los mensajes rápidos para el equipo de ejecución
+            </p>
+          </div>
           <Button onClick={() => setShowCreateDialog(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Nueva Plantilla
           </Button>
-        }
-      />
-
-      <div className="flex-1 space-y-6 p-6">
+        </div>
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3">
