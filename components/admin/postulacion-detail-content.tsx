@@ -57,6 +57,8 @@ import {
 } from "@/components/admin/postulacion-helpers"
 import { ContactButton } from "@/components/admin/postulaciones/contact-button"
 import { RejectButton } from "@/components/admin/postulaciones/reject-button"
+import { SendOnboardingListButton } from "@/components/admin/send-onboarding-list-button"
+import { SendOnboardingReminderButton } from "@/components/admin/send-onboarding-reminder-button"
 import { getContactStatus } from "@/lib/utils/contact-status.utils"
 import { toast } from "sonner"
 import {
@@ -520,6 +522,26 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </div>
 
           <div className="flex flex-wrap justify-end items-center gap-2">
+            {/* Botón para enviar listado de capacitaciones (verificación completada) */}
+            {!isEditing && postulacion.phoneNumber && (
+              <SendOnboardingListButton
+                driverId={postulacion.id}
+                driverName={postulacion.fullName || 'Driver'}
+                phoneNumber={postulacion.phoneNumber}
+                variant="outline"
+              />
+            )}
+
+            {/* Botón para recordatorio de capacitaciones (ya verificados) */}
+            {!isEditing && postulacion.phoneNumber && (
+              <SendOnboardingReminderButton
+                driverId={postulacion.id}
+                driverName={postulacion.fullName || 'Driver'}
+                phoneNumber={postulacion.phoneNumber}
+                variant="outline"
+              />
+            )}
+
             {/* Botón de Contactar con mensajes rápidos */}
             {!isEditing && postulacion.phoneNumber && (
               <ContactButton

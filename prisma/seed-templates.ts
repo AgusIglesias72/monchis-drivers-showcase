@@ -1,9 +1,7 @@
 // prisma/seed-templates.ts
 // Script para inicializar las plantillas de WhatsApp
 
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '../lib/prisma'
 
 const INITIAL_TEMPLATES = [
   {

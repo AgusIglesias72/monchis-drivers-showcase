@@ -98,6 +98,11 @@ const menuItems = [
         icon: MessageSquare,
       },
       {
+        title: "Plantillas WhatsApp",
+        url: "/admin/plantillas-whatsapp",
+        icon: MessageSquare,
+      },
+      {
         title: "Braze",
         url: "/admin/comunicaciones/braze",
         icon: Mail,
