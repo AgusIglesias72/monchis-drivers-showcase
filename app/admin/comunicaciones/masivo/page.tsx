@@ -192,7 +192,7 @@ export default function EnvioMasivoPage() {
   const [message, setMessage] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [botId, setBotId] = useState<string>('auto');
+  const [botId, setBotId] = useState<string>('bot-reactivacion-prod');
   const [imageMode, setImageMode] = useState<'url' | 'upload'>('url');
 
   const [isValidating, setIsValidating] = useState(false);
@@ -331,14 +331,15 @@ export default function EnvioMasivoPage() {
     setValidationResult(null);
 
     try {
-      const response = await fetch('/api/whatsapp/send-bulk', {
+      const response = await fetch('/api/whatsapp/send-sequential', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           recipients: recipients.trim(),
           message: message,
           imageUrl: imageUrl || undefined,
-          botId: botId === 'auto' ? null : botId,
+          botId: botId,
+          delaySeconds: 5,
           testMode: true,
         }),
       });
@@ -371,14 +372,15 @@ export default function EnvioMasivoPage() {
     setSendResult(null);
 
     try {
-      const response = await fetch('/api/whatsapp/send-bulk', {
+      const response = await fetch('/api/whatsapp/send-sequential', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           recipients: recipients.trim(),
           message: message,
           imageUrl: imageUrl || undefined,
-          botId: botId === 'auto' ? null : botId,
+          botId: botId,
+          delaySeconds: 5,
           testMode: false,
         }),
       });
@@ -470,7 +472,7 @@ export default function EnvioMasivoPage() {
       <AdminHeader
         breadcrumbs={[
           { label: 'Comunicaciones', href: '/admin/comunicaciones' },
-          { label: 'Envío Masivo' },
+          { label: 'Envío Personalizado' },
         ]}
       />
 
@@ -479,9 +481,9 @@ export default function EnvioMasivoPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Envío Masivo de Mensajes</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Envío de Mensajes Personalizados</h1>
               <p className="text-muted-foreground mt-1">
-                Envía mensajes personalizados con variables dinámicas y soporte de imágenes
+                Envía mensajes personalizados con delay de 5s entre cada mensaje para evitar bloqueos
               </p>
             </div>
           </div>
@@ -859,7 +861,7 @@ Ejemplo: Hola {nombre}, tu código es {codigo}."
                     <div>
                       <CardTitle className="text-lg">Configuración</CardTitle>
                       <CardDescription>
-                        Distribución automática entre bots disponibles
+                        Envío secuencial con delay para evitar bloqueos
                       </CardDescription>
                     </div>
                   </div>
@@ -872,13 +874,12 @@ Ejemplo: Hola {nombre}, tu código es {codigo}."
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="auto" className="cursor-pointer">🔄 Distribuir automáticamente</SelectItem>
-                        <SelectItem value="bot-adquisicion-prod" className="cursor-pointer">📥 Bot Adquisición</SelectItem>
                         <SelectItem value="bot-reactivacion-prod" className="cursor-pointer">🔁 Bot Reactivación</SelectItem>
+                        <SelectItem value="bot-adquisicion-prod" className="cursor-pointer">📥 Bot Adquisición</SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground pt-1">
-                      Delay automático de 2 segundos entre mensajes
+                      Delay de 5 segundos entre mensajes para evitar bloqueos
                     </p>
                   </div>
                 </CardContent>
@@ -1111,7 +1112,8 @@ Ejemplo: Hola {nombre}, tu código es {codigo}."
 
                         <ul className="text-xs text-muted-foreground space-y-1.5 mt-4 pt-4 border-t">
                           <li>• Máximo 100 destinatarios</li>
-                          <li>• Delay de 2s entre mensajes</li>
+                          <li>• Delay de 5s entre mensajes</li>
+                          <li>• Envío secuencial personalizado</li>
                           <li>• {'{nombre}'} siempre disponible</li>
                         </ul>
                       </div>
