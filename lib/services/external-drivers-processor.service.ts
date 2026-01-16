@@ -78,8 +78,10 @@ class PDFDownloadAutomation {
   }
 
   async initialize(): Promise<void> {
+    const isProduction = process.env.NODE_ENV === 'production';
+
     this.browser = await chromium.launch({
-      headless: false,
+      headless: isProduction, // true en producción, false en desarrollo
       slowMo: 50,
     });
 

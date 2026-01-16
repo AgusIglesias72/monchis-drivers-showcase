@@ -69,6 +69,9 @@ export async function POST(request: NextRequest) {
         // Extraer googleUsername del oktaEmail si se provee
         const googleUsername = body.oktaEmail ? body.oktaEmail.split('@')[0] : undefined;
 
+        // Headless: true en producción, false en desarrollo
+        const isProduction = process.env.NODE_ENV === 'production';
+
         reportsResult = await reportsProcessorService.processAndUpload({
           loginUrl: process.env.APP_LOGIN_URL || 'https://pr-721.durgl9xxo9p82.amplifyapp.com/login',
           reportsUrl: process.env.APP_DRIVERS_URL || 'https://pr-721.durgl9xxo9p82.amplifyapp.com/reports/driverpayment',
@@ -79,7 +82,7 @@ export async function POST(request: NextRequest) {
           startDate: body.startDate,
           endDate: body.endDate,
           daysPerRange: 1,
-          headless: false,
+          headless: isProduction, // true en producción, false en desarrollo
           keepBrowserOpen: body.processExternalDrivers, // Mantener abierto si hay PASO 2
           // Credenciales opcionales (fallback a .env si no se proveen)
           googleUsername, // Extraído del oktaEmail

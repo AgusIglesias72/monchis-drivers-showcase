@@ -120,7 +120,7 @@ class ReportDownloader {
     await this.page.fill('#basic_password', CONFIG.password);
     
     await Promise.all([
-      this.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }),
+      this.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 60000 }),
       this.page.click('button[type="submit"]')
     ]);
     

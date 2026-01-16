@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
           startDate: body.startDate,
           endDate: body.endDate,
           daysPerRange: 1,
-          headless: true,
+          headless: false,
 
         });
 

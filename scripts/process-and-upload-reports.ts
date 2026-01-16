@@ -21,7 +21,7 @@ const CONFIG = {
   sheetName: 'Reporte Pagos',
   
   // Configuración de descarga
-  headless: true,
+  headless: false,
   downloadTimeout: 300000, // 5 minutos
   
   // Configuración de fechas
@@ -76,7 +76,10 @@ function generateDateRanges(startDate: string, endDate: string, daysPerRange: nu
  */
 function filterInvalidRows(data: any[][]): any[][] {
   return data.filter((row, index) => {
-    // Verificar si la fila está vacía
+    // Nunca filtrar el header (primera fila)
+    if (index === 0) return true;
+    
+    // 1. FILTRAR FILAS COMPLETAMENTE VACÍAS
     const isEmpty = row.every(cell => 
       cell === null || 
       cell === undefined || 
@@ -86,15 +89,29 @@ function filterInvalidRows(data: any[][]): any[][] {
     
     if (isEmpty) return false;
     
-    // Verificar si contiene "Total"
-    const hasTotal = row.some(cell => 
-      typeof cell === 'string' && 
-      cell.toLowerCase().includes('total')
+    // 2. FILTRAR FILAS DE TOTAL (LÓGICA ROBUSTA)
+    // Verificar si las primeras 4 columnas (A, B, C, D = índices 0, 1, 2, 3) están TODAS vacías
+    const firstFourColumns = row.slice(0, 4);
+    const allFirstFourEmpty = firstFourColumns.every(cell => 
+      cell === null || 
+      cell === undefined || 
+      cell === '' || 
+      (typeof cell === 'string' && cell.trim() === '')
     );
     
-    if (hasTotal) return false;
+    // Si las primeras 4 columnas están vacías, verificar si hay "Total" en la fila
+    if (allFirstFourEmpty) {
+      const hasTotal = row.some(cell => 
+        typeof cell === 'string' && 
+        cell.toLowerCase().includes('total')
+      );
+      
+      if (hasTotal) {
+        return false; // Filtrar esta fila de resumen
+      }
+    }
     
-    // Verificar si la mayoría de las celdas están vacías
+    // 3. FILTRAR FILAS MAYORMENTE VACÍAS
     const nonEmptyCells = row.filter(cell => 
       cell !== null && 
       cell !== undefined && 
@@ -110,6 +127,9 @@ function filterInvalidRows(data: any[][]): any[][] {
     return true;
   });
 }
+
+
+
 
 /**
  * Lee un buffer de Excel y devuelve los datos como matriz
@@ -163,7 +183,7 @@ class ReportProcessorAndUploader {
     await this.page.fill('#basic_password', CONFIG.password);
     
     await Promise.all([
-      this.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }),
+      this.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 60000 }),
       this.page.click('button[type="submit"]')
     ]);
     
