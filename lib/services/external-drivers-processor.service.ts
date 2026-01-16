@@ -10,6 +10,8 @@ import {
   uploadBufferToDrive,
   generateWeekFolderName,
 } from './google-sheets-drive.service';
+import { performGoogleOktaLogin } from '../utils/google-okta-login';
+import { BrowserSession } from './reports-processor.service';
 
 const DELAY_BETWEEN_DOWNLOADS = 3000;
 
@@ -77,47 +79,73 @@ class PDFDownloadAutomation {
 
   async initialize(): Promise<void> {
     this.browser = await chromium.launch({
-      headless: true,
+      headless: false,
       slowMo: 50,
     });
-  
+
     this.context = await this.browser.newContext({
       acceptDownloads: true,
       viewport: { width: 1920, height: 1080 },
     });
-  
+
     this.page = await this.context.newPage();
-    this.page.setDefaultTimeout(30000);
+    this.page.setDefaultTimeout(60000);
+  }
+
+  async initializeWithSession(session: BrowserSession): Promise<void> {
+    console.log(`🔄 [Worker ${this.workerId}] Clonando sesión del navegador principal...`);
+
+    // Usar el mismo browser pero crear un nuevo contexto con las cookies
+    this.browser = session.browser;
+
+    this.context = await this.browser.newContext({
+      acceptDownloads: true,
+      viewport: { width: 1920, height: 1080 },
+    });
+
+    // Agregar cookies al nuevo contexto
+    await this.context.addCookies(session.cookies);
+    console.log(`   ✓ ${session.cookies.length} cookies clonadas`);
+
+    this.page = await this.context.newPage();
+    this.page.setDefaultTimeout(60000);
+
+    // Restaurar localStorage y sessionStorage
+    await this.page.evaluate(
+      ({ localStorage, sessionStorage }) => {
+        // Restaurar localStorage
+        for (const [key, value] of Object.entries(localStorage)) {
+          window.localStorage.setItem(key, value);
+        }
+        // Restaurar sessionStorage
+        for (const [key, value] of Object.entries(sessionStorage)) {
+          window.sessionStorage.setItem(key, value);
+        }
+      },
+      { localStorage: session.localStorage, sessionStorage: session.sessionStorage }
+    );
+
+    console.log(`✅ [Worker ${this.workerId}] Sesión clonada exitosamente`);
   }
 
   async login(email: string, password: string, loginUrl: string, driversPageUrl: string): Promise<void> {
     if (!this.page) throw new Error('Página no inicializada');
-    
-    console.log(`🔐 [Worker ${this.workerId}] Iniciando sesión...`);
-    
-    await this.page.goto(loginUrl, { waitUntil: 'networkidle' });
-    
-    await this.page.fill('#basic_email', email);
-    await this.page.fill('#basic_password', password);
-    
-    await Promise.all([
-      this.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }),
-      this.page.click('button[type="submit"]')
-    ]);
-    
-    await sleep(2000);
-    
-    await this.page.goto(driversPageUrl, { 
-      waitUntil: 'networkidle',
-      timeout: 30000 
+
+    console.log(`🔐 [Worker ${this.workerId}] Iniciando sesión con Google Workspace + Okta...`);
+
+    await performGoogleOktaLogin({
+      page: this.page,
+      loginUrl,
+      targetUrl: driversPageUrl,
+      workerId: this.workerId,
     });
-    
+
     try {
       await this.page.waitForSelector('input[placeholder="Fecha desde"]', { timeout: 10000 });
     } catch (error) {
       console.log(`⚠️  [Worker ${this.workerId}] No se detectó el campo de fecha, pero continuando...`);
     }
-    
+
     console.log(`✅ [Worker ${this.workerId}] Sesión iniciada`);
   }
 
@@ -404,8 +432,12 @@ class PDFDownloadAutomation {
 // ============================================================================
 
 export const externalDriversProcessor = {
-  async processJob(jobId: string): Promise<void> {
+  async processJob(jobId: string, sharedSession?: BrowserSession): Promise<void> {
     console.log(`🚀🚀🚀 [PROCESSOR] Iniciando processJob para ${jobId} 🚀🚀🚀`);
+
+    if (sharedSession) {
+      console.log(`🔄 [PROCESSOR] Sesión compartida detectada - se clonará para los workers`);
+    }
     
     try {
       console.log(`[${jobId}] Obteniendo job de la base de datos...`);
@@ -486,37 +518,67 @@ export const externalDriversProcessor = {
       await backgroundJobsService.addLog(jobId, `✅ Carpeta M&G: ${weekName}`);
       await backgroundJobsService.addLog(jobId, '');
 
-      console.log(`[${jobId}] Iniciando ${metadata.concurrency} workers con Playwright...`);
+      // Determinar número de workers según si hay sesión compartida
+      const numWorkers = sharedSession ? 1 : metadata.concurrency;
+
+      console.log(`[${jobId}] Iniciando ${numWorkers} worker(s) con Playwright...`);
       await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
-      await backgroundJobsService.addLog(jobId, `🤖 INICIANDO ${metadata.concurrency} WORKERS`);
-      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
-      
-      const workers: PDFDownloadAutomation[] = [];
-      for (let i = 0; i < metadata.concurrency; i++) {
-        console.log(`[${jobId}] Inicializando worker ${i + 1}...`);
-        const worker = new PDFDownloadAutomation(i + 1);
-        await worker.initialize();
-        console.log(`[${jobId}] Worker ${i + 1} inicializado, haciendo login...`);
-        await worker.login(metadata.email, metadata.password, metadata.loginUrl, metadata.driversPageUrl);
-        workers.push(worker);
-        await backgroundJobsService.addLog(jobId, `✅ Worker ${i + 1} listo`);
-        console.log(`✅ [${jobId}] Worker ${i + 1} listo`);
+
+      if (sharedSession) {
+        await backgroundJobsService.addLog(jobId, `🤖 USANDO 1 WORKER (sesión compartida)`);
+        await backgroundJobsService.addLog(jobId, '🔄 Sin login adicional - reutilizando sesión del paso anterior');
+      } else {
+        await backgroundJobsService.addLog(jobId, `🤖 INICIANDO ${metadata.concurrency} WORKERS`);
       }
-      
+
+      await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
+
+      const workers: PDFDownloadAutomation[] = [];
+
+      if (sharedSession) {
+        // Usar un solo worker con la sesión compartida (sin login)
+        console.log(`[${jobId}] Reutilizando navegador del paso anterior...`);
+        const worker = new PDFDownloadAutomation(1);
+
+        // Simplemente asignar la página existente
+        worker['browser'] = sharedSession.browser;
+        worker['context'] = sharedSession.context;
+        worker['page'] = sharedSession.page;
+
+        workers.push(worker);
+        await backgroundJobsService.addLog(jobId, `✅ Worker reutilizando sesión existente`);
+        console.log(`✅ [${jobId}] Worker listo con sesión compartida`);
+
+      } else {
+        // Flujo normal con múltiples workers y login
+        for (let i = 0; i < metadata.concurrency; i++) {
+          console.log(`[${jobId}] Inicializando worker ${i + 1}...`);
+          const worker = new PDFDownloadAutomation(i + 1);
+
+          await worker.initialize();
+          console.log(`[${jobId}] Worker ${i + 1} inicializado, haciendo login...`);
+          await worker.login(metadata.email, metadata.password, metadata.loginUrl, metadata.driversPageUrl);
+          await backgroundJobsService.addLog(jobId, `✅ Worker ${i + 1} listo`);
+
+          workers.push(worker);
+          console.log(`✅ [${jobId}] Worker ${i + 1} listo`);
+        }
+      }
+
       await backgroundJobsService.addLog(jobId, '');
       await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
       await backgroundJobsService.addLog(jobId, '🚀 PROCESANDO CONDUCTORES');
       await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
       await backgroundJobsService.addLog(jobId, '');
 
-      console.log(`[${jobId}] Dividiendo conductores entre ${metadata.concurrency} workers...`);
-      const workerQueues: ReportDriver[][] = Array.from({ length: metadata.concurrency }, () => []);
-      
+      console.log(`[${jobId}] Dividiendo conductores entre ${numWorkers} worker(s)...`);
+      const workerQueues: ReportDriver[][] = Array.from({ length: numWorkers }, () => []);
+
       for (let i = 0; i < driversToProcess.length; i++) {
-        workerQueues[i % metadata.concurrency].push(driversToProcess[i]);
+        workerQueues[i % numWorkers].push(driversToProcess[i]);
       }
-      
-      console.log(`[${jobId}] Distribución de conductores:`, 
+
+      console.log(`[${jobId}] Distribución de conductores:`,
         workerQueues.map((q, i) => `Worker ${i + 1}: ${q.length}`).join(', ')
       );
 
@@ -680,8 +742,15 @@ export const externalDriversProcessor = {
       await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
       await backgroundJobsService.addLog(jobId, '🏁 FINALIZANDO PROCESO');
       await backgroundJobsService.addLog(jobId, '═══════════════════════════════════════');
-      await Promise.all(workers.map(w => w.close()));
-      console.log(`✅ [${jobId}] Navegadores cerrados`);
+
+      // Solo cerrar navegadores si NO es sesión compartida
+      if (!sharedSession) {
+        await Promise.all(workers.map(w => w.close()));
+        console.log(`✅ [${jobId}] Navegadores cerrados`);
+      } else {
+        console.log(`🔄 [${jobId}] Navegador compartido - no se cierra aquí`);
+        await backgroundJobsService.addLog(jobId, '🔄 Sesión compartida preservada');
+      }
 
       const finalResult = {
         successful: results.successful,

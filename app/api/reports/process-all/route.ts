@@ -16,6 +16,10 @@ interface ProcessAllRequest {
     concurrency?: number;
     maxDrivers?: number | null;
     notificationEmails?: string[];
+    // Credencial opcional: email de ITTI para Okta (ej: "agustin.iglesias@itti.digital")
+    // De este email se extrae: googleUsername (antes del @) y oktaEmail (completo)
+    // appEmail y appPassword se mantienen del .env
+    oktaEmail?: string;
   }
 
 export async function POST(request: NextRequest) {
@@ -54,15 +58,18 @@ export async function POST(request: NextRequest) {
 
     // Iniciar proceso en background
     (async () => {
-      let reportsStats = null;
+      let reportsResult = null;
       let driversJobId = null;
       let driversStats = null;
 
       try {
         // 1. PROCESAR Y SUBIR REPORTES
         console.log('📊 PASO 1: Procesando reportes...');
-        
-        reportsStats = await reportsProcessorService.processAndUpload({
+
+        // Extraer googleUsername del oktaEmail si se provee
+        const googleUsername = body.oktaEmail ? body.oktaEmail.split('@')[0] : undefined;
+
+        reportsResult = await reportsProcessorService.processAndUpload({
           loginUrl: process.env.APP_LOGIN_URL || 'https://pr-721.durgl9xxo9p82.amplifyapp.com/login',
           reportsUrl: process.env.APP_DRIVERS_URL || 'https://pr-721.durgl9xxo9p82.amplifyapp.com/reports/driverpayment',
           email: process.env.APP_EMAIL!,
@@ -72,18 +79,26 @@ export async function POST(request: NextRequest) {
           startDate: body.startDate,
           endDate: body.endDate,
           daysPerRange: 1,
-          headless: true,
-            
+          headless: false,
+          keepBrowserOpen: body.processExternalDrivers, // Mantener abierto si hay PASO 2
+          // Credenciales opcionales (fallback a .env si no se proveen)
+          googleUsername, // Extraído del oktaEmail
+          oktaEmail: body.oktaEmail, // Email completo
+          // appEmail y appPassword siempre del .env
         });
 
         console.log('✅ Reportes procesados y subidos exitosamente');
-        console.log(`   Total filas: ${reportsStats.totalRows}`);
-        console.log(`   Filas de datos: ${reportsStats.dataRows}`);
+        console.log(`   Total filas: ${reportsResult.stats.totalRows}`);
+        console.log(`   Filas de datos: ${reportsResult.stats.dataRows}`);
+
+        if (reportsResult.session) {
+          console.log('🔄 Sesión del navegador preservada para external drivers');
+        }
 
         // 2. PROCESAR EXTERNAL DRIVERS (si está habilitado)
         if (body.processExternalDrivers) {
           console.log('\n🚗 PASO 2: Procesando conductores externos...');
-          
+
           const job = await backgroundJobsService.create({
             type: 'DRIVER_PROCESSING',
             userId: '1',
@@ -106,14 +121,20 @@ export async function POST(request: NextRequest) {
           driversJobId = job.id;
           console.log(`✅ Job de drivers creado: ${driversJobId}`);
 
-          // Procesar y esperar
-          await externalDriversProcessor.processJob(driversJobId);
-          
+          // Procesar con sesión compartida si existe
+          await externalDriversProcessor.processJob(driversJobId, reportsResult.session);
+
           // Obtener resultados
           const jobResult = await backgroundJobsService.getById(driversJobId);
           if (jobResult?.result) {
             driversStats = jobResult.result as any;
             console.log('✅ Conductores externos procesados exitosamente');
+          }
+
+          // Cerrar el navegador compartido después de procesar
+          if (reportsResult.session?.browser) {
+            console.log('🔒 Cerrando navegador compartido...');
+            await reportsResult.session.browser.close();
           }
         }
 
@@ -123,9 +144,9 @@ export async function POST(request: NextRequest) {
             startDate: body.startDate,
             endDate: body.endDate,
           reportsStats: {
-            totalRows: reportsStats.totalRows,
-            dataRows: reportsStats.dataRows,
-            processedRanges: reportsStats.processedRanges,
+            totalRows: reportsResult.stats.totalRows,
+            dataRows: reportsResult.stats.dataRows,
+            processedRanges: reportsResult.stats.processedRanges,
           },
           driversStats: driversStats ? {
             successful: driversStats.successful,

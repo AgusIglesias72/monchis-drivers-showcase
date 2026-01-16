@@ -3,6 +3,7 @@ import 'dotenv/config';
 import { chromium, Browser, Page, BrowserContext, Download } from 'playwright';
 import * as XLSX from 'xlsx';
 import { writeToSheet, clearSheet } from '@/scripts/utils/sheet-connection';
+import { performGoogleOktaLogin } from '../utils/google-okta-login';
 
 export interface ReportsConfig {
   loginUrl: string;
@@ -15,6 +16,11 @@ export interface ReportsConfig {
   endDate: string;
   daysPerRange: number;
   headless: boolean;
+  keepBrowserOpen?: boolean; // Nueva opción para mantener el navegador abierto
+  // Credenciales opcionales para Okta (si no se proveen, usa .env)
+  googleUsername?: string; // Se extrae del oktaEmail (parte antes del @)
+  oktaEmail?: string; // Email completo de ITTI (ej: "agustin.iglesias@itti.digital")
+  // appEmail y appPassword SIEMPRE vienen del .env
 }
 
 interface DateRange {
@@ -27,6 +33,15 @@ interface ProcessStats {
   dataRows: number;
   processedRanges: number;
   filteredRows: number;
+}
+
+export interface BrowserSession {
+  browser: Browser;
+  context: BrowserContext;
+  page: Page;
+  cookies: any[];
+  localStorage: Record<string, string>;
+  sessionStorage: Record<string, string>;
 }
 
 // ============================================================================
@@ -194,33 +209,36 @@ class ReportProcessorAndUploader {
 
   async login(): Promise<void> {
     if (!this.page) throw new Error('Página no inicializada');
-    
-    this.log('🔐 Iniciando sesión...');
-    
-    await this.page.goto(this.config.loginUrl, { waitUntil: 'networkidle' });
-    
-    await this.page.fill('#basic_email', this.config.email);
-    await this.page.fill('#basic_password', this.config.password);
-    
-    await Promise.all([
-      this.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }),
-      this.page.click('button[type="submit"]')
-    ]);
-    
-    await sleep(2000);
-    
+
+    this.log('🔐 Iniciando sesión con Google Workspace + Okta...');
+
+    await performGoogleOktaLogin({
+      page: this.page,
+      loginUrl: this.config.loginUrl,
+      targetUrl: this.config.reportsUrl,
+      googleUsername: this.config.googleUsername,
+      oktaEmail: this.config.oktaEmail,
+      // appEmail y appPassword se usan del .env por defecto en performGoogleOktaLogin
+    });
+
     this.log('✅ Sesión iniciada');
   }
 
   async navigateToReports(): Promise<void> {
     if (!this.page) throw new Error('Página no inicializada');
-    
-    this.log('📊 Navegando a reportes...');
-    await this.page.goto(this.config.reportsUrl, { 
-      waitUntil: 'networkidle',
-      timeout: 30000 
-    });
-    
+
+    this.log('📊 Verificando página de reportes...');
+
+    // Verificar si ya estamos en la página de reportes (el login ya nos llevó allí)
+    const currentUrl = this.page.url();
+    if (!currentUrl.includes('reports')) {
+      this.log('   Navegando a reportes...');
+      await this.page.goto(this.config.reportsUrl, {
+        waitUntil: 'networkidle',
+        timeout: 30000
+      });
+    }
+
     await this.page.waitForSelector('input[placeholder="Fecha desde"]', { timeout: 10000 });
     this.log('✅ Página de reportes cargada');
   }
@@ -288,22 +306,69 @@ class ReportProcessorAndUploader {
     }
     
     this.log('⏳ Descargando Excel en memoria (timeout: 10 min)...');
-    
-    const downloadPromise = this.page.waitForEvent('download', { 
-      timeout: CONFIG.downloadTimeout // 10 minutos
-    });
-    
-    await downloadButton.click();
-    
+
     let download: Download;
-    try {
-      download = await downloadPromise;
-      this.log('✅ Descarga iniciada');
-    } catch (error: any) {
-      if (error.message.includes('Timeout')) {
-        throw new Error('TIMEOUT'); // Error específico para retry
+    let downloadAttempt = 0;
+    const maxDownloadAttempts = 3;
+
+    while (downloadAttempt < maxDownloadAttempts) {
+      try {
+        downloadAttempt++;
+
+        if (downloadAttempt > 1) {
+          this.log(`   🔄 Intento ${downloadAttempt}/${maxDownloadAttempts} de descarga...`);
+        }
+
+        const downloadPromise = this.page.waitForEvent('download', {
+          timeout: CONFIG.downloadTimeout // 10 minutos
+        });
+
+        await downloadButton.click();
+
+        download = await downloadPromise;
+        this.log('✅ Descarga iniciada');
+        break; // Éxito, salir del loop
+
+      } catch (error: any) {
+        const isNetworkError = error.message && (
+          error.message.includes('ERR_NETWORK_CHANGED') ||
+          error.message.includes('net::') ||
+          error.message.includes('Network')
+        );
+
+        const isTimeout = error.message && error.message.includes('Timeout');
+
+        if ((isNetworkError || isTimeout) && downloadAttempt < maxDownloadAttempts) {
+          this.log(`   ⚠️  Error de ${isNetworkError ? 'red' : 'timeout'} detectado, recargando página...`);
+
+          // Recargar la página como fallback
+          await this.page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+          await sleep(2000);
+
+          // Re-buscar el botón de descarga después del reload
+          const reloadedDownloadButton = await this.page.waitForSelector(
+            'span:has-text("Descargar de todos los drivers")',
+            { timeout: 10000 }
+          );
+
+          if (!reloadedDownloadButton) {
+            throw new Error('No se encontró el botón de descarga después de recargar');
+          }
+
+          // Continuar con el siguiente intento
+          continue;
+        }
+
+        // Si no es un error recuperable o ya agotamos los intentos
+        if (isTimeout) {
+          throw new Error('TIMEOUT'); // Error específico para retry
+        }
+        throw error;
       }
-      throw error;
+    }
+
+    if (!download!) {
+      throw new Error('No se pudo completar la descarga después de ' + maxDownloadAttempts + ' intentos');
     }
     
     this.log('📖 Leyendo Excel en memoria...');
@@ -477,6 +542,55 @@ class ReportProcessorAndUploader {
     };
   }
 
+  async extractSession(): Promise<BrowserSession> {
+    if (!this.browser || !this.context || !this.page) {
+      throw new Error('No hay navegador activo para extraer sesión');
+    }
+
+    this.log('📦 Extrayendo sesión del navegador...');
+
+    // Extraer cookies
+    const cookies = await this.context.cookies();
+
+    // Extraer localStorage
+    const localStorage = await this.page.evaluate(() => {
+      const data: Record<string, string> = {};
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (key) {
+          data[key] = window.localStorage.getItem(key) || '';
+        }
+      }
+      return data;
+    });
+
+    // Extraer sessionStorage
+    const sessionStorage = await this.page.evaluate(() => {
+      const data: Record<string, string> = {};
+      for (let i = 0; i < window.sessionStorage.length; i++) {
+        const key = window.sessionStorage.key(i);
+        if (key) {
+          data[key] = window.sessionStorage.getItem(key) || '';
+        }
+      }
+      return data;
+    });
+
+    this.log('✅ Sesión extraída exitosamente');
+    this.log(`   Cookies: ${cookies.length}`);
+    this.log(`   localStorage keys: ${Object.keys(localStorage).length}`);
+    this.log(`   sessionStorage keys: ${Object.keys(sessionStorage).length}`);
+
+    return {
+      browser: this.browser,
+      context: this.context,
+      page: this.page,
+      cookies,
+      localStorage,
+      sessionStorage,
+    };
+  }
+
   getData(): any[][] {
     return this.allData;
   }
@@ -490,12 +604,12 @@ export const reportsProcessorService = {
   async processAndUpload(
     config: ReportsConfig,
     logCallback?: (message: string) => void
-  ): Promise<ProcessStats> {
+  ): Promise<{ stats: ProcessStats; session?: BrowserSession }> {
     const processor = new ReportProcessorAndUploader(config, logCallback);
-    
+
     try {
       const dateRanges = generateDateRanges(config.startDate, config.endDate, config.daysPerRange);
-      
+
       if (logCallback) {
         logCallback(`📋 Se procesarán ${dateRanges.length} rangos de fechas\n`);
       }
@@ -509,9 +623,9 @@ export const reportsProcessorService = {
         if (logCallback) {
           logCallback(`[${i + 1}/${dateRanges.length}]`);
         }
-        
+
         await processor.processDateRange(range.start, range.end);
-        
+
         if (i < dateRanges.length - 1) {
           await sleep(5000);
         }
@@ -519,10 +633,21 @@ export const reportsProcessorService = {
 
       await processor.uploadToSheets();
 
-      return processor.getStats();
-      
+      const stats = processor.getStats();
+
+      // Si keepBrowserOpen es true, extraer y devolver la sesión
+      if (config.keepBrowserOpen) {
+        const session = await processor.extractSession();
+        return { stats, session };
+      }
+
+      return { stats };
+
     } finally {
-      await processor.close();
+      // Solo cerrar si keepBrowserOpen es false
+      if (!config.keepBrowserOpen) {
+        await processor.close();
+      }
     }
   },
 };
