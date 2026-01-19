@@ -95,15 +95,25 @@ interface DriverDataForValidation {
 export class AIDocumentValidator {
   private anthropic: Anthropic;
   private drive: any;
+  private initialized = false;
   private readonly MAX_BASE64_SIZE = 5 * 1024 * 1024; // 5 MB para imágenes
   private readonly MAX_PDF_SIZE = 32 * 1024 * 1024; // 32 MB para PDFs
   private readonly TARGET_SIZE = 3.5 * 1024 * 1024; // Target 3.5 MB
-  
+
   constructor() {
+    // No inicializar en el constructor para evitar errores en build time
+  }
+
+  /**
+   * Lazy initialization para evitar errores en build time
+   */
+  private ensureInitialized() {
+    if (this.initialized) return;
+
     this.anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY!,
     });
-    
+
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -111,8 +121,9 @@ export class AIDocumentValidator {
       },
       scopes: ['https://www.googleapis.com/auth/drive.readonly'],
     });
-    
+
     this.drive = google.drive({ version: 'v3', auth });
+    this.initialized = true;
   }
   
   /**
@@ -389,6 +400,7 @@ export class AIDocumentValidator {
     expectedType: DocumentType,
     driverData?: DriverDataForValidation
   ): Promise<DocumentAnalysis> {
+    this.ensureInitialized();
     try {
       console.log(`🤖 Iniciando validación con IA para documento ${documentId}`);
       console.log(`   Tipo esperado: ${expectedType}`);
@@ -608,6 +620,7 @@ export class AIDocumentValidator {
     needsReview: number;
     details: any[];
   }> {
+    this.ensureInitialized();
     const results = {
       processed: 0,
       approved: 0,
@@ -747,6 +760,7 @@ export class AIDocumentValidator {
    * Procesa documentos en batch (para cron jobs)
    */
   async processPendingDocumentsBatch(limit: number = 10): Promise<any> {
+    this.ensureInitialized();
     try {
       const drivers = await prisma.formDriver.findMany({
         where: {
