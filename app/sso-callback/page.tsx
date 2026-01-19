@@ -2,11 +2,13 @@
 'use client'
 
 import { Suspense } from 'react'
+import { ClerkPageWrapper } from '@/components/ClerkPageWrapper'
 import SSOCallbackContent from './SSOCallbackContent'
 
 export default function SSOCallbackPage() {
   return (
-    <Suspense
+    <ClerkPageWrapper>
+      <Suspense
       fallback={
         <div
           className="min-h-screen flex items-center justify-center"
@@ -21,5 +23,6 @@ export default function SSOCallbackPage() {
     >
       <SSOCallbackContent />
     </Suspense>
+    </ClerkPageWrapper>
   )
 }

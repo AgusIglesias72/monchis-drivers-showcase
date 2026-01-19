@@ -2,11 +2,13 @@
 'use client'
 
 import { Suspense } from 'react'
+import { ClerkPageWrapper } from '@/components/ClerkPageWrapper'
 import ResetPasswordContent from './ResetPasswordContent'
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense
+    <ClerkPageWrapper>
+      <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-white to-pink-50">
           <div className="text-center">
@@ -18,5 +20,6 @@ export default function ResetPasswordPage() {
     >
       <ResetPasswordContent />
     </Suspense>
+    </ClerkPageWrapper>
   )
 }

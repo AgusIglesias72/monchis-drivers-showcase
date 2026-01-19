@@ -2,11 +2,13 @@
 'use client'
 
 import { Suspense } from 'react'
+import { ClerkPageWrapper } from '@/components/ClerkPageWrapper'
 import SignUpContent from './SignUpContent'
 
 export default function SignUpPage() {
   return (
-    <Suspense
+    <ClerkPageWrapper>
+      <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-white to-pink-50">
           <div className="text-center">
@@ -18,5 +20,6 @@ export default function SignUpPage() {
     >
       <SignUpContent />
     </Suspense>
+    </ClerkPageWrapper>
   )
 }
