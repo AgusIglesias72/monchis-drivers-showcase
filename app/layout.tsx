@@ -14,6 +14,9 @@ const montserrat = Montserrat({
   display: 'swap',
 });
 
+// Force dynamic rendering to prevent Clerk initialization during build
+export const dynamic = 'force-dynamic'
+
 export const metadata = {
   metadataBase: new URL('https://monchis-drivers.vercel.app'),
   title: {
