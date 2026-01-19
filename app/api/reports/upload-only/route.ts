@@ -55,9 +55,9 @@ export async function POST(request: NextRequest) {
           startDate: body.startDate,
           endDate: body.endDate,
           reportsStats: {
-            totalRows: stats.totalRows,
-            dataRows: stats.dataRows,
-            processedRanges: stats.processedRanges,
+            totalRows: stats.stats.totalRows,
+            dataRows: stats.stats.dataRows,
+            processedRanges: stats.stats.processedRanges,
           },
           spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${process.env.GOOGLE_SHEETS_ID}`,
           notificationEmails: body.notificationEmails || [],
