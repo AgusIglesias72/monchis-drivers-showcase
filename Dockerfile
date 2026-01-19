@@ -48,8 +48,12 @@ RUN npx playwright install chromium --with-deps
 # Copiar el resto del código
 COPY . .
 
+# ARG para recibir la variable durante el build
+ARG NEXT_PUBLIC_DISABLE_CLERK=true
+
 # Build de Next.js (requiere devDependencies como Tailwind)
-RUN npm run build
+# La variable ARG estará disponible durante el build
+RUN NEXT_PUBLIC_DISABLE_CLERK=${NEXT_PUBLIC_DISABLE_CLERK} npm run build
 
 # Limpiar devDependencies después del build para reducir tamaño
 RUN npm prune --production
@@ -57,9 +61,10 @@ RUN npm prune --production
 # Exponer puerto (Railway lo asigna dinámicamente, pero por defecto usamos 3000)
 EXPOSE 3000
 
-# Variables de entorno para Playwright
+# Variables de entorno para Playwright y Clerk
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV NODE_ENV=production
+ENV NEXT_PUBLIC_DISABLE_CLERK=true
 
 # Comando para iniciar la aplicación
 CMD ["npm", "start"]

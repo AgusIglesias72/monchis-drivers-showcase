@@ -15,11 +15,7 @@ Esta aplicación está configurada para funcionar en dos ambientes:
 
 ## Variables de Entorno para Railway
 
-Agregar esta variable en Railway para deshabilitar Clerk:
-
-```bash
-NEXT_PUBLIC_DISABLE_CLERK=true
-```
+**IMPORTANTE**: El Dockerfile ya incluye `NEXT_PUBLIC_DISABLE_CLERK=true` por defecto, por lo que **NO necesitas agregarla manualmente en Railway**.
 
 ### Variables requeridas para Railway:
 
@@ -49,10 +45,9 @@ GOOGLE_OAUTH_CLIENT_SECRET=your_client_secret
 
 # Antropic (para validación de documentos)
 ANTHROPIC_API_KEY=your_anthropic_key
-
-# Deshabilitar Clerk (IMPORTANTE)
-NEXT_PUBLIC_DISABLE_CLERK=true
 ```
+
+**Nota**: `NEXT_PUBLIC_DISABLE_CLERK=true` ya está configurado en el Dockerfile, no necesitas agregarlo.
 
 ## Endpoints disponibles en Railway
 
@@ -65,7 +60,7 @@ Una vez desplegado, estos endpoints estarán disponibles sin autenticación:
 
 ## Cómo funciona
 
-La variable `NEXT_PUBLIC_DISABLE_CLERK=true` hace que:
+El Dockerfile configura `NEXT_PUBLIC_DISABLE_CLERK=true` tanto durante el build como en runtime. Esto hace que:
 
 1. `ClerkProviderWrapper` no inicialice ClerkProvider
 2. Las páginas de autenticación (`/sign-in`, `/sign-up`, etc.) muestren un mensaje informativo
