@@ -80,10 +80,23 @@ class PDFDownloadAutomation {
   async initialize(): Promise<void> {
     const isProduction = process.env.NODE_ENV === 'production';
 
-    this.browser = await chromium.launch({
+    // Configuración para Docker/Railway
+    const launchOptions: any = {
       headless: isProduction, // true en producción, false en desarrollo
       slowMo: 50,
-    });
+    };
+
+    // En producción (Docker), agregar args necesarios
+    if (isProduction) {
+      launchOptions.args = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+      ];
+    }
+
+    this.browser = await chromium.launch(launchOptions);
 
     this.context = await this.browser.newContext({
       acceptDownloads: true,

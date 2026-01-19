@@ -191,10 +191,24 @@ class ReportProcessorAndUploader {
 
   async initialize(): Promise<void> {
     this.log('🚀 Iniciando navegador...');
-    this.browser = await chromium.launch({
+
+    // Configuración para Docker/Railway
+    const launchOptions: any = {
       headless: this.config.headless,
       slowMo: 50,
-    });
+    };
+
+    // En producción (Docker), agregar args necesarios
+    if (process.env.NODE_ENV === 'production') {
+      launchOptions.args = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+      ];
+    }
+
+    this.browser = await chromium.launch(launchOptions);
 
     this.context = await this.browser.newContext({
       acceptDownloads: true,
@@ -203,7 +217,7 @@ class ReportProcessorAndUploader {
 
     this.page = await this.context.newPage();
     this.page.setDefaultTimeout(60000);
-    
+
     this.log('✅ Navegador inicializado');
   }
 
