@@ -42,9 +42,6 @@ COPY package*.json ./
 # Instalar TODAS las dependencias (incluyendo devDependencies para el build)
 RUN npm ci
 
-# Instalar Chromium de Playwright con todas las dependencias
-RUN npx playwright install chromium --with-deps
-
 # Copiar el resto del código
 COPY . .
 
@@ -58,11 +55,14 @@ RUN NEXT_PUBLIC_DISABLE_CLERK=${NEXT_PUBLIC_DISABLE_CLERK} npm run build
 # Limpiar devDependencies después del build para reducir tamaño
 RUN npm prune --production
 
+# Reinstalar solo Playwright después del prune (necesario en runtime)
+RUN npm install playwright@1.49.1 && npx playwright install chromium --with-deps
+
 # Exponer puerto (Railway lo asigna dinámicamente, pero por defecto usamos 3000)
 EXPOSE 3000
 
 # Variables de entorno para Playwright y Clerk
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# No configurar PLAYWRIGHT_BROWSERS_PATH para usar la ruta por defecto
 ENV NODE_ENV=production
 ENV NEXT_PUBLIC_DISABLE_CLERK=true
 
