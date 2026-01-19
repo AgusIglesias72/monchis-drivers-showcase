@@ -1,24 +1,37 @@
 // lib/services/google-sheets.ts
 import { google } from 'googleapis';
 
-const { GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY } = process.env;
+let auth: any;
+let googleSheets: any;
+let initialized = false;
 
-if (!GOOGLE_SERVICE_ACCOUNT_EMAIL || !GOOGLE_PRIVATE_KEY) {
-  throw new Error('Missing Google Sheets credentials in environment variables');
+/**
+ * Lazy initialization para evitar errores en build time
+ */
+function ensureInitialized() {
+  if (initialized) return;
+
+  const { GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY } = process.env;
+
+  if (!GOOGLE_SERVICE_ACCOUNT_EMAIL || !GOOGLE_PRIVATE_KEY) {
+    throw new Error('Missing Google Sheets credentials in environment variables');
+  }
+
+  auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    },
+    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  });
+
+  googleSheets = google.sheets({
+    version: 'v4',
+    auth,
+  });
+
+  initialized = true;
 }
-
-const auth = new google.auth.GoogleAuth({
-  credentials: {
-    client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    private_key: GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-  },
-  scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-});
-
-const googleSheets = google.sheets({
-  version: 'v4',
-  auth,
-});
 
 /**
  * Obtiene filas de una hoja de Google Sheets
@@ -27,6 +40,7 @@ const googleSheets = google.sheets({
  * @returns {Promise<Object>} - Respuesta de la API con los datos
  */
 export const getRows = async (table_name: string, spreadsheet_id: string) => {
+  ensureInitialized();
   try {
     const response = await googleSheets.spreadsheets.values.get({
       auth,
@@ -48,6 +62,7 @@ export const getRows = async (table_name: string, spreadsheet_id: string) => {
  * @returns {Promise<any[][]>} - Array de arrays con los datos
  */
 export const getRowsInRange = async (spreadsheet_id: string, range: string): Promise<any[][]> => {
+  ensureInitialized();
   try {
     const response = await googleSheets.spreadsheets.values.get({
       auth,
@@ -85,9 +100,10 @@ export interface DriverRow {
  * @returns {Promise<DriverRow[]>} - Array de datos de drivers
  */
 export const getDriversData = async (
-  spreadsheet_id: string, 
+  spreadsheet_id: string,
   sheet_name: string = 'Drivers'
 ): Promise<DriverRow[]> => {
+  ensureInitialized();
   try {
     console.info(`Obteniendo datos de drivers de Google Sheets: ${sheet_name}`);
     
