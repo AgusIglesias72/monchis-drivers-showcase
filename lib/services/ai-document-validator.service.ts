@@ -93,8 +93,8 @@ interface DriverDataForValidation {
 }
 
 export class AIDocumentValidator {
-  private anthropic: Anthropic;
-  private drive: any;
+  private anthropic!: Anthropic;
+  private drive!: any;
   private initialized = false;
   private readonly MAX_BASE64_SIZE = 5 * 1024 * 1024; // 5 MB para imágenes
   private readonly MAX_PDF_SIZE = 32 * 1024 * 1024; // 32 MB para PDFs
