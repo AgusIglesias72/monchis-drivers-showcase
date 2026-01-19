@@ -3,28 +3,41 @@
 import 'dotenv/config';
 import { google } from 'googleapis';
 
-const { GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY } = process.env;
+let sheetsAuth: any;
+let googleSheets: any;
+let initialized = false;
 
-if (!GOOGLE_SERVICE_ACCOUNT_EMAIL || !GOOGLE_PRIVATE_KEY) {
-  throw new Error('Missing Google Sheets credentials in environment variables');
+/**
+ * Lazy initialization para evitar errores en build time
+ */
+function ensureInitialized() {
+  if (initialized) return;
+
+  const { GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY } = process.env;
+
+  if (!GOOGLE_SERVICE_ACCOUNT_EMAIL || !GOOGLE_PRIVATE_KEY) {
+    throw new Error('Missing Google Sheets credentials in environment variables');
+  }
+
+  sheetsAuth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    },
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+
+  googleSheets = google.sheets({
+    version: 'v4',
+    auth: sheetsAuth,
+  });
+
+  initialized = true;
 }
 
 // ============================================================================
 // GOOGLE SHEETS
 // ============================================================================
-
-const sheetsAuth = new google.auth.GoogleAuth({
-  credentials: {
-    client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    private_key: GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-  },
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
-
-const googleSheets = google.sheets({
-  version: 'v4',
-  auth: sheetsAuth,
-});
 
 /**
  * Interface para datos de conductores externos
@@ -44,6 +57,7 @@ export async function getExternalDrivers(
   spreadsheetId: string,
   sheetName: string = 'Drivers Externos'
 ): Promise<ExternalDriver[]> {
+  ensureInitialized();
   try {
     console.log(`📊 Obteniendo conductores externos de "${sheetName}"...`);
     
@@ -395,6 +409,7 @@ export async function writeToSheet(
   values: any[][],
   startCell: string = 'A1'
 ): Promise<void> {
+  ensureInitialized();
   try {
     console.log(`📝 Escribiendo ${values.length} filas en "${sheetName}"...`);
     
@@ -426,6 +441,7 @@ export async function clearSheet(
   sheetName: string,
   keepHeaders: boolean = true
 ): Promise<void> {
+  ensureInitialized();
   try {
     console.log(`🧹 Limpiando hoja "${sheetName}"...`);
     
@@ -455,6 +471,7 @@ export async function appendToSheet(
   sheetName: string,
   values: any[][]
 ): Promise<void> {
+  ensureInitialized();
   try {
     console.log(`➕ Agregando ${values.length} filas a "${sheetName}"...`);
     
