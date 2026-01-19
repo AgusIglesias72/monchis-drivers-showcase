@@ -88,14 +88,19 @@ class PDFDownloadAutomation {
 
     // En producción (Docker), agregar args necesarios
     if (isProduction) {
+      console.log(`🐳 [Worker ${this.workerId}] Detectado entorno de producción - usando args de Docker`);
       launchOptions.args = [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-blink-features=AutomationControlled',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
       ];
     }
 
+    console.log(`📦 [Worker ${this.workerId}] Lanzando Chromium con headless=${launchOptions.headless}`);
     this.browser = await chromium.launch(launchOptions);
 
     this.context = await this.browser.newContext({
@@ -105,6 +110,7 @@ class PDFDownloadAutomation {
 
     this.page = await this.context.newPage();
     this.page.setDefaultTimeout(60000);
+    console.log(`✅ [Worker ${this.workerId}] Navegador inicializado`);
   }
 
   async initializeWithSession(session: BrowserSession): Promise<void> {

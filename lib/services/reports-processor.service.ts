@@ -200,14 +200,19 @@ class ReportProcessorAndUploader {
 
     // En producción (Docker), agregar args necesarios
     if (process.env.NODE_ENV === 'production') {
+      this.log('🐳 Detectado entorno de producción - usando args de Docker');
       launchOptions.args = [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-blink-features=AutomationControlled',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
       ];
     }
 
+    this.log(`📦 Lanzando Chromium con headless=${launchOptions.headless}`);
     this.browser = await chromium.launch(launchOptions);
 
     this.context = await this.browser.newContext({
