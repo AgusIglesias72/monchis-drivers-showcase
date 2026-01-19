@@ -4,9 +4,8 @@ import { Toaster } from 'sonner';
 import { GoogleAnalytics } from '@next/third-parties/google'
 import { GoogleTagManager } from '@/components/GoogleTagManager'
 import ClarityScript from "@/components/ClarityScript"
-import { ClerkProvider } from '@clerk/nextjs'
 import './globals.css';
-import { esES } from '@clerk/localizations'
+import { ClerkProviderWrapper } from '@/components/ClerkProviderWrapper'
 
 const montserrat = Montserrat({
   subsets: ['latin'],
@@ -87,7 +86,7 @@ export default function RootLayout({
   const gtmId: string = process.env.NEXT_PUBLIC_GTM_ID || '';
   
   return (
-    <ClerkProvider localization={esES}>
+    <ClerkProviderWrapper>
       <html lang="es">
         <head>
           {/* Google Tag Manager debe ir en el <head> */}
@@ -116,6 +115,6 @@ export default function RootLayout({
           {gaId && <GoogleAnalytics gaId={gaId} />}
         </body>
       </html>
-    </ClerkProvider>
+    </ClerkProviderWrapper>
   );
 }
