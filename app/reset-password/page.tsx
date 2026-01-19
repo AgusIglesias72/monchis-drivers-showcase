@@ -1,6 +1,8 @@
 // app/reset-password/page.tsx
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useSignIn } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import { useState, FormEvent } from 'react'
