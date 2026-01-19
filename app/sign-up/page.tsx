@@ -1,6 +1,8 @@
 // app/sign-up/page.tsx
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useSignUp } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import { useState, FormEvent } from 'react'

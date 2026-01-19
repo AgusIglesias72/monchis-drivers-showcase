@@ -1,6 +1,8 @@
 // app/sso-callback/page.tsx
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useEffect } from 'react'
 import { useClerk } from '@clerk/nextjs'
 import Image from 'next/image'
