@@ -77,8 +77,8 @@ export async function getExternalDrivers(
     // Saltar la primera fila (headers) y procesar el resto
     const drivers: ExternalDriver[] = rows
       .slice(1)
-      .filter((row) => row[0] && row[1]) // Filtrar filas vacías
-      .map((row) => ({
+      .filter((row: any) => row[0] && row[1]) // Filtrar filas vacías
+      .map((row: any) => ({
         nombre: String(row[0]).trim(),
         driver_id: String(row[1]).trim(),
       }));
