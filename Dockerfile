@@ -39,8 +39,8 @@ WORKDIR /app
 # Copiar archivos de dependencias
 COPY package*.json ./
 
-# Instalar dependencias de Node.js
-RUN npm ci --omit=dev
+# Instalar TODAS las dependencias (incluyendo devDependencies para el build)
+RUN npm ci
 
 # Instalar Chromium de Playwright con todas las dependencias
 RUN npx playwright install chromium --with-deps
@@ -48,8 +48,11 @@ RUN npx playwright install chromium --with-deps
 # Copiar el resto del código
 COPY . .
 
-# Build de Next.js
+# Build de Next.js (requiere devDependencies como Tailwind)
 RUN npm run build
+
+# Limpiar devDependencies después del build para reducir tamaño
+RUN npm prune --production
 
 # Exponer puerto (Railway lo asigna dinámicamente, pero por defecto usamos 3000)
 EXPOSE 3000
