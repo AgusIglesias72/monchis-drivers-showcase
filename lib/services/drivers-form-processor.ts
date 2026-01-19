@@ -127,14 +127,24 @@ export interface ProcessedFormData {
 export class DriverFormProcessor {
   private auth: any;
   private sheets: any;
-  
+  private initialized: boolean = false;
+
   constructor() {
+    // No inicializar en el constructor para evitar errores en build time
+  }
+
+  /**
+   * Inicializa la conexión con Google Sheets (lazy initialization)
+   */
+  private ensureInitialized() {
+    if (this.initialized) return;
+
     const { GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY } = process.env;
-    
+
     if (!GOOGLE_SERVICE_ACCOUNT_EMAIL || !GOOGLE_PRIVATE_KEY) {
       throw new Error('Missing Google Sheets credentials');
     }
-    
+
     this.auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -142,8 +152,9 @@ export class DriverFormProcessor {
       },
       scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
     });
-    
+
     this.sheets = google.sheets({ version: 'v4', auth: this.auth });
+    this.initialized = true;
   }
   
   /**
@@ -392,6 +403,7 @@ export class DriverFormProcessor {
     sheetName: string = 'Respuestas de formulario 1',
     limit: number = 10
   ): Promise<{ rawRows: any[][], headers: string[] }> {
+    this.ensureInitialized();
     try {
       const headers = await this.getHeaders(spreadsheetId, sheetName);
       
@@ -429,6 +441,7 @@ export class DriverFormProcessor {
     sheetName: string = 'Respuestas de formulario 1',
     limit: number = 10
   ): Promise<ProcessedFormData[]> {
+    this.ensureInitialized();
     try {
       console.log(`📊 Obteniendo últimas ${limit} respuestas del formulario...`);
       
@@ -671,6 +684,7 @@ export class DriverFormProcessor {
     errors: number;
     results: Array<{ cedula: string; status: 'success' | 'error'; message?: string }>
   }> {
+    this.ensureInitialized();
     // Obtener headers primero
     const headers = await this.getHeaders(spreadsheetId, sheetName);
     
