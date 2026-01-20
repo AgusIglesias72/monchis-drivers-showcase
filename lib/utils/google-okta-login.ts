@@ -77,7 +77,8 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
     await googleEmailInput.fill(googleUsername);
     await sleep(500);
 
-    const nextButton = await page.$('button:has-text("Siguiente")');
+    // Soportar ambos idiomas: español e inglés
+    const nextButton = await page.$('button:has-text("Siguiente")') || await page.$('button:has-text("Next")');
     if (nextButton) {
       await nextButton.click();
       console.log(`✅ ${logPrefix} Email de Google ingresado`);
@@ -95,7 +96,8 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
     await googlePasswordInput.fill(googlePassword);
     await sleep(500);
 
-    const nextButton = await page.$('button:has-text("Siguiente")');
+    // Soportar ambos idiomas: español e inglés
+    const nextButton = await page.$('button:has-text("Siguiente")') || await page.$('button:has-text("Next")');
     if (nextButton) {
       await nextButton.click();
       console.log(`✅ ${logPrefix} Password de Google ingresado`);
@@ -228,15 +230,21 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
 
   await sleep(1000);
 
-  // Click en "Siguiente"
-  console.log(`🔘 ${logPrefix} Buscando botón "Siguiente"...`);
+  // Click en "Siguiente" / "Next"
+  console.log(`🔘 ${logPrefix} Buscando botón "Siguiente" / "Next"...`);
 
   const oktaNextSelectors = [
+    // Español
     'input[type="submit"][value="Siguiente"]',
-    'button[type="submit"]',
-    'input.button-primary[type="submit"]',
     'button:has-text("Siguiente")',
     'input[value="Siguiente"]',
+    // Inglés
+    'input[type="submit"][value="Next"]',
+    'button:has-text("Next")',
+    'input[value="Next"]',
+    // Genérico (cualquier botón submit visible)
+    'button[type="submit"]',
+    'input.button-primary[type="submit"]',
   ];
 
   let nextButtonClicked = false;
@@ -244,10 +252,12 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
     const button = await page.$(selector);
     if (button) {
       const isVisible = await button.isVisible();
-      console.log(`   ✓ Botón encontrado con: ${selector}, visible: ${isVisible}`);
+      const text = await button.textContent().catch(() => '');
+      const value = await button.getAttribute('value').catch(() => '');
+      console.log(`   ✓ Botón encontrado con: ${selector}, visible: ${isVisible}, text: "${text}", value: "${value}"`);
       if (isVisible) {
         await button.click();
-        console.log(`✅ ${logPrefix} Click en "Siguiente" realizado`);
+        console.log(`✅ ${logPrefix} Click en botón "Next/Siguiente" realizado`);
         await page.waitForLoadState('networkidle');
         await sleep(1000);
         nextButtonClicked = true;
@@ -258,7 +268,7 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
 
   if (!nextButtonClicked) {
     // Debug: listar todos los botones
-    console.log(`   ⚠️  No se encontró botón "Siguiente"`);
+    console.log(`   ⚠️  No se encontró botón "Siguiente" o "Next"`);
     const allButtons = await page.$$('button, input[type="submit"]');
     console.log(`   Total de botones: ${allButtons.length}`);
     for (let i = 0; i < Math.min(allButtons.length, 5); i++) {
@@ -269,7 +279,7 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
       console.log(`   Botón ${i + 1}: text="${text}", value="${value}", type="${type}"`);
     }
 
-    throw new Error('No se encontró el botón "Siguiente" en Okta');
+    throw new Error('No se encontró el botón "Siguiente" o "Next" en Okta');
   }
 
   // PASO 5: Seleccionar opción de Contraseña en MFA
@@ -394,11 +404,13 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
       await emailInput.fill(oktaEmail);
       await sleep(500);
 
-      // Click en "Siguiente" de nuevo
-      const nextButton = await page.$('input[type="submit"][value="Siguiente"]');
+      // Click en "Siguiente" / "Next" de nuevo
+      const nextButton = await page.$('input[type="submit"][value="Siguiente"]')
+        || await page.$('input[type="submit"][value="Next"]')
+        || await page.$('button[type="submit"]');
       if (nextButton) {
         await nextButton.click();
-        console.log(`   ✅ Click en "Siguiente" realizado (segundo intento)`);
+        console.log(`   ✅ Click en "Next/Siguiente" realizado (segundo intento)`);
         await page.waitForLoadState('networkidle');
         await sleep(2000);
       }
