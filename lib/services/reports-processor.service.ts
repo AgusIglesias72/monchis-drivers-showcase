@@ -192,38 +192,49 @@ class ReportProcessorAndUploader {
   async initialize(): Promise<void> {
     this.log('🚀 Iniciando navegador...');
 
-    // Configuración para Docker/Railway
-    const launchOptions: any = {
-      headless: this.config.headless,
-      slowMo: 50,
-    };
+    try {
+      // Configuración para Docker/Railway
+      const isProduction = process.env.NODE_ENV === 'production';
 
-    // En producción (Docker), agregar args necesarios
-    if (process.env.NODE_ENV === 'production') {
-      this.log('🐳 Detectado entorno de producción - usando args de Docker');
-      launchOptions.args = [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-extensions',
-      ];
+      const launchOptions: any = {
+        headless: this.config.headless,
+      };
+
+      // En producción (Docker), usar configuración específica
+      if (isProduction) {
+        this.log('🐳 Detectado entorno de producción - configurando para Docker/Railway');
+        launchOptions.args = [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ];
+        // Asegurar que headless esté en true en producción
+        launchOptions.headless = true;
+      } else {
+        launchOptions.slowMo = 50;
+      }
+
+      this.log(`📦 Lanzando Chromium con headless=${launchOptions.headless}, args=${JSON.stringify(launchOptions.args || [])}`);
+
+      this.browser = await chromium.launch(launchOptions);
+      this.log('✅ Chromium lanzado exitosamente');
+
+      this.context = await this.browser.newContext({
+        acceptDownloads: true,
+        viewport: { width: 1920, height: 1080 },
+      });
+      this.log('✅ Contexto del navegador creado');
+
+      this.page = await this.context.newPage();
+      this.page.setDefaultTimeout(60000);
+      this.log('✅ Página creada - Navegador completamente inicializado');
+
+    } catch (error: any) {
+      this.log(`❌ Error al inicializar navegador: ${error.message}`);
+      this.log(`Stack: ${error.stack}`);
+      throw error;
     }
-
-    this.log(`📦 Lanzando Chromium con headless=${launchOptions.headless}`);
-    this.browser = await chromium.launch(launchOptions);
-
-    this.context = await this.browser.newContext({
-      acceptDownloads: true,
-      viewport: { width: 1920, height: 1080 },
-    });
-
-    this.page = await this.context.newPage();
-    this.page.setDefaultTimeout(60000);
-
-    this.log('✅ Navegador inicializado');
   }
 
   async login(): Promise<void> {

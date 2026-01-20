@@ -56,7 +56,8 @@ RUN NEXT_PUBLIC_DISABLE_CLERK=${NEXT_PUBLIC_DISABLE_CLERK} npm run build
 RUN npm prune --production
 
 # Reinstalar solo Playwright después del prune (necesario en runtime)
-RUN npm install playwright@1.49.1 && npx playwright install chromium --with-deps
+# Usar la misma versión que está en package.json
+RUN npm install playwright && npx playwright install --with-deps chromium
 
 # Exponer puerto (Railway lo asigna dinámicamente, pero por defecto usamos 3000)
 EXPOSE 3000
