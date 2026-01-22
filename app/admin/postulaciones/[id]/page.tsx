@@ -3,6 +3,7 @@
 import { notFound } from 'next/navigation'
 import { postulacionService } from '@/lib/services/postulacion.service'
 import { onboardingService } from '@/lib/services/onboarding.service'
+import { getActiveTemplates } from '@/lib/services/whatsapp-templates.service'
 import { PostulacionDetailContent } from '@/components/admin/postulacion-detail-content'
 
 export const revalidate = 0 // Siempre fresh data
@@ -10,13 +11,16 @@ export const revalidate = 0 // Siempre fresh data
 async function getPostulacion(id: string) {
   try {
     const postulacion = await postulacionService.getPostulacionById(id)
-    
+
     if (!postulacion) {
       return null
     }
 
-    // ✅ Cargar eventos disponibles en paralelo
-    const availableEvents = await onboardingService.getAvailableEvents()
+    // ✅ Cargar eventos disponibles y plantillas de WhatsApp en paralelo
+    const [availableEvents, whatsappTemplates] = await Promise.all([
+      onboardingService.getAvailableEvents(),
+      getActiveTemplates(),
+    ])
 
     // Transformar para serialización (convertir Dates, etc)
     return {
@@ -82,6 +86,14 @@ async function getPostulacion(id: string) {
         createdAt: event.createdAt.toISOString(),
         updatedAt: event.updatedAt.toISOString(),
         completedAt: event.completedAt?.toISOString() || null,
+      })),
+
+      // ✅ Agregar plantillas de WhatsApp activas
+      whatsappTemplates: whatsappTemplates.map(template => ({
+        id: template.id,
+        key: template.key,
+        name: template.name,
+        content: template.content,
       })),
     }
   } catch (error) {

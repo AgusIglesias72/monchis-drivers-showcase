@@ -3,6 +3,8 @@
 import { getAllTemplates } from "@/lib/actions/whatsapp-templates.actions"
 import { TemplatesManagementContent } from "@/components/admin/templates-management-content"
 
+export const dynamic = 'force-dynamic'
+
 export default async function PlantillasWhatsAppPage() {
   const result = await getAllTemplates()
 

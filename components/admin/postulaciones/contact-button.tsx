@@ -37,6 +37,7 @@ import {
   canContactDriver,
   type ContactStatus
 } from '@/lib/utils/contact-status.utils'
+import { replaceTemplatePlaceholders } from '@/lib/services/whatsapp-templates.service'
 
 // Componente de logo de WhatsApp
 const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -49,86 +50,12 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
-// Plantillas de mensajes predefinidos
-const MESSAGE_TEMPLATES = {
-  capacitaciones: {
-    label: "Info sobre Capacitaciones",
-    template: (name: string) => `Hola ${name}! 👋
-
-¿Cómo estás? Te escribo para contarte sobre nuestras capacitaciones.
-
-📅 Tenemos eventos todos los días de la semana donde te explicamos todo lo que necesitas saber para trabajar con nosotros.
-
-¿Te gustaría agendar una fecha? Estamos a tu disposición para cualquier consulta o duda que tengas.
-
-¡Saludos! 😊`
-  },
-  seguimiento_documentos: {
-    label: "Seguimiento de Documentos",
-    template: (name: string) => `Hola ${name}! 👋
-
-Te escribo para hacer un seguimiento de tu postulación.
-
-Veo que aún faltan algunos documentos por completar. ¿Hay algo en lo que pueda ayudarte?
-
-Estoy aquí para resolver cualquier duda que tengas.
-
-¡Saludos! 😊`
-  },
-  bienvenida_completo: {
-    label: "Bienvenida - Formulario Completo",
-    template: (name: string) => `¡Felicitaciones ${name}! 🎉
-
-Completaste exitosamente tu postulación. Ahora vamos a revisar tu información y documentos.
-
-📋 Próximos pasos:
-1. Revisión de documentos (24-48 hs)
-2. Te contactaremos para agendar tu capacitación
-3. Una vez capacitado, ¡podrás empezar a trabajar!
-
-¿Tienes alguna pregunta? Estoy aquí para ayudarte.
-
-¡Bienvenido al equipo! 💪`
-  },
-  recordatorio_pago: {
-    label: "Recordatorio de Pago",
-    template: (name: string) => `Hola ${name}! 👋
-
-Te escribo para recordarte que aún falta que completes el pago de equipamiento.
-
-💳 Una vez que realices el pago, no olvides subir el comprobante en el formulario.
-
-Si ya realizaste el pago y no pudiste cargar el comprobante, podés enviármelo por aquí.
-
-¿Necesitas ayuda con algo?
-
-¡Saludos! 😊`
-  },
-  consulta_general: {
-    label: "Consulta General / Disponibilidad",
-    template: (name: string) => `Hola ${name}! 👋
-
-¿Cómo estás? Te escribo para saber si seguís interesado en trabajar con nosotros.
-
-Veo que empezaste tu postulación pero quedó pendiente de completar.
-
-Si tenés alguna duda o necesitás ayuda con algo, estoy aquí para ayudarte. 😊
-
-¿Seguimos adelante?`
-  },
-  info_zona_trabajo: {
-    label: "Info sobre Zona de Trabajo",
-    template: (name: string) => `Hola ${name}! 👋
-
-Te escribo para contarte más sobre cómo funciona la zona de trabajo.
-
-🗺️ Actualmente tenemos disponibilidad en varias zonas de Asunción y alrededores.
-Una vez que completes tu capacitación, vos elegís en qué zona preferís trabajar según tu ubicación.
-
-¿Te interesa alguna zona en particular? Puedo darte más información.
-
-¡Saludos! 😊`
-  },
+// Tipo para las plantillas
+export interface WhatsAppTemplateForContact {
+  id: string
+  key: string
+  name: string
+  content: string
 }
 
 interface ContactButtonProps {
@@ -136,6 +63,7 @@ interface ContactButtonProps {
   driverName: string
   phoneNumber: string
   contactStatus: ContactStatus
+  templates: WhatsAppTemplateForContact[] // ✅ NUEVO: Plantillas desde la BD
   showLabel?: boolean // Si es true, muestra el texto del botón
   size?: 'sm' | 'default' // Tamaño del botón
   inDropdown?: boolean // ✅ NUEVO: Si está dentro de un dropdown "Acciones"
@@ -146,9 +74,10 @@ export function ContactButton({
   driverName,
   phoneNumber,
   contactStatus,
+  templates,
   showLabel = false,
   size = 'sm',
-  inDropdown = false // ✅ NUEVO
+  inDropdown = false
 }: ContactButtonProps) {
   const router = useRouter()
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
@@ -168,23 +97,26 @@ export function ContactButton({
     window.open(`https://wa.me/595${cleanPhone}`, '_blank')
   }
 
-  const handleSendQuickMessage = async (templateKey: string, e: React.MouseEvent) => {
+  const handleSendQuickMessage = async (template: WhatsAppTemplateForContact, e: React.MouseEvent) => {
     e.stopPropagation()
-
-    const template = MESSAGE_TEMPLATES[templateKey as keyof typeof MESSAGE_TEMPLATES]
-    if (!template) return
 
     setIsSendingMessage(true)
     try {
+      // Reemplazar placeholders en el contenido de la plantilla
+      const messageContent = replaceTemplatePlaceholders(template.content, {
+        name: firstName,
+      })
+
       const result = await sendQuickWhatsAppMessage({
         driverId,
         driverName: firstName,
         phoneNumber,
-        message: template.template(firstName),
+        message: messageContent,
+        templateId: template.id, // ✅ Pasar el ID de la plantilla para trackear uso
       })
 
       if (result.success) {
-        toast.success(`Mensaje "${template.label}" enviado correctamente! ✅`)
+        toast.success(`Mensaje "${template.name}" enviado correctamente! ✅`)
         startTransition(() => {
           router.refresh()
         })
@@ -281,17 +213,23 @@ export function ContactButton({
                   Mensajes Rápidos
                 </DropdownMenuLabel>
 
-                {Object.entries(MESSAGE_TEMPLATES).map(([key, template]) => (
-                  <DropdownMenuItem
-                    key={key}
-                    onClick={(e) => handleSendQuickMessage(key, e)}
-                    className="cursor-pointer"
-                    disabled={isSendingMessage}
-                  >
-                    <Send className="mr-2 h-4 w-4 text-blue-600" />
-                    <span>{template.label}</span>
+                {templates.length === 0 ? (
+                  <DropdownMenuItem disabled className="text-muted-foreground text-sm">
+                    No hay plantillas disponibles
                   </DropdownMenuItem>
-                ))}
+                ) : (
+                  templates.map((template) => (
+                    <DropdownMenuItem
+                      key={template.id}
+                      onClick={(e) => handleSendQuickMessage(template, e)}
+                      className="cursor-pointer"
+                      disabled={isSendingMessage}
+                    >
+                      <Send className="mr-2 h-4 w-4 text-blue-600" />
+                      <span>{template.name}</span>
+                    </DropdownMenuItem>
+                  ))
+                )}
 
                 <DropdownMenuSeparator />
 
@@ -392,17 +330,23 @@ export function ContactButton({
               Mensajes Rápidos
             </DropdownMenuLabel>
 
-            {Object.entries(MESSAGE_TEMPLATES).map(([key, template]) => (
-              <DropdownMenuItem
-                key={key}
-                onClick={(e) => handleSendQuickMessage(key, e)}
-                className="cursor-pointer"
-                disabled={isSendingMessage}
-              >
-                <Send className="mr-2 h-4 w-4 text-blue-600" />
-                <span>{template.label}</span>
+            {templates.length === 0 ? (
+              <DropdownMenuItem disabled className="text-muted-foreground text-sm">
+                No hay plantillas disponibles
               </DropdownMenuItem>
-            ))}
+            ) : (
+              templates.map((template) => (
+                <DropdownMenuItem
+                  key={template.id}
+                  onClick={(e) => handleSendQuickMessage(template, e)}
+                  className="cursor-pointer"
+                  disabled={isSendingMessage}
+                >
+                  <Send className="mr-2 h-4 w-4 text-blue-600" />
+                  <span>{template.name}</span>
+                </DropdownMenuItem>
+              ))
+            )}
 
             <DropdownMenuSeparator />
 
@@ -499,17 +443,23 @@ export function ContactButton({
                 Mensajes Rápidos
               </DropdownMenuLabel>
 
-              {Object.entries(MESSAGE_TEMPLATES).map(([key, template]) => (
-                <DropdownMenuItem
-                  key={key}
-                  onClick={(e) => handleSendQuickMessage(key, e)}
-                  className="cursor-pointer"
-                  disabled={isSendingMessage}
-                >
-                  <Send className="mr-2 h-4 w-4 text-blue-600" />
-                  <span>{template.label}</span>
+              {templates.length === 0 ? (
+                <DropdownMenuItem disabled className="text-muted-foreground text-sm">
+                  No hay plantillas disponibles
                 </DropdownMenuItem>
-              ))}
+              ) : (
+                templates.map((template) => (
+                  <DropdownMenuItem
+                    key={template.id}
+                    onClick={(e) => handleSendQuickMessage(template, e)}
+                    className="cursor-pointer"
+                    disabled={isSendingMessage}
+                  >
+                    <Send className="mr-2 h-4 w-4 text-blue-600" />
+                    <span>{template.name}</span>
+                  </DropdownMenuItem>
+                ))
+              )}
 
               <DropdownMenuSeparator />
 

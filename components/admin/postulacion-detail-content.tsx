@@ -549,6 +549,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                 driverName={postulacion.fullName || 'Driver'}
                 phoneNumber={postulacion.phoneNumber}
                 contactStatus={contactStatus}
+                templates={postulacion.whatsappTemplates || []}
                 showLabel={true}
               />
             )}
@@ -634,7 +635,8 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                       driverName={postulacion.fullName || 'Driver'}
                       phoneNumber={postulacion.phoneNumber || ''}
                       contactStatus={contactStatus}
-                      inDropdown={true} // ✅ NUEVO
+                      templates={postulacion.whatsappTemplates || []}
+                      inDropdown={true}
                     />
                   </DropdownMenuItem>
 

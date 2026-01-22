@@ -4,6 +4,7 @@ import { PostulacionesPageContent } from "@/components/admin/postulaciones-page-
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
 import type { PostulacionFilters } from "@/types/postulacion-filters.types"
+import { getActiveTemplates } from "@/lib/services/whatsapp-templates.service"
 
 export const revalidate = 30
 
@@ -607,6 +608,15 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     rechazados,
   }
 
+  // Cargar plantillas de WhatsApp activas
+  const whatsappTemplates = await getActiveTemplates()
+  const templatesForContact = whatsappTemplates.map(template => ({
+    id: template.id,
+    key: template.key,
+    name: template.name,
+    content: template.content,
+  }))
+
   // Calcular total y paginación correctamente
   let finalTotal = totalFiltered
   let totalPages = 1
@@ -616,11 +626,11 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   if (hasPostProcessingFilters) {
     finalTotal = postulaciones.length
     totalPages = Math.ceil(finalTotal / limit)
-    
+
     const startIndex = (page - 1) * limit
     const endIndex = startIndex + limit
     postulacionesToShow = postulaciones.slice(startIndex, endIndex)
-    
+
     hasMore = endIndex < postulaciones.length
   } else {
     finalTotal = totalFiltered
@@ -629,10 +639,16 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     postulacionesToShow = postulaciones
   }
 
+  // Agregar plantillas a todas las postulaciones
+  const postulacionesWithTemplates = postulacionesToShow.map(postulacion => ({
+    ...postulacion,
+    whatsappTemplates: templatesForContact,
+  }))
+
   return (
     <PostulacionesPageContent
       stats={stats}
-      postulaciones={postulacionesToShow}
+      postulaciones={postulacionesWithTemplates}
       total={finalTotal}
       currentPage={page}
       totalPages={totalPages}

@@ -578,6 +578,7 @@ export function PostulacionesTableExpandable({
                                 driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
                                 phoneNumber={postulacion.phoneNumber}
                                 contactStatus={postulacion.contactStatus}
+                                templates={postulacion.whatsappTemplates || []}
                               />
 
                               <DropdownMenu>
