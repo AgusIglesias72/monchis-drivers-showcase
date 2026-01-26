@@ -215,4 +215,128 @@ export const emailService = {
       console.error('❌ Error enviando email de error:', error.message);
     }
   },
+
+  async sendBonusProcessCompletedEmail(data: {
+    bonusDate: string;
+    executionMode: 'DRY_RUN' | 'EXECUTE';
+    stats: {
+      totalOrders: number;
+      driversProcessed: number;
+      extrasCreated: number;
+      assignmentsSuccessful: number;
+      assignmentsFailed: number;
+      totalPayoutAmount: number;
+    };
+    errors?: Array<{ driver: string; error: string }>;
+    notificationEmails?: string[];
+  }): Promise<void> {
+    try {
+      const auth = getGmailAuth();
+      const gmail = google.gmail({ version: 'v1', auth });
+
+      const recipients = [
+        ...DEFAULT_NOTIFICATION_EMAILS,
+        ...(data.notificationEmails || [])
+      ];
+
+      const isDryRun = data.executionMode === 'DRY_RUN';
+      const hasErrors = data.errors && data.errors.length > 0;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: ${isDryRun ? '#fff3cd' : '#d1fae5'}; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h2 style="margin-top: 0; color: ${isDryRun ? '#856404' : '#065f46'};">
+                ${isDryRun ? '🏃 DRY RUN - Simulación de Bonos' : '✅ Bonos Procesados Exitosamente'}
+              </h2>
+              <p style="font-size: 16px; margin: 10px 0;">
+                <strong>📅 Fecha de Bonos:</strong> ${data.bonusDate}
+              </p>
+            </div>
+
+            <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #333;">📊 Resumen del Proceso</h3>
+
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>📦 Pedidos procesados:</strong></td>
+                  <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${data.stats.totalOrders}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>👥 Conductores beneficiados:</strong></td>
+                  <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${data.stats.driversProcessed}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>🎁 Extras ${isDryRun ? 'a crear' : 'creados'}:</strong></td>
+                  <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${data.stats.extrasCreated}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>✅ Asignaciones exitosas:</strong></td>
+                  <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${data.stats.assignmentsSuccessful}</td>
+                </tr>
+                ${data.stats.assignmentsFailed > 0 ? `
+                <tr style="background: #fee;">
+                  <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>❌ Asignaciones fallidas:</strong></td>
+                  <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${data.stats.assignmentsFailed}</td>
+                </tr>
+                ` : ''}
+                <tr style="background: #e8f5e9;">
+                  <td style="padding: 8px;"><strong>💰 Total a pagar:</strong></td>
+                  <td style="padding: 8px; text-align: right; font-size: 18px; font-weight: bold;">
+                    ${data.stats.totalPayoutAmount.toLocaleString('es-PY')} Gs
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+            ${isDryRun ? `
+              <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
+                <strong>⚠️ MODO DRY RUN ACTIVO</strong>
+                <p style="margin: 10px 0;">Esta fue una simulación. No se crearon extras ni se asignaron bonos reales.</p>
+                <p style="margin: 10px 0;">Para ejecutar en producción, cambiar <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">executionMode</code> a <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">EXECUTE</code></p>
+              </div>
+            ` : ''}
+
+            ${hasErrors && data.errors ? `
+              <div style="background: #fee; padding: 15px; border-left: 4px solid #f44336; margin: 20px 0;">
+                <strong>❌ Errores encontrados (${data.errors.length})</strong>
+                <ul style="margin: 10px 0;">
+                  ${data.errors.slice(0, 10).map(e => `<li style="font-size: 14px;">${e.driver}: ${e.error}</li>`).join('')}
+                  ${data.errors.length > 10 ? `<li style="font-size: 14px;">... y ${data.errors.length - 10} más</li>` : ''}
+                </ul>
+              </div>
+            ` : ''}
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+
+            <p style="color: #666; font-size: 12px; text-align: center;">
+              Generado automáticamente por el Sistema de Bonos - ${new Date().toLocaleString('es-PY')}
+            </p>
+          </body>
+        </html>
+      `;
+
+      const encodedMessage = createEmailMessage(
+        recipients,
+        `${isDryRun ? '[DRY RUN] ' : ''}Bonos ${data.bonusDate} - ${data.stats.driversProcessed} conductores`,
+        html
+      );
+
+      await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: {
+          raw: encodedMessage,
+        },
+      });
+
+      console.log(`✅ Email de bonos enviado a: ${recipients.join(', ')}`);
+    } catch (error: any) {
+      console.error('❌ Error enviando email de bonos:', error.message);
+    }
+  },
 };

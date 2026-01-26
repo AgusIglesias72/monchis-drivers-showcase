@@ -1,24 +1,28 @@
 {
-    "crons": [
-      {
-        "path": "/api/cron/check-pending-applications",
-        "schedule": "0 12,18,21 * * *"
-      },
-      {
-        "path": "/api/cron/capacitacion-reminder?type=day-before",
-        "schedule": "0 22 * * *"
-      },
-      {
-        "path": "/api/cron/capacitacion-reminder?type=same-day",
-        "schedule": "0 11 * * *"
-      },
-      {
-        "path": "/api/cron/cleanup-duplicate-documents?dryRun=false",
-        "schedule": "0 3 * * *"
-      },
-      {
-        "path": "/api/cron/send-daily-reminders",
-        "schedule": "0 10 * * *"
-      }
-    ]
-  }
+  "crons": [
+    {
+      "path": "/api/cron/check-pending-applications",
+      "schedule": "0 12,18,21 * * *"
+    },
+    {
+      "path": "/api/cron/capacitacion-reminder?type=day-before",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron/capacitacion-reminder?type=same-day",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-duplicate-documents?dryRun=false",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/send-daily-reminders",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-google-token",
+      "schedule": "0 2 */5 * *"
+    }
+  ]
+}

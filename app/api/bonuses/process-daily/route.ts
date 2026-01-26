@@ -1,0 +1,206 @@
+// app/api/bonuses/process-daily/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { backgroundJobsService } from '@/lib/services/background-jobs.service';
+import { bonusProcessorService } from '@/lib/services/bonus-processor.service';
+import { emailService } from '@/lib/services/email.service';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // 5 minutos
+
+interface ProcessDailyRequest {
+  bonusDate: string; // YYYY-MM-DD
+  executionMode?: 'DRY_RUN' | 'EXECUTE';
+  notificationEmails?: string[];
+  keepBrowserOpen?: boolean;
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body: ProcessDailyRequest = await request.json();
+
+    // ========== VALIDACIONES ==========
+
+    if (!body.bonusDate) {
+      return NextResponse.json(
+        { success: false, error: 'bonusDate es requerido (formato: YYYY-MM-DD)' },
+        { status: 400 }
+      );
+    }
+
+    // Validar formato de fecha
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(body.bonusDate)) {
+      return NextResponse.json(
+        { success: false, error: 'Formato de fecha inválido. Use YYYY-MM-DD' },
+        { status: 400 }
+      );
+    }
+
+    // Validar que la fecha no sea futura
+    const bonusDate = new Date(body.bonusDate);
+    bonusDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (bonusDate > today) {
+      return NextResponse.json(
+        { success: false, error: 'No se pueden procesar bonos de fechas futuras' },
+        { status: 400 }
+      );
+    }
+
+    // Validar executionMode
+    const executionMode = body.executionMode || 'DRY_RUN';
+    if (executionMode !== 'DRY_RUN' && executionMode !== 'EXECUTE') {
+      return NextResponse.json(
+        { success: false, error: 'executionMode debe ser DRY_RUN o EXECUTE' },
+        { status: 400 }
+      );
+    }
+
+    console.log(`🚀 Iniciando proceso de bonos para ${body.bonusDate}`);
+    console.log(`   Modo: ${executionMode}`);
+
+    // ========== CREAR BACKGROUND JOB ==========
+
+    const job = await backgroundJobsService.create({
+      type: 'BONUS_PROCESSING',
+      userId: '1', // Sistema
+      metadata: {
+        bonusDate: body.bonusDate,
+        executionMode,
+        notificationEmails: body.notificationEmails,
+      },
+    });
+
+    console.log(`   Job ID: ${job.id}`);
+
+    // ========== INICIAR PROCESO EN BACKGROUND ==========
+
+    (async () => {
+      try {
+        await backgroundJobsService.updateStatus(job.id, 'PROCESSING');
+        await backgroundJobsService.addLog(job.id, '🚀 Iniciando proceso de bonos...');
+        await backgroundJobsService.addLog(job.id, `📅 Fecha: ${body.bonusDate}`);
+        await backgroundJobsService.addLog(job.id, `🏃 Modo: ${executionMode}`);
+
+        // Ejecutar proceso
+        const result = await bonusProcessorService.process({
+          bonusDate: body.bonusDate,
+          executionMode,
+          notificationEmails: body.notificationEmails,
+          keepBrowserOpen: body.keepBrowserOpen || false,
+        });
+
+        // Guardar resultado
+        await backgroundJobsService.saveResult(job.id, result);
+
+        // Actualizar progreso
+        await backgroundJobsService.updateProgress(
+          job.id,
+          result.stats.driversProcessed,
+          result.stats.driversProcessed
+        );
+
+        // Logs de resultado
+        await backgroundJobsService.addLogs(job.id, [
+          '',
+          '✅ ========== PROCESO COMPLETADO ==========',
+          `📦 Pedidos procesados: ${result.stats.totalOrders}`,
+          `👥 Conductores beneficiados: ${result.stats.driversProcessed}`,
+          `🎁 Extras creados: ${result.stats.extrasCreated}`,
+          `✅ Asignaciones exitosas: ${result.stats.assignmentsSuccessful}`,
+          `❌ Asignaciones fallidas: ${result.stats.assignmentsFailed}`,
+          `💰 Total a pagar: ${result.stats.totalPayoutAmount.toLocaleString('es-PY')} Gs`,
+          '',
+        ]);
+
+        if (result.duplicatesDetected && result.duplicatesDetected > 0) {
+          await backgroundJobsService.addLog(
+            job.id,
+            `⚠️  ${result.duplicatesDetected} conductores ya tenían bonos (duplicados filtrados)`
+          );
+        }
+
+        if (result.errors && result.errors.length > 0) {
+          await backgroundJobsService.addLog(job.id, `❌ ${result.errors.length} errores:`);
+          result.errors.slice(0, 5).forEach((err) => {
+            backgroundJobsService.addLog(job.id, `   - ${err.driver}: ${err.error}`);
+          });
+          if (result.errors.length > 5) {
+            await backgroundJobsService.addLog(job.id, `   ... y ${result.errors.length - 5} más`);
+          }
+        }
+
+        await backgroundJobsService.addLog(job.id, '==========================================');
+
+        // Marcar como completado
+        await backgroundJobsService.updateStatus(job.id, 'COMPLETED');
+
+        // Enviar email de notificación
+        console.log('📧 Enviando email de notificación...');
+
+        await emailService.sendBonusProcessCompletedEmail({
+          bonusDate: body.bonusDate,
+          executionMode: result.executionMode,
+          stats: result.stats,
+          errors: result.errors,
+          notificationEmails: body.notificationEmails,
+        });
+
+        console.log('✅ Email enviado exitosamente');
+      } catch (error: any) {
+        console.error('❌ Error en proceso de bonos:', error);
+
+        await backgroundJobsService.addLog(job.id, `❌ ERROR: ${error.message}`);
+        await backgroundJobsService.markAsFailed(job.id, error.message);
+
+        // Enviar email de error
+        try {
+          await emailService.sendBonusProcessCompletedEmail({
+            bonusDate: body.bonusDate,
+            executionMode: executionMode,
+            stats: {
+              totalOrders: 0,
+              driversProcessed: 0,
+              extrasCreated: 0,
+              assignmentsSuccessful: 0,
+              assignmentsFailed: 0,
+              totalPayoutAmount: 0,
+            },
+            errors: [{ driver: 'SISTEMA', error: error.message }],
+            notificationEmails: body.notificationEmails,
+          });
+        } catch (emailError) {
+          console.error('❌ Error al enviar email de error:', emailError);
+        }
+      }
+    })();
+
+    // ========== RESPONDER INMEDIATAMENTE ==========
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: executionMode === 'DRY_RUN'
+          ? `Simulación de bonos iniciada para ${body.bonusDate}. El proceso se ejecutará en background.`
+          : `Proceso de bonos iniciado para ${body.bonusDate}. El proceso se ejecutará en background.`,
+        jobId: job.id,
+        bonusDate: body.bonusDate,
+        executionMode,
+      },
+      { status: 200 }
+    );
+  } catch (error: any) {
+    console.error('❌ Error al iniciar proceso de bonos:', error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: error.message || 'Error al iniciar el proceso de bonos',
+      },
+      { status: 500 }
+    );
+  }
+}

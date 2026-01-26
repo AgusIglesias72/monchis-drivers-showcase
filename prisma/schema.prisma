@@ -765,6 +765,45 @@ model BrazeExecution {
   @@map("braze_executions")
 }
 
+// ==================== BONUS SYSTEM ====================
+
+model BonusAssignment {
+  id            String   @id @default(cuid())
+  executionDate DateTime @map("execution_date")  // Cuándo se ejecutó el proceso
+  bonusDate     DateTime @map("bonus_date")      // Fecha de los pedidos bonificados
+  driverCedula  String   @map("driver_cedula")
+  driverName    String?  @map("driver_name")
+  orderCount    Int      @map("order_count")     // Pedidos que calificaron
+  bonusAmount   Decimal  @map("bonus_amount")    // Monto total del bono
+  extraName     String   @map("extra_name")      // "18/1 (9)- 3.000 Gs"
+  ruleId        String?  @map("rule_id")         // Regla que aplicó
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([executionDate])
+  @@index([bonusDate])
+  @@index([driverCedula])
+  @@index([extraName])
+  @@map("bonus_assignments")
+}
+
+model BonusRule {
+  id            String   @id @default(cuid())
+  date          DateTime                         // Fecha para la que aplica
+  startTime     String   @map("start_time")     // "14:00"
+  endTime       String   @map("end_time")       // "18:00"
+  zones         String[]                         // ["Centro", "Villa Morra"] o ["ALL"]
+  amountPerOrder Decimal @map("amount_per_order") // Monto por pedido
+  isActive      Boolean  @default(true) @map("is_active")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([date, isActive])
+  @@map("bonus_rules")
+}
+
 // ==================== ENUMS ====================
 
 enum JobType {
@@ -772,6 +811,7 @@ enum JobType {
   DOCUMENT_VALIDATION // Validar documentos con AI
   EXPORT_DATA // Exportar datos
   BULK_EMAIL // Envío masivo de emails
+  BONUS_PROCESSING // Procesar bonos por pedido
 }
 
 enum JobStatus {
