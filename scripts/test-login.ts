@@ -1,22 +1,18 @@
 // scripts/test-login.ts
-// Script para probar el flujo de login con Google Workspace + Okta
+// Script para probar el flujo de login con Okta SAML ITTI
 
 import { chromium } from 'playwright';
 import 'dotenv/config';
-import { performGoogleOktaLogin } from '../lib/utils/google-okta-login';
+import { performOktaLogin } from '../lib/utils/okta-login';
 
 async function testLogin() {
   console.log('🚀 Iniciando test de login...\n');
 
   const loginUrl = process.env.APP_LOGIN_URL || 'https://admin.monchis-drivers.com/auth/login';
-  const googleUsername = process.env.GOOGLE_USERNAME || 'agustin.iglesias';
-  const googlePassword = process.env.GOOGLE_PASSWORD || '';
   const oktaEmail = process.env.OKTA_EMAIL || 'agustin.iglesias@itti.digital';
   const oktaPassword = process.env.OKTA_PASSWORD || '';
 
   console.log(`📍 URL: ${loginUrl}`);
-  console.log(`👤 Google username: ${googleUsername}`);
-  console.log(`🔐 Google password: ${googlePassword ? '***' : 'NO CONFIGURADO'}`);
   console.log(`📧 Okta email: ${oktaEmail}`);
   console.log(`🔐 Okta password: ${oktaPassword ? '***' : 'NO CONFIGURADO'}\n`);
 
@@ -35,11 +31,9 @@ async function testLogin() {
 
   try {
     // Usar la función reutilizable
-    await performGoogleOktaLogin({
+    await performOktaLogin({
       page,
       loginUrl,
-      googleUsername,
-      googlePassword,
       oktaEmail,
       oktaPassword,
     });

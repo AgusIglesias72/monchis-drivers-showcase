@@ -10,7 +10,7 @@ import {
   uploadBufferToDrive,
   generateWeekFolderName,
 } from './google-sheets-drive.service';
-import { performGoogleOktaLogin } from '../utils/google-okta-login';
+import { performOktaLogin } from '../utils/okta-login';
 import { BrowserSession } from './reports-processor.service';
 
 const DELAY_BETWEEN_DOWNLOADS = 3000;
@@ -163,7 +163,7 @@ class PDFDownloadAutomation {
 
     console.log(`🔐 [Worker ${this.workerId}] Iniciando sesión con Google Workspace + Okta...`);
 
-    await performGoogleOktaLogin({
+    await performOktaLogin({
       page: this.page,
       loginUrl,
       targetUrl: driversPageUrl,

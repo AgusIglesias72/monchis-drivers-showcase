@@ -1,11 +1,9 @@
-// lib/utils/google-okta-login.ts
+// lib/utils/okta-login.ts
 import { Page } from 'playwright';
 
-interface GoogleOktaLoginOptions {
+interface OktaLoginOptions {
   page: Page;
   loginUrl: string;
-  googleUsername?: string;
-  googlePassword?: string;
   oktaEmail?: string;
   oktaPassword?: string;
   targetUrl?: string;
@@ -16,17 +14,15 @@ interface GoogleOktaLoginOptions {
 }
 
 /**
- * Realiza login automático con Google Workspace SSO + Okta MFA
+ * Realiza login automático con Okta SAML ITTI + Okta MFA
  *
  * @param options Configuración de login
  * @returns Promise que se resuelve cuando el login es exitoso
  */
-export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): Promise<void> {
+export async function performOktaLogin(options: OktaLoginOptions): Promise<void> {
   const {
     page,
     loginUrl,
-    googleUsername = process.env.GOOGLE_USERNAME || 'agustin.iglesias',
-    googlePassword = process.env.GOOGLE_PASSWORD || '',
     oktaEmail = process.env.OKTA_EMAIL || 'agustin.iglesias@itti.digital',
     oktaPassword = process.env.OKTA_PASSWORD || '',
     targetUrl,
@@ -41,73 +37,42 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  console.log(`🔐 ${logPrefix} Iniciando login con Google Workspace + Okta...`);
+  console.log(`🔐 ${logPrefix} Iniciando login con Okta SAML ITTI...`);
 
   // Navegar a la URL de login
   await page.goto(loginUrl, { waitUntil: 'networkidle' });
   console.log(`✅ ${logPrefix} Página de login cargada`);
 
-  // PASO 1: Click en botón de Google Workspace
-  const googleButtonSelectors = [
-    'a[href*="google"]',
-    'button:has-text("Google")',
-    'a:has-text("Google")',
+  // PASO 1: Click en botón de Okta SAML ITTI
+  const oktaSamlButtonSelectors = [
+    'a[title="SAML ・ Okta ITTI"]',
+    'a[href*="itti-py.okta.com"]',
+    'a#idp3',
+    'a[data-idp="SAML"][title*="ITTI"]',
   ];
 
-  let googleButton = null;
-  for (const selector of googleButtonSelectors) {
+  let authButton = null;
+
+  // Buscar botón de Okta SAML ITTI
+  for (const selector of oktaSamlButtonSelectors) {
     const button = await page.$(selector);
     if (button) {
-      console.log(`   ✓ Botón de Google encontrado con: ${selector}`);
-      googleButton = button;
+      console.log(`   ✓ Botón de Okta SAML ITTI encontrado con: ${selector}`);
+      authButton = button;
       break;
     }
   }
 
-  if (googleButton) {
-    await googleButton.click();
-    console.log(`✅ ${logPrefix} Click en botón de Google realizado`);
+  if (authButton) {
+    await authButton.click();
+    console.log(`✅ ${logPrefix} Click en botón de Okta SAML ITTI realizado`);
     await page.waitForLoadState('networkidle');
-  }
-
-  // PASO 2: Completar email de Google (si es necesario)
-  const googleEmailInput = await page.$('#identifierId');
-  if (googleEmailInput) {
-    console.log(`📧 ${logPrefix} Ingresando email de Google...`);
-    await googleEmailInput.fill(googleUsername);
-    await sleep(500);
-
-    // Soportar ambos idiomas: español e inglés
-    const nextButton = await page.$('button:has-text("Siguiente")') || await page.$('button:has-text("Next")');
-    if (nextButton) {
-      await nextButton.click();
-      console.log(`✅ ${logPrefix} Email de Google ingresado`);
-      await page.waitForLoadState('networkidle');
-    }
   } else {
-    console.log(`⏭️  ${logPrefix} Email de Google no requerido (sesión activa)`);
+    console.log(`   ⚠️  No se encontró botón de Okta SAML ITTI`);
+    throw new Error('No se encontró el botón de Okta SAML ITTI en la página de login');
   }
 
-  // PASO 3: Completar password de Google (si es necesario)
-  await sleep(1000);
-  const googlePasswordInput = await page.$('input[type="password"][name="Passwd"]');
-  if (googlePasswordInput && googlePassword) {
-    console.log(`🔑 ${logPrefix} Ingresando password de Google...`);
-    await googlePasswordInput.fill(googlePassword);
-    await sleep(500);
-
-    // Soportar ambos idiomas: español e inglés
-    const nextButton = await page.$('button:has-text("Siguiente")') || await page.$('button:has-text("Next")');
-    if (nextButton) {
-      await nextButton.click();
-      console.log(`✅ ${logPrefix} Password de Google ingresado`);
-      await page.waitForLoadState('networkidle');
-    }
-  } else {
-    console.log(`⏭️  ${logPrefix} Password de Google no requerido (sesión activa)`);
-  }
-
-  // PASO 4: Completar email en Okta
+  // PASO 2: Completar email en Okta
   await sleep(3000);
 
   console.log(`📧 ${logPrefix} Buscando formulario de Okta...`);
@@ -282,7 +247,7 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
     throw new Error('No se encontró el botón "Siguiente" o "Next" en Okta');
   }
 
-  // PASO 5: Seleccionar opción de Contraseña en MFA
+  // PASO 3: Seleccionar opción de Contraseña en MFA
   await sleep(2000);
 
   console.log(`🔍 ${logPrefix} Buscando opciones de MFA...`);
@@ -476,7 +441,7 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
     throw new Error(`No se pudo seleccionar la opción de Okta Verify Push: ${error}`);
   }
 
-  // PASO 6: Esperar aprobación del push
+  // PASO 4: Esperar aprobación del push
   console.log(`📱 ${logPrefix} Esperando aprobación de Okta Verify en tu dispositivo...`);
   console.log(`   Por favor, aprueba la notificación push en tu teléfono`);
 
@@ -509,7 +474,7 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
 
   console.log(`   Estado: ${isInCloudflare ? 'En Cloudflare' : isInOkta ? 'En Okta' : isInTarget ? 'En página objetivo' : 'Ubicación desconocida'}`);
 
-  // PASO 7: Navegar a la URL objetivo si se especificó y no estamos ya ahí
+  // PASO 5: Navegar a la URL objetivo si se especificó y no estamos ya ahí
   if (targetUrl && !isInTarget) {
     await sleep(2000);
     console.log(`📍 ${logPrefix} Navegando a URL objetivo: ${targetUrl}`);
@@ -530,7 +495,7 @@ export async function performGoogleOktaLogin(options: GoogleOktaLoginOptions): P
     console.log(`✅ ${logPrefix} Ya estamos en la página objetivo`);
   }
 
-  // PASO 8: Login en la aplicación Monchis si terminamos en /auth/login
+  // PASO 6: Login en la aplicación Monchis si terminamos en /auth/login
   const finalUrl = page.url();
   if (finalUrl.includes('/auth/login')) {
     console.log(`🔐 ${logPrefix} Detectada página de login de Monchis, iniciando sesión...`);

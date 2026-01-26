@@ -5,7 +5,7 @@ import 'dotenv/config';
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import { google } from 'googleapis';
 import { parseOrdersExcel, OrderData } from '../utils/excel-order-parser';
-import { performGoogleOktaLogin } from '../utils/google-okta-login';
+import { performOktaLogin } from '../utils/okta-login';
 import { BrowserSession } from './reports-processor.service';
 import { prisma } from '../prisma';
 import * as fs from 'fs';
@@ -226,7 +226,7 @@ class BonusProcessor {
     const appEmail = process.env.APP_EMAIL;
     const appPassword = process.env.APP_PASSWORD;
 
-    await performGoogleOktaLogin({
+    await performOktaLogin({
       page: this.page,
       loginUrl,
       googleUsername,

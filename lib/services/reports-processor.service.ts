@@ -3,7 +3,7 @@ import 'dotenv/config';
 import { chromium, Browser, Page, BrowserContext, Download } from 'playwright';
 import * as XLSX from 'xlsx';
 import { writeToSheet, clearSheet } from '@/scripts/utils/sheet-connection';
-import { performGoogleOktaLogin } from '../utils/google-okta-login';
+import { performOktaLogin } from '../utils/okta-login';
 
 export interface ReportsConfig {
   loginUrl: string;
@@ -242,13 +242,13 @@ class ReportProcessorAndUploader {
 
     this.log('🔐 Iniciando sesión con Google Workspace + Okta...');
 
-    await performGoogleOktaLogin({
+    await performOktaLogin({
       page: this.page,
       loginUrl: this.config.loginUrl,
       targetUrl: this.config.reportsUrl,
       googleUsername: this.config.googleUsername,
       oktaEmail: this.config.oktaEmail,
-      // appEmail y appPassword se usan del .env por defecto en performGoogleOktaLogin
+      // appEmail y appPassword se usan del .env por defecto en performOktaLogin
     });
 
     this.log('✅ Sesión iniciada');
