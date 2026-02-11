@@ -163,7 +163,7 @@ class ReportProcessorAndUploader {
 
     this.context = await this.browser.newContext({
       acceptDownloads: true,
-      viewport: { width: 1920, height: 1080 },
+      viewport: { width: 1440, height: 900 },
     });
 
     this.page = await this.context.newPage();

@@ -17,6 +17,7 @@ import * as fs from 'fs';
 export interface BonusProcessConfig {
   bonusDate: string; // YYYY-MM-DD - fecha de los pedidos a procesar
   executionMode: 'DRY_RUN' | 'EXECUTE';
+  scope?: 'FULL' | 'SHEETS_ONLY'; // SHEETS_ONLY: solo sube pedidos y resumen al sheet, sin crear extras ni asignar
   notificationEmails?: string[];
   keepBrowserOpen?: boolean;
   loginUrl?: string;
@@ -151,7 +152,7 @@ class BonusProcessor {
 
     this.browser = await chromium.launch(launchOptions);
     this.context = await this.browser.newContext({
-      viewport: { width: 1920, height: 1080 },
+      viewport: { width: 1440, height: 900 },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     });
     this.page = await this.context.newPage();
@@ -187,13 +188,13 @@ class BonusProcessor {
     // Lanzar con contexto persistente (incluye userDataDir)
     this.context = await chromium.launchPersistentContext(userDataDir, {
       headless,
-      viewport: { width: 1920, height: 1080 },
+      viewport: { width: 1440, height: 900 },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       ...launchOptions,
     });
 
     this.page = this.context.pages()[0] || await this.context.newPage();
-    // @ts-ignore - browser no está disponible en persistent context pero guardamos el context
+    // @ts-expect-error - browser no está disponible en persistent context pero guardamos el context
     this.browser = null;
 
     console.log(`✅ Navegador inicializado con sesión persistente (headless: ${headless})`);
@@ -217,10 +218,8 @@ class BonusProcessor {
       throw new Error('Página no inicializada');
     }
 
-    console.log('🔐 Iniciando login con Google + Okta...');
+    console.log('🔐 Iniciando login con Okta...');
 
-    const googleUsername = process.env.GOOGLE_USERNAME;
-    const googlePassword = process.env.GOOGLE_PASSWORD;
     const oktaEmail = process.env.OKTA_EMAIL;
     const oktaPassword = process.env.OKTA_PASSWORD;
     const appEmail = process.env.APP_EMAIL;
@@ -229,8 +228,6 @@ class BonusProcessor {
     await performOktaLogin({
       page: this.page,
       loginUrl,
-      googleUsername,
-      googlePassword,
       oktaEmail,
       oktaPassword,
       appEmail,
@@ -264,25 +261,119 @@ class BonusProcessor {
     await sleep(500);
 
     // Parsear la fecha (YYYY-MM-DD)
-    const [year, month, day] = bonusDate.split('-').map(Number);
+    const [targetYear, targetMonth, targetDay] = bonusDate.split('-').map(Number);
 
-    // Seleccionar la fecha en el calendario usando el atributo title (formato YYYY-MM-DD)
-    const dateCell = await this.page.waitForSelector(
-      `.ant-picker-cell[title="${bonusDate}"]`,
-      { timeout: 5000 }
-    );
+    // Navegar al mes/año correcto en el date picker
+    let attempts = 0;
+    const maxAttempts = 12; // Máximo 12 meses de diferencia
+    let targetDateFound = false;
 
-    if (!dateCell) {
-      throw new Error(`No se encontró la celda para la fecha ${bonusDate}`);
+    while (attempts < maxAttempts) {
+      // Verificar si la fecha deseada está visible en el calendario actual
+      const dateCell = await this.page.$(`.ant-picker-cell[title="${bonusDate}"]`);
+
+      if (dateCell) {
+        // La fecha está visible
+        console.log(`   ✅ Fecha ${bonusDate} encontrada en el calendario`);
+        targetDateFound = true;
+        break;
+      }
+
+      // La fecha no está visible, necesitamos navegar
+      // Obtener todas las celdas visibles para determinar el mes mostrado
+      const firstVisibleCell = await this.page.$('.ant-picker-cell[title]:not(.ant-picker-cell-disabled)');
+
+      if (!firstVisibleCell) {
+        throw new Error('No se pudo determinar el mes actual del calendario');
+      }
+
+      const firstCellTitle = await firstVisibleCell.getAttribute('title');
+      const [displayedYear, displayedMonth] = firstCellTitle!.split('-').map(Number);
+
+      console.log(`   📅 Calendario mostrando: ${displayedMonth}/${displayedYear}, buscando: ${targetMonth}/${targetYear}`);
+
+      // Calcular si necesitamos ir hacia atrás o adelante
+      const targetYearMonth = targetYear * 12 + targetMonth;
+      const displayedYearMonth = displayedYear * 12 + displayedMonth;
+
+      if (targetYearMonth < displayedYearMonth) {
+        // Ir hacia atrás (mes anterior)
+        console.log(`   ⬅️  Navegando al mes anterior...`);
+        const prevButton = await this.page.waitForSelector('.ant-picker-header-prev-btn', { timeout: 5000 });
+        await prevButton.click();
+        await sleep(500);
+      } else if (targetYearMonth > displayedYearMonth) {
+        // Ir hacia adelante (mes siguiente)
+        console.log(`   ➡️  Navegando al mes siguiente...`);
+        const nextButton = await this.page.waitForSelector('.ant-picker-header-next-btn', { timeout: 5000 });
+        await nextButton.click();
+        await sleep(500);
+      } else {
+        // Mismo mes/año pero la celda no está visible (no debería pasar)
+        throw new Error(`Fecha ${bonusDate} no encontrada en el mes ${displayedMonth}/${displayedYear}`);
+      }
+
+      attempts++;
     }
 
-    // Click en la fecha dos veces (start y end del rango)
-    await dateCell.click();
-    await sleep(300);
-    await dateCell.click();
-    await sleep(500);
+    if (!targetDateFound) {
+      throw new Error(`No se pudo navegar a la fecha ${bonusDate} después de ${maxAttempts} intentos`);
+    }
 
-    console.log(`   📅 Fecha seleccionada: ${bonusDate}`);
+    // Ahora que estamos en el mes correcto, seleccionar la fecha dos veces
+    // Para evitar que el calendario salte entre clicks, hacemos ambos clicks rápidamente
+    console.log(`   📍 Seleccionando rango de fecha única...`);
+
+    // Primer click: fecha de inicio
+    let dateCell = await this.page.waitForSelector(
+      `.ant-picker-cell[title="${bonusDate}"]:not(.ant-picker-cell-disabled)`,
+      { timeout: 2000 }
+    );
+    await dateCell.click();
+    await sleep(100);
+
+    // Verificar si necesitamos volver a navegar al mes (por si el calendario saltó)
+    let secondDateCell = await this.page.$(`.ant-picker-cell[title="${bonusDate}"]:not(.ant-picker-cell-disabled)`);
+
+    if (!secondDateCell) {
+      console.log(`   ⚠️  Calendario cambió de mes, navegando de nuevo...`);
+      // Volver a navegar al mes correcto
+      let reNavAttempts = 0;
+      while (reNavAttempts < 3) {
+        const firstCell = await this.page.$('.ant-picker-cell[title]:not(.ant-picker-cell-disabled)');
+        if (!firstCell) break;
+
+        const cellTitle = await firstCell.getAttribute('title');
+        const [currentYear, currentMonth] = cellTitle!.split('-').map(Number);
+        const currentYearMonth = currentYear * 12 + currentMonth;
+        const targetYearMonth = targetYear * 12 + targetMonth;
+
+        if (currentYearMonth === targetYearMonth) {
+          break;
+        }
+
+        if (targetYearMonth < currentYearMonth) {
+          const prevBtn = await this.page.waitForSelector('.ant-picker-header-prev-btn', { timeout: 5000 });
+          await prevBtn.click();
+          await sleep(300);
+        } else {
+          const nextBtn = await this.page.waitForSelector('.ant-picker-header-next-btn', { timeout: 5000 });
+          await nextBtn.click();
+          await sleep(300);
+        }
+        reNavAttempts++;
+      }
+
+      secondDateCell = await this.page.waitForSelector(
+        `.ant-picker-cell[title="${bonusDate}"]:not(.ant-picker-cell-disabled)`,
+        { timeout: 2000 }
+      );
+    }
+
+    // Segundo click: fecha de fin
+    await secondDateCell.click();
+    console.log(`   ✅ Rango seleccionado: ${bonusDate} - ${bonusDate}`);
+    await sleep(500);
 
     // Click en el botón "Buscar"
     const searchButton = await this.page.waitForSelector('button:has-text("Buscar")', { timeout: 5000 });
@@ -346,6 +437,13 @@ class BonusProcessor {
     }
 
     const bonusDateStr = formatDate(bonusDate);
+
+    // Debug: mostrar las primeras filas y el formato de fecha
+    console.log(`   🔍 Buscando fecha: "${bonusDateStr}"`);
+    console.log(`   📋 Primeras 5 filas del sheet:`);
+    rows.slice(0, 5).forEach((row, i) => {
+      console.log(`      Fila ${i + 2}: fecha="${row[0]}" | activo="${row[5]}"`);
+    });
 
     const rules: BonusRule[] = rows
       .filter((row) => {
@@ -440,7 +538,7 @@ class BonusProcessor {
         return 0;
       });
 
-    // 2. Agrupar pedidos por (driver, regla aplicable)
+    // 2. Agrupar pedidos por (driver, monto) - consolida múltiples reglas del mismo monto
     const bonusesByDriver = new Map<string, Map<string, any>>();
 
     for (const order of orders) {
@@ -468,10 +566,10 @@ class BonusProcessor {
 
       if (!matchingRule) continue;
 
-      // Agrupar por (driver, regla)
+      // Agrupar por (driver, monto) - consolida reglas con mismo monto
       // Usamos driverName como key ya que driverCedula es opcional
       const driverKey = order.driverCedula || order.driverName;
-      const ruleKey = matchingRule.id;
+      const amountKey = matchingRule.amountPerOrder.toString();
 
       if (!bonusesByDriver.has(driverKey)) {
         bonusesByDriver.set(driverKey, new Map());
@@ -479,25 +577,31 @@ class BonusProcessor {
 
       const driverBonuses = bonusesByDriver.get(driverKey)!;
 
-      if (!driverBonuses.has(ruleKey)) {
-        driverBonuses.set(ruleKey, {
+      if (!driverBonuses.has(amountKey)) {
+        driverBonuses.set(amountKey, {
           orderCount: 0,
           amountPerOrder: matchingRule.amountPerOrder,
-          ruleId: matchingRule.id,
+          ruleIds: [], // Array de reglas que contribuyeron (para auditoría)
           driverCedula: order.driverCedula || '', // Puede estar vacío
           driverName: order.driverName,
           bonusDate: matchingRule.date,
         });
       }
 
-      driverBonuses.get(ruleKey)!.orderCount++;
+      const bonusData = driverBonuses.get(amountKey)!;
+      bonusData.orderCount++;
+
+      // Trackear regla si no está ya incluida (para auditoría)
+      if (!bonusData.ruleIds.includes(matchingRule.id)) {
+        bonusData.ruleIds.push(matchingRule.id);
+      }
     }
 
     // 3. Generar map de extras (agrupar por mismo nombre)
     const extrasByName = new Map<string, BonusComputation[]>();
 
     for (const [driverKey, driverBonuses] of bonusesByDriver) {
-      for (const [ruleId, bonusData] of driverBonuses) {
+      for (const [_amountKey, bonusData] of driverBonuses) {
         const extraName = this.generateExtraName(bonusData.bonusDate, bonusData.orderCount, bonusData.amountPerOrder);
 
         if (!extrasByName.has(extraName)) {
@@ -510,7 +614,7 @@ class BonusProcessor {
           orderCount: bonusData.orderCount,
           bonusAmount: bonusData.orderCount * bonusData.amountPerOrder,
           extraName: extraName,
-          ruleId: bonusData.ruleId,
+          ruleId: bonusData.ruleIds[0], // Usar primera regla para compatibilidad
           bonusDate: bonusData.bonusDate,
         });
       }
@@ -1552,6 +1656,7 @@ class BonusProcessor {
     const {
       bonusDate,
       executionMode,
+      scope = 'FULL',
       loginUrl = process.env.APP_LOGIN_URL!,
       ordersReportUrl = process.env.APP_ORDERS_REPORT_URL!,
       email = process.env.APP_EMAIL!,
@@ -1595,11 +1700,68 @@ class BonusProcessor {
         };
       }
 
-      // 5. Cargar reglas
-      const rules = await this.loadBonusRules(process.env.BONUS_RULES_SHEET_ID!, new Date(bonusDate));
+      // 5. Si scope es SHEETS_ONLY, retornar con preview de bonos sin tocar la UI
+      if (scope === 'SHEETS_ONLY') {
+        console.log('\n📊 Scope SHEETS_ONLY: generando preview de bonos...');
 
-      if (rules.length === 0) {
-        console.log('⚠️  No hay reglas activas para esta fecha');
+        const bonusDateObj = new Date(bonusDate + 'T00:00:00');
+        const rules = await this.loadBonusRules(process.env.BONUS_RULES_SHEET_ID!, bonusDateObj);
+
+        if (rules.length === 0) {
+          console.log('⚠️  No hay reglas activas para esta fecha');
+          return {
+            bonusDate,
+            executionMode,
+            stats: {
+              totalOrders: orders.length,
+              driversProcessed: 0,
+              extrasCreated: 0,
+              assignmentsSuccessful: 0,
+              assignmentsFailed: 0,
+              totalPayoutAmount: 0,
+            },
+          };
+        }
+
+        const extrasByName = this.computeBonuses(orders, rules);
+
+        const preview = Array.from(extrasByName.entries()).map(([extraName, computations]) => ({
+          extraName,
+          totalAmount: computations[0]?.bonusAmount || 0,
+          driverCount: computations.length,
+          drivers: computations.map((c) => `${c.driverName} (${c.driverCedula})`),
+        }));
+
+        const totalPayout = Array.from(extrasByName.values())
+          .flat()
+          .reduce((sum, c) => sum + c.bonusAmount, 0);
+
+        const allDriverCedulas = Array.from(extrasByName.values())
+          .flat()
+          .map((c) => c.driverCedula);
+
+        console.log(`✅ Preview generado: ${preview.length} extras, ${allDriverCedulas.length} conductores, ${totalPayout} Gs`);
+
+        return {
+          bonusDate,
+          executionMode,
+          stats: {
+            totalOrders: orders.length,
+            driversProcessed: allDriverCedulas.length,
+            extrasCreated: 0,
+            assignmentsSuccessful: 0,
+            assignmentsFailed: 0,
+            totalPayoutAmount: totalPayout,
+          },
+          preview,
+        };
+      }
+
+      // 6. Leer resumen de bonos del sheet (scope FULL)
+      const extraMap = await this.readBonusSummaryFromSheet(bonusDate);
+
+      if (extraMap.size === 0) {
+        console.log('⚠️  No hay datos de bonos en el sheet para esta fecha');
         return {
           bonusDate,
           executionMode,
@@ -1614,78 +1776,52 @@ class BonusProcessor {
         };
       }
 
-      // 6. Computar bonos
-      const extrasByName = this.computeBonuses(orders, rules);
-
-      // 7. Validar duplicados
-      const allDriverCedulas = Array.from(extrasByName.values())
-        .flat()
-        .map((c) => c.driverCedula);
-      const duplicates = await this.validateNoDuplicatesInDB(new Date(bonusDate), allDriverCedulas);
-
-      // Filtrar conductores duplicados
-      if (duplicates.length > 0) {
-        for (const [extraName, computations] of extrasByName) {
-          extrasByName.set(
-            extraName,
-            computations.filter((c) => !duplicates.includes(c.driverCedula))
-          );
-        }
-      }
-
-      // 8. Si es DRY_RUN, generar preview y terminar
+      // 7. Si es DRY_RUN, generar preview desde el sheet y terminar
       if (executionMode === 'DRY_RUN') {
-        const preview = Array.from(extrasByName.entries()).map(([extraName, computations]) => ({
+        const preview = Array.from(extraMap.entries()).map(([extraName, data]) => ({
           extraName,
-          totalAmount: computations[0]?.bonusAmount || 0,
-          driverCount: computations.length,
-          drivers: computations.map((c) => `${c.driverName} (${c.driverCedula})`),
+          totalAmount: data.totalAmount,
+          driverCount: data.drivers.length,
+          drivers: data.drivers,
         }));
 
-        const totalPayout = Array.from(extrasByName.values())
-          .flat()
-          .reduce((sum, c) => sum + c.bonusAmount, 0);
+        const totalPayout = Array.from(extraMap.values())
+          .reduce((sum, data) => sum + data.totalAmount, 0);
 
-        // Registrar en Sheet con status DRY_RUN
-        const allComputations = Array.from(extrasByName.values()).flat();
-        await this.recordAssignments(allComputations, 'DRY_RUN', process.env.BONUS_RULES_SHEET_ID!);
+        const totalDrivers = Array.from(extraMap.values())
+          .reduce((sum, data) => sum + data.drivers.length, 0);
 
         return {
           bonusDate,
           executionMode: 'DRY_RUN',
           stats: {
             totalOrders: orders.length,
-            driversProcessed: allDriverCedulas.length - duplicates.length,
+            driversProcessed: totalDrivers,
             extrasCreated: 0,
             assignmentsSuccessful: 0,
             assignmentsFailed: 0,
             totalPayoutAmount: totalPayout,
           },
           preview,
-          duplicatesDetected: duplicates.length,
-          duplicates,
         };
       }
 
-      // 9. EXECUTE: Crear extras y asignar
+      // 8. EXECUTE: Crear extras y asignar desde datos del sheet
       let extrasCreated = 0;
       let assignmentsSuccessful = 0;
       let assignmentsFailed = 0;
       const allErrors: Array<{ driver: string; error: string }> = [];
 
-      for (const [extraName, computations] of extrasByName) {
-        if (computations.length === 0) continue;
+      for (const [extraName, data] of extraMap) {
+        if (data.drivers.length === 0) continue;
 
-        const totalAmount = computations[0].bonusAmount;
-
-        // Crear extra
-        const created = await this.createExtra(extraName, totalAmount);
+        // Crear extra en UI
+        const created = await this.createExtraInUI(extraName, data.totalAmount);
         if (created) {
           extrasCreated++;
 
-          // Asignar a conductores
-          const driverCedulas = computations.map((c) => c.driverCedula);
-          const assignmentStats = await this.assignExtraToDrivers(extraName, driverCedulas);
+          // Asignar a conductores por nombre
+          const assignmentStats = await this.selectDriversForExtra(extraName, data.drivers, bonusDate);
 
           assignmentsSuccessful += assignmentStats.successful;
           assignmentsFailed += assignmentStats.failed;
@@ -1693,26 +1829,24 @@ class BonusProcessor {
         }
       }
 
-      // 10. Registrar en DB y Sheet
-      const allComputations = Array.from(extrasByName.values()).flat();
-      await this.recordAssignments(allComputations, 'EXECUTE', process.env.BONUS_RULES_SHEET_ID!);
+      const totalPayout = Array.from(extraMap.values())
+        .reduce((sum, data) => sum + data.totalAmount, 0);
 
-      const totalPayout = allComputations.reduce((sum, c) => sum + c.bonusAmount, 0);
+      const totalDrivers = Array.from(extraMap.values())
+        .reduce((sum, data) => sum + data.drivers.length, 0);
 
       return {
         bonusDate,
         executionMode: 'EXECUTE',
         stats: {
           totalOrders: orders.length,
-          driversProcessed: allDriverCedulas.length - duplicates.length,
+          driversProcessed: totalDrivers,
           extrasCreated,
           assignmentsSuccessful,
           assignmentsFailed,
           totalPayoutAmount: totalPayout,
         },
         errors: allErrors.length > 0 ? allErrors : undefined,
-        duplicatesDetected: duplicates.length,
-        duplicates: duplicates.length > 0 ? duplicates : undefined,
       };
     } finally {
       await this.close();

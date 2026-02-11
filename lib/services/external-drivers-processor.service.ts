@@ -48,13 +48,49 @@ function cleanDriverName(nombre: string, apellido: string): string {
     .replace(/\s+(js|JS|Js)$/i, '')
     .replace(/\s+(m&g|M&G|M\&G)$/i, '')
     .trim();
-  
+
   const fullName = `${nombre} ${cleanApellido}`;
-  
+
   return fullName
     .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ');
+}
+
+/**
+ * Genera variantes del nombre para búsqueda.
+ * Algunos drivers están guardados con espacio doble entre nombre y apellido.
+ *
+ * Ejemplo: "Christian Alberto Vera Cabañas JS" genera:
+ * - "Christian Alberto Vera Cabañas JS" (original)
+ * - "Christian  Alberto Vera Cabañas JS" (espacio doble después del primer nombre)
+ * - "Christian Alberto  Vera Cabañas JS" (espacio doble después del segundo nombre)
+ */
+function generateNameVariants(fullName: string): string[] {
+  const variants: string[] = [fullName]; // Siempre incluir el original primero
+
+  // Dividir el nombre en partes
+  const parts = fullName.split(' ').filter(p => p.length > 0);
+
+  if (parts.length >= 2) {
+    // Variante 1: espacio doble después del primer nombre
+    // "Christian  Alberto Vera Cabañas"
+    const variant1 = parts[0] + '  ' + parts.slice(1).join(' ');
+    if (!variants.includes(variant1)) {
+      variants.push(variant1);
+    }
+
+    // Variante 2: espacio doble después del segundo nombre (si hay 3+ partes)
+    if (parts.length >= 3) {
+      // "Christian Alberto  Vera Cabañas"
+      const variant2 = parts.slice(0, 2).join(' ') + '  ' + parts.slice(2).join(' ');
+      if (!variants.includes(variant2)) {
+        variants.push(variant2);
+      }
+    }
+  }
+
+  return variants;
 }
 
 function generatePdfFileName(driver: ReportDriver, startDate: string, endDate: string): string {
@@ -107,7 +143,7 @@ class PDFDownloadAutomation {
 
       this.context = await this.browser.newContext({
         acceptDownloads: true,
-        viewport: { width: 1920, height: 1080 },
+        viewport: { width: 1440, height: 900 },
       });
       console.log(`✅ [Worker ${this.workerId}] Contexto creado`);
 
@@ -219,39 +255,67 @@ class PDFDownloadAutomation {
     await sleep(500);
     
     console.log(`🔍 [Worker ${this.workerId}] Buscando conductor: ${driver.fullName}`);
-    
-    const driverSelect = await this.page.waitForSelector('.ant-select-selector', { 
-      timeout: 10000 
+
+    const driverSelect = await this.page.waitForSelector('.ant-select-selector', {
+      timeout: 10000
     });
     await driverSelect.click();
     await sleep(500);
-    
-    const driverInput = await this.page.waitForSelector('#filtersDriverPaymentForm_driver', { 
-      timeout: 10000 
+
+    const driverInput = await this.page.waitForSelector('#filtersDriverPaymentForm_driver', {
+      timeout: 10000
     });
-    
-    await driverInput.fill(driver.fullName);
-    await sleep(2000);
-    
-    console.log(`⏳ [Worker ${this.workerId}] Esperando dropdown...`);
-    
-    const dropdown = await this.page.waitForSelector('.rc-virtual-list-holder-inner', { 
-      timeout: 15000,
-      state: 'visible'
-    });
-    
-    console.log(`✅ [Worker ${this.workerId}] Dropdown apareció`);
-    
-    const firstOption = await dropdown.$('div:first-child');
-    
-    if (!firstOption) {
-      throw new Error(`No se encontró ninguna opción para: ${driver.fullName}`);
+
+    // Generar variantes del nombre (original + con espacio doble entre nombre y apellido)
+    const nameVariants = generateNameVariants(driver.fullName);
+    let foundOption = false;
+    let usedName = driver.fullName;
+
+    for (const nameVariant of nameVariants) {
+      console.log(`🔍 [Worker ${this.workerId}] Intentando con: "${nameVariant}"`);
+
+      // Limpiar el input antes de cada intento
+      await driverInput.fill('');
+      await sleep(300);
+      await driverInput.fill(nameVariant);
+      await sleep(2000);
+
+      console.log(`⏳ [Worker ${this.workerId}] Esperando dropdown...`);
+
+      try {
+        const dropdown = await this.page.waitForSelector('.rc-virtual-list-holder-inner', {
+          timeout: 8000,
+          state: 'visible'
+        });
+
+        const firstOption = await dropdown.$('div:first-child');
+
+        if (firstOption) {
+          // Verificar que no sea un mensaje de "No encontrado" o similar
+          const optionText = await firstOption.textContent();
+          if (optionText && !optionText.toLowerCase().includes('no encontr') && !optionText.toLowerCase().includes('sin resultado')) {
+            console.log(`✅ [Worker ${this.workerId}] Dropdown apareció con opción: "${optionText}"`);
+            await firstOption.click();
+            await sleep(500);
+            foundOption = true;
+            usedName = nameVariant;
+            break;
+          }
+        }
+      } catch (error) {
+        console.log(`⚠️  [Worker ${this.workerId}] No se encontró con "${nameVariant}", probando siguiente variante...`);
+      }
+
+      // Cerrar dropdown si está abierto antes del siguiente intento
+      await this.page.keyboard.press('Escape');
+      await sleep(300);
     }
-    
-    await firstOption.click();
-    await sleep(500);
-    
-    console.log(`✅ [Worker ${this.workerId}] Conductor seleccionado: ${driver.fullName}`);
+
+    if (!foundOption) {
+      throw new Error(`No se encontró ninguna opción para: ${driver.fullName} (intentado ${nameVariants.length} variantes)`);
+    }
+
+    console.log(`✅ [Worker ${this.workerId}] Conductor seleccionado: ${usedName}`);
     
     const submitButtonSelectors = [
       'button:has-text("Buscar")',

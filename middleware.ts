@@ -16,6 +16,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/reports/external-drivers(.*)',
   '/api/reports/process-all(.*)',
   '/api/reports/upload-only(.*)',
+  '/api/bonuses(.*)',
   '/api/cron/capacitacion-reminder(.*)',
   '/api/cron/capacitacion-reminder/preview(.*)',
 ])

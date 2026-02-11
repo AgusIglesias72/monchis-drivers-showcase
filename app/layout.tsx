@@ -1,18 +1,10 @@
 // app/layout.tsx
-import { Montserrat } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { GoogleAnalytics } from '@next/third-parties/google'
 import { GoogleTagManager } from '@/components/GoogleTagManager'
 import ClarityScript from "@/components/ClarityScript"
 import './globals.css';
 import { ClerkProviderWrapper } from '@/components/ClerkProviderWrapper'
-
-const montserrat = Montserrat({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-montserrat',
-  display: 'swap',
-});
 
 export const metadata = {
   metadataBase: new URL('https://monchis-drivers.vercel.app'),
@@ -89,10 +81,17 @@ export default function RootLayout({
     <ClerkProviderWrapper>
       <html lang="es">
         <head>
+          {/* Google Fonts - Montserrat */}
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+          <link 
+            href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" 
+            rel="stylesheet" 
+          />
           {/* Google Tag Manager debe ir en el <head> */}
           {gtmId && <GoogleTagManager gtmId={gtmId} />}
         </head>
-        <body className={`${montserrat.variable} font-sans`}>
+        <body className="font-sans">
           {children}
          
           {/* Sonner Toast */}

@@ -222,7 +222,7 @@ class ReportProcessorAndUploader {
 
       this.context = await this.browser.newContext({
         acceptDownloads: true,
-        viewport: { width: 1920, height: 1080 },
+        viewport: { width: 1440, height: 900 },
       });
       this.log('✅ Contexto del navegador creado');
 
@@ -240,13 +240,12 @@ class ReportProcessorAndUploader {
   async login(): Promise<void> {
     if (!this.page) throw new Error('Página no inicializada');
 
-    this.log('🔐 Iniciando sesión con Google Workspace + Okta...');
+    this.log('🔐 Iniciando sesión con Okta...');
 
     await performOktaLogin({
       page: this.page,
       loginUrl: this.config.loginUrl,
       targetUrl: this.config.reportsUrl,
-      googleUsername: this.config.googleUsername,
       oktaEmail: this.config.oktaEmail,
       // appEmail y appPassword se usan del .env por defecto en performOktaLogin
     });

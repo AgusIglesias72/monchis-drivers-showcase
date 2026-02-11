@@ -10,6 +10,7 @@ export const maxDuration = 300; // 5 minutos
 interface ProcessDailyRequest {
   bonusDate: string; // YYYY-MM-DD
   executionMode?: 'DRY_RUN' | 'EXECUTE';
+  scope?: 'FULL' | 'SHEETS_ONLY';
   notificationEmails?: string[];
   keepBrowserOpen?: boolean;
 }
@@ -59,8 +60,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validar scope
+    const scope = body.scope || 'FULL';
+    if (scope !== 'FULL' && scope !== 'SHEETS_ONLY') {
+      return NextResponse.json(
+        { success: false, error: 'scope debe ser FULL o SHEETS_ONLY' },
+        { status: 400 }
+      );
+    }
+
     console.log(`🚀 Iniciando proceso de bonos para ${body.bonusDate}`);
     console.log(`   Modo: ${executionMode}`);
+    console.log(`   Scope: ${scope}`);
 
     // ========== CREAR BACKGROUND JOB ==========
 
@@ -70,6 +81,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         bonusDate: body.bonusDate,
         executionMode,
+        scope,
         notificationEmails: body.notificationEmails,
       },
     });
@@ -84,11 +96,13 @@ export async function POST(request: NextRequest) {
         await backgroundJobsService.addLog(job.id, '🚀 Iniciando proceso de bonos...');
         await backgroundJobsService.addLog(job.id, `📅 Fecha: ${body.bonusDate}`);
         await backgroundJobsService.addLog(job.id, `🏃 Modo: ${executionMode}`);
+        await backgroundJobsService.addLog(job.id, `🎯 Scope: ${scope}`);
 
         // Ejecutar proceso
         const result = await bonusProcessorService.process({
           bonusDate: body.bonusDate,
           executionMode,
+          scope,
           notificationEmails: body.notificationEmails,
           keepBrowserOpen: body.keepBrowserOpen || false,
         });
@@ -180,15 +194,21 @@ export async function POST(request: NextRequest) {
 
     // ========== RESPONDER INMEDIATAMENTE ==========
 
+    const messageMap: Record<string, string> = {
+      'SHEETS_ONLY': `Solo sheets: se subirán pedidos y resumen de bonos para ${body.bonusDate}. Sin creación de extras ni asignaciones.`,
+      'FULL_DRY_RUN': `Simulación completa de bonos iniciada para ${body.bonusDate}. El proceso se ejecutará en background.`,
+      'FULL_EXECUTE': `Proceso de bonos iniciado para ${body.bonusDate}. El proceso se ejecutará en background.`,
+    };
+    const messageKey = scope === 'SHEETS_ONLY' ? 'SHEETS_ONLY' : `FULL_${executionMode}`;
+
     return NextResponse.json(
       {
         success: true,
-        message: executionMode === 'DRY_RUN'
-          ? `Simulación de bonos iniciada para ${body.bonusDate}. El proceso se ejecutará en background.`
-          : `Proceso de bonos iniciado para ${body.bonusDate}. El proceso se ejecutará en background.`,
+        message: messageMap[messageKey],
         jobId: job.id,
         bonusDate: body.bonusDate,
         executionMode,
+        scope,
       },
       { status: 200 }
     );
