@@ -4,7 +4,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { User } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { User, Megaphone, UserPlus } from "lucide-react"
 import { formatBirthDateWithAge, formatDateOnly } from "@/lib/utils"
 
 interface PersonalInfoCardProps {
@@ -329,7 +330,7 @@ export function PersonalInfoCard({
           {(postulacion.experience || postulacion.availability || postulacion.whenCanStart) && (
             <div className="space-y-2 pt-3 border-t">
               <h5 className="text-xs font-semibold text-muted-foreground">INFORMACIÓN ADICIONAL</h5>
-              
+
               {isEditing ? (
                 <div className="space-y-2">
                   {postulacion.experience !== undefined && (
@@ -371,6 +372,55 @@ export function PersonalInfoCard({
                     <div className="grid grid-cols-2">
                       <span className="text-xs text-muted-foreground">Puede iniciar:</span>
                       <span className="text-xs">{postulacion.whenCanStart}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Cómo se enteró / Referido */}
+          {(postulacion.howHeardAboutUs || postulacion.referredBy) && (
+            <div className="space-y-2 pt-3 border-t">
+              <h5 className="text-xs font-semibold text-muted-foreground">ORIGEN</h5>
+
+              {isEditing ? (
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Cómo se enteró</Label>
+                    <Input
+                      value={editedData.howHeardAboutUs || ''}
+                      onChange={(e) => setEditedData({ ...editedData, howHeardAboutUs: e.target.value })}
+                      placeholder="Ej: Instagram, Referido, etc."
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Referido por</Label>
+                    <Input
+                      value={editedData.referredBy || ''}
+                      onChange={(e) => setEditedData({ ...editedData, referredBy: e.target.value })}
+                      placeholder="Nombre de quien lo refirió"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {postulacion.howHeardAboutUs && (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="gap-1.5 text-xs font-normal">
+                        <Megaphone className="h-3 w-3" />
+                        {postulacion.howHeardAboutUs}
+                      </Badge>
+                    </div>
+                  )}
+                  {postulacion.referredBy && (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="gap-1.5 text-xs font-normal border-green-200 bg-green-50 text-green-700">
+                        <UserPlus className="h-3 w-3" />
+                        Referido por: {postulacion.referredBy}
+                      </Badge>
                     </div>
                   )}
                 </div>

@@ -30,11 +30,18 @@ export async function POST(request: NextRequest) {
       where,
       include: {
         documents: true,
-        equipmentPayments: true,
+        equipmentPayments: {
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
         financialService: true,
         onboardingAttendances: {
           include: {
             event: true,
+          },
+          orderBy: {
+            createdAt: "desc",
           },
         },
       },
@@ -50,8 +57,8 @@ export async function POST(request: NextRequest) {
         .map((d) => `${d.documentType}: ${d.blobUrl}`)
         .join(", ");
 
-      // Información de pago
-      const payment = p.equipmentPayments[0]; // Asumimos el primer pago
+      // Información de pago (el más reciente)
+      const payment = p.equipmentPayments[0];
       const paymentInfo = payment
         ? {
             paymentMethod: payment.paymentMethod || "",
@@ -60,14 +67,22 @@ export async function POST(request: NextRequest) {
             invoiceNumber: payment.invoiceNumber || "",
             paymentStatus: payment.status,
             paymentProofUrl: payment.paymentProofUrl || "",
+            paymentDate: payment.paymentDate
+              ? payment.paymentDate.toISOString().split("T")[0]
+              : "",
+            hasPayment: "Sí",
+            paymentVerified: payment.status === "VERIFIED" ? "Sí" : "No",
           }
         : {
             paymentMethod: "",
             paymentAmount: 0,
             paymentNumber: "",
             invoiceNumber: "",
-            paymentStatus: "N/A",
+            paymentStatus: "SIN PAGO",
             paymentProofUrl: "",
+            paymentDate: "",
+            hasPayment: "No",
+            paymentVerified: "No",
           };
 
       // Información financiera
@@ -84,19 +99,71 @@ export async function POST(request: NextRequest) {
             taxComplianceUrl: "",
           };
 
-      // Información de onboarding
-      const onboarding = p.onboardingAttendances[0];
-      const onboardingInfo = onboarding
+      // ===== INFORMACIÓN DETALLADA DE CAPACITACIONES =====
+      const attendances = p.onboardingAttendances || [];
+      const totalCapacitaciones = attendances.length;
+
+      // Última capacitación asignada (la más reciente)
+      const ultimaCapacitacion = attendances[0];
+
+      // Verificar asistencias
+      const asistenciasConfirmadas = attendances.filter(
+        (a) => a.status === "ATTENDED" || a.status === "CONFIRMED"
+      );
+      const noShows = attendances.filter((a) => a.status === "NO_SHOW");
+      const agendadas = attendances.filter(
+        (a) => a.status === "SCHEDULED" || a.status === "INVITED"
+      );
+
+      // Determinar estado de asistencia resumido
+      let resumenAsistencia = "Sin capacitación asignada";
+      if (totalCapacitaciones > 0) {
+        if (asistenciasConfirmadas.length > 0) {
+          resumenAsistencia = "Asistió";
+        } else if (noShows.length > 0 && agendadas.length === 0) {
+          resumenAsistencia = "No Asistió";
+        } else if (agendadas.length > 0) {
+          resumenAsistencia = "Agendado - Pendiente";
+        } else {
+          resumenAsistencia = ultimaCapacitacion?.status || "Pendiente";
+        }
+      }
+
+      // Información de onboarding detallada
+      const onboardingInfo = ultimaCapacitacion
         ? {
-            onboardingStatus: onboarding.status,
-            onboardingDate: onboarding.event.scheduledDate.toISOString().split("T")[0],
-            onboardingLocation: onboarding.event.location || "",
+            onboardingStatus: ultimaCapacitacion.status,
+            onboardingDate: ultimaCapacitacion.event?.scheduledDate
+              ? ultimaCapacitacion.event.scheduledDate.toISOString().split("T")[0]
+              : "",
+            onboardingLocation: ultimaCapacitacion.event?.location || "",
+            onboardingEventTitle: ultimaCapacitacion.event?.title || "",
           }
         : {
             onboardingStatus: p.onboardingStatus || "NOT_READY",
             onboardingDate: "",
             onboardingLocation: "",
+            onboardingEventTitle: "",
           };
+
+      // Campos adicionales de capacitación
+      const capacitacionInfo = {
+        tieneCapacitacionAsignada: totalCapacitaciones > 0 ? "Sí" : "No",
+        totalCapacitacionesAsignadas: totalCapacitaciones,
+        fechaUltimaCapacitacion: onboardingInfo.onboardingDate,
+        estadoUltimaCapacitacion: onboardingInfo.onboardingStatus,
+        asistioCapacitacion: asistenciasConfirmadas.length > 0 ? "Sí" : "No",
+        noAsistioCapacitacion: noShows.length > 0 ? "Sí" : "No",
+        cantidadNoShows: noShows.length,
+        resumenAsistencia: resumenAsistencia,
+        fechaCheckIn: ultimaCapacitacion?.checkedInAt
+          ? ultimaCapacitacion.checkedInAt.toISOString().split("T")[0]
+          : "",
+        onboardingCompletado: p.onboardingStatus === "COMPLETED" ? "Sí" : "No",
+        fechaOnboardingCompletado: p.onboardingCompletedAt
+          ? p.onboardingCompletedAt.toISOString().split("T")[0]
+          : "",
+      };
 
       return {
         // Datos personales
@@ -144,18 +211,31 @@ export async function POST(request: NextRequest) {
         "Interesado en Conto": financialInfo.interestedInConto,
         "Certificado Tributario": financialInfo.taxComplianceUrl,
 
-        // Pago de equipamiento
+        // ===== PAGO DE EQUIPAMIENTO (MEJORADO) =====
+        "Realizó Pago": paymentInfo.hasPayment,
+        "Pago Verificado": paymentInfo.paymentVerified,
         "Método de Pago": paymentInfo.paymentMethod,
         "Monto Pagado": paymentInfo.paymentAmount,
+        "Fecha de Pago": paymentInfo.paymentDate,
         "Nro Comprobante": paymentInfo.paymentNumber,
         "Nro Factura": paymentInfo.invoiceNumber,
         "Estado Pago": paymentInfo.paymentStatus,
         "Comprobante URL": paymentInfo.paymentProofUrl,
 
-        // Onboarding
-        "Estado Onboarding": onboardingInfo.onboardingStatus,
-        "Fecha Onboarding": onboardingInfo.onboardingDate,
-        "Ubicación Onboarding": onboardingInfo.onboardingLocation,
+        // ===== CAPACITACIONES (NUEVO - DETALLADO) =====
+        "Tiene Capacitación Asignada": capacitacionInfo.tieneCapacitacionAsignada,
+        "Total Capacitaciones Asignadas": capacitacionInfo.totalCapacitacionesAsignadas,
+        "Fecha Última Capacitación": capacitacionInfo.fechaUltimaCapacitacion,
+        "Estado Última Capacitación": capacitacionInfo.estadoUltimaCapacitacion,
+        "Asistió a Capacitación": capacitacionInfo.asistioCapacitacion,
+        "No Asistió (No Show)": capacitacionInfo.noAsistioCapacitacion,
+        "Cantidad No Shows": capacitacionInfo.cantidadNoShows,
+        "Resumen Asistencia": capacitacionInfo.resumenAsistencia,
+        "Fecha Check-In": capacitacionInfo.fechaCheckIn,
+        "Onboarding Completado": capacitacionInfo.onboardingCompletado,
+        "Fecha Onboarding Completado": capacitacionInfo.fechaOnboardingCompletado,
+        "Ubicación Capacitación": onboardingInfo.onboardingLocation,
+        "Título Evento": onboardingInfo.onboardingEventTitle,
 
         // Estado del formulario
         Estado: p.status,
@@ -214,15 +294,31 @@ export async function POST(request: NextRequest) {
       { wch: 12 }, // Puede facturar
       { wch: 15 }, // Interesado en Conto
       { wch: 50 }, // Certificado Tributario
+      // PAGO DE EQUIPAMIENTO
+      { wch: 12 }, // Realizó Pago
+      { wch: 15 }, // Pago Verificado
       { wch: 15 }, // Método de Pago
       { wch: 12 }, // Monto Pagado
+      { wch: 12 }, // Fecha de Pago
       { wch: 15 }, // Nro Comprobante
       { wch: 15 }, // Nro Factura
-      { wch: 12 }, // Estado Pago
+      { wch: 15 }, // Estado Pago
       { wch: 50 }, // Comprobante URL
-      { wch: 15 }, // Estado Onboarding
-      { wch: 12 }, // Fecha Onboarding
-      { wch: 20 }, // Ubicación Onboarding
+      // CAPACITACIONES
+      { wch: 20 }, // Tiene Capacitación Asignada
+      { wch: 15 }, // Total Capacitaciones Asignadas
+      { wch: 18 }, // Fecha Última Capacitación
+      { wch: 20 }, // Estado Última Capacitación
+      { wch: 18 }, // Asistió a Capacitación
+      { wch: 18 }, // No Asistió (No Show)
+      { wch: 15 }, // Cantidad No Shows
+      { wch: 25 }, // Resumen Asistencia
+      { wch: 15 }, // Fecha Check-In
+      { wch: 18 }, // Onboarding Completado
+      { wch: 22 }, // Fecha Onboarding Completado
+      { wch: 20 }, // Ubicación Capacitación
+      { wch: 25 }, // Título Evento
+      // ESTADO FORMULARIO
       { wch: 15 }, // Estado
       { wch: 10 }, // Paso Actual
       { wch: 15 }, // Pasos Completados
