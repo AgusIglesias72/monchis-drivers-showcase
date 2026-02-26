@@ -68,7 +68,7 @@ export const InformationSection: React.FC = () => {
                 <div className="text-center">
                   <p className="text-sm text-gray-600 mb-2">Pago inicial requerido</p>
                   <div className="text-4xl font-bold mb-3" style={{ color: MONCHIS_RED }}>
-                    Gs. 100.000
+                    Gs. 200.000
                   </div>
                   <p className="text-sm text-gray-700 leading-relaxed">
                     Este monto es <strong>requisito para comenzar a realizar entregas</strong>. Lo podés abonar mediante transferencia previo a la capacitación o ese mismo día.
@@ -140,7 +140,7 @@ export const InformationSection: React.FC = () => {
                 </div>
                 <div className="pt-3 border-t border-gray-300">
                   <p className="text-sm text-gray-600 leading-relaxed">
-                    El <strong>saldo restante (318.000 Gs.)</strong> se descuenta automáticamente de tus comisiones quincenales. Este monto <strong>no es reembolsable</strong>.
+                    El <strong>saldo restante (218.000 Gs.)</strong> se descuenta automáticamente de tus comisiones quincenales. Este monto <strong>no es reembolsable</strong>.
                   </p>
                 </div>
               </div>

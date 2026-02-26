@@ -82,7 +82,7 @@ ${eventsList}
 
 ⏱ *Tolerancia máxima:* 10 minutos
 
-💳 *Costo:* Gs. 100.000 en concepto de entrega de equipos (solo POS o transferencia, no efectivo)
+💳 *Costo:* Gs. 200.000 en concepto de entrega de equipos (solo POS o transferencia, no efectivo)
 
 ¿Alguna de estas fechas te viene bien? 😊`
 }
@@ -129,7 +129,7 @@ ${eventsList}
 
 ⏱ *Tolerancia máxima:* 10 minutos
 
-💳 *Costo:* Gs. 100.000 en concepto de entrega de equipos (solo POS o transferencia, no efectivo)
+💳 *Costo:* Gs. 200.000 en concepto de entrega de equipos (solo POS o transferencia, no efectivo)
 
 ¿Alguna de estas fechas te viene bien? 😊`
 }

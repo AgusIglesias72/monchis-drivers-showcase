@@ -8,17 +8,17 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up',
   '/reset-password',
   '/sso-callback',
+  '/postulacion(.*)', // ← Portal de autogestión (rutas públicas con token)
   '/api/form(.*)',
+  '/api/postulacion/(.*)', // ← APIs del portal (generate-token tiene auth interna)
   '/api/webhooks(.*)',
-  '/api/cron(.*)', // ← AGREGAR ESTA LÍNEA para los crons
+  '/api/cron(.*)',
   '/api/admin/postulaciones/export-json(.*)',
   '/api/onboarding/no-show(.*)',
   '/api/reports/external-drivers(.*)',
   '/api/reports/process-all(.*)',
   '/api/reports/upload-only(.*)',
   '/api/bonuses(.*)',
-  '/api/cron/capacitacion-reminder(.*)',
-  '/api/cron/capacitacion-reminder/preview(.*)',
 ])
 
 export default clerkMiddleware(async (auth, req) => {

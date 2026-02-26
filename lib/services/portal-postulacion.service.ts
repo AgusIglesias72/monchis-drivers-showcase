@@ -1,0 +1,628 @@
+// lib/services/portal-postulacion.service.ts
+// Servicio para operaciones del portal de postulantes
+
+import { prisma } from '@/lib/prisma'
+import { put, del } from '@vercel/blob'
+import type {
+  PortalData,
+  PersonalDataSection,
+  DocumentWithStatus,
+  NextStepsInfo,
+  AssignedCapacitacionInfo,
+  AvailableCapacitacionEvent,
+  UpdatePersonalDataDto,
+} from '@/lib/types/portal.types'
+import { getDocumentTypeName } from '@/lib/types/portal.types'
+import { validateAccessToken, type FormDriverWithPortalIncludes } from './portal-access.service'
+import type { FormDriver, DocumentType, OnboardingEvent } from '@prisma/client'
+
+/**
+ * Obtiene todos los datos del portal para un postulante
+ * @param token - Access token del postulante
+ * @returns Datos completos del portal
+ */
+export async function getPostulacionByToken(token: string): Promise<PortalData> {
+  const formDriver = await validateAccessToken(token)
+
+  // Construir datos personales
+  const personalData: PersonalDataSection = {
+    firstName: formDriver.firstName,
+    lastName: formDriver.lastName,
+    email: formDriver.email,
+    birthDate: formDriver.birthDate,
+    department: formDriver.department,
+    city: formDriver.city,
+    neighborhood: formDriver.neighborhood,
+    address: formDriver.address,
+    addressLat: formDriver.addressLat,
+    addressLng: formDriver.addressLng,
+    emergencyName: formDriver.emergencyName,
+    emergencyRelationship: formDriver.emergencyRelationship,
+    emergencyPhone: formDriver.emergencyPhone,
+    workZone: formDriver.workZone,
+    howHeardAboutUs: formDriver.howHeardAboutUs,
+    referredBy: formDriver.referredBy,
+    hasVehicle: formDriver.hasVehicle,
+    vehicleBrand: formDriver.vehicleBrand,
+    vehicleModel: formDriver.vehicleModel,
+    vehicleYear: formDriver.vehicleYear,
+    vehiclePlate: formDriver.vehiclePlate,
+    experience: formDriver.experience,
+    availability: formDriver.availability,
+    whenCanStart: formDriver.whenCanStart,
+    hasUenoAccount: formDriver.hasUenoAccount,
+    uenoAccountNumber: formDriver.uenoAccountNumber,
+    canInvoice: formDriver.canInvoice,
+  }
+
+  // Construir documentos con información de estado
+  const documents: DocumentWithStatus[] = formDriver.documents.map((doc) => ({
+    id: doc.id,
+    documentType: doc.documentType,
+    documentTypeName: getDocumentTypeName(doc.documentType),
+    fileName: doc.fileName,
+    blobUrl: doc.blobUrl,
+    status: doc.status,
+    rejectionReason: doc.rejectionReason,
+    uploadedAt: doc.uploadedAt,
+    reviewedAt: doc.reviewedAt,
+    reviewedBy: doc.reviewedByUser?.fullName || null,
+    canDelete: doc.status === 'PENDING' || doc.status === 'REJECTED',
+    canReplace: doc.status === 'REJECTED',
+  }))
+
+  // Calcular próximos pasos
+  const nextSteps = calculateNextSteps(formDriver)
+
+  // Obtener capacitación asignada si existe
+  const assignedCapacitacion = getAssignedCapacitacion(formDriver)
+
+  return {
+    id: formDriver.id,
+    fullName: formDriver.fullName,
+    cedula: formDriver.cedula,
+    phoneNumber: formDriver.phoneNumber,
+    email: formDriver.email,
+    status: formDriver.status,
+    documentsStatus: formDriver.documentsStatus,
+    onboardingStatus: formDriver.onboardingStatus,
+    personalData,
+    documents,
+    nextSteps,
+    assignedCapacitacion,
+  }
+}
+
+/**
+ * Actualiza datos personales del postulante
+ * @param token - Access token
+ * @param data - Datos a actualizar
+ * @returns FormDriver actualizado
+ */
+export async function updatePersonalData(
+  token: string,
+  data: UpdatePersonalDataDto
+): Promise<FormDriver> {
+  const formDriver = await validateAccessToken(token)
+
+  // Convertir birthDate si viene como string
+  const updateData: any = { ...data }
+  if (updateData.birthDate && typeof updateData.birthDate === 'string') {
+    updateData.birthDate = new Date(updateData.birthDate)
+  }
+
+  const updated = await prisma.formDriver.update({
+    where: { id: formDriver.id },
+    data: updateData,
+  })
+
+  return updated
+}
+
+/**
+ * Sube un nuevo documento
+ * @param token - Access token
+ * @param file - Archivo a subir
+ * @param documentType - Tipo de documento
+ * @returns Documento creado
+ */
+export async function uploadDocument(
+  token: string,
+  file: File,
+  documentType: DocumentType
+) {
+  const formDriver = await validateAccessToken(token)
+
+  // Upload a Vercel Blob
+  const blob = await put(
+    `drivers/${formDriver.cedula}/${documentType}-${Date.now()}-${file.name}`,
+    file,
+    {
+      access: 'public',
+      addRandomSuffix: true,
+    }
+  )
+
+  // Crear registro en BD
+  const document = await prisma.formDocument.create({
+    data: {
+      formDriverId: formDriver.id,
+      documentType,
+      fileName: file.name,
+      blobUrl: blob.url,
+      mimeType: file.type,
+      fileSize: file.size,
+      status: 'PENDING',
+      uploadedAt: new Date(),
+    },
+  })
+
+  // Recalcular documentsStatus
+  await recalculateDocumentsStatus(formDriver.id)
+
+  return document
+}
+
+/**
+ * Elimina un documento
+ * Solo permitido para documentos PENDING o REJECTED
+ * @param token - Access token
+ * @param docId - ID del documento a eliminar
+ */
+export async function deleteDocument(token: string, docId: string): Promise<void> {
+  const formDriver = await validateAccessToken(token)
+
+  // Buscar documento
+  const document = await prisma.formDocument.findUnique({
+    where: { id: docId },
+  })
+
+  if (!document) {
+    throw new Error('Documento no encontrado')
+  }
+
+  // Verificar que pertenece al postulante
+  if (document.formDriverId !== formDriver.id) {
+    throw new Error('No tiene permisos para eliminar este documento')
+  }
+
+  // Verificar que el status permite eliminación
+  if (document.status !== 'PENDING' && document.status !== 'REJECTED') {
+    throw new Error('Solo se pueden eliminar documentos pendientes o rechazados')
+  }
+
+  // Eliminar de Vercel Blob
+  try {
+    await del(document.blobUrl)
+  } catch (error) {
+    console.error('Error eliminando archivo de Vercel Blob:', error)
+    // Continuar con la eliminación de BD incluso si falla el blob
+  }
+
+  // Eliminar de BD
+  await prisma.formDocument.delete({
+    where: { id: docId },
+  })
+
+  // Recalcular documentsStatus
+  await recalculateDocumentsStatus(formDriver.id)
+}
+
+/**
+ * Obtiene eventos de capacitación disponibles
+ * @param token - Access token
+ * @returns Lista de eventos disponibles y capacitación actual
+ */
+export async function getAvailableCapacitaciones(token: string): Promise<{
+  canSelect: boolean
+  reason: string | null
+  events: AvailableCapacitacionEvent[]
+  currentAssignment: AssignedCapacitacionInfo | null
+}> {
+  const formDriver = await validateAccessToken(token)
+
+  // Verificar si puede seleccionar capacitación
+  const canSelect = formDriver.documentsStatus === 'APPROVED'
+  const reason = !canSelect
+    ? 'Debes tener todos tus documentos aprobados para seleccionar una capacitación'
+    : null
+
+  // Obtener capacitación actual si existe
+  const currentAssignment = getAssignedCapacitacion(formDriver)
+
+  // Si no puede seleccionar, retornar vacío
+  if (!canSelect) {
+    return {
+      canSelect: false,
+      reason,
+      events: [],
+      currentAssignment,
+    }
+  }
+
+  // Buscar eventos disponibles
+  const now = new Date()
+  const events = await prisma.onboardingEvent.findMany({
+    where: {
+      scheduledDate: {
+        gte: now,
+      },
+      status: 'SCHEDULED',
+      OR: [
+        { maxCapacity: null },
+        {
+          currentCapacity: {
+            lt: prisma.onboardingEvent.fields.maxCapacity,
+          },
+        },
+      ],
+    },
+    orderBy: {
+      scheduledDate: 'asc',
+    },
+  })
+
+  const availableEvents: AvailableCapacitacionEvent[] = events.map((event) => ({
+    id: event.id,
+    title: event.title || 'Capacitación',
+    scheduledDate: event.scheduledDate,
+    startTime: event.startTime || '09:00',
+    endTime: event.endTime || '12:00',
+    location: event.location || 'Oficina Central',
+    locationAddress: event.locationAddress || '',
+    meetingLink: event.meetingLink || null,
+    availableSlots: event.maxCapacity
+      ? event.maxCapacity - event.currentCapacity
+      : 999,
+    maxCapacity: event.maxCapacity || 999,
+    description: event.description || null,
+  }))
+
+  return {
+    canSelect,
+    reason: null,
+    events: availableEvents,
+    currentAssignment,
+  }
+}
+
+/**
+ * Selecciona un evento de capacitación
+ * @param token - Access token
+ * @param eventId - ID del evento a seleccionar
+ * @returns Información de la asignación
+ */
+export async function selectCapacitacion(
+  token: string,
+  eventId: string
+): Promise<AssignedCapacitacionInfo> {
+  const formDriver = await validateAccessToken(token)
+
+  // Verificar que puede seleccionar
+  if (formDriver.documentsStatus !== 'APPROVED') {
+    throw new Error('Debes tener todos tus documentos aprobados para seleccionar capacitación')
+  }
+
+  // Verificar que el evento existe y tiene capacidad
+  const event = await prisma.onboardingEvent.findUnique({
+    where: { id: eventId },
+  })
+
+  if (!event) {
+    throw new Error('Evento no encontrado')
+  }
+
+  if (event.status !== 'SCHEDULED') {
+    throw new Error('El evento no está disponible para selección')
+  }
+
+  if (event.maxCapacity && event.currentCapacity >= event.maxCapacity) {
+    throw new Error('El evento no tiene cupos disponibles')
+  }
+
+  // Verificar que no esté ya asignado a otro evento activo
+  const existingAssignment = await prisma.onboardingAttendee.findFirst({
+    where: {
+      formDriverId: formDriver.id,
+      status: {
+        in: ['INVITED', 'CONFIRMED', 'SCHEDULED'],
+      },
+    },
+  })
+
+  if (existingAssignment) {
+    throw new Error('Ya tienes una capacitación asignada')
+  }
+
+  // Crear asignación
+  const attendee = await prisma.onboardingAttendee.create({
+    data: {
+      formDriverId: formDriver.id,
+      eventId: event.id,
+      status: 'SCHEDULED',
+      invitedAt: new Date(),
+    },
+    include: {
+      event: true,
+    },
+  })
+
+  // Actualizar capacidad del evento
+  await prisma.onboardingEvent.update({
+    where: { id: event.id },
+    data: {
+      currentCapacity: {
+        increment: 1,
+      },
+    },
+  })
+
+  // Actualizar estado del formDriver
+  await prisma.formDriver.update({
+    where: { id: formDriver.id },
+    data: {
+      onboardingStatus: 'SCHEDULED',
+      onboardingScheduledAt: event.scheduledDate,
+    },
+  })
+
+  return {
+    id: attendee.id,
+    eventId: attendee.eventId,
+    scheduledDate: attendee.event.scheduledDate,
+    startTime: attendee.event.startTime || '09:00',
+    endTime: attendee.event.endTime || '12:00',
+    location: attendee.event.location || 'Oficina Central',
+    locationAddress: attendee.event.locationAddress || '',
+    meetingLink: attendee.event.meetingLink,
+    status: attendee.status,
+    canChange: true,
+    confirmedAt: attendee.confirmedAt,
+  }
+}
+
+/**
+ * Cambia la capacitación asignada por otra
+ * @param token - Access token
+ * @param newEventId - ID del nuevo evento
+ * @returns Información de la nueva asignación
+ */
+export async function changeCapacitacion(
+  token: string,
+  newEventId: string
+): Promise<{ previousEvent: { id: string; scheduledDate: Date }; newAssignment: AssignedCapacitacionInfo }> {
+  const formDriver = await validateAccessToken(token)
+
+  // Buscar asignación actual
+  const currentAssignment = await prisma.onboardingAttendee.findFirst({
+    where: {
+      formDriverId: formDriver.id,
+      status: {
+        in: ['INVITED', 'CONFIRMED', 'SCHEDULED'],
+      },
+    },
+    include: {
+      event: true,
+    },
+  })
+
+  if (!currentAssignment) {
+    throw new Error('No tienes una capacitación asignada actualmente')
+  }
+
+  // Verificar que el nuevo evento es diferente
+  if (currentAssignment.eventId === newEventId) {
+    throw new Error('Ya estás asignado a este evento')
+  }
+
+  // Verificar que el nuevo evento existe y tiene capacidad
+  const newEvent = await prisma.onboardingEvent.findUnique({
+    where: { id: newEventId },
+  })
+
+  if (!newEvent) {
+    throw new Error('Evento no encontrado')
+  }
+
+  if (newEvent.status !== 'SCHEDULED') {
+    throw new Error('El evento no está disponible')
+  }
+
+  if (newEvent.maxCapacity && newEvent.currentCapacity >= newEvent.maxCapacity) {
+    throw new Error('El evento no tiene cupos disponibles')
+  }
+
+  // Guardar info del evento anterior
+  const previousEvent = {
+    id: currentAssignment.eventId,
+    scheduledDate: currentAssignment.event.scheduledDate,
+  }
+
+  // Cancelar asignación anterior
+  await prisma.onboardingAttendee.update({
+    where: { id: currentAssignment.id },
+    data: {
+      status: 'CANCELLED',
+    },
+  })
+
+  // Liberar capacidad del evento anterior
+  await prisma.onboardingEvent.update({
+    where: { id: currentAssignment.eventId },
+    data: {
+      currentCapacity: {
+        decrement: 1,
+      },
+    },
+  })
+
+  // Crear nueva asignación
+  const newAttendee = await prisma.onboardingAttendee.create({
+    data: {
+      formDriverId: formDriver.id,
+      eventId: newEvent.id,
+      status: 'SCHEDULED',
+      invitedAt: new Date(),
+    },
+    include: {
+      event: true,
+    },
+  })
+
+  // Incrementar capacidad del nuevo evento
+  await prisma.onboardingEvent.update({
+    where: { id: newEvent.id },
+    data: {
+      currentCapacity: {
+        increment: 1,
+      },
+    },
+  })
+
+  // Actualizar formDriver
+  await prisma.formDriver.update({
+    where: { id: formDriver.id },
+    data: {
+      onboardingScheduledAt: newEvent.scheduledDate,
+    },
+  })
+
+  return {
+    previousEvent,
+    newAssignment: {
+      id: newAttendee.id,
+      eventId: newAttendee.eventId,
+      scheduledDate: newAttendee.event.scheduledDate,
+      startTime: newAttendee.event.startTime || '09:00',
+      endTime: newAttendee.event.endTime || '12:00',
+      location: newAttendee.event.location || 'Oficina Central',
+      locationAddress: newAttendee.event.locationAddress || '',
+      meetingLink: newAttendee.event.meetingLink,
+      status: newAttendee.status,
+      canChange: true,
+      confirmedAt: newAttendee.confirmedAt,
+    },
+  }
+}
+
+// ===== HELPER FUNCTIONS =====
+
+/**
+ * Calcula los próximos pasos y permisos del postulante
+ */
+function calculateNextSteps(formDriver: any): NextStepsInfo {
+  const pendingActions: string[] = []
+  let progressPercentage = 0
+
+  // Calcular progreso
+  const totalSteps = 5
+  let completedSteps = 0
+
+  // 1. Formulario completado
+  if (formDriver.status === 'COMPLETED') {
+    completedSteps++
+  } else {
+    pendingActions.push('Completar formulario de postulación')
+  }
+
+  // 2. Documentos aprobados
+  if (formDriver.documentsStatus === 'APPROVED') {
+    completedSteps++
+  } else if (formDriver.documentsStatus === 'CORRECTIONS') {
+    pendingActions.push('Corregir documentos rechazados')
+  } else {
+    pendingActions.push('Subir documentos requeridos')
+  }
+
+  // 3. Capacitación seleccionada
+  if (formDriver.onboardingStatus === 'SCHEDULED' || formDriver.onboardingStatus === 'COMPLETED') {
+    completedSteps++
+  } else if (formDriver.documentsStatus === 'APPROVED') {
+    pendingActions.push('Seleccionar fecha de capacitación')
+  }
+
+  // 4. Capacitación completada
+  if (formDriver.onboardingStatus === 'COMPLETED') {
+    completedSteps++
+  }
+
+  // 5. Activación
+  if (formDriver.status === 'ACTIVE') {
+    completedSteps++
+  }
+
+  progressPercentage = Math.round((completedSteps / totalSteps) * 100)
+
+  return {
+    canUploadDocuments: true, // Siempre puede subir documentos
+    canSelectCapacitacion: formDriver.documentsStatus === 'APPROVED',
+    pendingActions,
+    progressPercentage,
+  }
+}
+
+/**
+ * Obtiene la capacitación asignada si existe
+ */
+function getAssignedCapacitacion(formDriver: any): AssignedCapacitacionInfo | null {
+  const activeAssignment = formDriver.onboardingAttendances.find(
+    (attendance: any) =>
+      attendance.status === 'INVITED' ||
+      attendance.status === 'CONFIRMED' ||
+      attendance.status === 'SCHEDULED'
+  )
+
+  if (!activeAssignment) {
+    return null
+  }
+
+  return {
+    id: activeAssignment.id,
+    eventId: activeAssignment.eventId,
+    scheduledDate: activeAssignment.event.scheduledDate,
+    startTime: activeAssignment.event.startTime || '09:00',
+    endTime: activeAssignment.event.endTime || '12:00',
+    location: activeAssignment.event.location || 'Oficina Central',
+    locationAddress: activeAssignment.event.locationAddress || '',
+    meetingLink: activeAssignment.event.meetingLink,
+    status: activeAssignment.status,
+    canChange: true,
+    confirmedAt: activeAssignment.confirmedAt,
+  }
+}
+
+/**
+ * Recalcula el documentsStatus basado en los documentos actuales
+ */
+async function recalculateDocumentsStatus(formDriverId: string): Promise<void> {
+  const documents = await prisma.formDocument.findMany({
+    where: { formDriverId },
+  })
+
+  let newStatus: any = 'INCOMPLETE'
+
+  if (documents.length === 0) {
+    newStatus = 'INCOMPLETE'
+  } else {
+    const hasRejected = documents.some((doc) => doc.status === 'REJECTED')
+    const hasPending = documents.some(
+      (doc) => doc.status === 'PENDING' || doc.status === 'IN_REVIEW'
+    )
+    const allApproved = documents.every((doc) => doc.status === 'APPROVED')
+
+    if (allApproved && documents.length > 0) {
+      newStatus = 'APPROVED'
+    } else if (hasRejected) {
+      newStatus = 'CORRECTIONS'
+    } else if (hasPending) {
+      newStatus = 'IN_REVIEW'
+    } else {
+      newStatus = 'PENDING'
+    }
+  }
+
+  await prisma.formDriver.update({
+    where: { id: formDriverId },
+    data: { documentsStatus: newStatus },
+  })
+}

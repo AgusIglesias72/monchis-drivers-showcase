@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { FormDocumentsStatus } from '@prisma/client'
 import { NextResponse } from 'next/server'
+import { sendPortalSelectCapacitacion } from '@/lib/services/portal-whatsapp.service'
 
 export async function PATCH(
   request: Request,
@@ -55,6 +56,8 @@ export async function PATCH(
     }
 
     // 3. Actualizar el FormDriver con el nuevo estado
+    const previousStatus = document.formDriver.documentsStatus
+
     await prisma.formDriver.update({
       where: { id: document.formDriverId },
       data: {
@@ -62,7 +65,38 @@ export async function PATCH(
       }
     })
 
-    return NextResponse.json({ 
+    // 4. Enviar mensaje de WhatsApp si acaban de aprobar todos los documentos
+    if (newDocumentStatus === 'APPROVED' && previousStatus !== 'APPROVED') {
+      try {
+        const driver = await prisma.formDriver.findUnique({
+          where: { id: document.formDriverId },
+          select: {
+            id: true,
+            phoneNumber: true,
+            firstName: true,
+            fullName: true,
+            accessToken: true,
+          }
+        })
+
+        if (driver && driver.phoneNumber && driver.accessToken) {
+          const firstName = driver.firstName || driver.fullName?.split(' ')[0] || 'Postulante'
+
+          await sendPortalSelectCapacitacion(
+            driver.phoneNumber,
+            firstName,
+            driver.accessToken,
+            driver.id
+          )
+
+          console.log(`✅ [PORTAL] Mensaje para seleccionar capacitación enviado a ${driver.phoneNumber}`)
+        }
+      } catch (whatsappError) {
+        console.error('Error al enviar mensaje de WhatsApp:', whatsappError)
+      }
+    }
+
+    return NextResponse.json({
       document,
       documentStatus: newDocumentStatus,
       message: 'Documento aprobado exitosamente'

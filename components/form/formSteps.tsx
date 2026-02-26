@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { AddressMapPicker } from '@/components/ui/address-map-picker';
 
 const MONCHIS_RED = '#e7243f';
 
@@ -383,61 +384,56 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800">Tu Domicilio</h3>
 
-            <div className="space-y-2">
-              <Label htmlFor="address">
-                Dirección <span style={{ color: MONCHIS_RED }}>*</span>
+            <AddressMapPicker
+              value={{
+                address: formData.address || '',
+                city: formData.city || '',
+                department: formData.department || '',
+                neighborhood: formData.neighborhood || '',
+                lat: formData.addressLat ?? null,
+                lng: formData.addressLng ?? null,
+              }}
+              onChange={(changes) => {
+                if (changes.address !== undefined) handleInputChange('address', changes.address)
+                if (changes.city !== undefined) handleInputChange('city', changes.city)
+                if (changes.department !== undefined) handleInputChange('department', changes.department)
+                if (changes.neighborhood !== undefined) handleInputChange('neighborhood', changes.neighborhood)
+                if (changes.lat !== undefined) handleInputChange('addressLat', changes.lat)
+                if (changes.lng !== undefined) handleInputChange('addressLng', changes.lng)
+              }}
+              required
+              accentColor={MONCHIS_RED}
+            />
+
+            <div className="space-y-1.5">
+              <Label htmlFor="department">
+                Departamento <span style={{ color: MONCHIS_RED }}>*</span>
               </Label>
-              <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => handleInputChange('address', e.target.value)}
-                placeholder="Calle y número"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="city">
-                  Ciudad <span style={{ color: MONCHIS_RED }}>*</span>
-                </Label>
-                <Input
-                  id="city"
-                  value={formData.city}
-                  onChange={(e) => handleInputChange('city', e.target.value)}
-                  placeholder="Asunción"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="department">
-                  Departamento <span style={{ color: MONCHIS_RED }}>*</span>
-                </Label>
-                <Select value={formData.department} onValueChange={(value) => handleInputChange('department', value)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecciona" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Asunción">Asunción</SelectItem>
-                    <SelectItem value="Central">Central</SelectItem>
-                    <SelectItem value="Alto Paraná">Alto Paraná</SelectItem>
-                    <SelectItem value="Alto Paraguay">Alto Paraguay</SelectItem>
-                    <SelectItem value="Amambay">Amambay</SelectItem>
-                    <SelectItem value="Boquerón">Boquerón</SelectItem>
-                    <SelectItem value="Caaguazú">Caaguazú</SelectItem>
-                    <SelectItem value="Caazapá">Caazapá</SelectItem>
-                    <SelectItem value="Canindeyú">Canindeyú</SelectItem>
-                    <SelectItem value="Concepción">Concepción</SelectItem>
-                    <SelectItem value="Cordillera">Cordillera</SelectItem>
-                    <SelectItem value="Guairá">Guairá</SelectItem>
-                    <SelectItem value="Itapúa">Itapúa</SelectItem>
-                    <SelectItem value="Misiones">Misiones</SelectItem>
-                    <SelectItem value="Ñeembucú">Ñeembucú</SelectItem>
-                    <SelectItem value="Paraguarí">Paraguarí</SelectItem>
-                    <SelectItem value="Presidente Hayes">Presidente Hayes</SelectItem>
-                    <SelectItem value="San Pedro">San Pedro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select value={formData.department} onValueChange={(value) => handleInputChange('department', value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Asunción">Asunción</SelectItem>
+                  <SelectItem value="Central">Central</SelectItem>
+                  <SelectItem value="Alto Paraná">Alto Paraná</SelectItem>
+                  <SelectItem value="Alto Paraguay">Alto Paraguay</SelectItem>
+                  <SelectItem value="Amambay">Amambay</SelectItem>
+                  <SelectItem value="Boquerón">Boquerón</SelectItem>
+                  <SelectItem value="Caaguazú">Caaguazú</SelectItem>
+                  <SelectItem value="Caazapá">Caazapá</SelectItem>
+                  <SelectItem value="Canindeyú">Canindeyú</SelectItem>
+                  <SelectItem value="Concepción">Concepción</SelectItem>
+                  <SelectItem value="Cordillera">Cordillera</SelectItem>
+                  <SelectItem value="Guairá">Guairá</SelectItem>
+                  <SelectItem value="Itapúa">Itapúa</SelectItem>
+                  <SelectItem value="Misiones">Misiones</SelectItem>
+                  <SelectItem value="Ñeembucú">Ñeembucú</SelectItem>
+                  <SelectItem value="Paraguarí">Paraguarí</SelectItem>
+                  <SelectItem value="Presidente Hayes">Presidente Hayes</SelectItem>
+                  <SelectItem value="San Pedro">San Pedro</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -1053,7 +1049,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
   <div className="bg-white rounded-lg p-4 space-y-3">
     <div className="flex justify-between items-center pb-3 border-b border-gray-200">
       <span className="font-semibold text-gray-800">Pago inicial requerido:</span>
-      <span className="text-3xl font-bold" style={{ color: MONCHIS_RED }}>100.000 Gs.</span>
+      <span className="text-3xl font-bold" style={{ color: MONCHIS_RED }}>200.000 Gs.</span>
     </div>
     
     <div>
@@ -1081,7 +1077,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
           <span className="text-lg font-bold text-blue-900">418.000 Gs.</span>
         </div>
         <p className="text-xs text-blue-800">
-          El saldo restante (318.000 Gs.) se irá descontando de tus comisiones semanales.
+          El saldo restante (218.000 Gs.) se irá descontando de tus comisiones semanales.
         </p>
       </div>
       
@@ -1094,7 +1090,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
 
           <div className="space-y-2">
             <Label>
-              ¿Cómo querés realizar el pago inicial de 100.000 Gs.? <span style={{ color: MONCHIS_RED }}>*</span>
+              ¿Cómo querés realizar el pago inicial de 200.000 Gs.? <span style={{ color: MONCHIS_RED }}>*</span>
             </Label>
             <div className="grid grid-cols-2 gap-3">
               <Button
@@ -1152,7 +1148,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
                 </div>
                 <div className="mt-3 pt-3 border-t border-blue-200">
                   <p className="text-xs text-blue-800">
-                    <strong>Monto a transferir:</strong> 100.000 Gs.
+                    <strong>Monto a transferir:</strong> 200.000 Gs.
                   </p>
                 </div>
               </div>
@@ -1176,7 +1172,7 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
           {formData.paymentMethod === 'POS' && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
               <p className="text-sm text-green-800">
-                <strong>Perfecto!</strong> Podrás realizar el pago de 100.000 Gs. en nuestro punto de venta el día de la capacitación. Te contactaremos para coordinar.
+                <strong>Perfecto!</strong> Podrás realizar el pago de 200.000 Gs. en nuestro punto de venta el día de la capacitación. Te contactaremos para coordinar.
               </p>
             </div>
           )}

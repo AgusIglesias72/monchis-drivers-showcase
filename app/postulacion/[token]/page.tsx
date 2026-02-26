@@ -1,0 +1,14 @@
+// app/postulacion/[token]/page.tsx
+// Página principal del portal de autogestión
+
+import { PortalDashboard } from '@/components/postulacion/portal-dashboard'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Mi Postulación - Monchis Drivers',
+  description: 'Gestiona tu postulación, documentos y capacitación',
+}
+
+export default function PortalPage({ params }: { params: { token: string } }) {
+  return <PortalDashboard token={params.token} />
+}

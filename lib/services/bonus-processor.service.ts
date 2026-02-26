@@ -1503,39 +1503,52 @@ class BonusProcessor {
       'Extra a Crear',
     ];
 
-    const summaryRows: any[][] = [];
+    // Crear lista plana de todas las entradas con el nombre del driver
+    const allEntries: Array<{
+      driverName: string;
+      orderCount: number;
+      ruleDescription: string;
+      amountPerOrder: number;
+      totalAmount: number;
+      extraName: string;
+    }> = [];
 
-    // Ordenar por total de pedidos elegibles (mayor a menor)
-    const sortedDrivers = Array.from(driverSummary.entries()).sort((a, b) => {
-      return b[1].totalOrders - a[1].totalOrders;
-    });
-
-    for (const [driverKey, summary] of sortedDrivers) {
-      // Si el driver tiene múltiples entradas (múltiples reglas), agregar una fila por entrada
-      for (let i = 0; i < summary.entries.length; i++) {
-        const entry = summary.entries[i];
-        summaryRows.push([
-          i === 0 ? summary.driverName : '', // Solo mostrar nombre en primera fila
-          entry.orderCount,
-          entry.ruleDescription,
-          entry.amountPerOrder,
-          entry.totalAmount,
-          entry.extraName,
-        ]);
-      }
-
-      // Si hay múltiples entradas, agregar una fila de total
-      if (summary.entries.length > 1) {
-        summaryRows.push([
-          `TOTAL ${summary.driverName}`,
-          summary.totalOrders,
-          '',
-          '',
-          summary.totalAmount,
-          '',
-        ]);
+    for (const [driverKey, summary] of driverSummary) {
+      for (const entry of summary.entries) {
+        allEntries.push({
+          driverName: summary.driverName,
+          orderCount: entry.orderCount,
+          ruleDescription: entry.ruleDescription,
+          amountPerOrder: entry.amountPerOrder,
+          totalAmount: entry.totalAmount,
+          extraName: entry.extraName,
+        });
       }
     }
+
+    // Ordenar: 1) por monto/regla, 2) por cantidad de pedidos (mayor a menor), 3) por nombre
+    allEntries.sort((a, b) => {
+      // 1. Primero por monto por pedido (mayor a menor) - agrupa por regla
+      if (b.amountPerOrder !== a.amountPerOrder) {
+        return b.amountPerOrder - a.amountPerOrder;
+      }
+      // 2. Dentro de la misma regla, por cantidad de pedidos (mayor a menor)
+      if (b.orderCount !== a.orderCount) {
+        return b.orderCount - a.orderCount;
+      }
+      // 3. Si mismo monto y cantidad, ordenar alfabéticamente por nombre
+      return a.driverName.localeCompare(b.driverName);
+    });
+
+    // Generar filas sin TOTALes
+    const summaryRows: any[][] = allEntries.map(entry => [
+      entry.driverName,
+      entry.orderCount,
+      entry.ruleDescription,
+      entry.amountPerOrder,
+      entry.totalAmount,
+      entry.extraName,
+    ]);
 
     // 5. Escribir headers y filas en columnas J-O
     const rangeStart = 'J1';

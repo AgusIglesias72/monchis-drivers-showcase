@@ -294,7 +294,7 @@ Te recordamos que tenés ${eventTitle} programada para hoy a las *${eventTime}*.
 
 📋 *Recordá traer:*
 - Cédula de identidad
-- Gs. 100.000 para el kit (si no pagaste por transferencia)
+- Gs. 200.000 para el kit (si no pagaste por transferencia)
 
 ¡Te esperamos! 🚗
 Equipo Monchis 💪🍔`;
@@ -308,7 +308,7 @@ Te recordamos que mañana tenés ${eventTitle}.
 
 📋 *Recordá traer:*
 - Cédula de identidad
-- Gs. 100.000 para el kit (si no pagaste por transferencia)
+- Gs. 200.000 para el kit (si no pagaste por transferencia)
 
 Si tenés algún inconveniente para asistir, por favor avisanos respondiendo este mensaje.
 

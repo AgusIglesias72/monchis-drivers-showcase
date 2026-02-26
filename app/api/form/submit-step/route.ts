@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { WhatsAppMessageType } from '@prisma/client';
+import { v4 as uuidv4 } from 'uuid';
+import { sendPortalAccessInitial } from '@/lib/services/portal-whatsapp.service';
 
 // Función para parsear fecha de formato dd/MM/yyyy a Date
 function parseBirthDate(dateStr: string | null): Date | null {
@@ -86,7 +88,7 @@ export async function POST(request: NextRequest) {
       const birthDate = parseBirthDate(stepData.birthDate);
 
       if (!formDriver) {
-        // Crear nuevo FormDriver
+        // Crear nuevo FormDriver con accessToken
         formDriver = await prisma.formDriver.create({
           data: {
             cedula: stepData.cedula,
@@ -98,24 +100,34 @@ export async function POST(request: NextRequest) {
             birthDate: birthDate,
             currentStep: 1,
             completedSteps: [1],
-            status: 'IN_PROGRESS'
+            status: 'IN_PROGRESS',
+            accessToken: uuidv4(), // ← Generar token automáticamente
+            accessTokenGeneratedAt: new Date()
           }
         });
       } else {
-        // Actualizar FormDriver existente
+        // Actualizar FormDriver existente y generar token si no tiene
+        const updateData: any = {
+          firstName: stepData.firstName,
+          lastName: stepData.lastName,
+          fullName: `${stepData.firstName || ''} ${stepData.lastName || ''}`.trim(),
+          phoneNumber: stepData.phoneNumber,
+          email: stepData.email || null,
+          birthDate: birthDate,
+          currentStep: Math.max(formDriver.currentStep, 1),
+          completedSteps: Array.from(new Set([...formDriver.completedSteps, 1])),
+          lastActivityAt: new Date()
+        };
+
+        // Generar token si no tiene
+        if (!formDriver.accessToken) {
+          updateData.accessToken = uuidv4();
+          updateData.accessTokenGeneratedAt = new Date();
+        }
+
         formDriver = await prisma.formDriver.update({
           where: { id: formDriver.id },
-          data: {
-            firstName: stepData.firstName,
-            lastName: stepData.lastName,
-            fullName: `${stepData.firstName || ''} ${stepData.lastName || ''}`.trim(),
-            phoneNumber: stepData.phoneNumber,
-            email: stepData.email || null,
-            birthDate: birthDate,
-            currentStep: Math.max(formDriver.currentStep, 1),
-            completedSteps: Array.from(new Set([...formDriver.completedSteps, 1])),
-            lastActivityAt: new Date()
-          }
+          data: updateData
         });
       }
 
@@ -128,6 +140,22 @@ export async function POST(request: NextRequest) {
       submission = await prisma.formSubmission.findUnique({
         where: { sessionId }
       });
+
+      // Enviar mensaje de WhatsApp con link del portal (solo primera vez)
+      if (formDriver.accessToken && !formDriver.completedSteps.includes(1)) {
+        try {
+          await sendPortalAccessInitial(
+            formDriver.phoneNumber,
+            formDriver.firstName || 'Postulante',
+            formDriver.accessToken,
+            formDriver.id
+          )
+          console.log(`✅ [PORTAL] Mensaje de bienvenida enviado a ${formDriver.phoneNumber}`)
+        } catch (error) {
+          console.error('Error enviando mensaje de portal inicial:', error)
+          // No lanzar error para no bloquear el flujo
+        }
+      }
     }
 
     // Registrar el step completion
@@ -229,6 +257,8 @@ export async function PATCH(request: NextRequest) {
         updateData.city = stepData.city;
         updateData.neighborhood = stepData.neighborhood;
         updateData.address = stepData.address;
+        updateData.addressLat = stepData.addressLat ? parseFloat(stepData.addressLat) : null;
+        updateData.addressLng = stepData.addressLng ? parseFloat(stepData.addressLng) : null;
         updateData.emergencyName = stepData.emergencyName;
         updateData.emergencyRelationship = stepData.emergencyRelationship;
         updateData.emergencyPhone = stepData.emergencyPhone;

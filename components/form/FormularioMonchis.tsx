@@ -73,6 +73,8 @@ const FormularioMonchis: React.FC = () => {
     city: '',
     neighborhood: '',
     address: '',
+    addressLat: null as number | null,
+    addressLng: null as number | null,
     hasVehicle: '',
     vehicleBrand: '',
     vehicleModel: '',
@@ -257,6 +259,8 @@ const FormularioMonchis: React.FC = () => {
           city: formData.city,
           neighborhood: formData.neighborhood,
           address: formData.address,
+          addressLat: formData.addressLat,
+          addressLng: formData.addressLng,
           emergencyName: formData.emergencyName,
           emergencyRelationship: formData.emergencyRelationship,
           emergencyPhone: formData.emergencyPhone

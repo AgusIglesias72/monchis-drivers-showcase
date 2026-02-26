@@ -84,7 +84,7 @@ Vimos que comenzaste tu postulación en Monchis Drivers pero quedó incompleta. 
           return (
             baseIntro.replace('quedó incompleta', 'está casi completa') +
             `¡Estás a un paso de completar tu postulación! 🚗\n\n` +
-            `Solo falta confirmar el pago inicial del equipo (Gs. 100.000) que incluye mochila térmica, remera y porta vasos.\n\n` +
+            `Solo falta confirmar el pago inicial del equipo (Gs. 200.000) que incluye mochila térmica, remera y porta vasos.\n\n` +
             `💵 *Podés abonar:*\n` +
             `• Por transferencia antes de la capacitación\n` +
             `• Presencialmente el día de la capacitación\n\n` +

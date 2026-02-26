@@ -139,6 +139,8 @@ model FormDriver {
   city         String? // Ciudad
   neighborhood String? // Barrio
   address      String? // Dirección exacta
+  addressLat   Float?  @map("address_lat") // Latitud del domicilio
+  addressLng   Float?  @map("address_lng") // Longitud del domicilio
 
   // Vehículo
   hasVehicle   Boolean @default(false) @map("has_vehicle")
@@ -197,6 +199,11 @@ model FormDriver {
   source   String? // web, mobile, referral
   metadata Json?
 
+  // Portal de autogestión
+  accessToken            String?   @unique @map("access_token")
+  accessTokenGeneratedAt DateTime? @map("access_token_generated_at")
+  lastPortalAccessAt     DateTime? @map("last_portal_access_at")
+
   // Timestamps
   startedAt      DateTime  @default(now()) @map("started_at")
   lastActivityAt DateTime  @updatedAt @map("last_activity_at")
@@ -222,6 +229,7 @@ model FormDriver {
   @@index([lastActivityAt])
   @@index([documentsStatus])
   @@index([onboardingStatus])
+  @@index([accessToken])
   @@map("form_drivers")
 }
 
@@ -644,8 +652,8 @@ model OnboardingAttendee {
 
   // Timestamps
   invitedAt     DateTime  @default(now()) @map("invited_at")
-  invitedBy     String    @map("invited_by") // clerkId
-  invitedByUser AdminUser @relation("AttendeeInvitedBy", fields: [invitedBy], references: [id])
+  invitedBy     String?    @map("invited_by") // clerkId or null for self-service
+  invitedByUser AdminUser? @relation("AttendeeInvitedBy", fields: [invitedBy], references: [id])
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
@@ -989,6 +997,13 @@ enum WhatsAppMessageType {
   CUSTOM // Mensaje personalizado/manual
   CAPACITATION_NO_SHOW
   DOCUMENT_REJECTED // Documento rechazado
+
+  // Portal de autogestión
+  PORTAL_ACCESS_INITIAL // Link inicial al completar formulario
+  PORTAL_ACCESS_DOCUMENT_FIX // Link para corregir documento rechazado
+  PORTAL_SELECT_CAPACITACION // Link para seleccionar capacitación
+  CAPACITACION_SELECTED // Confirmación de capacitación seleccionada
+  CAPACITACION_CHANGED // Confirmación de cambio de capacitación
 }
 
 enum WhatsAppMessageStatus {
