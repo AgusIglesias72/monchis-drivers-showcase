@@ -8,11 +8,11 @@ import { FormDocumentStatus } from "@prisma/client"
 export const revalidate = 10 // Revalidar cada 10 segundos
 
 interface PageProps {
-  searchParams: {
+  searchParams: Promise<{
     status?: string
     page?: string
     limit?: string
-  }
+  }>
 }
 
 
@@ -26,9 +26,10 @@ function isValidDocumentStatus(status: string | undefined): FormDocumentStatus |
 }
 
 export default async function DocumentosPage({ searchParams }: PageProps) {
-  const status = searchParams.status
-  const page = parseInt(searchParams.page || '1')
-  const limit = parseInt(searchParams.limit || '20')
+  const params = await searchParams
+  const status = params.status
+  const page = parseInt(params.page || '1')
+  const limit = parseInt(params.limit || '20')
 
   const validStatus = isValidDocumentStatus(status)
 
