@@ -14,6 +14,21 @@ export type PaymentStatusFilter = 'all' | 'verificado' | 'en-verificacion' | 'pe
 
 export type InvoiceStatusFilter = 'all' | 'completa' | 'pendiente' | 'na'
 
+export type RucStatusSlug =
+  | 'activo'
+  | 'cancelado'
+  | 'suspension-temporal'
+  | 'bloqueado'
+  | 'no-encontrado'
+  | 'no-consultado'
+  | 'error'
+
+/**
+ * Filtro por estado RUC. Multi-select: CSV de slugs (ej: "activo,cancelado").
+ * Valor vacío o 'all' = sin filtro.
+ */
+export type RucStatusFilter = string
+
 export type SortByFilter = 'createdAt' | 'fullName' | 'city' | 'currentStep'
 
 export type SortOrderFilter = 'asc' | 'desc'
@@ -31,6 +46,7 @@ export interface PostulacionFilters {
   documentStatus?: DocumentStatusFilter
   paymentStatus?: PaymentStatusFilter
   invoiceStatus?: InvoiceStatusFilter
+  rucStatus?: RucStatusFilter
   sortBy?: SortByFilter
   sortOrder?: SortOrderFilter
   page?: string
@@ -80,3 +96,43 @@ export const INVOICE_STATUS_OPTIONS: FilterOption[] = [
   { value: 'pendiente', label: '⏳ Pendiente', color: 'orange' },
   { value: 'na', label: '➖ No Aplica', color: 'gray' },
 ]
+
+export const RUC_STATUS_OPTIONS: FilterOption[] = [
+  { value: 'all', label: '🏛️ Todos' },
+  { value: 'activo', label: '✅ Activo', color: 'green' },
+  { value: 'cancelado', label: '❌ Cancelado', color: 'red' },
+  { value: 'suspension-temporal', label: '⛔ Suspensión Temporal', color: 'red' },
+  { value: 'bloqueado', label: '🚫 Bloqueado', color: 'red' },
+  { value: 'no-encontrado', label: '❓ No Encontrado', color: 'amber' },
+  { value: 'no-consultado', label: '⏳ No Consultado', color: 'gray' },
+  { value: 'error', label: '⚠️ Error de consulta', color: 'slate' },
+]
+
+/**
+ * Mapea el slug del filtro al string crudo persistido en `FormDriver.rucStatus`.
+ * El slug 'no-consultado' se maneja aparte (null o 'NOT_CHECKED' en DB).
+ */
+export const RUC_FILTER_TO_DB: Record<Exclude<RucStatusSlug, 'no-consultado'>, string> = {
+  'activo': 'ACTIVO',
+  'cancelado': 'CANCELADO',
+  'suspension-temporal': 'SUSPENSION TEMPORAL',
+  'bloqueado': 'BLOQUEADO',
+  'no-encontrado': 'NO_ENCONTRADO',
+  'error': 'ERROR',
+}
+
+export function parseRucFilter(value: string | undefined | null): RucStatusSlug[] {
+  if (!value || value === 'all') return []
+  const validSlugs = new Set<string>([
+    'activo', 'cancelado', 'suspension-temporal', 'bloqueado',
+    'no-encontrado', 'no-consultado', 'error',
+  ])
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => validSlugs.has(s)) as RucStatusSlug[]
+}
+
+export function serializeRucFilter(slugs: RucStatusSlug[]): string {
+  return slugs.join(',')
+}

@@ -49,10 +49,12 @@ function getDocumentsBadge(postulacion: any): BadgeType {
   
   // Filtrar solo documentos principales
   const criminalRecords = documents.filter((d: any) => d.documentType === 'CRIMINAL_RECORD')
-  const cedulaFront = documents.filter((d: any) => d.documentType === 'CEDULA_FRONT')
+  const cedulaFront = documents.filter(
+    (d: any) => d.documentType === 'CEDULA_FRONT' || d.documentType === 'CEDULA',
+  )
   const cedulaBack = documents.filter((d: any) => d.documentType === 'CEDULA_BACK')
-  
-  // Verificar documentos requeridos
+
+  // Verificar documentos requeridos (CEDULA_BACK es opcional)
   const hasCriminalRecord = criminalRecords.length > 0
   const hasCedula = cedulaFront.length > 0 || cedulaBack.length > 0
   
@@ -114,10 +116,16 @@ function getPaymentBadge(postulacion: any): BadgeType {
 function getInvoiceBadge(postulacion: any): BadgeType {
   const financial = postulacion.financialService
   const documents = postulacion.documents || []
-  
+
+  // Si el admin marcó "RUC Inactivo" (postulante se comprometió a regularizar),
+  // el certificado tributario se da por satisfecho.
+  if (postulacion.rucInactiveWaived) {
+    return 'FACTURACION_COMPLETA'
+  }
+
   // Buscar documento TAX_COMPLIANCE
   const taxDoc = documents.find((d: any) => d.documentType === 'TAX_COMPLIANCE')
-  
+
   // Si existe el documento TAX_COMPLIANCE y está aprobado → Verde
   if (taxDoc && taxDoc.status === 'APPROVED') {
     return 'FACTURACION_COMPLETA'

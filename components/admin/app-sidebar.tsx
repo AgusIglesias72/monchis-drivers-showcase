@@ -18,9 +18,9 @@ import {
   LogOut,
   UserCog,
   CreditCard,
-  Mail,
   ChevronRight,
-  CloudRain,
+  Sparkles,
+  CalendarClock,
 } from "lucide-react"
 
 import {
@@ -90,6 +90,16 @@ const menuItems = [
     ],
   },
   {
+    title: "Gestión Admin",
+    items: [
+      {
+        title: "Turnos",
+        url: "/admin/gestion/turnos",
+        icon: CalendarClock,
+      },
+    ],
+  },
+  {
     title: "Comunicaciones",
     items: [
       {
@@ -102,26 +112,16 @@ const menuItems = [
         url: "/admin/plantillas-whatsapp",
         icon: MessageSquare,
       },
-      {
-        title: "Braze",
-        url: "/admin/comunicaciones/braze",
-        icon: Mail,
-      },
-    ],
-  },
-  {
-    title: "Bonos y Compensaciones",
-    items: [
-      {
-        title: "Bono por Lluvia",
-        url: "/admin/comunicaciones/braze/bono-lluvia",
-        icon: CloudRain,
-      },
     ],
   },
   {
     title: "Sistema",
     items: [
+      {
+        title: "Agente IA",
+        url: "/admin/agent-runs",
+        icon: Sparkles,
+      },
       {
         title: "Reportes",
         url: "/admin/reportes",

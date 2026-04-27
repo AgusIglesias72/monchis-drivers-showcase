@@ -1,16 +1,26 @@
 // components/postulacion/documents-section.tsx
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Upload, FileText, CheckCircle, XCircle, Clock, Filter } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useRef } from 'react'
+import {
+  Upload,
+  FileText,
+  CheckCircle,
+  XCircle,
+  Clock,
+  CreditCard,
+  ShieldCheck,
+  Receipt,
+  Eye,
+  Trash2,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { toast } from 'sonner'
 import type { DocumentWithStatus } from '@/lib/types/portal.types'
-import type { FormDocumentsStatus } from '@prisma/client'
-import { DocumentCard } from './document-card'
+import type { FormDocumentsStatus, DocumentType } from '@prisma/client'
 import { DocumentUploadDialog } from './document-upload-dialog'
 
 const MONCHIS_RED = '#e7243f'
@@ -22,7 +32,82 @@ interface DocumentsSectionProps {
   onUpdate: () => void
 }
 
-type FilterType = 'ALL' | 'PENDING' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED'
+interface DocSectionDef {
+  key: string
+  title: string
+  icon: typeof CreditCard
+  types: DocumentType[]
+  description: string
+}
+
+const DOC_SECTIONS: DocSectionDef[] = [
+  {
+    key: 'cedula',
+    title: 'Cédula de Identidad',
+    icon: CreditCard,
+    types: ['CEDULA_FRONT', 'CEDULA_BACK'],
+    description: 'Frente y dorso de tu cédula de identidad',
+  },
+  {
+    key: 'antecedentes',
+    title: 'Cert. Antecedentes Policiales',
+    icon: ShieldCheck,
+    types: ['CRIMINAL_RECORD'],
+    description: 'Certificado de antecedentes policiales',
+  },
+  {
+    key: 'tributario',
+    title: 'Certificado Tributario',
+    icon: Receipt,
+    types: ['TAX_COMPLIANCE'],
+    description: 'Certificado de cumplimiento tributario (RUC)',
+  },
+]
+
+type SectionStatus = 'approved' | 'review' | 'rejected' | 'none'
+
+function getSectionStatus(docs: DocumentWithStatus[], requiredTypes: DocumentType[]): SectionStatus {
+  const relevantDocs = docs.filter((d) => requiredTypes.includes(d.documentType))
+
+  if (relevantDocs.length === 0) return 'none'
+
+  // Si al menos uno está aprobado, la sección está aprobada
+  if (relevantDocs.some((d) => d.status === 'APPROVED')) return 'approved'
+
+  if (relevantDocs.some((d) => d.status === 'REJECTED')) return 'rejected'
+
+  if (relevantDocs.some((d) => d.status === 'IN_REVIEW' || d.status === 'PENDING' || d.status === 'RESUBMITTED'))
+    return 'review'
+
+  return 'none'
+}
+
+const STATUS_CONFIG: Record<SectionStatus, { borderColor: string; bg: string; badge: string; badgeText: string }> = {
+  approved: {
+    borderColor: 'border-l-green-500',
+    bg: 'bg-green-50/50',
+    badge: 'bg-green-100 text-green-800',
+    badgeText: 'Aprobado',
+  },
+  review: {
+    borderColor: 'border-l-yellow-500',
+    bg: 'bg-yellow-50/50',
+    badge: 'bg-yellow-100 text-yellow-800',
+    badgeText: 'En Revisión',
+  },
+  rejected: {
+    borderColor: 'border-l-red-500',
+    bg: 'bg-red-50/50',
+    badge: 'bg-red-100 text-red-800',
+    badgeText: 'Requiere Corrección',
+  },
+  none: {
+    borderColor: 'border-l-gray-300',
+    bg: 'bg-gray-50/50',
+    badge: 'bg-gray-100 text-gray-600',
+    badgeText: 'Pendiente',
+  },
+}
 
 export function DocumentsSection({
   token,
@@ -31,212 +116,267 @@ export function DocumentsSection({
   onUpdate,
 }: DocumentsSectionProps) {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
-  const [filter, setFilter] = useState<FilterType>('ALL')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [uploadingType, setUploadingType] = useState<DocumentType | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const pendingDocType = useRef<DocumentType | null>(null)
 
-  // Calcular estadísticas
-  const stats = useMemo(() => {
-    const total = documents.length
-    const approved = documents.filter((d) => d.status === 'APPROVED').length
-    const rejected = documents.filter((d) => d.status === 'REJECTED').length
-    const pending = documents.filter((d) => d.status === 'PENDING').length
-    const inReview = documents.filter((d) => d.status === 'IN_REVIEW').length
+  // Direct file upload (no dialog) for section-specific buttons
+  const handleDirectUpload = (docType: DocumentType) => {
+    pendingDocType.current = docType
+    fileInputRef.current?.click()
+  }
 
-    return { total, approved, rejected, pending, inReview }
-  }, [documents])
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    const docType = pendingDocType.current
+    // Reset input so same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    if (!file || !docType) return
 
-  // Filtrar documentos
-  const filteredDocuments = useMemo(() => {
-    if (filter === 'ALL') return documents
-    return documents.filter((d) => d.status === filter)
-  }, [documents, filter])
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Solo se permiten archivos JPG, PNG o PDF')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('El archivo no puede superar los 5MB')
+      return
+    }
 
-  // Ordenar: REJECTED primero, luego por fecha
-  const sortedDocuments = useMemo(() => {
-    return [...filteredDocuments].sort((a, b) => {
-      // REJECTED primero
-      if (a.status === 'REJECTED' && b.status !== 'REJECTED') return -1
-      if (a.status !== 'REJECTED' && b.status === 'REJECTED') return 1
+    try {
+      setUploadingType(docType)
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('documentType', docType)
 
-      // Luego por fecha (más reciente primero)
-      return new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-    })
-  }, [filteredDocuments])
+      const response = await fetch(`/api/postulacion/${token}/documents`, {
+        method: 'POST',
+        body: formData,
+      })
+      const result = await response.json()
 
-  const getStatusMessage = () => {
-    switch (documentsStatus) {
-      case 'APPROVED':
-        return {
-          variant: 'default' as const,
-          icon: <CheckCircle className="h-4 w-4" />,
-          title: '¡Documentos aprobados!',
-          message: 'Todos tus documentos han sido aprobados. Ya podés seleccionar tu fecha de capacitación.',
-        }
-      case 'IN_REVIEW':
-        return {
-          variant: 'default' as const,
-          icon: <Clock className="h-4 w-4" />,
-          title: 'Documentos en revisión',
-          message: 'Nuestro equipo está revisando tus documentos. Te avisaremos cuando estén aprobados.',
-        }
-      case 'CORRECTIONS':
-        return {
-          variant: 'destructive' as const,
-          icon: <XCircle className="h-4 w-4" />,
-          title: 'Documentos requieren corrección',
-          message:
-            'Algunos documentos fueron rechazados. Revisá los motivos abajo y subí versiones corregidas.',
-        }
-      case 'PENDING':
-        return {
-          variant: 'default' as const,
-          icon: <Clock className="h-4 w-4" />,
-          title: 'Documentos pendientes',
-          message: 'Subí todos los documentos requeridos para continuar con tu postulación.',
-        }
-      case 'INCOMPLETE':
-      default:
-        return {
-          variant: 'default' as const,
-          icon: <FileText className="h-4 w-4" />,
-          title: 'Documentación en progreso',
-          message: 'Continuá subiendo tus documentos.',
-        }
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al subir documento')
+      }
+
+      toast.success('Documento subido correctamente')
+      onUpdate()
+    } catch (err: any) {
+      toast.error(err.message || 'No se pudo subir el documento')
+    } finally {
+      setUploadingType(null)
+      pendingDocType.current = null
     }
   }
 
-  const statusMessage = getStatusMessage()
+  const handleDelete = async (docId: string) => {
+    try {
+      setDeletingId(docId)
+      const response = await fetch(`/api/postulacion/${token}/documents/${docId}`, {
+        method: 'DELETE',
+      })
+      const result = await response.json()
 
-  const handleUploadSuccess = () => {
-    onUpdate()
-  }
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al eliminar documento')
+      }
 
-  const handleDeleteSuccess = () => {
-    onUpdate()
+      toast.success('Documento eliminado')
+      onUpdate()
+    } catch (err: any) {
+      toast.error(err.message || 'No se pudo eliminar el documento')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
-    <div className="space-y-6">
-      {/* Status Alert */}
-      <Alert variant={statusMessage.variant}>
-        {statusMessage.icon}
-        <AlertDescription>
-          <strong>{statusMessage.title}</strong> {statusMessage.message}
-        </AlertDescription>
-      </Alert>
+    <div className="space-y-5">
+      {/* Hidden file input for direct uploads */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept="image/jpeg,image/png,image/jpg,application/pdf"
+        onChange={handleFileSelected}
+      />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-gray-600">Total</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-green-600">{stats.approved}</div>
-            <p className="text-xs text-gray-600">Aprobados</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
-            <p className="text-xs text-gray-600">Rechazados</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-600">{stats.inReview + stats.pending}</div>
-            <p className="text-xs text-gray-600">En Proceso</p>
-          </CardContent>
-        </Card>
-      </div>
+      <p className="text-sm text-gray-500">
+        Subí los documentos requeridos. Nuestro equipo los revisará en 24-48 horas.
+        Si te rechazan un documento, podés subir otro nuevamente para que lo revisemos.
+      </p>
 
-      {/* Actions Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-gray-500" />
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterType)}>
-            <TabsList>
-              <TabsTrigger value="ALL">Todos ({stats.total})</TabsTrigger>
-              <TabsTrigger value="REJECTED">Rechazados ({stats.rejected})</TabsTrigger>
-              <TabsTrigger value="APPROVED">Aprobados ({stats.approved})</TabsTrigger>
-              <TabsTrigger value="IN_REVIEW">En Revisión ({stats.inReview})</TabsTrigger>
-              <TabsTrigger value="PENDING">Pendientes ({stats.pending})</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
+      <Accordion type="single" collapsible className="w-full space-y-2">
+        {DOC_SECTIONS.map((section) => {
+          const sectionDocs = documents.filter((d) => section.types.includes(d.documentType))
+          const status = getSectionStatus(documents, section.types)
+          const config = STATUS_CONFIG[status]
+          const Icon = section.icon
 
+          return (
+            <AccordionItem
+              key={section.key}
+              value={section.key}
+              className={`border-l-4 rounded-2xl border ${config.borderColor} ${config.bg} overflow-hidden border-r-0 border-t-0 border-b-0`}
+            >
+              <AccordionTrigger className="hover:no-underline px-4 py-3">
+                <div className="flex items-center justify-between w-full mr-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-white shadow-sm">
+                      <Icon className="w-4 h-4 text-gray-700" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-semibold text-gray-800 text-sm">{section.title}</h3>
+                      <p className="text-xs text-gray-500">{section.description}</p>
+                    </div>
+                  </div>
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${config.badge}`}>
+                    {config.badgeText}
+                  </span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-4">
+                {/* Uploaded documents */}
+                {sectionDocs.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {sectionDocs.map((doc) => (
+                      <DocRow
+                        key={doc.id}
+                        doc={doc}
+                        onDelete={() => handleDelete(doc.id)}
+                        isDeleting={deletingId === doc.id}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Upload buttons per type — direct file picker */}
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {section.types.map((type) => {
+                    const hasDoc = sectionDocs.some((d) => d.documentType === type)
+                    const rejectedDoc = sectionDocs.find(
+                      (d) => d.documentType === type && d.status === 'REJECTED'
+                    )
+                    const isUploading = uploadingType === type
+
+                    if (!hasDoc || rejectedDoc) {
+                      const typeLabel =
+                        type === 'CEDULA_FRONT'
+                          ? 'Frente'
+                          : type === 'CEDULA_BACK'
+                            ? 'Dorso'
+                            : section.title
+
+                      return (
+                        <Button
+                          key={type}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          disabled={isUploading}
+                          onClick={() => handleDirectUpload(type)}
+                        >
+                          {isUploading ? (
+                            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                          ) : (
+                            <Upload className="w-3.5 h-3.5 mr-1.5" />
+                          )}
+                          {isUploading ? 'Subiendo...' : rejectedDoc ? `Resubir ${typeLabel}` : `Subir ${typeLabel}`}
+                        </Button>
+                      )
+                    }
+                    return null
+                  })}
+                </div>
+
+                {sectionDocs.length === 0 && (
+                  <p className="text-xs text-gray-400 mt-2">No hay documentos subidos aún.</p>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          )
+        })}
+      </Accordion>
+
+      {/* General upload button (opens dialog with type selector) */}
+      <div className="pt-2">
         <Button
           onClick={() => setUploadDialogOpen(true)}
+          className="w-full hover:opacity-90 text-white"
           style={{ backgroundColor: MONCHIS_RED }}
-          className="hover:opacity-90 w-full sm:w-auto"
         >
           <Upload className="h-4 w-4 mr-2" />
-          Subir Documento
+          Subir Otro Documento
         </Button>
       </div>
 
-      {/* Documents Grid */}
-      {sortedDocuments.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {filter === 'ALL' ? 'No hay documentos' : `No hay documentos ${filter.toLowerCase()}`}
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              {filter === 'ALL'
-                ? 'Subí tus documentos para comenzar el proceso de postulación'
-                : 'Probá cambiando el filtro para ver otros documentos'}
-            </p>
-            {filter === 'ALL' && (
-              <Button
-                onClick={() => setUploadDialogOpen(true)}
-                style={{ backgroundColor: MONCHIS_RED }}
-                className="hover:opacity-90"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Subir Primer Documento
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {sortedDocuments.map((document) => (
-            <DocumentCard
-              key={document.id}
-              document={document}
-              token={token}
-              onDelete={handleDeleteSuccess}
-            />
-          ))}
-        </div>
-      )}
+      {/* Info */}
+      <div className="bg-gray-50 rounded-xl p-4 text-xs text-gray-500 space-y-1">
+        <p>• Formatos aceptados: JPG, PNG o PDF (máx. 5MB)</p>
+        <p>• Si te rechazan un documento, podés subir otro para que lo revisemos nuevamente</p>
+        <p>• Una vez aprobados, los documentos no pueden ser modificados</p>
+      </div>
 
-      {/* Help Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">💡 Información importante</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <ul className="list-disc list-inside space-y-1 text-gray-700">
-            <li>Podés subir archivos en formato JPG, PNG o PDF (máximo 5MB)</li>
-            <li>Los documentos rechazados pueden ser eliminados y reemplazados</li>
-            <li>Una vez aprobados, los documentos no pueden ser modificados</li>
-            <li>Nuestro equipo revisa los documentos en un plazo de 24-48 horas</li>
-          </ul>
-        </CardContent>
-      </Card>
-
-      {/* Upload Dialog */}
+      {/* Upload Dialog — only for "Subir Otro Documento" */}
       <DocumentUploadDialog
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
         token={token}
-        onUploadSuccess={handleUploadSuccess}
+        onUploadSuccess={onUpdate}
       />
+    </div>
+  )
+}
+
+// Individual document row
+function DocRow({
+  doc,
+  onDelete,
+  isDeleting,
+}: {
+  doc: DocumentWithStatus
+  onDelete: () => void
+  isDeleting: boolean
+}) {
+  const statusIcon = {
+    APPROVED: <CheckCircle className="w-4 h-4 text-green-600" />,
+    REJECTED: <XCircle className="w-4 h-4 text-red-600" />,
+    IN_REVIEW: <Clock className="w-4 h-4 text-yellow-600" />,
+    PENDING: <Clock className="w-4 h-4 text-gray-400" />,
+    RESUBMITTED: <Clock className="w-4 h-4 text-blue-500" />,
+  }
+
+  return (
+    <div className="bg-white rounded-lg p-3 flex items-center gap-3 shadow-sm">
+      <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-700 truncate">{doc.documentTypeName}</p>
+        <p className="text-xs text-gray-400 truncate">{doc.fileName}</p>
+        {doc.status === 'REJECTED' && doc.rejectionReason && (
+          <div className="flex items-start gap-1 mt-1">
+            <AlertCircle className="w-3 h-3 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-600">{doc.rejectionReason}</p>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {statusIcon[doc.status] || statusIcon.PENDING}
+        {doc.blobUrl && (
+          <a href={doc.blobUrl} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600">
+            <Eye className="w-4 h-4" />
+          </a>
+        )}
+        {doc.canDelete && (
+          <button
+            onClick={onDelete}
+            disabled={isDeleting}
+            className="text-gray-400 hover:text-red-500 disabled:opacity-50"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
     </div>
   )
 }

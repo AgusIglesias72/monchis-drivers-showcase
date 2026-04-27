@@ -6,7 +6,6 @@ import { changeCapacitacion } from '@/lib/services/portal-postulacion.service'
 import { SelectCapacitacionSchema } from '@/lib/validators/portal.validators'
 import { validateAccessToken } from '@/lib/services/portal-access.service'
 import { logCapacitacionChanged } from '@/lib/services/portal-audit.service'
-import { sendCapacitacionChanged } from '@/lib/services/portal-whatsapp.service'
 import { prisma } from '@/lib/prisma'
 
 // Rate limiting
@@ -53,7 +52,7 @@ export async function PUT(
     const currentAssignment = await prisma.onboardingAttendee.findFirst({
       where: {
         formDriverId: driver.id,
-        status: { in: ['SCHEDULED', 'ATTENDED'] },
+        status: { in: ['INVITED', 'CONFIRMED', 'SCHEDULED'] },
       },
       include: { event: true },
       orderBy: { createdAt: 'desc' },
@@ -104,33 +103,7 @@ export async function PUT(
       userAgent
     )
 
-    // Enviar mensaje WhatsApp de confirmación del cambio
-    try {
-      const firstName = driver.firstName || driver.fullName?.split(' ')[0] || 'Postulante'
-
-      await sendCapacitacionChanged(
-        driver.phoneNumber,
-        firstName,
-        driver.id,
-        {
-          scheduledDate: currentAssignment.event.scheduledDate,
-          startTime: currentAssignment.event.startTime,
-        },
-        {
-          scheduledDate: newEvent.scheduledDate,
-          startTime: newEvent.startTime,
-          endTime: newEvent.endTime || undefined,
-          location: newEvent.location || '',
-          locationAddress: newEvent.locationAddress || '',
-          meetingLink: newEvent.meetingLink || undefined,
-        }
-      )
-
-      console.log(`✅ [PORTAL] Mensaje de cambio de capacitación enviado a ${driver.phoneNumber}`)
-    } catch (whatsappError) {
-      console.error('Error al enviar mensaje de WhatsApp:', whatsappError)
-      // No fallar la operación si falla el WhatsApp
-    }
+    // TODO: migrar a WhatsApp multi-bot — notificar CAPACITACION_CHANGED con old/new date/time/location
 
     return NextResponse.json({
       success: true,

@@ -23,6 +23,14 @@
     {
       "path": "/api/cron/refresh-google-token",
       "schedule": "0 2 */5 * *"
+    },
+    {
+      "path": "/api/cron/daily-postulaciones-report",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/process-completed-postulations",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

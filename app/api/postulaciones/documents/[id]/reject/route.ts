@@ -2,10 +2,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
-import { messagesService } from '@/lib/services/messages.service';
-import { WhatsAppMessageType, WhatsAppMessageSource } from '@prisma/client';
-import { sendPortalDocumentFix } from '@/lib/services/portal-whatsapp.service';
-import { DOCUMENT_TYPE_NAMES } from '@/lib/types/portal.types';
 
 export async function PATCH(
   request: NextRequest,
@@ -76,45 +72,7 @@ export async function PATCH(
       data: { documentsStatus: newDocumentsStatus }
     });
 
-    // Enviar notificación de WhatsApp con link del portal para TODOS los documentos rechazados
-    try {
-      // Obtener información del conductor para enviar el mensaje
-      const driver = await prisma.formDriver.findUnique({
-        where: { id: updatedDoc.formDriverId },
-        select: {
-          id: true,
-          phoneNumber: true,
-          firstName: true,
-          fullName: true,
-          accessToken: true,
-        }
-      });
-
-      if (driver && driver.phoneNumber && driver.accessToken) {
-        // Extraer primer nombre
-        const firstName = driver.firstName || driver.fullName?.split(' ')[0] || 'Postulante';
-
-        // Obtener nombre del tipo de documento
-        const documentTypeName = DOCUMENT_TYPE_NAMES[updatedDoc.documentType] || updatedDoc.documentType;
-
-        // Enviar mensaje con link del portal
-        await sendPortalDocumentFix(
-          driver.phoneNumber,
-          firstName,
-          driver.accessToken,
-          driver.id,
-          documentTypeName,
-          reason || 'El documento no cumple con los requisitos'
-        );
-
-        console.log(`✅ [PORTAL] Mensaje de corrección de documento enviado a ${driver.phoneNumber} (${documentTypeName})`);
-      } else {
-        console.warn('No se pudo enviar WhatsApp: conductor sin teléfono o token');
-      }
-    } catch (whatsappError) {
-      // No fallar el rechazo si falla el envío de WhatsApp
-      console.error('Error al enviar mensaje de WhatsApp:', whatsappError);
-    }
+    // TODO: migrar a WhatsApp multi-bot — notificar DOCUMENT_REJECTED con documentType + reason
 
     return NextResponse.json({
       success: true,

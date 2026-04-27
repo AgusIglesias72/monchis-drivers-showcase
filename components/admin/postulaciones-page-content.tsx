@@ -55,14 +55,17 @@ import {
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { getContactStatus } from "@/lib/utils/contact-status.utils"
-import type { PostulacionFilters } from "@/types/postulacion-filters.types"
+import type { PostulacionFilters, RucStatusSlug } from "@/types/postulacion-filters.types"
 import {
   CURRENT_STEP_OPTIONS,
   CONTACT_STATUS_OPTIONS,
   DOCUMENT_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS,
   INVOICE_STATUS_OPTIONS,
+  parseRucFilter,
+  serializeRucFilter,
 } from "@/types/postulacion-filters.types"
+import { RucStatusMultiSelect } from "@/components/admin/postulaciones/ruc-status-multi-select"
 
 interface PostulacionesPageContentProps {
   stats: any
@@ -109,6 +112,7 @@ export function PostulacionesPageContent({
   const [documentStatusFilter, setDocumentStatusFilter] = useState(currentFilters.documentStatus || 'all')
   const [paymentStatusFilter, setPaymentStatusFilter] = useState(currentFilters.paymentStatus || 'all')
   const [invoiceStatusFilter, setInvoiceStatusFilter] = useState(currentFilters.invoiceStatus || 'all')
+  const [rucStatusSlugs, setRucStatusSlugs] = useState<RucStatusSlug[]>(parseRucFilter(currentFilters.rucStatus))
   const [workZoneFilter, setWorkZoneFilter] = useState(currentFilters.workZone || 'all')
   const [startDate, setStartDate] = useState(currentFilters.startDate || '')
   const [endDate, setEndDate] = useState(currentFilters.endDate || '')
@@ -181,6 +185,7 @@ export function PostulacionesPageContent({
     setDocumentStatusFilter(currentFilters.documentStatus || 'all')
     setPaymentStatusFilter(currentFilters.paymentStatus || 'all')
     setInvoiceStatusFilter(currentFilters.invoiceStatus || 'all')
+    setRucStatusSlugs(parseRucFilter(currentFilters.rucStatus))
     setWorkZoneFilter(currentFilters.workZone || 'all')
     setStartDate(currentFilters.startDate || '')
     setEndDate(currentFilters.endDate || '')
@@ -254,6 +259,7 @@ export function PostulacionesPageContent({
       if (documentStatusFilter !== 'all') params.set('documentStatus', documentStatusFilter)
       if (paymentStatusFilter !== 'all') params.set('paymentStatus', paymentStatusFilter)
       if (invoiceStatusFilter !== 'all') params.set('invoiceStatus', invoiceStatusFilter)
+      if (rucStatusSlugs.length > 0) params.set('rucStatus', serializeRucFilter(rucStatusSlugs))
     }
 
     // Estos filtros solo se aplican si NO hay quick filter activo
@@ -273,7 +279,7 @@ export function PostulacionesPageContent({
     startTransition(() => {
       router.push(`/admin/postulaciones${queryString ? `?${queryString}` : ''}`, { scroll: false })
     })
-  }, [router, statusFilter, onboardingStatusFilter, currentStepFilter, contactStatusFilter, documentStatusFilter, paymentStatusFilter, invoiceStatusFilter, workZoneFilter, searchTerm, startDate, endDate, sortBy, sortOrder])
+  }, [router, statusFilter, onboardingStatusFilter, currentStepFilter, contactStatusFilter, documentStatusFilter, paymentStatusFilter, invoiceStatusFilter, rucStatusSlugs, workZoneFilter, searchTerm, startDate, endDate, sortBy, sortOrder])
 
   const handleQuickFilter = (filter: QuickFilter) => {
     setActiveQuickFilter(filter)
@@ -287,6 +293,7 @@ export function PostulacionesPageContent({
       setDocumentStatusFilter('all')
       setPaymentStatusFilter('all')
       setInvoiceStatusFilter('all')
+      setRucStatusSlugs([])
       setWorkZoneFilter('all')
       setSearchTerm('')
       setStartDate('')
@@ -314,6 +321,7 @@ export function PostulacionesPageContent({
     setDocumentStatusFilter('all')
     setPaymentStatusFilter('all')
     setInvoiceStatusFilter('all')
+    setRucStatusSlugs([])
     setWorkZoneFilter('all')
     setStartDate('')
     setEndDate('')
@@ -335,6 +343,7 @@ export function PostulacionesPageContent({
     documentStatusFilter !== 'all',
     paymentStatusFilter !== 'all',
     invoiceStatusFilter !== 'all',
+    rucStatusSlugs.length > 0,
     workZoneFilter !== 'all',
     startDate !== '',
     endDate !== '',
@@ -349,6 +358,7 @@ export function PostulacionesPageContent({
     documentStatusFilter !== 'all' ||
     paymentStatusFilter !== 'all' ||
     invoiceStatusFilter !== 'all' ||
+    rucStatusSlugs.length > 0 ||
     workZoneFilter !== 'all' ||
     startDate ||
     endDate
@@ -759,8 +769,8 @@ export function PostulacionesPageContent({
                             </TooltipContent>
                           </Tooltip>
                         </div>
-                        <Select 
-                          value={invoiceStatusFilter} 
+                        <Select
+                          value={invoiceStatusFilter}
                           onValueChange={(value) => setInvoiceStatusFilter(value as any)}
                         >
                           <SelectTrigger id="sheet-invoice" className="h-9 text-sm w-full cursor-pointer">
@@ -773,6 +783,27 @@ export function PostulacionesPageContent({
                             <SelectItem value="na" className="cursor-pointer">No Aplica</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="sheet-ruc" className="text-xs font-medium text-gray-600">
+                            Estado RUC
+                          </Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Filtra por estado del contribuyente (SET)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <RucStatusMultiSelect
+                          id="sheet-ruc"
+                          value={rucStatusSlugs}
+                          onChange={setRucStatusSlugs}
+                        />
                       </div>
                     </div>
                   </div>

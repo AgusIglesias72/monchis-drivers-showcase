@@ -156,11 +156,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Crear asistentes
+    // Crear o reactivar asistentes (puede existir uno cancelado por unique constraint)
     const attendees = await Promise.all(
       formDriverIds.map(async (formDriverId) => {
-        const attendee = await prisma.onboardingAttendee.create({
-          data: {
+        const attendee = await prisma.onboardingAttendee.upsert({
+          where: {
+            eventId_formDriverId: { eventId, formDriverId },
+          },
+          update: {
+            status: 'INVITED',
+            invitedBy: adminUser.id,
+            attendeeNotes,
+            invitedAt: new Date(),
+            cancelledAt: null,
+            cancelledBy: null,
+            cancelledReason: null,
+          },
+          create: {
             eventId,
             formDriverId,
             status: 'INVITED',
@@ -326,7 +338,13 @@ export async function PATCH(request: NextRequest) {
         }
         auditAction = 'ONBOARDING_ATTENDEE_CANCELLED'
         auditDescription = `Asistencia cancelada: ${attendee.formDriver.fullName}`
-        
+
+        // Liberar capacidad del evento
+        await prisma.onboardingEvent.update({
+          where: { id: attendee.eventId },
+          data: { currentCapacity: { decrement: 1 } },
+        })
+
         await prisma.formDriver.update({
           where: { id: attendee.formDriverId },
           data: {
@@ -358,15 +376,37 @@ export async function PATCH(request: NextRequest) {
         }
         auditAction = 'ONBOARDING_ATTENDEE_RESCHEDULED'
         auditDescription = `Reagendado de "${attendee.event.title}" a "${newEvent.title}"`
-        
-        await prisma.onboardingAttendee.create({
-          data: {
+
+        // Liberar capacidad del evento anterior, incrementar nuevo
+        await prisma.onboardingEvent.update({
+          where: { id: attendee.eventId },
+          data: { currentCapacity: { decrement: 1 } },
+        })
+        await prisma.onboardingEvent.update({
+          where: { id: newEventId },
+          data: { currentCapacity: { increment: 1 } },
+        })
+
+        await prisma.onboardingAttendee.upsert({
+          where: {
+            eventId_formDriverId: { eventId: newEventId, formDriverId: attendee.formDriverId },
+          },
+          update: {
+            status: 'INVITED',
+            invitedBy: adminUser.id,
+            attendeeNotes: `Reagendado desde evento anterior`,
+            invitedAt: new Date(),
+            cancelledAt: null,
+            cancelledBy: null,
+            cancelledReason: null,
+          },
+          create: {
             eventId: newEventId,
             formDriverId: attendee.formDriverId,
             status: 'INVITED',
             invitedBy: adminUser.id,
             attendeeNotes: `Reagendado desde evento anterior`,
-          }
+          },
         })
 
         await prisma.formDriver.update({

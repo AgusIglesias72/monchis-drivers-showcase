@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { WhatsAppMessageType } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
-import { sendPortalAccessInitial } from '@/lib/services/portal-whatsapp.service';
 
 // Función para parsear fecha de formato dd/MM/yyyy a Date
 function parseBirthDate(dateStr: string | null): Date | null {
@@ -141,21 +140,7 @@ export async function POST(request: NextRequest) {
         where: { sessionId }
       });
 
-      // Enviar mensaje de WhatsApp con link del portal (solo primera vez)
-      if (formDriver.accessToken && !formDriver.completedSteps.includes(1)) {
-        try {
-          await sendPortalAccessInitial(
-            formDriver.phoneNumber,
-            formDriver.firstName || 'Postulante',
-            formDriver.accessToken,
-            formDriver.id
-          )
-          console.log(`✅ [PORTAL] Mensaje de bienvenida enviado a ${formDriver.phoneNumber}`)
-        } catch (error) {
-          console.error('Error enviando mensaje de portal inicial:', error)
-          // No lanzar error para no bloquear el flujo
-        }
-      }
+      // TODO: migrar a WhatsApp multi-bot — mensaje de bienvenida PORTAL_ACCESS (solo primera vez con accessToken)
     }
 
     // Registrar el step completion

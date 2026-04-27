@@ -11,6 +11,7 @@ import type {
   AssignedCapacitacionInfo,
   AvailableCapacitacionEvent,
   UpdatePersonalDataDto,
+  PaymentInfo,
 } from '@/lib/types/portal.types'
 import { getDocumentTypeName } from '@/lib/types/portal.types'
 import { validateAccessToken, type FormDriverWithPortalIncludes } from './portal-access.service'
@@ -77,6 +78,9 @@ export async function getPostulacionByToken(token: string): Promise<PortalData> 
   // Obtener capacitación asignada si existe
   const assignedCapacitacion = getAssignedCapacitacion(formDriver)
 
+  // Obtener información de pago
+  const payment = getPaymentInfo(formDriver)
+
   return {
     id: formDriver.id,
     fullName: formDriver.fullName,
@@ -90,6 +94,7 @@ export async function getPostulacionByToken(token: string): Promise<PortalData> 
     documents,
     nextSteps,
     assignedCapacitacion,
+    payment,
   }
 }
 
@@ -221,26 +226,26 @@ export async function getAvailableCapacitaciones(token: string): Promise<{
 }> {
   const formDriver = await validateAccessToken(token)
 
-  // Verificar si puede seleccionar capacitación
-  const canSelect = formDriver.documentsStatus === 'APPROVED'
+  // Verificar elegibilidad usando documentos individuales (no el campo resumen)
+  // Requisitos: Cédula (frente o dorso) + Antecedentes Policiales aprobados
+  const cedulaOk = formDriver.documents.some(
+    (d: any) => (d.documentType === 'CEDULA_FRONT' || d.documentType === 'CEDULA_BACK') && d.status === 'APPROVED'
+  )
+  const antecedentesOk = formDriver.documents.some(
+    (d: any) => d.documentType === 'CRIMINAL_RECORD' && d.status === 'APPROVED'
+  )
+  const docsApproved = cedulaOk && antecedentesOk
+  const dataComplete = !!(formDriver.firstName && formDriver.lastName)
+  const canSelect = docsApproved && dataComplete && formDriver.status !== 'REJECTED'
+
   const reason = !canSelect
-    ? 'Debes tener todos tus documentos aprobados para seleccionar una capacitación'
+    ? 'Debes completar tus datos y tener cédula y antecedentes aprobados'
     : null
 
   // Obtener capacitación actual si existe
   const currentAssignment = getAssignedCapacitacion(formDriver)
 
-  // Si no puede seleccionar, retornar vacío
-  if (!canSelect) {
-    return {
-      canSelect: false,
-      reason,
-      events: [],
-      currentAssignment,
-    }
-  }
-
-  // Buscar eventos disponibles
+  // Siempre buscar eventos disponibles (el frontend los muestra disabled si no puede seleccionar)
   const now = new Date()
   const events = await prisma.onboardingEvent.findMany({
     where: {
@@ -248,14 +253,6 @@ export async function getAvailableCapacitaciones(token: string): Promise<{
         gte: now,
       },
       status: 'SCHEDULED',
-      OR: [
-        { maxCapacity: null },
-        {
-          currentCapacity: {
-            lt: prisma.onboardingEvent.fields.maxCapacity,
-          },
-        },
-      ],
     },
     orderBy: {
       scheduledDate: 'asc',
@@ -280,7 +277,7 @@ export async function getAvailableCapacitaciones(token: string): Promise<{
 
   return {
     canSelect,
-    reason: null,
+    reason,
     events: availableEvents,
     currentAssignment,
   }
@@ -298,9 +295,18 @@ export async function selectCapacitacion(
 ): Promise<AssignedCapacitacionInfo> {
   const formDriver = await validateAccessToken(token)
 
-  // Verificar que puede seleccionar
-  if (formDriver.documentsStatus !== 'APPROVED') {
-    throw new Error('Debes tener todos tus documentos aprobados para seleccionar capacitación')
+  // Verificar elegibilidad usando documentos individuales
+  const hasCedula = formDriver.documents.some(
+    (d: any) => (d.documentType === 'CEDULA_FRONT' || d.documentType === 'CEDULA_BACK') && d.status === 'APPROVED'
+  )
+  const hasAntecedentes = formDriver.documents.some(
+    (d: any) => d.documentType === 'CRIMINAL_RECORD' && d.status === 'APPROVED'
+  )
+  if (!hasCedula || !hasAntecedentes || !formDriver.firstName || !formDriver.lastName) {
+    throw new Error('Debes completar tus datos y tener cédula y antecedentes aprobados para seleccionar capacitación')
+  }
+  if (formDriver.status === 'REJECTED') {
+    throw new Error('Tu postulación fue rechazada')
   }
 
   // Verificar que el evento existe y tiene capacidad
@@ -334,9 +340,19 @@ export async function selectCapacitacion(
     throw new Error('Ya tienes una capacitación asignada')
   }
 
-  // Crear asignación
-  const attendee = await prisma.onboardingAttendee.create({
-    data: {
+  // Crear o reactivar asignación (puede existir una cancelada por unique constraint)
+  const attendee = await prisma.onboardingAttendee.upsert({
+    where: {
+      eventId_formDriverId: { eventId: event.id, formDriverId: formDriver.id },
+    },
+    update: {
+      status: 'SCHEDULED',
+      invitedAt: new Date(),
+      cancelledAt: null,
+      cancelledBy: null,
+      cancelledReason: null,
+    },
+    create: {
       formDriverId: formDriver.id,
       eventId: event.id,
       status: 'SCHEDULED',
@@ -456,13 +472,25 @@ export async function changeCapacitacion(
     },
   })
 
-  // Crear nueva asignación
-  const newAttendee = await prisma.onboardingAttendee.create({
-    data: {
+  // Crear o reactivar asignación en nuevo evento (puede existir una cancelada)
+  const newAttendee = await prisma.onboardingAttendee.upsert({
+    where: {
+      eventId_formDriverId: { eventId: newEvent.id, formDriverId: formDriver.id },
+    },
+    update: {
+      status: 'SCHEDULED',
+      invitedAt: new Date(),
+      invitedBy: currentAssignment.invitedBy,
+      cancelledAt: null,
+      cancelledBy: null,
+      cancelledReason: null,
+    },
+    create: {
       formDriverId: formDriver.id,
       eventId: newEvent.id,
       status: 'SCHEDULED',
       invitedAt: new Date(),
+      invitedBy: currentAssignment.invitedBy,
     },
     include: {
       event: true,
@@ -558,6 +586,26 @@ function calculateNextSteps(formDriver: any): NextStepsInfo {
     canSelectCapacitacion: formDriver.documentsStatus === 'APPROVED',
     pendingActions,
     progressPercentage,
+  }
+}
+
+/**
+ * Obtiene la información de pago más reciente
+ */
+function getPaymentInfo(formDriver: any): PaymentInfo | null {
+  const payments = formDriver.equipmentPayments
+  if (!payments || payments.length === 0) return null
+
+  const latestPayment = payments[0] // Already ordered by createdAt desc
+  return {
+    id: latestPayment.id,
+    amount: latestPayment.amount,
+    status: latestPayment.status,
+    paymentMethod: latestPayment.paymentMethod,
+    paymentDate: latestPayment.paymentDate,
+    paymentProofUrl: latestPayment.paymentProofUrl,
+    rejectionReason: latestPayment.rejectionReason,
+    verifiedAt: latestPayment.verifiedAt,
   }
 }
 

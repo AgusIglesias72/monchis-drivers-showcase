@@ -25,6 +25,7 @@ interface SendOnboardingReminderButtonProps {
   variant?: "default" | "outline" | "ghost"
   size?: "default" | "sm" | "lg" | "icon"
   className?: string
+  inDropdown?: boolean
 }
 
 export function SendOnboardingReminderButton({
@@ -34,6 +35,7 @@ export function SendOnboardingReminderButton({
   variant = "outline",
   size = "default",
   className,
+  inDropdown = false,
 }: SendOnboardingReminderButtonProps) {
   const [isSending, setIsSending] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
@@ -48,14 +50,14 @@ export function SendOnboardingReminderButton({
         phoneNumber,
       })
 
-      if (result.success) {
+      if (result.success && 'eventsCount' in result) {
         toast.success(
           result.eventsCount === 0
             ? "Recordatorio enviado (sin capacitaciones disponibles)"
             : `Recordatorio enviado con ${result.eventsCount} capacitación${result.eventsCount !== 1 ? "es" : ""}`
         )
         setIsOpen(false)
-      } else {
+      } else if (!result.success) {
         toast.error(result.error || "Error al enviar recordatorio")
       }
     } catch (error) {
@@ -69,24 +71,42 @@ export function SendOnboardingReminderButton({
   return (
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
       <AlertDialogTrigger asChild>
-        <Button
-          variant={variant}
-          size={size}
-          className={className}
-          disabled={isSending}
-        >
-          {isSending ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Enviando...
-            </>
-          ) : (
-            <>
-              <Bell className="h-4 w-4 mr-2" />
-              Recordar Capacitación
-            </>
-          )}
-        </Button>
+        {inDropdown ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-left gap-2 h-auto py-2 px-2 font-normal"
+            disabled={isSending}
+          >
+            {isSending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Bell className="h-4 w-4" />
+            )}
+            <span className="flex-1">
+              {isSending ? 'Enviando…' : 'Recordar capacitación'}
+            </span>
+          </Button>
+        ) : (
+          <Button
+            variant={variant}
+            size={size}
+            className={className}
+            disabled={isSending}
+          >
+            {isSending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Enviando...
+              </>
+            ) : (
+              <>
+                <Bell className="h-4 w-4 mr-2" />
+                Recordar Capacitación
+              </>
+            )}
+          </Button>
+        )}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>

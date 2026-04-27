@@ -20,6 +20,8 @@ export interface BonusProcessConfig {
   scope?: 'FULL' | 'SHEETS_ONLY'; // SHEETS_ONLY: solo sube pedidos y resumen al sheet, sin crear extras ni asignar
   notificationEmails?: string[];
   keepBrowserOpen?: boolean;
+  startFromExtra?: string; // Nombre del extra desde donde retomar (salta los anteriores)
+  skipSheetUpload?: boolean; // Salta descarga de Excel y upload a Sheet (usa el sheet existente)
   loginUrl?: string;
   ordersReportUrl?: string;
   extrasListUrl?: string;
@@ -1688,29 +1690,36 @@ class BonusProcessor {
       // 2. Login
       await this.login(loginUrl, ordersReportUrl);
 
-      // 3. Descargar Excel de pedidos
-      const excelBuffer = await this.downloadOrdersReport(ordersReportUrl, bonusDate);
+      // 3-4.5: Descargar Excel y subir a Sheet (saltar si skipSheetUpload)
+      let orders: OrderData[] = [];
 
-      // 4. Parsear Excel
-      const orders = parseOrdersExcel(excelBuffer);
+      if (config.skipSheetUpload) {
+        console.log('\n⏭️  Saltando descarga de Excel y upload a Sheet (usando sheet existente)');
+      } else {
+        // 3. Descargar Excel de pedidos
+        const excelBuffer = await this.downloadOrdersReport(ordersReportUrl, bonusDate);
 
-      // 4.5 Subir pedidos al Google Sheet (para referencia y auditoría)
-      await this.uploadOrdersToSheet(orders, bonusDate, process.env.BONUS_RULES_SHEET_ID!);
+        // 4. Parsear Excel
+        orders = parseOrdersExcel(excelBuffer);
 
-      if (orders.length === 0) {
-        console.log('⚠️  No hay pedidos para procesar');
-        return {
-          bonusDate,
-          executionMode,
-          stats: {
-            totalOrders: 0,
-            driversProcessed: 0,
-            extrasCreated: 0,
-            assignmentsSuccessful: 0,
-            assignmentsFailed: 0,
-            totalPayoutAmount: 0,
-          },
-        };
+        // 4.5 Subir pedidos al Google Sheet (para referencia y auditoría)
+        await this.uploadOrdersToSheet(orders, bonusDate, process.env.BONUS_RULES_SHEET_ID!);
+
+        if (orders.length === 0) {
+          console.log('⚠️  No hay pedidos para procesar');
+          return {
+            bonusDate,
+            executionMode,
+            stats: {
+              totalOrders: 0,
+              driversProcessed: 0,
+              extrasCreated: 0,
+              assignmentsSuccessful: 0,
+              assignmentsFailed: 0,
+              totalPayoutAmount: 0,
+            },
+          };
+        }
       }
 
       // 5. Si scope es SHEETS_ONLY, retornar con preview de bonos sin tocar la UI
@@ -1825,7 +1834,24 @@ class BonusProcessor {
       let assignmentsFailed = 0;
       const allErrors: Array<{ driver: string; error: string }> = [];
 
+      // Si hay startFromExtra, saltar extras hasta encontrarlo
+      let shouldProcess = !config.startFromExtra;
+      if (config.startFromExtra) {
+        console.log(`\n⏭️  Retomando desde extra: "${config.startFromExtra}"`);
+      }
+
       for (const [extraName, data] of extraMap) {
+        // Lógica de skip hasta encontrar startFromExtra
+        if (!shouldProcess) {
+          if (extraName === config.startFromExtra) {
+            shouldProcess = true;
+            console.log(`   ✅ Encontrado extra de inicio, procesando desde aquí...`);
+          } else {
+            console.log(`   ⏭️  Saltando extra ya procesado: "${extraName}"`);
+            continue;
+          }
+        }
+
         if (data.drivers.length === 0) continue;
 
         // Crear extra en UI

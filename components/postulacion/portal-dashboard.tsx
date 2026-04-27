@@ -2,19 +2,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, FileText, User, Calendar, TrendingUp, AlertCircle } from 'lucide-react'
+import { Loader2, FileText, User, Calendar, AlertCircle, X, ArrowLeftRight } from 'lucide-react'
 import { toast } from 'sonner'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import type { PortalData } from '@/lib/types/portal.types'
 import { DocumentsSection } from './documents-section'
 import { PersonalDataSection } from './personal-data-section'
 import { CapacitacionSelector } from './capacitacion-selector'
-import { ProgressTimeline } from './progress-timeline'
 
 const MONCHIS_RED = '#e7243f'
+
+type TabType = 'datos' | 'documentos' | 'capacitacion'
 
 interface PortalDashboardProps {
   token: string
@@ -24,9 +21,18 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
   const [data, setData] = useState<PortalData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState('documentos')
+  const [activeTab, setActiveTab] = useState<TabType>('datos')
+  const [showGuide, setShowGuide] = useState(false)
 
-  // Cargar datos del portal
+  // Show guide on first visit
+  useEffect(() => {
+    const key = `portal_guide_seen_${token}`
+    if (!localStorage.getItem(key)) {
+      setShowGuide(true)
+      localStorage.setItem(key, '1')
+    }
+  }, [token])
+
   useEffect(() => {
     fetchPortalData()
   }, [token])
@@ -52,7 +58,6 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
     }
   }
 
-  // Refrescar datos (útil después de actualizar algo)
   const refreshData = () => {
     fetchPortalData()
   }
@@ -60,137 +65,125 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <Loader2 className="h-12 w-12 animate-spin" style={{ color: MONCHIS_RED }} />
-        <p className="text-gray-600">Cargando tu información...</p>
+        <Loader2 className="h-12 w-12 animate-spin text-white" />
+        <p className="text-white/80">Cargando tu información...</p>
       </div>
     )
   }
 
   if (error || !data) {
     return (
-      <div className="max-w-2xl mx-auto mt-12">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
+      <div className="max-w-2xl mx-auto px-4 mt-12">
+        <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8">
+          <div className="flex items-center gap-3 text-red-600 mb-3">
+            <AlertCircle className="h-6 w-6" />
+            <h2 className="text-lg font-bold">Error de acceso</h2>
+          </div>
+          <p className="text-gray-600">
             {error || 'No se pudo acceder a tu información. Verifica que el link sea correcto.'}
-          </AlertDescription>
-        </Alert>
+          </p>
+        </div>
       </div>
     )
   }
 
-  // Determinar color del badge según estado
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      IN_PROGRESS: 'bg-blue-100 text-blue-800',
-      COMPLETED: 'bg-green-100 text-green-800',
-      APPROVED: 'bg-green-100 text-green-800',
-      ACTIVE: 'bg-green-100 text-green-800',
-      CORRECTIONS: 'bg-yellow-100 text-yellow-800',
-      REJECTED: 'bg-red-100 text-red-800',
-    }
-    return colors[status] || 'bg-gray-100 text-gray-800'
-  }
-
-  const getStatusText = (status: string) => {
-    const texts: Record<string, string> = {
-      IN_PROGRESS: 'En Progreso',
-      COMPLETED: 'Completado',
-      APPROVED: 'Aprobado',
-      ACTIVE: 'Activo',
-      CORRECTIONS: 'Requiere Correcciones',
-      REJECTED: 'Rechazado',
-      SCHEDULED: 'Agendado',
-    }
-    return texts[status] || status
-  }
+  const tabs: { key: TabType; label: string; shortLabel: string; icon: typeof User }[] = [
+    { key: 'datos', label: 'Mis Datos', shortLabel: 'Datos', icon: User },
+    { key: 'documentos', label: 'Mis Documentos', shortLabel: 'Docs', icon: FileText },
+    { key: 'capacitacion', label: 'Mi Capacitación', shortLabel: 'Capacitación', icon: Calendar },
+  ]
 
   return (
-    <div className="space-y-6">
-      {/* Header con info del postulante */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <CardTitle className="text-2xl">{data.fullName || 'Postulante'}</CardTitle>
-              <CardDescription className="mt-1">
-                CI: {data.cedula} • Tel: {data.phoneNumber}
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge className={getStatusColor(data.status)}>
-                {getStatusText(data.status)}
-              </Badge>
-              {data.documentsStatus && (
-                <Badge className={getStatusColor(data.documentsStatus)}>
-                  Docs: {getStatusText(data.documentsStatus)}
-                </Badge>
-              )}
-            </div>
+    <div>
+      {/* Pill Navigation (same style as TopNavigation.tsx) */}
+      <div className="relative backdrop-blur-sm">
+        <div className="max-w-2xl mx-auto px-4 py-3">
+          <div className="bg-white/20 rounded-full p-1 flex gap-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`
+                    flex-1 py-2.5 px-3 rounded-full flex items-center justify-center gap-2 transition-all duration-300
+                    ${activeTab === tab.key ? 'bg-white text-gray-900 font-bold shadow-sm' : 'text-white'}
+                  `}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="text-sm hidden sm:inline">{tab.label}</span>
+                  <span className="text-xs sm:hidden">{tab.shortLabel}</span>
+                </button>
+              )
+            })}
           </div>
-        </CardHeader>
-      </Card>
+        </div>
+      </div>
 
-      {/* Tabs principales */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
-          <TabsTrigger value="documentos" className="flex items-center gap-2 py-3">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Documentos</span>
-            <span className="sm:hidden">Docs</span>
-          </TabsTrigger>
-          <TabsTrigger value="datos" className="flex items-center gap-2 py-3">
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">Mis Datos</span>
-            <span className="sm:hidden">Datos</span>
-          </TabsTrigger>
-          <TabsTrigger value="capacitacion" className="flex items-center gap-2 py-3">
-            <Calendar className="h-4 w-4" />
-            <span className="hidden sm:inline">Capacitación</span>
-            <span className="sm:hidden">Capa.</span>
-          </TabsTrigger>
-          <TabsTrigger value="progreso" className="flex items-center gap-2 py-3">
-            <TrendingUp className="h-4 w-4" />
-            <span className="hidden sm:inline">Progreso</span>
-            <span className="sm:hidden">Prog.</span>
-          </TabsTrigger>
-        </TabsList>
+      {/* First-visit guide */}
+      {showGuide && (
+        <div className="relative max-w-2xl mx-auto px-4 mt-2">
+          <div className="bg-white/20 backdrop-blur-sm rounded-2xl px-4 py-3 flex items-start gap-3">
+            <ArrowLeftRight className="w-5 h-5 text-white shrink-0 mt-0.5" />
+            <p className="text-sm text-white leading-snug flex-1">
+              <strong>¡Bienvenido a tu portal!</strong> Desde acá podés gestionar toda tu postulación.
+              Usá las pestañas de arriba para moverte entre <strong>Mis Datos</strong>, <strong>Mis Documentos</strong> y <strong>Mi Capacitación</strong>.
+            </p>
+            <button
+              onClick={() => setShowGuide(false)}
+              className="text-white/70 hover:text-white shrink-0 mt-0.5"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
-        <TabsContent value="documentos" className="mt-6">
-          <DocumentsSection
-            token={token}
-            documents={data.documents}
-            documentsStatus={data.documentsStatus}
-            onUpdate={refreshData}
-          />
-        </TabsContent>
+      {/* Content in white card */}
+      <div className="relative max-w-2xl mx-auto px-4 pb-6 mt-2">
+        <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8">
+          {/* Header with name and status */}
+          <div className="mb-6 pb-4 border-b border-gray-100">
+            <h1 className="text-xl font-bold text-gray-800">
+              {data.fullName || 'Postulante'}
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              CI: {data.cedula} • Tel: {data.phoneNumber}
+            </p>
+          </div>
 
-        <TabsContent value="datos" className="mt-6">
-          <PersonalDataSection
-            token={token}
-            personalData={data.personalData}
-            onUpdate={refreshData}
-          />
-        </TabsContent>
+          {/* Tab Content */}
+          {activeTab === 'datos' && (
+            <PersonalDataSection
+              token={token}
+              personalData={data.personalData}
+              onUpdate={refreshData}
+            />
+          )}
 
-        <TabsContent value="capacitacion" className="mt-6">
-          <CapacitacionSelector
-            token={token}
-            documentsStatus={data.documentsStatus}
-            assignedCapacitacion={data.assignedCapacitacion}
-            onUpdate={refreshData}
-          />
-        </TabsContent>
+          {activeTab === 'documentos' && (
+            <DocumentsSection
+              token={token}
+              documents={data.documents}
+              documentsStatus={data.documentsStatus}
+              onUpdate={refreshData}
+            />
+          )}
 
-        <TabsContent value="progreso" className="mt-6">
-          <ProgressTimeline
-            status={data.status}
-            documentsStatus={data.documentsStatus}
-            onboardingStatus={data.onboardingStatus}
-            nextSteps={data.nextSteps}
-          />
-        </TabsContent>
-      </Tabs>
+          {activeTab === 'capacitacion' && (
+            <CapacitacionSelector
+              token={token}
+              documents={data.documents}
+              personalData={data.personalData}
+              status={data.status}
+              documentsStatus={data.documentsStatus}
+              assignedCapacitacion={data.assignedCapacitacion}
+              payment={data.payment}
+              onUpdate={refreshData}
+            />
+          )}
+        </div>
+      </div>
     </div>
   )
 }

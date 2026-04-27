@@ -608,7 +608,9 @@ const validateCurrentStep = (): boolean => {
                 `Quisiera consultar sobre mi postulación.\n\n` +
                 `Nombre: ${formData.firstName} ${formData.lastName}`
               );
-              window.open(`https://wa.me/595974236666?text=${message}`, '_blank');
+              // Número dedicado ManyChat. Que el postulante escriba primero abre
+              // la ventana de 24h y deja el loop con la IA sin costo de templates.
+              window.open(`https://wa.me/15754194027?text=${message}`, '_blank');
             }}
             variant="outline"
             className="w-full cursor-pointer"

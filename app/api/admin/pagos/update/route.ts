@@ -120,6 +120,8 @@ export async function POST(request: NextRequest) {
       // No fallar la operación principal si falla la auditoría
     }
 
+    // TODO: migrar a WhatsApp multi-bot — notificar PAYMENT_VERIFIED cuando status === "VERIFIED"
+
     return NextResponse.json({
       success: true,
       pago: pagoActualizado,

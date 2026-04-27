@@ -19,7 +19,7 @@ export type PostulacionBadgeType =
   | 'VERIFICAR_PAGO'
   | 'PAGADO'
   | 'AGENDADO'
-  | 'ASISTIDA' // ✅ NUEVO
+  | 'ASISTIDA'
 
 /**
  * Configuración de estilo y texto para cada badge
@@ -59,6 +59,20 @@ export interface PostulacionBadgesResult {
 }
 
 /**
+ * Paleta semántica unificada:
+ * - success: APROBADO / VERIFICADO / COMPLETO
+ * - warning: PENDIENTE (requiere acción de postulante o admin)
+ * - info:    EN PROCESO / AGENDADO / EN REVISIÓN
+ * - danger:  CRÍTICO / RECHAZADO / BLOQUEANTE
+ * - neutral: NO APLICA
+ */
+const STYLE_SUCCESS = 'bg-success-soft text-success border-success/25'
+const STYLE_WARNING = 'bg-warning-soft text-warning border-warning/30'
+const STYLE_INFO = 'bg-info-soft text-info border-info/25'
+const STYLE_DANGER = 'bg-danger-soft text-danger border-danger/25'
+const STYLE_NEUTRAL = 'bg-muted text-muted-foreground border-border'
+
+/**
  * Configuraciones visuales de los badges
  */
 export const BADGE_CONFIGS: Record<PostulacionBadgeType, BadgeConfig> = {
@@ -66,84 +80,84 @@ export const BADGE_CONFIGS: Record<PostulacionBadgeType, BadgeConfig> = {
     type: 'VERIFICAR_SOLICITUD',
     label: 'Verificar Solicitud',
     variant: 'outline',
-    className: 'border-blue-500 text-blue-700 bg-blue-50'
+    className: STYLE_INFO,
   },
   DOCUMENTOS_PENDIENTES: {
     type: 'DOCUMENTOS_PENDIENTES',
     label: 'Documentos Pendientes',
     variant: 'outline',
-    className: 'border-yellow-500 text-yellow-700 bg-yellow-50'
+    className: STYLE_WARNING,
   },
   DOCUMENTOS_EN_REVISION: {
     type: 'DOCUMENTOS_EN_REVISION',
     label: 'Documentos en Revisión',
     variant: 'outline',
-    className: 'border-amber-500 text-amber-700 bg-amber-50'
+    className: STYLE_INFO,
   },
   DOCUMENTOS_COMPLETOS: {
     type: 'DOCUMENTOS_COMPLETOS',
     label: 'Documentos Completos',
-    variant: 'default',
-    className: 'border-green-500 text-green-700 bg-green-50'
+    variant: 'outline',
+    className: STYLE_SUCCESS,
   },
   FACTURACION_PENDIENTE: {
     type: 'FACTURACION_PENDIENTE',
     label: 'Facturación Pendiente',
     variant: 'outline',
-    className: 'border-orange-500 text-orange-700 bg-orange-50'
+    className: STYLE_WARNING,
   },
   FACTURACION_COMPLETA: {
     type: 'FACTURACION_COMPLETA',
     label: 'Facturación Completa',
-    variant: 'default',
-    className: 'border-green-500 text-green-700 bg-green-50'
+    variant: 'outline',
+    className: STYLE_SUCCESS,
   },
   FACTURACION_NA: {
     type: 'FACTURACION_NA',
     label: 'No Aplica',
-    variant: 'secondary',
-    className: 'border-gray-500 text-gray-700 bg-gray-50'
+    variant: 'outline',
+    className: STYLE_NEUTRAL,
   },
   PAGO_PENDIENTE: {
     type: 'PAGO_PENDIENTE',
     label: 'Pago Pendiente',
-    variant: 'destructive',
-    className: 'border-red-500 text-red-700 bg-red-50'
+    variant: 'outline',
+    className: STYLE_DANGER,
   },
   PAGO_EN_VERIFICACION: {
     type: 'PAGO_EN_VERIFICACION',
     label: 'Pago en Verificación',
     variant: 'outline',
-    className: 'border-purple-500 text-purple-700 bg-purple-50'
+    className: STYLE_INFO,
   },
   PAGO_COMPLETO: {
     type: 'PAGO_COMPLETO',
     label: 'Pago Completo',
-    variant: 'default',
-    className: 'border-green-500 text-green-700 bg-green-50'
+    variant: 'outline',
+    className: STYLE_SUCCESS,
   },
   VERIFICAR_PAGO: {
     type: 'VERIFICAR_PAGO',
     label: 'Verificar Pago',
     variant: 'outline',
-    className: 'border-purple-500 text-purple-700 bg-purple-50'
+    className: STYLE_WARNING,
   },
   PAGADO: {
     type: 'PAGADO',
     label: 'Pagado',
-    variant: 'default',
-    className: 'border-green-500 text-green-700 bg-green-50'
+    variant: 'outline',
+    className: STYLE_SUCCESS,
   },
   AGENDADO: {
     type: 'AGENDADO',
     label: 'Agendado',
-    variant: 'default',
-    className: 'border-emerald-500 text-emerald-700 bg-emerald-50'
+    variant: 'outline',
+    className: STYLE_INFO,
   },
   ASISTIDA: {
     type: 'ASISTIDA',
     label: 'Asistida',
-    variant: 'default',
-    className: 'border-emerald-500 text-emerald-700 bg-emerald-50 font-semibold'
-  }
+    variant: 'outline',
+    className: `${STYLE_SUCCESS} font-semibold`,
+  },
 }

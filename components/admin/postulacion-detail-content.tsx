@@ -20,6 +20,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -44,6 +50,8 @@ import {
   Download,
   Phone,
   MoreVertical,
+  ExternalLink,
+  Copy,
 } from "lucide-react"
 import { DocumentPreview } from "@/components/admin/document-preview"
 import { ManageOnboardingModal } from "@/components/admin/manage-onboarding-modal"
@@ -73,6 +81,9 @@ import {
   updateDocumentType,
 } from "@/lib/actions/postulacion.actions"
 import { AssistedCompletionButton } from "./postulaciones/assisted-completion-button"
+import { RefreshRucButton } from "./postulaciones/refresh-ruc-button"
+import { RunAgentButton } from "./postulaciones/run-agent-button"
+import { AgentRunBadge } from "./agent-runs/agent-run-badge"
 import { DropdownMenu, DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuSeparator } from "../ui/dropdown-menu"
 
 interface PostulacionDetailContentProps {
@@ -504,9 +515,24 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
       <div className="flex-1 p-4 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="space-y-3">
-            <h1 className="text-2xl font-bold tracking-tight">
-              {postulacion.fullName}
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold tracking-tight">
+                {postulacion.fullName}
+              </h1>
+              {postulacion.agentRuns?.[0] && (
+                <AgentRunBadge
+                  driverName={postulacion.fullName || 'Driver'}
+                  cedula={postulacion.cedula}
+                  run={{
+                    ...postulacion.agentRuns[0],
+                    createdAt:
+                      postulacion.agentRuns[0].createdAt instanceof Date
+                        ? postulacion.agentRuns[0].createdAt.toISOString()
+                        : postulacion.agentRuns[0].createdAt,
+                  }}
+                />
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span>CI: {postulacion.cedula}</span>
               <span>•</span>
@@ -522,27 +548,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           </div>
 
           <div className="flex flex-wrap justify-end items-center gap-2">
-            {/* Botón para enviar listado de capacitaciones (verificación completada) */}
-            {!isEditing && postulacion.phoneNumber && (
-              <SendOnboardingListButton
-                driverId={postulacion.id}
-                driverName={postulacion.fullName || 'Driver'}
-                phoneNumber={postulacion.phoneNumber}
-                variant="outline"
-              />
-            )}
-
-            {/* Botón para recordatorio de capacitaciones (ya verificados) */}
-            {!isEditing && postulacion.phoneNumber && (
-              <SendOnboardingReminderButton
-                driverId={postulacion.id}
-                driverName={postulacion.fullName || 'Driver'}
-                phoneNumber={postulacion.phoneNumber}
-                variant="outline"
-              />
-            )}
-
-            {/* Botón de Contactar con mensajes rápidos */}
+            {/* Botón principal: Contactar */}
             {!isEditing && postulacion.phoneNumber && (
               <ContactButton
                 driverId={postulacion.id}
@@ -624,19 +630,76 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                     Acciones
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  {/* Contactar */}
+                <DropdownMenuContent align="end" className="w-64">
+                  {/* Portal del postulante */}
+                  {postulacion.accessToken && (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => window.open(`/postulacion/${postulacion.accessToken}`, '_blank')}
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Abrir portal del postulante
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const url = `${window.location.origin}/postulacion/${postulacion.accessToken}`
+                          navigator.clipboard.writeText(url)
+                          toast.success('Link del portal copiado al portapapeles')
+                        }}
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copiar link del portal
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+
+                  {/* Comunicación: capacitaciones */}
+                  {postulacion.phoneNumber && (
+                    <>
+                      <DropdownMenuItem
+                        onSelect={(e) => e.preventDefault()}
+                        className="p-0"
+                      >
+                        <SendOnboardingListButton
+                          driverId={postulacion.id}
+                          driverName={postulacion.fullName || 'Driver'}
+                          phoneNumber={postulacion.phoneNumber}
+                          inDropdown={true}
+                        />
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={(e) => e.preventDefault()}
+                        className="p-0"
+                      >
+                        <SendOnboardingReminderButton
+                          driverId={postulacion.id}
+                          driverName={postulacion.fullName || 'Driver'}
+                          phoneNumber={postulacion.phoneNumber}
+                          inDropdown={true}
+                        />
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+
+                  {/* Automatización */}
                   <DropdownMenuItem
                     onSelect={(e) => e.preventDefault()}
                     className="p-0"
                   >
-                    <ContactButton
+                    <RefreshRucButton
                       driverId={postulacion.id}
-                      driverName={postulacion.fullName || 'Driver'}
-                      phoneNumber={postulacion.phoneNumber || ''}
-                      contactStatus={contactStatus}
-                      templates={postulacion.whatsappTemplates || []}
-                      inDropdown={true}
+                      onSuccess={handleActionSuccess}
+                    />
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={(e) => e.preventDefault()}
+                    className="p-0"
+                  >
+                    <RunAgentButton
+                      driverId={postulacion.id}
+                      hasExistingRun={(postulacion.agentRuns?.length ?? 0) > 0}
                     />
                   </DropdownMenuItem>
 
@@ -697,6 +760,11 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                 onDocumentApprove={handleDocumentApprove}
                 onDocumentReject={handleDocumentReject}
                 isLoading={isDocumentPending}
+                driverId={postulacion.id}
+                rucInactiveWaived={postulacion.rucInactiveWaived}
+                rucInactiveWaivedAt={postulacion.rucInactiveWaivedAt}
+                rucInactiveWaivedNote={postulacion.rucInactiveWaivedNote}
+                onWaiveChange={() => router.refresh()}
               />
             </CardContent>
           </Card>

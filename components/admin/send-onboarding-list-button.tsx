@@ -25,6 +25,7 @@ interface SendOnboardingListButtonProps {
   variant?: "default" | "outline" | "ghost"
   size?: "default" | "sm" | "lg" | "icon"
   className?: string
+  inDropdown?: boolean
 }
 
 export function SendOnboardingListButton({
@@ -34,6 +35,7 @@ export function SendOnboardingListButton({
   variant = "outline",
   size = "default",
   className,
+  inDropdown = false,
 }: SendOnboardingListButtonProps) {
   const [isSending, setIsSending] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
@@ -69,24 +71,42 @@ export function SendOnboardingListButton({
   return (
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
       <AlertDialogTrigger asChild>
-        <Button
-          variant={variant}
-          size={size}
-          className={className}
-          disabled={isSending}
-        >
-          {isSending ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Enviando...
-            </>
-          ) : (
-            <>
-              <Calendar className="h-4 w-4 mr-2" />
-              Enviar Capacitaciones
-            </>
-          )}
-        </Button>
+        {inDropdown ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-left gap-2 h-auto py-2 px-2 font-normal"
+            disabled={isSending}
+          >
+            {isSending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Calendar className="h-4 w-4" />
+            )}
+            <span className="flex-1">
+              {isSending ? 'Enviando…' : 'Enviar listado de capacitaciones'}
+            </span>
+          </Button>
+        ) : (
+          <Button
+            variant={variant}
+            size={size}
+            className={className}
+            disabled={isSending}
+          >
+            {isSending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Enviando...
+              </>
+            ) : (
+              <>
+                <Calendar className="h-4 w-4 mr-2" />
+                Enviar Capacitaciones
+              </>
+            )}
+          </Button>
+        )}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>

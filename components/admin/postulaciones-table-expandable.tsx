@@ -37,7 +37,10 @@ import {
   MoreVertical,
   XCircle,
   MessageSquare,
+  ExternalLink,
+  Copy,
 } from "lucide-react"
+import { toast } from "sonner"
 import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
 import { ContactButton } from "@/components/admin/postulaciones/contact-button"
 import { RejectButton } from "@/components/admin/postulaciones/reject-button"
@@ -45,7 +48,11 @@ import { useRouter } from "next/navigation"
 import { formatBirthDateWithAge } from "@/lib/utils"
 import { calculatePostulacionBadges } from "@/lib/utils/postulacion-badges.utils"
 import { getPostulacionStatusBadge } from "@/lib/utils/postulacion-status-badge.utils"
+import { getRucBadgeConfig } from "@/lib/utils/postulacion-ruc-badge.utils"
 import { AssistedCompletionButton } from "./postulaciones/assisted-completion-button"
+import { RefreshRucButton } from "./postulaciones/refresh-ruc-button"
+import { RunAgentButton } from "./postulaciones/run-agent-button"
+import { AgentRunBadge } from "./agent-runs/agent-run-badge"
 
 interface PostulacionesTableProps {
   postulaciones: any[]
@@ -318,12 +325,15 @@ export function PostulacionesTableExpandable({
                       // Ahora verificamos el Certificado Tributario
 
                       // 🟢 VERDE: Cédula + Antecedentes + Cert. Tributario todos APROBADOS
-                      if (taxDoc && taxDoc.status === 'APPROVED') {
+                      // (o el admin marcó "RUC Inactivo" como excepción)
+                      if ((taxDoc && taxDoc.status === 'APPROVED') || postulacion.rucInactiveWaived) {
                         return {
                           icon: FileText,
                           bg: 'bg-green-100',
                           text: 'text-green-700',
-                          tooltip: 'Documentos Completos'
+                          tooltip: postulacion.rucInactiveWaived
+                            ? 'Documentos Completos (RUC Inactivo: excepción admin)'
+                            : 'Documentos Completos'
                         }
                       }
 
@@ -378,9 +388,11 @@ export function PostulacionesTableExpandable({
 
                     const docIcon = getDocumentIcon()
                     const payIcon = getPaymentIcon()
+                    const rucIcon = getRucBadgeConfig(postulacion.rucStatus, postulacion.rucName)
 
                     const DocIcon = docIcon.icon
                     const PayIcon = payIcon.icon
+                    const RucIcon = rucIcon.icon
 
                     return (
                       <Fragment key={postulacion.id}>
@@ -402,9 +414,26 @@ export function PostulacionesTableExpandable({
                           <td className="px-3 py-3">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
-                                <div className="font-medium text-sm">
+                                <Link
+                                  href={`/admin/postulaciones/${postulacion.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="font-medium text-sm hover:underline hover:text-primary"
+                                >
                                   {postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
-                                </div>
+                                </Link>
+                                {postulacion.agentRuns?.[0] && (
+                                  <AgentRunBadge
+                                    driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
+                                    cedula={postulacion.cedula}
+                                    run={{
+                                      ...postulacion.agentRuns[0],
+                                      createdAt:
+                                        postulacion.agentRuns[0].createdAt instanceof Date
+                                          ? postulacion.agentRuns[0].createdAt.toISOString()
+                                          : postulacion.agentRuns[0].createdAt,
+                                    }}
+                                  />
+                                )}
                                 {postulacion.workZone?.includes('San Bernardino') && (
                                   <TooltipProvider>
                                     <Tooltip>
@@ -478,7 +507,7 @@ export function PostulacionesTableExpandable({
                             </div>
                           </td>
 
-                          {/* ESTADOS - ✅ SOLO 2 ICONOS AHORA */}
+                          {/* ESTADOS */}
                           <td className="px-3 py-3">
                             <TooltipProvider>
                               <div className="flex items-center justify-center gap-2">
@@ -501,6 +530,17 @@ export function PostulacionesTableExpandable({
                                   </TooltipTrigger>
                                   <TooltipContent>
                                     <p className="text-xs">{payIcon.tooltip}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className={`flex items-center justify-center w-8 h-8 rounded-full ${rucIcon.bg} ${rucIcon.text}`}>
+                                      <RucIcon className="h-4 w-4" />
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="text-xs">{rucIcon.tooltip}</p>
                                   </TooltipContent>
                                 </Tooltip>
                               </div>
@@ -593,6 +633,32 @@ export function PostulacionesTableExpandable({
                                     Ver detalles
                                   </DropdownMenuItem>
 
+                                  {postulacion.accessToken && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          window.open(`/postulacion/${postulacion.accessToken}`, '_blank')
+                                        }}
+                                      >
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        Ver Portal del Postulante
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          const url = `${window.location.origin}/postulacion/${postulacion.accessToken}`
+                                          navigator.clipboard.writeText(url)
+                                          toast.success('Link del portal copiado')
+                                        }}
+                                      >
+                                        <Copy className="mr-2 h-4 w-4" />
+                                        Copiar Link del Portal
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+
                                   {canSchedule && (
                                     <>
                                       <DropdownMenuSeparator />
@@ -610,6 +676,18 @@ export function PostulacionesTableExpandable({
                                     driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
                                     isRejected={postulacion.status === 'REJECTED'}
                                     onSuccess={() => window.location.reload()}
+                                  />
+
+                                  <DropdownMenuSeparator />
+
+                                  <RefreshRucButton
+                                    driverId={postulacion.id}
+                                    onSuccess={() => router.refresh()}
+                                  />
+
+                                  <RunAgentButton
+                                    driverId={postulacion.id}
+                                    hasExistingRun={(postulacion.agentRuns?.length ?? 0) > 0}
                                   />
 
                                   <DropdownMenuSeparator />

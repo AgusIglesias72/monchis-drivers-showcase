@@ -1,0 +1,1109 @@
+// lib/services/agent.service.ts
+//
+// Servicio del agente IA para procesar postulaciones.
+//
+// - Sprint 1 (actual): stub que devuelve NEEDS_REVIEW siempre. Sirve de andamiaje
+//   para que el botón "Correr agente" y la UI funcionen sin LLM real.
+// - Sprint 2: pipeline determinista que llama a Haiku Vision para validar documentos
+//   y decide con if/else.
+// - Sprint 3: loop de tool use real con prompt caching.
+//
+// Filosofía "draft + aprobación humana": en modo REAL el agente crea AgentActions
+// con status=PROPOSED. Solo un admin ejecuta. En DRY_RUN nada se persiste fuera
+// del AgentRun histórico.
+
+import { prisma } from '@/lib/prisma'
+import type { AgentRunDecision, AgentRunMode, Prisma } from '@prisma/client'
+import { checkRucStatus, normalizeCedula, isForeignCedula } from '@/lib/services/turuc.service'
+import {
+  validateDriverDocuments,
+  HAIKU_MODEL,
+  type ImageValidationResult,
+} from '@/lib/services/agent-vision.service'
+
+export type ProposedToolCall =
+  | { tool: 'propose_approve_document'; input: { documentId: string }; reasoning?: string }
+  | { tool: 'propose_reject_document'; input: { documentId: string; reason: string }; reasoning?: string }
+  | { tool: 'propose_waive_ruc_inactive'; input: { note: string }; reasoning?: string }
+  | {
+      tool: 'propose_send_whatsapp_template'
+      input: { templateKey: string; variables: Record<string, string> }
+      reasoning?: string
+    }
+  | {
+      tool: 'propose_request_document_resubmission'
+      input: {
+        documentType: 'CEDULA_FRONT' | 'CEDULA_BACK' | 'CRIMINAL_RECORD' | 'TAX_COMPLIANCE'
+        reason: string
+        whatsappMessage: string
+      }
+      reasoning?: string
+    }
+  | {
+      tool: 'propose_update_driver_cedula'
+      input: {
+        currentCedula: string
+        correctedCedula: string
+        extractedFullName: string | null
+        reason: string
+      }
+      reasoning?: string
+    }
+  | { tool: 'escalate_to_admin'; input: { reason: string }; reasoning?: string }
+
+export interface AgentRunResult {
+  agentRunId: string
+  decision: AgentRunDecision | null
+  summary: string
+  reasoning: string
+  actions: ProposedToolCall[]
+  metrics: {
+    iterations: number
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
+    costMicroUsd: number
+  }
+  model: string | null
+  error?: string
+}
+
+interface RunAgentParams {
+  driverId: string
+  mode: AgentRunMode
+  triggeredBy: string
+}
+
+/**
+ * Punto de entrada principal del agente.
+ * Crea el AgentRun, invoca la lógica del agente y persiste resultados.
+ */
+export async function runAgentForDriver(params: RunAgentParams): Promise<AgentRunResult> {
+  const { driverId, mode, triggeredBy } = params
+
+  // Crear AgentRun en estado PENDING
+  const run = await prisma.agentRun.create({
+    data: {
+      formDriverId: driverId,
+      status: 'PENDING',
+      mode,
+      triggeredBy,
+    },
+  })
+
+  try {
+    await prisma.agentRun.update({
+      where: { id: run.id },
+      data: { status: 'RUNNING', startedAt: new Date() },
+    })
+
+    // Traer el contexto completo del driver
+    const driver = await prisma.formDriver.findUnique({
+      where: { id: driverId },
+      include: {
+        documents: true,
+        financialService: true,
+        equipmentPayments: true,
+      },
+    })
+
+    if (!driver) {
+      throw new Error(`FormDriver ${driverId} no encontrado`)
+    }
+
+    // Sprint 2: pipeline determinista.
+    // 1. Chequea/refresca RUC.
+    // 2. Valida imágenes de cédula (frente + dorso) + antecedentes con Haiku.
+    // 3. Decide con if/else.
+    const result = await runDeterministicPipeline(driver)
+
+    // Persistir resultado en AgentRun
+    await prisma.agentRun.update({
+      where: { id: run.id },
+      data: {
+        status: result.decision === 'NEEDS_REVIEW' ? 'NEEDS_REVIEW' : 'COMPLETED',
+        decision: result.decision,
+        summary: result.summary,
+        reasoning: result.reasoning,
+        iterations: result.metrics.iterations,
+        inputTokens: result.metrics.inputTokens,
+        outputTokens: result.metrics.outputTokens,
+        cacheReadTokens: result.metrics.cacheReadTokens,
+        cacheWriteTokens: result.metrics.cacheWriteTokens,
+        costMicroUsd: result.metrics.costMicroUsd,
+        model: result.model,
+        completedAt: new Date(),
+      },
+    })
+
+    // Persistir las acciones propuestas en ambos modos.
+    // - DRY_RUN: quedan como PROPOSED informativas (no se ejecutan).
+    // - REAL: quedan como PROPOSED y el admin puede aprobarlas/ejecutarlas desde UI.
+    // Esto permite que los runs históricos muestren correctamente qué propuso el agente.
+    if (result.actions.length > 0) {
+      await prisma.agentAction.createMany({
+        data: result.actions.map((a) => ({
+          agentRunId: run.id,
+          tool: a.tool,
+          input: a.input as Prisma.InputJsonValue,
+          reasoning: a.reasoning ?? null,
+          status: 'PROPOSED' as const,
+        })),
+      })
+    }
+
+    return { ...result, agentRunId: run.id }
+  } catch (err: any) {
+    console.error('[agent.service] runAgentForDriver error:', err)
+    await prisma.agentRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'FAILED',
+        error: err?.message ?? 'Error desconocido',
+        completedAt: new Date(),
+      },
+    })
+    return {
+      agentRunId: run.id,
+      decision: null,
+      summary: 'El agente falló durante la ejecución.',
+      reasoning: '',
+      actions: [],
+      metrics: emptyMetrics(),
+      model: null,
+      error: err?.message ?? 'Error desconocido',
+    }
+  }
+}
+
+// ============================================================================
+// Pipeline determinista (Sprint 2).
+// ============================================================================
+
+type DriverWithRelations = Prisma.FormDriverGetPayload<{
+  include: { documents: true; financialService: true; equipmentPayments: true }
+}>
+
+const RUC_REFRESH_MAX_AGE_DAYS = 7
+
+async function runDeterministicPipeline(
+  driver: DriverWithRelations,
+): Promise<Omit<AgentRunResult, 'agentRunId'>> {
+  const steps: string[] = []
+  const actions: ProposedToolCall[] = []
+  const metrics = emptyMetrics()
+
+  const driverName = cleanName(
+    driver.fullName || [driver.firstName, driver.lastName].filter(Boolean).join(' '),
+  )
+  steps.push(`👤 **Postulante:** ${driverName || 'sin nombre'} (cédula ${driver.cedula})`)
+
+  // Guard: cédula vacía — no podemos consultar RUC ni validar identidad
+  if (!driver.cedula || driver.cedula.trim() === '') {
+    return {
+      decision: 'NEEDS_REVIEW',
+      summary: 'Cédula del postulante vacía o inválida. No se puede procesar automáticamente.',
+      reasoning: [
+        ...steps,
+        '',
+        '⚠️ La cédula del formulario está vacía. No consulté el RUC ni valido documentos porque no hay con qué cruzar los datos. Un admin tiene que completar la cédula manualmente.',
+      ].join('\n'),
+      actions: [
+        {
+          tool: 'escalate_to_admin',
+          input: { reason: 'Cédula del postulante está vacía — registrar manualmente.' },
+          reasoning: 'Sin cédula no podemos hacer ninguna validación fiscal ni de identidad.',
+        },
+      ],
+      metrics,
+      model: null,
+    }
+  }
+
+  // --- 1. RUC ---
+  const rucAgeDays = driver.rucLastCheckedAt
+    ? (Date.now() - driver.rucLastCheckedAt.getTime()) / (1000 * 60 * 60 * 24)
+    : Infinity
+  let rucStatus = driver.rucStatus
+  let rucName = driver.rucName
+
+  const foreignCedula = isForeignCedula(driver.cedula)
+
+  steps.push('')
+  steps.push('🏛️ **Consulta RUC (SET)**')
+  if (foreignCedula) {
+    rucStatus = 'NOT_APPLICABLE'
+    rucName = null
+    steps.push(
+      `La cédula "${driver.cedula}" contiene letras → postulante extranjero. No aplica consulta al SET paraguayo.`,
+    )
+  } else if (!rucStatus || rucStatus === 'NOT_CHECKED' || rucAgeDays > RUC_REFRESH_MAX_AGE_DAYS) {
+    steps.push('Consulté turuc.com.py en vivo (no había dato reciente).')
+    const rucResult = await checkRucStatus(driver.cedula)
+    rucStatus = rucResult.status
+    rucName = rucResult.name
+  } else {
+    steps.push(
+      `Usé el dato persistido en nuestra base (consultado hace ${formatAge(rucAgeDays)}), no llamé a la API de nuevo.`,
+    )
+  }
+  steps.push(`Estado fiscal: **${rucStatus ?? 'desconocido'}**${describeRucStatus(rucStatus)}`)
+  if (rucName) steps.push(`Razón social en SET: "${rucName}"`)
+  if (driver.rucInactiveWaived) {
+    steps.push('ℹ️ El admin marcó "RUC Inactivo (excepción)" — el certificado tributario se da por cumplido.')
+  }
+
+  // --- 2. Imágenes ---
+  // La cédula se acepta como CEDULA_FRONT o CEDULA (tipo genérico legacy).
+  // CEDULA_BACK es opcional — si está, la validamos como bonus; si no, ignoramos.
+  const cedulaFront =
+    pickLatestDoc(driver.documents, 'CEDULA_FRONT') ??
+    pickLatestDoc(driver.documents, 'CEDULA')
+  const cedulaBack = pickLatestDoc(driver.documents, 'CEDULA_BACK')
+  const criminal = pickLatestDoc(driver.documents, 'CRIMINAL_RECORD')
+
+  const missingDocs: string[] = []
+  if (!cedulaFront) missingDocs.push('cédula')
+  if (!criminal) missingDocs.push('certificado de antecedentes')
+  // cédula dorso (CEDULA_BACK) es opcional
+
+  // Validación unificada: una sola llamada a Haiku con todas las imágenes disponibles
+  // + system prompt con prompt caching (cache hits en corridas dentro de 5 min).
+  const validation = await validateDriverDocuments({
+    driverCedula: driver.cedula,
+    driverName,
+    cedulaFrontUrl: cedulaFront?.blobUrl ?? null,
+    cedulaBackUrl: cedulaBack?.blobUrl ?? null,
+    criminalRecordUrl: criminal?.blobUrl ?? null,
+    isForeign: foreignCedula,
+  }).catch((err) => {
+    console.error('[agent-pipeline] validateDriverDocuments threw:', err)
+    return null
+  })
+
+  let frontResult: ImageValidationResult | null = validation?.cedulaFront ?? null
+  let backResult: ImageValidationResult | null = validation?.cedulaBack ?? null
+  let criminalResult: ImageValidationResult | null = validation?.criminalRecord ?? null
+
+  // Métricas agregadas (vienen todas en validation.usage, una sola llamada)
+  if (validation?.usage) {
+    metrics.inputTokens += validation.usage.inputTokens
+    metrics.outputTokens += validation.usage.outputTokens
+    metrics.cacheReadTokens += validation.usage.cacheReadTokens
+    metrics.cacheWriteTokens += validation.usage.cacheWriteTokens
+    metrics.costMicroUsd += validation.usage.costMicroUsd
+    metrics.iterations = 1 // 1 llamada unificada
+  }
+
+  // Si toda la validación falló (ej. ANTHROPIC_API_KEY ausente o JSON no parseable),
+  // marcamos todos los docs presentes como error para que la lógica de decisión los
+  // mande a revisión humana.
+  if (!validation || !validation.ok) {
+    const errMsg = validation?.error ?? 'Validación visual no disponible'
+    if (cedulaFront && !frontResult) frontResult = buildCaughtErrorResult(new Error(errMsg))
+    if (cedulaBack && !backResult) backResult = buildCaughtErrorResult(new Error(errMsg))
+    if (criminal && !criminalResult) criminalResult = buildCaughtErrorResult(new Error(errMsg))
+  }
+
+  // --- 3. Decisión ---
+  // Para extranjeros no aplicamos reglas de RUC paraguayo — el flujo sigue por otro lado.
+  const rucBlocking = !foreignCedula && ['CANCELADO', 'BLOQUEADO'].includes(rucStatus ?? '')
+  // NO_ENCONTRADO es el caso más común (postulante no registrado en el SET, normal
+  // para cualquiera que no facture). NO lo tratamos como bloqueante — se aprueba con
+  // aviso al postulante de que si en el futuro quiere facturar necesita registrarse.
+  const rucNotRegistered = !foreignCedula && rucStatus === 'NO_ENCONTRADO'
+  // Soft issue = tuvo RUC pero está inactivo/suspendido. Requiere intervención admin
+  // (contactar para regularizar o marcar waive).
+  const rucSoftIssue =
+    !foreignCedula && ['SUSPENSION TEMPORAL', 'INACTIVO'].includes(rucStatus ?? '')
+  const rucUnknown =
+    !foreignCedula && (!rucStatus || rucStatus === 'NOT_CHECKED' || rucStatus === 'ERROR')
+
+  // Contar rechazos claros de imágenes
+  const rejectsFromImages: { doc: string; reason: string; docId: string }[] = []
+  const reviewsFromImages: { doc: string; concern: string; docId: string }[] = []
+  const approvalsFromImages: { doc: string; docId: string }[] = []
+
+  // Aplicar overrides antes de clasificar:
+  // 1) Override de cédula coincidente: REJECT por nombre pero cédula coincide → APPROVE
+  // 2) Override de vencimiento: REJECT por "vencido/expired" → MANUAL_REVIEW (renovable, no fraude)
+  const frontResultFinal = applyExpiryOverride(
+    applyCedulaMatchOverride(frontResult, driver.cedula, steps),
+    steps,
+    'cédula frente',
+  )
+  const backResultFinal = applyExpiryOverride(
+    applyCedulaMatchOverride(backResult, driver.cedula, steps),
+    steps,
+    'cédula dorso',
+  )
+  const criminalResultFinal = applyExpiryOverride(
+    applyCedulaMatchOverride(criminalResult, driver.cedula, steps),
+    steps,
+    'antecedentes',
+  )
+
+  if (cedulaFront) processImageResult(frontResultFinal, 'cédula frente', cedulaFront.id, rejectsFromImages, reviewsFromImages, approvalsFromImages)
+  if (cedulaBack) processImageResult(backResultFinal, 'cédula dorso', cedulaBack.id, rejectsFromImages, reviewsFromImages, approvalsFromImages)
+  if (criminal) processImageResult(criminalResultFinal, 'antecedentes', criminal.id, rejectsFromImages, reviewsFromImages, approvalsFromImages)
+
+  // Detección de typo de cédula: el postulante se equivocó al tipear su cédula
+  // en el formulario. Si los documentos son consistentes entre sí y difieren
+  // del form por ≤2 caracteres, es un typo, no fraude.
+  const cedulaTypo = detectCedulaTypo(driver.cedula, [frontResultFinal, backResultFinal, criminalResultFinal])
+  if (cedulaTypo) {
+    steps.push('')
+    steps.push(
+      `🔍 **Typo detectado en la cédula del formulario**: el postulante cargó "${cedulaTypo.formCedula}" pero todos los documentos muestran "${cedulaTypo.realCedula}" (diferencia: ${cedulaTypo.editDistance} caracteres). Muy probable error de tipeo, no fraude.`,
+    )
+  }
+
+  // Reglas de decisión
+  let decision: AgentRunDecision = 'NEEDS_REVIEW'
+  let summary = ''
+
+  if (missingDocs.length > 0) {
+    decision = 'NEEDS_REVIEW'
+    summary = `Faltan documentos obligatorios: ${missingDocs.join(', ')}.`
+    // Proponer solicitar cada documento faltante al postulante por WhatsApp
+    const firstName = getFirstName(driver)
+    if (!cedulaFront) {
+      actions.push({
+        tool: 'propose_request_document_resubmission',
+        input: {
+          documentType: 'CEDULA_FRONT',
+          reason: 'No se subió la foto de la cédula.',
+          whatsappMessage: `Hola ${firstName || ''}! Para avanzar con tu postulación en Monchis necesitamos que subas una foto clara del frente de tu cédula. Entrá al portal y subila cuando puedas, gracias!`,
+        },
+        reasoning: 'La postulación no tiene foto de cédula. Pedirla al postulante.',
+      })
+    }
+    if (!criminal) {
+      actions.push({
+        tool: 'propose_request_document_resubmission',
+        input: {
+          documentType: 'CRIMINAL_RECORD',
+          reason: 'No se subió el certificado de antecedentes penales.',
+          whatsappMessage: `Hola ${firstName || ''}! Para avanzar con tu postulación en Monchis necesitamos el certificado de antecedentes penales (vigencia 90 días). Podés tramitarlo en la Policía Nacional y subirlo al portal. Gracias!`,
+        },
+        reasoning: 'Falta certificado de antecedentes. Solicitarlo con nota de vigencia (90 días).',
+      })
+    }
+    actions.push({
+      tool: 'escalate_to_admin',
+      input: { reason: summary },
+      reasoning: 'Falta confirmación del admin antes de disparar el pedido al postulante.',
+    })
+  } else if (rucBlocking) {
+    decision = 'REJECTED'
+    summary = `RUC en estado ${rucStatus} — bloqueante.`
+    actions.push({
+      tool: 'escalate_to_admin',
+      input: { reason: `RUC ${rucStatus}. Requiere decisión administrativa (rechazo o regularización).` },
+      reasoning: 'Estado de RUC es bloqueante — no se puede aprobar directamente.',
+    })
+  } else if (rejectsFromImages.length > 0) {
+    // Override: si los rechazos son todos por "cédula no coincide" pero detectamos
+    // typo (docs consistentes entre sí, diff ≤2 chars), NO rechazamos — proponemos
+    // corregir la cédula en el form y re-validar.
+    const allRejectsAreCedulaMismatch = rejectsFromImages.every((r) =>
+      /cédula.*no coincide|cedula.*no coincide|otra persona|diferente persona/i.test(r.reason),
+    )
+    if (cedulaTypo && allRejectsAreCedulaMismatch) {
+      decision = 'NEEDS_REVIEW'
+      summary = `El postulante cargó "${cedulaTypo.formCedula}" en el formulario pero los documentos muestran "${cedulaTypo.realCedula}" — muy probable typo (diferencia: ${cedulaTypo.editDistance} caracteres). Los nombres son compatibles. Proponemos corregir la cédula en el formulario y re-validar.`
+      actions.push({
+        tool: 'propose_update_driver_cedula',
+        input: {
+          currentCedula: cedulaTypo.formCedula,
+          correctedCedula: cedulaTypo.realCedula,
+          extractedFullName: cedulaTypo.extractedName,
+          reason: `Todos los documentos subidos muestran la cédula ${cedulaTypo.realCedula}${
+            cedulaTypo.extractedName ? ` a nombre de ${cedulaTypo.extractedName}` : ''
+          }, pero el formulario dice ${cedulaTypo.formCedula}. Diferencia de ${cedulaTypo.editDistance} caracter${cedulaTypo.editDistance === 1 ? '' : 'es'}: muy probable typo al completar el formulario.`,
+        },
+        reasoning: `Typo detectado: form=${cedulaTypo.formCedula}, docs=${cedulaTypo.realCedula}, distancia=${cedulaTypo.editDistance}.`,
+      })
+      steps.push(
+        'ℹ️ No rechazo los documentos — propongo corregir la cédula del formulario para que coincida con los documentos, y re-validar todo.',
+      )
+    } else {
+      decision = 'REJECTED'
+      summary = `Imágenes con problemas claros: ${rejectsFromImages.map((r) => r.doc).join(', ')}.`
+      for (const r of rejectsFromImages) {
+        actions.push({
+          tool: 'propose_reject_document',
+          input: { documentId: r.docId, reason: r.reason },
+          reasoning: `Haiku sugirió REJECT para ${r.doc}: ${r.reason}`,
+        })
+      }
+    }
+  } else if (reviewsFromImages.length > 0) {
+    decision = 'NEEDS_REVIEW'
+    summary = `Imágenes ambiguas que requieren revisión humana: ${reviewsFromImages.map((r) => r.doc).join(', ')}.`
+
+    // Cada imagen en MANUAL_REVIEW se clasifica según el concern:
+    //  - Error interno (PDF no soportado, fallo descarga) → escalate_to_admin
+    //  - Vencido (antecedentes >90 días) → resubmission con mensaje específico
+    //  - Calidad (borrosa, reflejo, etc.) → resubmission con mensaje genérico
+    //  - Datos inconsistentes (fecha rara, firma dudosa) → escalate_to_admin
+    const firstName = getFirstName(driver)
+    for (const rev of reviewsFromImages) {
+      const docType = docLabelToType(rev.doc)
+      if (!docType) continue
+
+      const concernLower = rev.concern.toLowerCase()
+      const classification = classifyConcern(concernLower)
+      const docLabelEs = documentTypeLabelEs(docType)
+
+      if (classification === 'INTERNAL_ERROR') {
+        // No es problema del postulante; fallo nuestro. Admin debe decidir.
+        actions.push({
+          tool: 'escalate_to_admin',
+          input: {
+            reason: `Error técnico procesando ${docLabelEs}: ${rev.concern}. Admin debe revisar manualmente sin pedir re-submission al postulante.`,
+          },
+          reasoning: `Error interno (no del postulante): ${rev.concern}`,
+        })
+      } else if (classification === 'EXPIRED' && docType === 'CRIMINAL_RECORD') {
+        actions.push({
+          tool: 'propose_request_document_resubmission',
+          input: {
+            documentType: 'CRIMINAL_RECORD',
+            reason: 'Certificado de antecedentes vencido (vigencia 90 días).',
+            whatsappMessage: `Hola ${firstName || ''}! Revisamos tu postulación y el certificado de antecedentes que subiste está vencido (vigencia 90 días corridos desde la emisión). Podés tramitarlo de nuevo en la Policía Nacional y subirlo al portal. Apenas lo tengas seguimos. ¡Gracias!`,
+          },
+          reasoning: `Certificado vencido: ${rev.concern}`,
+        })
+      } else if (classification === 'WRONG_SIDE') {
+        // Postulante subió el dorso cuando se pedía el frente (caso común).
+        const expectedSide = docType === 'CEDULA_FRONT' ? 'frente' : 'dorso'
+        const submittedSide = docType === 'CEDULA_FRONT' ? 'dorso' : 'frente'
+        actions.push({
+          tool: 'propose_request_document_resubmission',
+          input: {
+            documentType: docType,
+            reason: `El postulante subió el ${submittedSide} de la cédula cuando se esperaba el ${expectedSide}.`,
+            whatsappMessage: `Hola ${firstName || ''}! Vimos que en lugar del ${expectedSide} de la cédula subiste el ${submittedSide} (el que tiene el código de barras y el MRZ). Podés subir la cara del ${expectedSide} (la que muestra tu foto y los datos personales)? ¡Gracias!`,
+          },
+          reasoning: `Lado incorrecto: ${rev.concern}`,
+        })
+      } else if (classification === 'QUALITY') {
+        actions.push({
+          tool: 'propose_request_document_resubmission',
+          input: {
+            documentType: docType,
+            reason: `Revisar ${docLabelEs}: ${rev.concern}`,
+            whatsappMessage: `Hola ${firstName || ''}! Miramos tu postulación y ${reviewMessageForDoc(
+              docType,
+              rev.concern,
+            )} ¿Podés subir una nueva al portal? ¡Gracias!`,
+          },
+          reasoning: `Calidad de imagen baja: ${rev.concern}`,
+        })
+      } else {
+        // DATA_INCONSISTENCY u OTHER: admin decide — no pedir re-submission ciegamente.
+        actions.push({
+          tool: 'escalate_to_admin',
+          input: {
+            reason: `Revisar ${docLabelEs}: ${rev.concern}. Se detectó inconsistencia en datos (no en calidad de imagen) — admin debe verificar si es error del modelo o problema real del documento.`,
+          },
+          reasoning: `Concern no mappea a calidad ni vencimiento: ${rev.concern}`,
+        })
+      }
+    }
+  } else if (rucUnknown) {
+    decision = 'NEEDS_REVIEW'
+    summary = `Imágenes OK pero estado RUC es incierto (${rucStatus ?? 'null'}).`
+    actions.push({
+      tool: 'escalate_to_admin',
+      input: { reason: 'Reintentar consulta RUC o verificar manualmente.' },
+      reasoning: 'No podemos aprobar sin certeza del RUC.',
+    })
+  } else if (rucSoftIssue && !driver.rucInactiveWaived) {
+    decision = 'NEEDS_REVIEW'
+    summary = `Imágenes OK pero RUC ${rucStatus}. El admin puede: (a) marcar "RUC Inactivo" como excepción (si el postulante se compromete a regularizar), o (b) contactarlo primero para que regularice.`
+    const firstName = getFirstName(driver) || 'Driver'
+
+    // Opción A: propose_waive_ruc_inactive — admin acepta la excepción con 1 click
+    actions.push({
+      tool: 'propose_waive_ruc_inactive',
+      input: {
+        note: `RUC en estado ${rucStatus}${rucName ? ` (${rucName})` : ''}. Documentos OK. Aceptar excepción con compromiso de regularización.`,
+      },
+      reasoning: `Opción rápida: marcar excepción RUC Inactivo. El certificado tributario se da por cumplido.`,
+    })
+
+    // Opción B: contactar al postulante para que regularice (mensaje listo)
+    actions.push({
+      tool: 'propose_request_document_resubmission',
+      input: {
+        documentType: 'TAX_COMPLIANCE',
+        reason: `Contactar al postulante: su RUC está ${rucStatus} y debe regularizarlo.`,
+        whatsappMessage: `Hola ${firstName}! Revisamos tu postulación y tu RUC está en estado "${rucStatus}". Para poder facturarnos cuando trabajes, necesitás regularizarlo en la SET (https://set.gov.py). Avisanos cuando esté listo. ¡Gracias!`,
+      },
+      reasoning:
+        'Opción alternativa al waive: contactar al postulante para regularización fiscal antes de aprobar.',
+    })
+  } else {
+    // Todos los docs OK — aprobamos. Puede ser RUC ACTIVO, NOT_APPLICABLE (extranjero),
+    // waiver vigente, o NO_ENCONTRADO (postulante no registrado en SET — caso más común).
+    decision = 'APPROVED'
+
+    let rucContext: string
+    if (driver.rucInactiveWaived) {
+      rucContext = 'con excepción admin de RUC Inactivo'
+    } else if (foreignCedula) {
+      rucContext = 'postulante extranjero (RUC no aplica)'
+    } else if (rucNotRegistered) {
+      rucContext = 'RUC no registrado en SET (normal, se informará al postulante)'
+    } else {
+      rucContext = `RUC ${rucStatus}`
+    }
+    summary = `Documentos e identidad validados — ${rucContext}. Postulación lista para avanzar.`
+
+    for (const a of approvalsFromImages) {
+      actions.push({
+        tool: 'propose_approve_document',
+        input: { documentId: a.docId },
+        reasoning: `Haiku sugirió APPROVE para ${a.doc}.`,
+      })
+    }
+
+    const firstName = getFirstName(driver) || 'Driver'
+
+    // Si RUC NO_ENCONTRADO → mensaje custom informando que necesita registrarse
+    // si quiere facturar en el futuro. No usa plantilla porque es específico.
+    if (rucNotRegistered) {
+      actions.push({
+        tool: 'propose_send_whatsapp_template',
+        input: {
+          templateKey: 'capacitaciones',
+          variables: { name: firstName },
+        },
+        reasoning:
+          'Postulación aprobada: mandar info de capacitaciones. Aviso sobre RUC va aparte.',
+      })
+      actions.push({
+        tool: 'propose_request_document_resubmission',
+        input: {
+          // Reutilizamos esta tool como contenedor del mensaje al postulante.
+          // documentType TAX_COMPLIANCE es semánticamente cercano (situación fiscal),
+          // aunque el mensaje es informativo, no un pedido urgente.
+          documentType: 'TAX_COMPLIANCE',
+          reason:
+            'Informar al postulante que no está registrado en el SET (RUC no encontrado). Si en el futuro quiere facturar necesita registrar RUC.',
+          whatsappMessage: `Hola ${firstName}! Ya validamos tu postulación. Te comentamos que no figurás registrado en el SET (no tenés RUC todavía). Podés trabajar igual como repartidor, pero si más adelante querés facturar vas a necesitar registrar RUC. Cualquier duda consultanos.`,
+        },
+        reasoning:
+          'RUC NO_ENCONTRADO: no bloqueante pero se avisa al postulante para que sepa la situación.',
+      })
+    } else {
+
+      // Camino estándar (RUC ACTIVO, waived, extranjero, u otro no-bloqueante):
+      // proponer plantilla de capacitaciones
+      const capacitacionesTemplate = await prisma.whatsAppTemplate.findFirst({
+        where: { key: 'capacitaciones', isActive: true },
+        select: { key: true },
+      })
+      if (capacitacionesTemplate) {
+        actions.push({
+          tool: 'propose_send_whatsapp_template',
+          input: {
+            templateKey: 'capacitaciones',
+            variables: { name: firstName },
+          },
+          reasoning:
+            'Postulación lista: proponer mandar info de capacitaciones disponibles (plantilla existe y está activa en DB).',
+        })
+      } else {
+        actions.push({
+          tool: 'escalate_to_admin',
+          input: {
+            reason:
+              'Postulación lista para avanzar pero la plantilla "capacitaciones" no existe o está inactiva en DB. El admin debe enviar la invitación a capacitación manualmente.',
+          },
+          reasoning: 'Evito proponer enviar una plantilla inexistente.',
+        })
+      }
+    }
+  }
+
+  // Agregar análisis de documentos al reasoning
+  steps.push('')
+  steps.push('📸 **Análisis de documentos**')
+  steps.push(describeImageResult('Cédula (frente)', frontResultFinal, !!cedulaFront))
+  if (cedulaBack) {
+    steps.push(describeImageResult('Cédula (dorso)', backResultFinal, true))
+  } else {
+    steps.push('**Cédula (dorso):** no fue subida — no es obligatoria, se ignora.')
+  }
+  steps.push(describeImageResult('Certificado de antecedentes', criminalResultFinal, !!criminal))
+
+  steps.push('')
+  steps.push(`${decisionEmoji(decision)} **Decisión final: ${decisionLabel(decision)}**`)
+  steps.push(summary)
+
+  const reasoning = steps.join('\n')
+
+  return {
+    decision,
+    summary,
+    reasoning,
+    actions,
+    metrics,
+    model: HAIKU_MODEL,
+  }
+}
+
+function pickLatestDoc<T extends { documentType: string; createdAt: Date }>(
+  docs: T[],
+  type: string,
+): T | null {
+  const matches = docs.filter((d) => d.documentType === type)
+  if (matches.length === 0) return null
+  return matches.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]
+}
+
+/**
+ * Si el modelo devolvió REJECT pero el número de cédula extraído coincide con
+ * el del form, y el motivo declarado tiene que ver con el nombre, degradamos
+ * a APPROVE. La cédula es la señal de identidad inequívoca; un form con typo
+ * en el nombre no es fraude.
+ */
+/**
+ * Si el modelo devolvió REJECT pero el motivo está relacionado con vencimiento
+ * ("vencido", "expired", "X días han pasado", "excede N días de vigencia"),
+ * degradamos a MANUAL_REVIEW. Un certificado vencido NO es fraude — el postulante
+ * puede renovarlo rápido. Esto lleva el caso al branch de resubmission con
+ * mensaje específico de renovación.
+ */
+function applyExpiryOverride(
+  result: ImageValidationResult | null,
+  steps: string[],
+  docLabel: string,
+): ImageValidationResult | null {
+  if (!result || !result.ok) return result
+  if (result.suggestion !== 'REJECT') return result
+
+  const combined =
+    (result.rejectReasonIfAny ?? '') + ' ' + result.concerns.join(' ')
+  const classification = classifyConcern(combined.toLowerCase())
+  if (classification !== 'EXPIRED') return result
+
+  steps.push(
+    `[override] Modelo devolvió REJECT para ${docLabel} por vencimiento. Degradar a MANUAL_REVIEW — un certificado vencido es renovable, no fraude. Sigue al flujo de resubmission.`,
+  )
+  return {
+    ...result,
+    suggestion: 'MANUAL_REVIEW',
+    rejectReasonIfAny: null,
+    concerns: [
+      ...result.concerns,
+      '[override] REJECT por vencimiento degradado a MANUAL_REVIEW; se pedirá renovación al postulante.',
+    ],
+  }
+}
+
+function applyCedulaMatchOverride(
+  result: ImageValidationResult | null,
+  formCedula: string,
+  steps: string[],
+): ImageValidationResult | null {
+  if (!result || !result.ok) return result
+  if (result.suggestion !== 'REJECT' && result.suggestion !== 'MANUAL_REVIEW') return result
+
+  const extracted = normalizeCedula(result.extractedDocNumber ?? '')
+  const form = normalizeCedula(formCedula)
+  if (!extracted || !form || extracted !== form) return result
+
+  const reason =
+    (result.rejectReasonIfAny ?? '') +
+    ' ' +
+    result.concerns.join(' ')
+  // También chequeamos matchesDriverName=false del modelo
+  const concernsAboutName =
+    /nombre|apellido|name/i.test(reason) || result.matchesDriverName === false
+  if (!concernsAboutName) return result
+
+  const prevSuggestion = result.suggestion
+  steps.push(
+    `[override] Modelo devolvió ${prevSuggestion} por discrepancia de nombre, pero la cédula extraída (${extracted}) coincide con la del form (${form}). Degradar a APPROVE — misma persona, nombre del form es alias/apodo/typo.`,
+  )
+  return {
+    ...result,
+    suggestion: 'APPROVE',
+    rejectReasonIfAny: null,
+    matchesDriverCedula: true,
+    matchesDriverName: true,
+    concerns: [
+      ...result.concerns,
+      `[override] Cédula del doc coincide con la del form; variación de nombre aceptada como alias/typo.`,
+    ],
+  }
+}
+
+function processImageResult(
+  result: ImageValidationResult | null,
+  docLabel: string,
+  docId: string,
+  rejects: { doc: string; reason: string; docId: string }[],
+  reviews: { doc: string; concern: string; docId: string }[],
+  approvals: { doc: string; docId: string }[],
+) {
+  if (!result || !result.ok) {
+    reviews.push({ doc: docLabel, concern: result?.error ?? 'falla al validar', docId })
+    return
+  }
+  if (result.suggestion === 'REJECT') {
+    rejects.push({
+      doc: docLabel,
+      reason: result.rejectReasonIfAny ?? result.concerns.join('; ') ?? 'rechazo sin detalle',
+      docId,
+    })
+  } else if (result.suggestion === 'APPROVE') {
+    approvals.push({ doc: docLabel, docId })
+  } else {
+    reviews.push({ doc: docLabel, concern: result.concerns.join('; ') || 'ambiguo', docId })
+  }
+}
+
+function cleanName(name: string): string {
+  return name.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Extrae y normaliza el primer nombre del driver, con fallback sensato.
+ * Evita "Hola Stiven !" por trailing space en `firstName`.
+ */
+function getFirstName(driver: { firstName: string | null; fullName: string | null }): string {
+  const source = driver.firstName?.trim() || driver.fullName?.trim() || ''
+  const cleaned = cleanName(source)
+  if (!cleaned) return ''
+  // Tomar solo la primera palabra (primer nombre) por si viene fullName
+  const firstWord = cleaned.split(' ')[0]
+  // Capitalizar: "yeni" → "Yeni", "STIVEN" → "Stiven"
+  return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase()
+}
+
+/**
+ * Mapea el label humano de imagen ("cédula frente", "cédula dorso", "antecedentes")
+ * al tipo de documento canónico usado por la tool propose_request_document_resubmission.
+ */
+function docLabelToType(
+  label: string,
+): 'CEDULA_FRONT' | 'CEDULA_BACK' | 'CRIMINAL_RECORD' | null {
+  const l = label.toLowerCase()
+  if (l.includes('antecedentes')) return 'CRIMINAL_RECORD'
+  if (l.includes('dorso')) return 'CEDULA_BACK'
+  if (l.includes('frente') || l.includes('cédula')) return 'CEDULA_FRONT'
+  return null
+}
+
+/**
+ * Traduce el concern técnico del modelo a una frase corta para el WhatsApp al postulante.
+ */
+function humanizeQualityReason(concern: string): string {
+  const c = concern.toLowerCase()
+  if (c.includes('borrosa') || c.includes('blur')) return 'está borrosa'
+  if (c.includes('reflejo')) return 'tiene mucho reflejo'
+  if (c.includes('ilegible')) return 'no se puede leer bien'
+  if (c.includes('oscur')) return 'está muy oscura'
+  if (c.includes('ángulo') || c.includes('angulo')) return 'está en ángulo'
+  return 'no se ve clara'
+}
+
+/**
+ * Detecta si el postulante cometió typo al tipear su cédula.
+ *
+ * Criterios (todos deben cumplirse):
+ * 1. Al menos 2 documentos subidos (cédula frente + antecedentes, por ejemplo)
+ * 2. Todos los docs con cédula extraída tienen EL MISMO número (consistencia interna)
+ * 3. Esa cédula difiere del form por ≤2 caracteres (Levenshtein ≤ 2)
+ *
+ * Devuelve null si no hay typo detectable.
+ */
+function detectCedulaTypo(
+  formCedula: string,
+  imageResults: Array<ImageValidationResult | null>,
+): { formCedula: string; realCedula: string; editDistance: number; extractedName: string | null } | null {
+  const formNorm = normalizeCedula(formCedula)
+  if (!formNorm) return null
+
+  const extractedCedulas: string[] = []
+  let extractedName: string | null = null
+  for (const r of imageResults) {
+    if (r?.ok && r.extractedDocNumber) {
+      const n = normalizeCedula(r.extractedDocNumber)
+      if (n) {
+        extractedCedulas.push(n)
+        if (!extractedName && r.extractedFullName) extractedName = r.extractedFullName
+      }
+    }
+  }
+
+  if (extractedCedulas.length < 2) return null // Necesitamos ≥2 docs para confirmar
+
+  // Todos los docs deben tener la MISMA cédula (consistencia interna = es la misma persona)
+  const firstCedula = extractedCedulas[0]
+  const allMatch = extractedCedulas.every((c) => c === firstCedula)
+  if (!allMatch) return null
+
+  // No puede ser igual al form (sino no hay typo)
+  if (firstCedula === formNorm) return null
+
+  // Mismo largo (típico en typo de un dígito) Y diferencia ≤2
+  if (firstCedula.length !== formNorm.length) return null
+  const dist = levenshtein(firstCedula, formNorm)
+  if (dist === 0 || dist > 2) return null
+
+  return { formCedula: formNorm, realCedula: firstCedula, editDistance: dist, extractedName }
+}
+
+/**
+ * Levenshtein distance simple (edit distance).
+ * Implementación O(n*m) con matriz — suficiente para strings cortos como cédulas (≤10 chars).
+ */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0
+  if (!a.length) return b.length
+  if (!b.length) return a.length
+  const matrix: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0))
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost,
+      )
+    }
+  }
+  return matrix[a.length][b.length]
+}
+
+/**
+ * Clasifica un concern del modelo para elegir la acción correcta:
+ * - INTERNAL_ERROR: fallo nuestro (PDF rechazado, descarga fallida, etc.) → escalate
+ * - EXPIRED: certificado vencido → resubmission específica
+ * - WRONG_SIDE: subió dorso en vez de frente (o viceversa) → resubmission específica
+ * - QUALITY: imagen borrosa/reflejo/ángulo → resubmission genérica
+ * - OTHER: inconsistencia de datos, fecha rara, firma dudosa → escalate (admin decide)
+ *
+ * Regex cubren español e inglés porque el modelo a veces responde en inglés.
+ */
+function classifyConcern(
+  concernLower: string,
+): 'INTERNAL_ERROR' | 'EXPIRED' | 'WRONG_SIDE' | 'QUALITY' | 'OTHER' {
+  if (/pdfs no soportados|error descarg|error procesando|no se pudo|respuesta no-json|timeout/i.test(concernLower)) {
+    return 'INTERNAL_ERROR'
+  }
+  // EXPIRED: castellano + inglés; "X days later" es común en respuestas del modelo
+  if (
+    /venci|antigua|antiguo|vencido|90 d|más de \d+ dí|caduc|expired|expir|days later|days passed|\d{2,} days/i.test(
+      concernLower,
+    )
+  ) {
+    return 'EXPIRED'
+  }
+  // WRONG_SIDE: subió dorso cuando se pedía frente (o viceversa).
+  // Típico: "Imagen etiquetada como CEDULA_FRONT pero contiene dorso" / "es claramente el DORSO"
+  if (
+    /dorso.*frente|frente.*dorso|contiene dorso|contiene el dorso|mrz.*barcode.*(no|sin).*foto|claramente el dorso|claramente el frente|lado incorrecto/i.test(
+      concernLower,
+    )
+  ) {
+    return 'WRONG_SIDE'
+  }
+  if (
+    /borrosa|blur|reflejo|ilegible|calidad|oscur|ángulo|angulo|baja resol|pixelad|distorsion|rotad|giro/i.test(
+      concernLower,
+    )
+  ) {
+    return 'QUALITY'
+  }
+  return 'OTHER'
+}
+
+function documentTypeLabelEs(
+  docType: 'CEDULA_FRONT' | 'CEDULA_BACK' | 'CRIMINAL_RECORD' | 'TAX_COMPLIANCE',
+): string {
+  const map: Record<typeof docType, string> = {
+    CEDULA_FRONT: 'cédula (frente)',
+    CEDULA_BACK: 'cédula (dorso)',
+    CRIMINAL_RECORD: 'certificado de antecedentes',
+    TAX_COMPLIANCE: 'certificado tributario',
+  }
+  return map[docType] ?? docType
+}
+
+/**
+ * Construye la frase central del WhatsApp cuando pedimos re-submission por
+ * calidad/otro motivo (no vencimiento).
+ */
+function reviewMessageForDoc(
+  docType: 'CEDULA_FRONT' | 'CEDULA_BACK' | 'CRIMINAL_RECORD' | 'TAX_COMPLIANCE',
+  concern: string,
+): string {
+  const docEs = documentTypeLabelEs(docType)
+  const hint = humanizeQualityReason(concern)
+  return `la imagen de ${docEs} ${hint}.`
+}
+
+function formatAge(days: number): string {
+  if (days < 1) {
+    const hours = Math.round(days * 24)
+    if (hours < 1) return 'hace menos de una hora'
+    if (hours === 1) return 'hace 1 hora'
+    return `hace ${hours} horas`
+  }
+  const d = Math.round(days)
+  if (d === 1) return 'hace 1 día'
+  return `hace ${d} días`
+}
+
+function describeRucStatus(status: string | null | undefined): string {
+  const s = (status ?? '').toUpperCase()
+  if (s === 'ACTIVO') return ' — el RUC está vigente ✅'
+  if (s === 'SUSPENSION TEMPORAL' || s === 'INACTIVO')
+    return ' — el postulante tiene que regularizar para poder facturar ⚠️'
+  if (s === 'CANCELADO') return ' — el RUC fue dado de baja ❌'
+  if (s === 'BLOQUEADO') return ' — el RUC está bloqueado por la autoridad fiscal ❌'
+  if (s === 'NO_ENCONTRADO') return ' — el postulante no está registrado en el SET'
+  if (s === 'ERROR') return ' — no se pudo consultar (posible problema de red)'
+  if (s === 'NOT_CHECKED') return ' — todavía no se consultó'
+  if (s === 'NOT_APPLICABLE')
+    return ' — postulante extranjero, no aplica SET paraguayo (flujo manual para facturación)'
+  return ''
+}
+
+function decisionLabel(d: AgentRunDecision): string {
+  if (d === 'APPROVED') return 'APROBADA'
+  if (d === 'REJECTED') return 'RECHAZADA'
+  return 'REVISIÓN MANUAL'
+}
+
+function decisionEmoji(d: AgentRunDecision): string {
+  if (d === 'APPROVED') return '✅'
+  if (d === 'REJECTED') return '❌'
+  return '⚠️'
+}
+
+function suggestionLabel(s: ImageValidationResult['suggestion']): string {
+  if (s === 'APPROVE') return 'Aprobado ✓'
+  if (s === 'REJECT') return 'Rechazado ✗'
+  if (s === 'MANUAL_REVIEW') return 'Requiere revisión manual'
+  return 'Sin sugerencia'
+}
+
+function scoreLabel(score: number | null | undefined, kind: 'calidad' | 'autenticidad'): string {
+  if (score == null) return ''
+  const adj = score >= 80 ? 'alta' : score >= 60 ? 'media' : 'baja'
+  return `${kind} ${adj} (${score}/100)`
+}
+
+/**
+ * Formatea un resultado de imagen como un párrafo en lenguaje natural,
+ * con todos los campos relevantes que el modelo extrajo.
+ */
+function describeImageResult(
+  label: string,
+  r: ImageValidationResult | null,
+  wasSubmitted: boolean,
+): string {
+  if (!wasSubmitted || !r) return `**${label}:** no fue subida.`
+  if (!r.ok) {
+    return `**${label}:** no se pudo analizar — ${r.error ?? 'error desconocido'}.`
+  }
+
+  const lines: string[] = [`**${label}:** ${suggestionLabel(r.suggestion)}`]
+
+  const scores: string[] = []
+  const q = scoreLabel(r.qualityScore, 'calidad')
+  const a = scoreLabel(r.authenticityScore, 'autenticidad')
+  if (q) scores.push(q)
+  if (a) scores.push(a)
+  if (scores.length > 0) lines.push(`- Evaluación visual: ${scores.join(', ')}.`)
+
+  if (r.documentTypeDetected) {
+    const matchLabel =
+      r.matchesExpectedType === true
+        ? 'coincide con el tipo esperado ✓'
+        : r.matchesExpectedType === false
+          ? '⚠️ tipo no esperado'
+          : ''
+    lines.push(`- Tipo detectado: ${r.documentTypeDetected}${matchLabel ? ` — ${matchLabel}` : ''}.`)
+  }
+
+  if (r.extractedDocNumber) {
+    const matchLabel =
+      r.matchesDriverCedula === true
+        ? '✓ coincide con la cédula del formulario'
+        : r.matchesDriverCedula === false
+          ? '⚠️ no coincide con la cédula del formulario'
+          : ''
+    lines.push(`- Cédula extraída: ${r.extractedDocNumber}${matchLabel ? ` — ${matchLabel}` : ''}.`)
+  }
+
+  if (r.extractedFullName) {
+    const matchLabel =
+      r.matchesDriverName === true
+        ? '✓ coincide con el nombre del formulario'
+        : r.matchesDriverName === false
+          ? '⚠️ no coincide con el nombre del formulario'
+          : ''
+    lines.push(`- Nombre extraído: "${r.extractedFullName}"${matchLabel ? ` — ${matchLabel}` : ''}.`)
+  }
+
+  if (r.concerns.length > 0) {
+    lines.push(`- Observaciones del modelo:`)
+    for (const c of r.concerns) lines.push(`  • ${c}`)
+  }
+
+  if (r.rejectReasonIfAny && r.suggestion === 'REJECT') {
+    lines.push(`- Motivo de rechazo: ${r.rejectReasonIfAny}`)
+  }
+
+  return lines.join('\n')
+}
+
+function buildCaughtErrorResult(err: unknown): ImageValidationResult {
+  const message = err instanceof Error ? err.message : 'Error desconocido'
+  return {
+    ok: false,
+    error: message,
+    documentTypeDetected: null,
+    matchesExpectedType: null,
+    isReadable: null,
+    qualityScore: null,
+    authenticityScore: null,
+    extractedDocNumber: null,
+    extractedFullName: null,
+    matchesDriverCedula: null,
+    matchesDriverName: null,
+    concerns: [],
+    suggestion: null,
+    rejectReasonIfAny: null,
+    usage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costMicroUsd: 0,
+    },
+  }
+}
+
+function emptyMetrics() {
+  return {
+    iterations: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    costMicroUsd: 0,
+  }
+}

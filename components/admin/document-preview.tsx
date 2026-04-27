@@ -2,6 +2,7 @@
 "use client"
 
 import { useState } from "react"
+import { WaiveRucButton } from "@/components/admin/postulaciones/waive-ruc-button"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -59,6 +60,12 @@ interface DocumentPreviewProps {
   onDocumentApprove?: (documentId: string) => void
   onDocumentReject?: (documentId: string, reason: string) => void
   isLoading?: boolean
+  // Datos del FormDriver para la excepción "RUC Inactivo"
+  driverId?: string
+  rucInactiveWaived?: boolean
+  rucInactiveWaivedAt?: string | Date | null
+  rucInactiveWaivedNote?: string | null
+  onWaiveChange?: () => void
 }
 
 // ✅ Tipos de documento simplificados - solo opciones esenciales para subir
@@ -150,6 +157,11 @@ export function DocumentPreview({
   onDocumentApprove,
   onDocumentReject,
   isLoading = false,
+  driverId,
+  rucInactiveWaived = false,
+  rucInactiveWaivedAt,
+  rucInactiveWaivedNote,
+  onWaiveChange,
 }: DocumentPreviewProps) {
   const [selectedDocument, setSelectedDocument] = useState<any>(null)
   const [showActionsModal, setShowActionsModal] = useState(false)
@@ -268,6 +280,15 @@ export function DocumentPreview({
                         {group.info.description}
                       </p>
                     </div>
+                    {groupKey === 'TAX_COMPLIANCE' && driverId && (
+                      <WaiveRucButton
+                        driverId={driverId}
+                        waived={rucInactiveWaived}
+                        waivedAt={rucInactiveWaivedAt}
+                        waivedNote={rucInactiveWaivedNote}
+                        onSuccess={onWaiveChange}
+                      />
+                    )}
                   </div>
                 </div>
 

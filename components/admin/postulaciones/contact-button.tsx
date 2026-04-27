@@ -180,19 +180,12 @@ export function ContactButton({
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    variant={contactStatus === 'urgent' ? 'default' : 'outline'}
                     size={size}
                     disabled={isDisabled || isPending}
-                    className={`gap-2 ${
-                      contactStatus === 'contacted' 
-                        ? 'bg-green-50 text-green-700 hover:bg-green-100 border-green-200' 
-                        : contactStatus === 'urgent'
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : ''
-                    }`}
+                    className="gap-2 bg-[#25D366] text-white hover:bg-[#1fb955] border-[#25D366]"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <MessageCircle className="h-4 w-4" />
+                    <WhatsAppIcon className="h-4 w-4" />
                     Contactar
                   </Button>
                 </DropdownMenuTrigger>

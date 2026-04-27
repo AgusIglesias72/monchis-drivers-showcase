@@ -1,342 +1,203 @@
 // lib/services/email.service.ts
-import { google } from 'googleapis';
+//
+// Servicio de envío de emails vía Resend + React Email.
+// Las firmas de las funciones existentes se mantienen para no romper callers.
 
-const DEFAULT_NOTIFICATION_EMAILS = [
-  'agusiglesias72@gmail.com',
-  'agustin.iglesias@itti.digital', // ✅ Actualizado
-];
+import { Resend } from 'resend'
+import ProcessCompletedEmail from '@/emails/process-completed'
+import ProcessFailedEmail from '@/emails/process-failed'
+import BonusCompletedEmail from '@/emails/bonus-completed'
+import DailyPostulacionesReportEmail from '@/emails/daily-postulaciones-report'
+import {
+  NOTIFICATIONS_CONFIG,
+  getResendApiKey,
+} from '@/lib/config/notifications.config'
+import type { DailyReportData } from './daily-report.service'
 
-function getGmailAuth() {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
-
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('Falta configuración de Google OAuth para Gmail');
-  }
-
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-  
-  return oauth2Client;
+let _resend: Resend | null = null
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(getResendApiKey())
+  return _resend
 }
 
-function createEmailMessage(to: string[], subject: string, htmlBody: string): string {
-  const messageParts = [
-    `To: ${to.join(', ')}`,
-    'Content-Type: text/html; charset=utf-8',
-    'MIME-Version: 1.0',
-    `Subject: ${subject}`,
-    '',
-    htmlBody,
-  ];
-  
-  const message = messageParts.join('\n');
-  return Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+// Deduplica destinatarios (por si alguien pasa un email que ya está en el default)
+function dedupeEmails(...lists: string[][]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const list of lists) {
+    for (const email of list) {
+      const norm = email.trim().toLowerCase()
+      if (norm && !seen.has(norm)) {
+        seen.add(norm)
+        out.push(email.trim())
+      }
+    }
+  }
+  return out
 }
 
 export const emailService = {
   async sendProcessCompletedEmail(data: {
-    startDate: string;
-    endDate: string;
+    startDate: string
+    endDate: string
     reportsStats?: {
-      totalRows: number;
-      dataRows: number;
-      processedRanges: number;
-    };
+      totalRows: number
+      dataRows: number
+      processedRanges: number
+    }
     driversStats?: {
-      successful: number;
-      failed: number;
-      total: number;
-      errors?: Array<{ driver: string; error: string }>;
-    };
-    spreadsheetUrl?: string;
-    notificationEmails?: string[]; // ✅ NUEVO
+      successful: number
+      failed: number
+      total: number
+      errors?: Array<{ driver: string; error: string }>
+    }
+    spreadsheetUrl?: string
+    notificationEmails?: string[]
   }): Promise<void> {
     try {
-      const auth = getGmailAuth();
-      const gmail = google.gmail({ version: 'v1', auth });
+      const to = dedupeEmails(
+        NOTIFICATIONS_CONFIG.processReports,
+        data.notificationEmails || []
+      )
 
-      // ✅ Combinar emails por defecto con los adicionales
-      const recipients = [
-        ...DEFAULT_NOTIFICATION_EMAILS,
-        ...(data.notificationEmails || [])
-      ];
+      const { data: result, error } = await getResend().emails.send({
+        from: NOTIFICATIONS_CONFIG.from,
+        to,
+        replyTo: NOTIFICATIONS_CONFIG.replyTo,
+        subject: `Proceso completado: ${data.startDate} al ${data.endDate}`,
+        react: ProcessCompletedEmail({
+          startDate: data.startDate,
+          endDate: data.endDate,
+          reportsStats: data.reportsStats,
+          driversStats: data.driversStats,
+          spreadsheetUrl: data.spreadsheetUrl,
+        }),
+      })
 
-      let html = `
-        <html>
-          <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #16a34a;">✅ Proceso Completado</h2>
-            
-            <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <h3 style="margin-top: 0;">📅 Rango de Fechas</h3>
-              <p><strong>${data.startDate}</strong> → <strong>${data.endDate}</strong></p>
-            </div>
-      `;
-
-      if (data.reportsStats) {
-        html += `
-            <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <h3 style="margin-top: 0; color: #16a34a;">📊 Reporte de Pagos</h3>
-              <ul style="list-style: none; padding: 0;">
-                <li>✅ Rangos procesados: <strong>${data.reportsStats.processedRanges}</strong></li>
-                <li>📝 Total de filas: <strong>${data.reportsStats.totalRows}</strong></li>
-                <li>📋 Filas de datos: <strong>${data.reportsStats.dataRows}</strong></li>
-              </ul>
-            </div>
-        `;
+      if (error) {
+        console.error('❌ Error enviando email (proceso completado):', error)
+        return
       }
-
-      if (data.driversStats) {
-        const successRate = ((data.driversStats.successful / data.driversStats.total) * 100).toFixed(1);
-        html += `
-            <div style="background-color: #eff6ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <h3 style="margin-top: 0; color: #2563eb;">🚗 Conductores Externos</h3>
-              <ul style="list-style: none; padding: 0;">
-                <li>✅ Exitosos: <strong>${data.driversStats.successful}</strong></li>
-                <li>❌ Fallidos: <strong>${data.driversStats.failed}</strong></li>
-                <li>📁 Total: <strong>${data.driversStats.total}</strong></li>
-                <li>📈 Tasa de éxito: <strong>${successRate}%</strong></li>
-              </ul>
-        `;
-
-        if (data.driversStats.errors && data.driversStats.errors.length > 0) {
-          html += `
-              <div style="margin-top: 15px; padding: 10px; background-color: #fee; border-left: 4px solid #ef4444;">
-                <h4 style="margin-top: 0; color: #dc2626;">⚠️ Conductores con errores:</h4>
-                <ul style="margin: 0;">
-          `;
-          data.driversStats.errors.forEach(err => {
-            html += `<li style="font-size: 14px;">${err.driver}</li>`;
-          });
-          html += `
-                </ul>
-              </div>
-          `;
-        }
-
-        html += `</div>`;
-      }
-
-      if (data.spreadsheetUrl) {
-        html += `
-            <div style="margin: 30px 0; text-align: center;">
-              <a href="${data.spreadsheetUrl}" 
-                 style="background-color: #2563eb; color: white; padding: 12px 24px; 
-                        text-decoration: none; border-radius: 6px; display: inline-block;">
-                📊 Ver Reporte en Google Sheets
-              </a>
-            </div>
-        `;
-      }
-
-      html += `
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; 
-                        color: #6b7280; font-size: 12px;">
-              <p>Este es un email automático generado por el sistema de procesamiento.</p>
-            </div>
-          </body>
-        </html>
-      `;
-
-      const encodedMessage = createEmailMessage(
-        recipients,
-        `Proceso Completado: ${data.startDate} al ${data.endDate}`, // ✅ Título mejorado
-        html
-      );
-
-      await gmail.users.messages.send({
-        userId: 'me',
-        requestBody: {
-          raw: encodedMessage,
-        },
-      });
-
-      console.log(`✅ Email de notificación enviado a: ${recipients.join(', ')}`);
-    } catch (error: any) {
-      console.error('❌ Error enviando email:', error.message);
+      console.log(`✅ Email "proceso completado" enviado [${result?.id}] a: ${to.join(', ')}`)
+    } catch (err: any) {
+      console.error('❌ Excepción enviando email:', err.message)
     }
   },
 
   async sendProcessFailedEmail(data: {
-    startDate: string;
-    endDate: string;
-    error: string;
-    notificationEmails?: string[]; // ✅ NUEVO
+    startDate: string
+    endDate: string
+    error: string
+    notificationEmails?: string[]
   }): Promise<void> {
     try {
-      const auth = getGmailAuth();
-      const gmail = google.gmail({ version: 'v1', auth });
+      const to = dedupeEmails(
+        NOTIFICATIONS_CONFIG.processReports,
+        data.notificationEmails || []
+      )
 
-      // ✅ Combinar emails por defecto con los adicionales
-      const recipients = [
-        ...DEFAULT_NOTIFICATION_EMAILS,
-        ...(data.notificationEmails || [])
-      ];
+      const { data: result, error } = await getResend().emails.send({
+        from: NOTIFICATIONS_CONFIG.from,
+        to,
+        replyTo: NOTIFICATIONS_CONFIG.replyTo,
+        subject: `❌ Proceso fallido: ${data.startDate} al ${data.endDate}`,
+        react: ProcessFailedEmail({
+          startDate: data.startDate,
+          endDate: data.endDate,
+          error: data.error,
+        }),
+      })
 
-      const html = `
-        <html>
-          <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #dc2626;">❌ Proceso Fallido</h2>
-            
-            <div style="background-color: #fef2f2; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
-              <h3 style="margin-top: 0;">📅 Rango de Fechas</h3>
-              <p><strong>${data.startDate}</strong> → <strong>${data.endDate}</strong></p>
-              
-              <h3>⚠️ Error:</h3>
-              <p style="color: #991b1b; font-family: monospace; background-color: #fee; padding: 10px; border-radius: 4px;">
-                ${data.error}
-              </p>
-            </div>
-
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; 
-                        color: #6b7280; font-size: 12px;">
-              <p>Por favor revisa los logs del sistema para más detalles.</p>
-            </div>
-          </body>
-        </html>
-      `;
-
-      const encodedMessage = createEmailMessage(
-        recipients,
-        `Proceso Fallido: ${data.startDate} al ${data.endDate}`, // ✅ Título mejorado
-        html
-      );
-
-      await gmail.users.messages.send({
-        userId: 'me',
-        requestBody: {
-          raw: encodedMessage,
-        },
-      });
-
-      console.log(`✅ Email de error enviado a: ${recipients.join(', ')}`);
-    } catch (error: any) {
-      console.error('❌ Error enviando email de error:', error.message);
+      if (error) {
+        console.error('❌ Error enviando email (proceso fallido):', error)
+        return
+      }
+      console.log(`✅ Email "proceso fallido" enviado [${result?.id}] a: ${to.join(', ')}`)
+    } catch (err: any) {
+      console.error('❌ Excepción enviando email de error:', err.message)
     }
   },
 
   async sendBonusProcessCompletedEmail(data: {
-    bonusDate: string;
-    executionMode: 'DRY_RUN' | 'EXECUTE';
+    bonusDate: string
+    executionMode: 'DRY_RUN' | 'EXECUTE'
     stats: {
-      totalOrders: number;
-      driversProcessed: number;
-      extrasCreated: number;
-      assignmentsSuccessful: number;
-      assignmentsFailed: number;
-      totalPayoutAmount: number;
-    };
-    errors?: Array<{ driver: string; error: string }>;
-    notificationEmails?: string[];
+      totalOrders: number
+      driversProcessed: number
+      extrasCreated: number
+      assignmentsSuccessful: number
+      assignmentsFailed: number
+      totalPayoutAmount: number
+    }
+    errors?: Array<{ driver: string; error: string }>
+    notificationEmails?: string[]
   }): Promise<void> {
     try {
-      const auth = getGmailAuth();
-      const gmail = google.gmail({ version: 'v1', auth });
+      const to = dedupeEmails(
+        NOTIFICATIONS_CONFIG.processReports,
+        data.notificationEmails || []
+      )
 
-      const recipients = [
-        ...DEFAULT_NOTIFICATION_EMAILS,
-        ...(data.notificationEmails || [])
-      ];
+      const subjectPrefix = data.executionMode === 'DRY_RUN' ? '[DRY RUN] ' : ''
+      const { data: result, error } = await getResend().emails.send({
+        from: NOTIFICATIONS_CONFIG.from,
+        to,
+        replyTo: NOTIFICATIONS_CONFIG.replyTo,
+        subject: `${subjectPrefix}Bonos ${data.bonusDate} — ${data.stats.driversProcessed} conductores`,
+        react: BonusCompletedEmail({
+          bonusDate: data.bonusDate,
+          executionMode: data.executionMode,
+          stats: data.stats,
+          errors: data.errors,
+        }),
+      })
 
-      const isDryRun = data.executionMode === 'DRY_RUN';
-      const hasErrors = data.errors && data.errors.length > 0;
-
-      const html = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          </head>
-          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: ${isDryRun ? '#fff3cd' : '#d1fae5'}; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-              <h2 style="margin-top: 0; color: ${isDryRun ? '#856404' : '#065f46'};">
-                ${isDryRun ? '🏃 DRY RUN - Simulación de Bonos' : '✅ Bonos Procesados Exitosamente'}
-              </h2>
-              <p style="font-size: 16px; margin: 10px 0;">
-                <strong>📅 Fecha de Bonos:</strong> ${data.bonusDate}
-              </p>
-            </div>
-
-            <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <h3 style="margin-top: 0; color: #333;">📊 Resumen del Proceso</h3>
-
-              <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                  <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>📦 Pedidos procesados:</strong></td>
-                  <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${data.stats.totalOrders}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>👥 Conductores beneficiados:</strong></td>
-                  <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${data.stats.driversProcessed}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>🎁 Extras ${isDryRun ? 'a crear' : 'creados'}:</strong></td>
-                  <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${data.stats.extrasCreated}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>✅ Asignaciones exitosas:</strong></td>
-                  <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${data.stats.assignmentsSuccessful}</td>
-                </tr>
-                ${data.stats.assignmentsFailed > 0 ? `
-                <tr style="background: #fee;">
-                  <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>❌ Asignaciones fallidas:</strong></td>
-                  <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${data.stats.assignmentsFailed}</td>
-                </tr>
-                ` : ''}
-                <tr style="background: #e8f5e9;">
-                  <td style="padding: 8px;"><strong>💰 Total a pagar:</strong></td>
-                  <td style="padding: 8px; text-align: right; font-size: 18px; font-weight: bold;">
-                    ${data.stats.totalPayoutAmount.toLocaleString('es-PY')} Gs
-                  </td>
-                </tr>
-              </table>
-            </div>
-
-            ${isDryRun ? `
-              <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0;">
-                <strong>⚠️ MODO DRY RUN ACTIVO</strong>
-                <p style="margin: 10px 0;">Esta fue una simulación. No se crearon extras ni se asignaron bonos reales.</p>
-                <p style="margin: 10px 0;">Para ejecutar en producción, cambiar <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">executionMode</code> a <code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">EXECUTE</code></p>
-              </div>
-            ` : ''}
-
-            ${hasErrors && data.errors ? `
-              <div style="background: #fee; padding: 15px; border-left: 4px solid #f44336; margin: 20px 0;">
-                <strong>❌ Errores encontrados (${data.errors.length})</strong>
-                <ul style="margin: 10px 0;">
-                  ${data.errors.slice(0, 10).map(e => `<li style="font-size: 14px;">${e.driver}: ${e.error}</li>`).join('')}
-                  ${data.errors.length > 10 ? `<li style="font-size: 14px;">... y ${data.errors.length - 10} más</li>` : ''}
-                </ul>
-              </div>
-            ` : ''}
-
-            <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
-
-            <p style="color: #666; font-size: 12px; text-align: center;">
-              Generado automáticamente por el Sistema de Bonos - ${new Date().toLocaleString('es-PY')}
-            </p>
-          </body>
-        </html>
-      `;
-
-      const encodedMessage = createEmailMessage(
-        recipients,
-        `${isDryRun ? '[DRY RUN] ' : ''}Bonos ${data.bonusDate} - ${data.stats.driversProcessed} conductores`,
-        html
-      );
-
-      await gmail.users.messages.send({
-        userId: 'me',
-        requestBody: {
-          raw: encodedMessage,
-        },
-      });
-
-      console.log(`✅ Email de bonos enviado a: ${recipients.join(', ')}`);
-    } catch (error: any) {
-      console.error('❌ Error enviando email de bonos:', error.message);
+      if (error) {
+        console.error('❌ Error enviando email (bonos):', error)
+        return
+      }
+      console.log(`✅ Email "bonos" enviado [${result?.id}] a: ${to.join(', ')}`)
+    } catch (err: any) {
+      console.error('❌ Excepción enviando email de bonos:', err.message)
     }
   },
-};
+
+  /**
+   * Envía el reporte diario de postulaciones (cron a las 00hs Paraguay).
+   */
+  async sendDailyPostulacionesReport(params: {
+    data: DailyReportData
+    notificationEmails?: string[]
+  }): Promise<{ id?: string; error?: string }> {
+    try {
+      const to = dedupeEmails(
+        NOTIFICATIONS_CONFIG.dailyReport,
+        params.notificationEmails || []
+      )
+
+      const dateStr = params.data.reportDate.toLocaleDateString('es-PY', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+
+      const { data, error } = await getResend().emails.send({
+        from: NOTIFICATIONS_CONFIG.from,
+        to,
+        replyTo: NOTIFICATIONS_CONFIG.replyTo,
+        subject: `📋 Reporte diario ${dateStr} — ${params.data.newPostulaciones} postulaciones nuevas`,
+        react: DailyPostulacionesReportEmail({ data: params.data }),
+      })
+
+      if (error) {
+        console.error('❌ Error enviando reporte diario:', error)
+        return { error: String(error) }
+      }
+      console.log(`✅ Reporte diario enviado [${data?.id}] a: ${to.join(', ')}`)
+      return { id: data?.id }
+    } catch (err: any) {
+      console.error('❌ Excepción enviando reporte diario:', err.message)
+      return { error: err.message }
+    }
+  },
+}

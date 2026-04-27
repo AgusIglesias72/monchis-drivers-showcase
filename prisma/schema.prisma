@@ -4,7 +4,6 @@
  * ├── 📝 Form System (FormDriver, FormSubmission, FormDocument, etc)
  * ├── 💰 Payment & Financial (EquipmentPayment, FinancialService)
  * ├── 🎓 Onboarding Events (OnboardingEvent, OnboardingAttendee)
- * ├── 📧 Braze Integration (BrazeTrigger, BrazeExecution)
  * └── 📋 Enums (todos al final)
  */
 
@@ -60,8 +59,6 @@ model AdminUser {
   whatsappMessagesSent WhatsAppMessage[] @relation("WhatsAppMessagesSent")
   whatsappTemplatesCreated WhatsAppTemplate[] @relation("TemplatesCreated")
   whatsappTemplatesUpdated WhatsAppTemplate[] @relation("TemplatesUpdated")
-  brazeTriggerCreated     BrazeTrigger[]     @relation("BrazeTriggerCreatedBy")
-  brazeExecutionsExecuted BrazeExecution[]   @relation("BrazeExecutionExecutedBy")
 
   @@index([email])
   @@index([role])
@@ -199,10 +196,35 @@ model FormDriver {
   source   String? // web, mobile, referral
   metadata Json?
 
+  // Control de frecuencia de mensajes
+  messagesSentCount Int       @default(0) @map("messages_sent_count") // Total de mensajes automáticos enviados
+  noContactBefore   DateTime? @map("no_contact_before") // No contactar antes de esta fecha
+  lastMessageSentAt DateTime? @map("last_message_sent_at") // Último mensaje automático enviado
+
   // Portal de autogestión
   accessToken            String?   @unique @map("access_token")
   accessTokenGeneratedAt DateTime? @map("access_token_generated_at")
   lastPortalAccessAt     DateTime? @map("last_portal_access_at")
+
+  // Integración ManyChat (bot de adquisición, número +15754194027).
+  // Sin @unique: si un candidato re-postula, puede existir el mismo subscriber_id en múltiples FormDrivers.
+  manychatSubscriberId String? @map("manychat_subscriber_id")
+
+  // Validación RUC (turuc.com.py)
+  rucStatus         String?   @default("NOT_CHECKED") @map("ruc_status") // NOT_CHECKED | ACTIVO | INACTIVO | CLAUSURADO | NO_ENCONTRADO | ERROR | etc (string libre, valor crudo del SET)
+  rucName           String?   @map("ruc_name")          // razonSocial
+  rucDv             Int?      @map("ruc_dv")            // dígito verificador
+  rucIsLegalEntity  Boolean?  @map("ruc_is_legal_entity")
+  rucIsPublicEntity Boolean?  @map("ruc_is_public_entity")
+  rucLastCheckedAt  DateTime? @map("ruc_last_checked_at")
+  rucApiRawResponse Json?     @map("ruc_api_raw_response") // respuesta completa (debug)
+
+  // Admin: marca "RUC Inactivo" (postulante va a corregir su situación fiscal).
+  // Cuando es true, el certificado tributario cuenta como completo a los fines del badge.
+  rucInactiveWaived    Boolean   @default(false) @map("ruc_inactive_waived")
+  rucInactiveWaivedBy  String?   @map("ruc_inactive_waived_by")   // clerkId del admin
+  rucInactiveWaivedAt  DateTime? @map("ruc_inactive_waived_at")
+  rucInactiveWaivedNote String?  @map("ruc_inactive_waived_note") @db.Text
 
   // Timestamps
   startedAt      DateTime  @default(now()) @map("started_at")
@@ -220,7 +242,7 @@ model FormDriver {
   driverContacts        DriverContact[]
   financialService      FinancialService?
   whatsappMessagesSent WhatsAppMessage[]
-  brazeExecutions      BrazeExecution[]
+  agentRuns            AgentRun[]
 
   @@index([cedula])
   @@index([phoneNumber])
@@ -230,6 +252,8 @@ model FormDriver {
   @@index([documentsStatus])
   @@index([onboardingStatus])
   @@index([accessToken])
+  @@index([rucStatus])
+  @@index([manychatSubscriberId])
   @@map("form_drivers")
 }
 
@@ -521,6 +545,10 @@ model WhatsAppTemplate {
   // Categoría opcional
   category String? // general, documentos, capacitacion, pago, etc
 
+  // Integración ManyChat: flow_ns del Flow que envuelve el template Meta aprobado.
+  // Si es null, el template se manda por el canal legacy (multi-bot) o no se envía.
+  manychatFlowId String? @map("manychat_flow_id")
+
   // Estadísticas de uso
   usageCount Int @default(0) @map("usage_count")
   lastUsedAt DateTime? @map("last_used_at")
@@ -690,89 +718,6 @@ model BackgroundJob {
   @@index([createdAt])
 }
 
-// ==================== BRAZE INTEGRATION ====================
-
-model BrazeTrigger {
-  id String @id @default(cuid())
-
-  // Información básica
-  title           String
-  description     String?   @db.Text
-
-  // Configuración de Braze
-  triggerType     BrazeTriggerType
-  campaignId      String?   @map("campaign_id")
-  canvasId        String?   @map("canvas_id")
-
-  // Documentación
-  targetAudience  String?   @map("target_audience") @db.Text
-  defaultProperties Json?   @map("default_properties")
-
-  // Estado
-  isActive        Boolean   @default(true) @map("is_active")
-  tags            String[]  @default([])
-  metadata        Json?
-
-  // Auditoría
-  createdBy       String    @map("created_by")
-  createdByUser   AdminUser @relation("BrazeTriggerCreatedBy", fields: [createdBy], references: [id])
-
-  // Timestamps
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  // Relaciones
-  executions      BrazeExecution[]
-
-  @@index([isActive])
-  @@index([triggerType])
-  @@index([createdBy])
-  @@map("braze_triggers")
-}
-
-model BrazeExecution {
-  id String @id @default(cuid())
-
-  // Relación con trigger
-  triggerId       String        @map("trigger_id")
-  trigger         BrazeTrigger  @relation(fields: [triggerId], references: [id], onDelete: Cascade)
-
-  // Ejecución
-  recipientCount  Int           @map("recipient_count")
-  triggerProperties Json?       @map("trigger_properties")
-  status          BrazeExecutionStatus @default(PENDING)
-
-  // Respuesta de Braze
-  brazeResponse   Json?         @map("braze_response")
-  brazeMessageId  String?       @map("braze_message_id") // dispatch_id
-  errorMessage    String?       @map("error_message") @db.Text
-  retryCount      Int           @default(0) @map("retry_count")
-
-  // Relación opcional con driver
-  formDriverId    String?       @map("form_driver_id")
-  formDriver      FormDriver?   @relation(fields: [formDriverId], references: [id], onDelete: SetNull)
-
-  // Auditoría
-  executedBy      String        @map("executed_by")
-  executedByUser  AdminUser     @relation("BrazeExecutionExecutedBy", fields: [executedBy], references: [id])
-  ipAddress       String?       @map("ip_address")
-  userAgent       String?       @map("user_agent")
-
-  // Timestamps
-  executedAt      DateTime      @default(now()) @map("executed_at")
-  completedAt     DateTime?     @map("completed_at")
-  failedAt        DateTime?     @map("failed_at")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
-
-  @@index([triggerId])
-  @@index([status])
-  @@index([executedBy])
-  @@index([executedAt])
-  @@index([formDriverId])
-  @@map("braze_executions")
-}
-
 // ==================== BONUS SYSTEM ====================
 
 model BonusAssignment {
@@ -883,15 +828,6 @@ enum AuditAction {
   USER_LOGIN
   USER_LOGOUT
   SETTINGS_CHANGED
-
-  // Braze
-  BRAZE_TRIGGER_CREATED
-  BRAZE_TRIGGER_UPDATED
-  BRAZE_TRIGGER_DELETED
-  BRAZE_TRIGGER_ACTIVATED
-  BRAZE_TRIGGER_DEACTIVATED
-  BRAZE_CAMPAIGN_EXECUTED
-  BRAZE_CANVAS_EXECUTED
 
   // Otros
   OTHER
@@ -1024,15 +960,113 @@ enum WhatsAppMessageSource {
   TEST // Mensaje de prueba
 }
 
-enum BrazeTriggerType {
-  CAMPAIGN
-  CANVAS
+// ============================================================================
+// Agente IA (Anthropic) para procesamiento de postulaciones
+// ============================================================================
+
+model AgentRun {
+  id           String @id @default(cuid())
+  formDriverId String @map("form_driver_id")
+
+  // Estado del run
+  status AgentRunStatus @default(PENDING)
+  mode   AgentRunMode   @default(DRY_RUN)
+
+  // Resultado
+  decision  AgentRunDecision?
+  summary   String?           @db.Text
+  reasoning String?           @db.Text // razonamiento paso a paso del agente
+
+  // Metadata LLM
+  model            String? // claude-haiku-4-5-20251001, etc.
+  iterations       Int     @default(0)
+  inputTokens      Int?    @map("input_tokens")
+  outputTokens     Int?    @map("output_tokens")
+  cacheReadTokens  Int?    @map("cache_read_tokens")
+  cacheWriteTokens Int?    @map("cache_write_tokens")
+  costMicroUsd     Int?    @map("cost_micro_usd") // costo en microdólares (1 unidad = $0.000001 USD). $0.01 = 10_000
+
+  // Auditoría
+  triggeredBy String? @map("triggered_by") // clerkId o 'SYSTEM'
+  error       String? @db.Text
+
+  // Feedback humano (admin califica si la decisión del agente fue correcta).
+  // Usado para medir accuracy y alimentar análisis automático (Fase 2).
+  humanFeedback     AgentFeedback? @map("human_feedback")
+  humanFeedbackNote String?        @map("human_feedback_note") @db.Text
+  humanFeedbackBy   String?        @map("human_feedback_by") // clerkId
+  humanFeedbackAt   DateTime?      @map("human_feedback_at")
+
+  // Timestamps
+  createdAt   DateTime  @default(now()) @map("created_at")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+
+  formDriver FormDriver    @relation(fields: [formDriverId], references: [id], onDelete: Cascade)
+  actions    AgentAction[]
+
+  @@index([formDriverId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([humanFeedback])
+  @@map("agent_runs")
 }
 
-enum BrazeExecutionStatus {
+enum AgentFeedback {
+  MATCHES // admin coincide con la decisión del agente
+  DOES_NOT_MATCH // admin decidiría distinto
+  PARTIAL // algunos puntos bien, otros mal
+}
+
+model AgentAction {
+  id         String @id @default(cuid())
+  agentRunId String @map("agent_run_id")
+
+  // Acción propuesta
+  tool      String // ej: 'propose_approve_document', 'propose_send_whatsapp_template'
+  input     Json // args del tool call
+  reasoning String? @db.Text // por qué el agente eligió esta acción
+
+  // Ejecución
+  status          AgentActionStatus @default(PROPOSED)
+  approvedBy      String?           @map("approved_by") // clerkId
+  approvedAt      DateTime?         @map("approved_at")
+  executedAt      DateTime?         @map("executed_at")
+  executionResult Json?             @map("execution_result")
+  executionError  String?           @map("execution_error") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  agentRun AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@index([agentRunId])
+  @@index([status])
+  @@map("agent_actions")
+}
+
+enum AgentRunStatus {
   PENDING
-  SENDING
-  SENT
+  RUNNING
+  COMPLETED
   FAILED
-  CANCELLED
+  NEEDS_REVIEW
+}
+
+enum AgentRunMode {
+  DRY_RUN // solo simula, no crea propuestas persistentes
+  REAL // crea AgentActions status=PROPOSED para review admin
+}
+
+enum AgentRunDecision {
+  APPROVED // postulación lista para avanzar
+  NEEDS_REVIEW // casos ambiguos, requiere humano
+  REJECTED // motivos claros para rechazar
+}
+
+enum AgentActionStatus {
+  PROPOSED // agente propuso, esperando aprobación
+  APPROVED // admin aprobó, pendiente de ejecutar
+  EXECUTED // ya se ejecutó
+  REJECTED // admin rechazó la propuesta
+  FAILED // falló al ejecutar
 }

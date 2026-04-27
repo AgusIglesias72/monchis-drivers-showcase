@@ -4,6 +4,7 @@ import { PostulacionesPageContent } from "@/components/admin/postulaciones-page-
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
 import type { PostulacionFilters } from "@/types/postulacion-filters.types"
+import { RUC_FILTER_TO_DB, parseRucFilter } from "@/types/postulacion-filters.types"
 import { getActiveTemplates } from "@/lib/services/whatsapp-templates.service"
 
 export const revalidate = 30
@@ -81,6 +82,32 @@ const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
       documentType: true,
       status: true,
     }
+  },
+  // Último run del agente (si existe) para mostrar ícono con la decisión
+  agentRuns: {
+    orderBy: { createdAt: 'desc' },
+    take: 1,
+    select: {
+      id: true,
+      mode: true,
+      status: true,
+      decision: true,
+      summary: true,
+      reasoning: true,
+      model: true,
+      inputTokens: true,
+      outputTokens: true,
+      costMicroUsd: true,
+      createdAt: true,
+      error: true,
+      humanFeedback: true,
+      humanFeedbackNote: true,
+      humanFeedbackAt: true,
+      actions: {
+        select: { id: true, tool: true, input: true, reasoning: true, status: true },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
   },
   equipmentPayments: {
     select: {
@@ -227,6 +254,27 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
       { phoneNumber: { contains: params.search } },
       { email: { contains: params.search, mode: 'insensitive' } },
     ]
+  }
+
+  // Filtro de RUC (estado del contribuyente, multi-select)
+  const rucSlugs = parseRucFilter(params.rucStatus)
+  if (rucSlugs.length > 0) {
+    const includeNotChecked = rucSlugs.includes('no-consultado')
+    const dbValues = rucSlugs
+      .filter((slug) => slug !== 'no-consultado')
+      .map((slug) => RUC_FILTER_TO_DB[slug as Exclude<typeof slug, 'no-consultado'>])
+      .filter(Boolean)
+
+    if (includeNotChecked) {
+      const orClauses: Prisma.FormDriverWhereInput[] = [
+        { rucStatus: null },
+        { rucStatus: 'NOT_CHECKED' },
+      ]
+      if (dbValues.length > 0) orClauses.push({ rucStatus: { in: dbValues } })
+      where.AND = [...((where.AND as any[]) || []), { OR: orClauses }]
+    } else if (dbValues.length > 0) {
+      where.rucStatus = { in: dbValues }
+    }
   }
 
   // Filtro de fechas
@@ -666,6 +714,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
         documentStatus: params.documentStatus,
         paymentStatus: params.paymentStatus,
         invoiceStatus: params.invoiceStatus,
+        rucStatus: params.rucStatus,
         sortBy: params.sortBy,
         sortOrder: params.sortOrder,
       }}

@@ -1,9 +1,11 @@
 // app/postulacion/[token]/layout.tsx
-// Layout del portal de autogestión (sin autenticación Clerk)
+// Layout del portal de autogestión - Estilo Monchis (fondo rojo)
 
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import { Toaster } from 'sonner'
+
+const MONCHIS_RED = '#e7243f'
 
 export const metadata: Metadata = {
   title: 'Mi Postulación - Monchis Drivers',
@@ -16,43 +18,37 @@ export default function PortalLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header simple */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Image
-                src="/monchis-logo-red.png"
-                alt="Monchis"
-                width={120}
-                height={40}
-                priority
-              />
-              <span className="text-gray-600 text-sm hidden sm:inline">
-                Portal de Postulantes
-              </span>
-            </div>
+    <div className="min-h-screen relative overflow-hidden pb-20" style={{ backgroundColor: MONCHIS_RED }}>
+      {/* Blur gradient circles (same as FormularioMonchis) */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/4 -right-40 w-[500px] h-[500px] bg-white/15 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 left-1/3 w-[600px] h-[600px] bg-white/10 rounded-full blur-3xl"></div>
+      </div>
 
-            {/* Info de ayuda */}
-            <div className="text-sm text-gray-600 hidden md:block">
-              ¿Necesitás ayuda? Escribinos al WhatsApp
-            </div>
+      {/* Header translúcido */}
+      <div className="relative bg-white/10 backdrop-blur-sm border-b border-white/20">
+        <div className="max-w-2xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <Image
+              src="/monchis-logo-white.png"
+              alt="Monchis"
+              width={140}
+              height={35}
+              className="h-9 w-auto"
+              priority
+            />
+            <p className="text-sm text-white/80 font-medium hidden sm:block">
+              Portal de Postulantes
+            </p>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Contenido principal */}
-      <main className="container mx-auto px-4 py-6 sm:py-8 max-w-5xl">
+      <main className="relative">
         {children}
       </main>
-
-      {/* Footer simple */}
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="container mx-auto px-4 py-6 text-center text-sm text-gray-600">
-          <p>© {new Date().getFullYear()} Monchis. Todos los derechos reservados.</p>
-        </div>
-      </footer>
 
       {/* Toast notifications */}
       <Toaster position="top-center" richColors />

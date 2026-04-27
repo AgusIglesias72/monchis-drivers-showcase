@@ -309,15 +309,27 @@ class OnboardingService {
       throw new Error('El driver ya está asignado a este evento')
     }
 
-    // Crear el attendee
-    const attendee = await prisma.onboardingAttendee.create({
-      data: {
+    // Crear o reactivar attendee (puede existir uno cancelado por la unique constraint)
+    const attendee = await prisma.onboardingAttendee.upsert({
+      where: {
+        eventId_formDriverId: { eventId, formDriverId: driverId },
+      },
+      update: {
+        status: 'INVITED',
+        invitedBy,
+        attendeeNotes: notes,
+        invitedAt: new Date(),
+        cancelledAt: null,
+        cancelledBy: null,
+        cancelledReason: null,
+      },
+      create: {
         eventId,
         formDriverId: driverId,
         status: 'INVITED',
         invitedBy,
         attendeeNotes: notes,
-        invitedAt: new Date()
+        invitedAt: new Date(),
       },
       include: {
         event: {
@@ -394,17 +406,29 @@ class OnboardingService {
       }
     }
 
-    // Crear attendees en batch
+    // Crear o reactivar attendees en batch
     const attendees = await prisma.$transaction(
       formDriverIds.map(driverId =>
-        prisma.onboardingAttendee.create({
-          data: {
+        prisma.onboardingAttendee.upsert({
+          where: {
+            eventId_formDriverId: { eventId, formDriverId: driverId },
+          },
+          update: {
+            status: 'INVITED',
+            invitedBy,
+            attendeeNotes: attendeeNotes || null,
+            invitedAt: new Date(),
+            cancelledAt: null,
+            cancelledBy: null,
+            cancelledReason: null,
+          },
+          create: {
             eventId,
             formDriverId: driverId,
             status: 'INVITED',
-            invitedBy, // ✅ Campo requerido por Prisma
+            invitedBy,
             attendeeNotes: attendeeNotes || null,
-            invitedAt: new Date()
+            invitedAt: new Date(),
           },
           include: {
             formDriver: true

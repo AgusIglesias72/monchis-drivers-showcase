@@ -13,6 +13,8 @@ interface ProcessDailyRequest {
   scope?: 'FULL' | 'SHEETS_ONLY';
   notificationEmails?: string[];
   keepBrowserOpen?: boolean;
+  startFromExtra?: string; // Para retomar desde un extra específico (salta los anteriores)
+  skipSheetUpload?: boolean; // Salta descarga de Excel y upload a Sheet (usa el sheet existente)
 }
 
 export async function POST(request: NextRequest) {
@@ -97,6 +99,12 @@ export async function POST(request: NextRequest) {
         await backgroundJobsService.addLog(job.id, `📅 Fecha: ${body.bonusDate}`);
         await backgroundJobsService.addLog(job.id, `🏃 Modo: ${executionMode}`);
         await backgroundJobsService.addLog(job.id, `🎯 Scope: ${scope}`);
+        if (body.skipSheetUpload) {
+          await backgroundJobsService.addLog(job.id, `⏭️  Saltando generación de sheet (usando existente)`);
+        }
+        if (body.startFromExtra) {
+          await backgroundJobsService.addLog(job.id, `⏭️  Retomando desde extra: ${body.startFromExtra}`);
+        }
 
         // Ejecutar proceso
         const result = await bonusProcessorService.process({
@@ -105,6 +113,8 @@ export async function POST(request: NextRequest) {
           scope,
           notificationEmails: body.notificationEmails,
           keepBrowserOpen: body.keepBrowserOpen || false,
+          startFromExtra: body.startFromExtra,
+          skipSheetUpload: body.skipSheetUpload || false,
         });
 
         // Guardar resultado

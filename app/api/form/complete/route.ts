@@ -1,20 +1,12 @@
 // app/api/form/complete/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
+import { WhatsAppMessageSource, WhatsAppMessageType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { messagesService } from '@/lib/services/messages.service';
-import { WhatsAppMessageType, WhatsAppMessageSource } from '@prisma/client';
+import { refreshRucForDriverAsync } from '@/lib/services/turuc.service';
+import { sendFlowByKey } from '@/lib/services/manychat-messaging.service';
 
-/**
- * Normaliza el nombre del usuario (solo primer nombre)
- */
-function normalizeFirstName(fullName: string | null | undefined): string {
-  if (!fullName) return 'Usuario';
-
-  const trimmed = fullName.trim();
-  const firstName = trimmed.split(' ')[0];
-
-  return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
-}
+const FORM_COMPLETED_TEMPLATE_KEY = 'form_completed';
 
 export async function POST(request: NextRequest) {
   try {
@@ -93,58 +85,36 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // ===== 🎉 ENVIAR MENSAJE DE CONFIRMACIÓN =====
-
-    const driver = submission.formDriver;
-
-    if (driver && driver.phoneNumber && driver.fullName) {
-      try {
-        const firstName = normalizeFirstName(driver.fullName);
-
-        const ipAddress =
-          request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
-        const userAgent = request.headers.get('user-agent') || 'unknown';
-
-        // ✅ Especificar bot para confirmaciones
-        const messageResult = await messagesService.sendWhatsAppMessage({
-          phone: driver.phoneNumber,
-          name: firstName,
-          type: WhatsAppMessageType.APPLICATION_RECEIVED,
-          formDriverId: driver.id,
-          source: WhatsAppMessageSource.TRIGGER,
-          botId: 'bot-adquisicion-prod', // ✅ NUEVO: Bot específico
-          metadata: {
-            triggeredBy: 'form_completion',
-            sessionId: submission.id,
-            completedAt: new Date().toISOString(),
-          },
-          ipAddress,
-          userAgent,
-        });
-
-        if (messageResult.success) {
-          console.log('✅ Mensaje de confirmación enviado:', {
-            driver: driver.fullName,
-            phone: driver.phoneNumber,
-            messageId: messageResult.messageId,
-            botUsed: messageResult.botUsed,
+    // Enviar confirmación post-form por ManyChat (template Meta envuelto en Flow).
+    // Diferido con after() para no bloquear la respuesta al postulante con la latencia
+    // de la API de ManyChat. Si falla solo queda log — el form ya se completó.
+    const driverForMessaging = submission.formDriver;
+    if (driverForMessaging) {
+      after(async () => {
+        try {
+          const result = await sendFlowByKey(driverForMessaging, FORM_COMPLETED_TEMPLATE_KEY, {
+            source: WhatsAppMessageSource.TRIGGER,
+            messageType: WhatsAppMessageType.APPLICATION_RECEIVED,
+            step: 'form_completed',
           });
-        } else {
-          console.error('⚠️ No se pudo enviar mensaje de confirmación:', {
-            driver: driver.fullName,
-            error: messageResult.error,
-            warning: messageResult.warning,
+          if (result.status !== 'sent') {
+            console.warn('[FORM_COMPLETE] ManyChat no envió', {
+              driverId: driverForMessaging.id,
+              result,
+            });
+          }
+        } catch (err) {
+          console.error('[FORM_COMPLETE] Error inesperado enviando ManyChat', {
+            driverId: driverForMessaging.id,
+            error: err instanceof Error ? err.message : err,
           });
         }
-      } catch (messageError) {
-        console.error('❌ Error enviando mensaje de confirmación:', messageError);
-      }
-    } else {
-      console.warn('⚠️ No se puede enviar mensaje: faltan datos del driver', {
-        hasPhone: !!driver?.phoneNumber,
-        hasName: !!driver?.fullName,
       });
     }
+
+    // Dispara consulta RUC en background (no bloquea la respuesta al postulante).
+    // El admin verá el estado fiscal cuando abra la postulación.
+    refreshRucForDriverAsync(submission.formDriverId);
 
     return NextResponse.json({
       success: true,

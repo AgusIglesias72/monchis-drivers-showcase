@@ -28,6 +28,21 @@ export interface PortalData {
   documents: DocumentWithStatus[]
   nextSteps: NextStepsInfo
   assignedCapacitacion: AssignedCapacitacionInfo | null
+  payment: PaymentInfo | null
+}
+
+/**
+ * Información del pago inicial de equipamiento
+ */
+export interface PaymentInfo {
+  id: string
+  amount: number | null
+  status: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'PARTIAL'
+  paymentMethod: string | null
+  paymentDate: Date | null
+  paymentProofUrl: string | null
+  rejectionReason: string | null
+  verifiedAt: Date | null
 }
 
 /**

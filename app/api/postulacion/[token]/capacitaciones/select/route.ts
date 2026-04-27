@@ -6,7 +6,6 @@ import { selectCapacitacion } from '@/lib/services/portal-postulacion.service'
 import { SelectCapacitacionSchema } from '@/lib/validators/portal.validators'
 import { validateAccessToken } from '@/lib/services/portal-access.service'
 import { logCapacitacionSelected } from '@/lib/services/portal-audit.service'
-import { sendCapacitacionSelected } from '@/lib/services/portal-whatsapp.service'
 import { prisma } from '@/lib/prisma'
 
 // Rate limiting
@@ -85,30 +84,7 @@ export async function POST(
       userAgent
     )
 
-    // Enviar mensaje WhatsApp de confirmación
-    try {
-      const firstName = driver.firstName || driver.fullName?.split(' ')[0] || 'Postulante'
-
-      await sendCapacitacionSelected(
-        driver.phoneNumber,
-        firstName,
-        driver.accessToken!,
-        driver.id,
-        {
-          scheduledDate: event.scheduledDate,
-          startTime: event.startTime,
-          endTime: event.endTime || undefined,
-          location: event.location || '',
-          locationAddress: event.locationAddress || '',
-          meetingLink: event.meetingLink,
-        }
-      )
-
-      console.log(`✅ [PORTAL] Mensaje de confirmación de capacitación enviado a ${driver.phoneNumber}`)
-    } catch (whatsappError) {
-      console.error('Error al enviar mensaje de WhatsApp:', whatsappError)
-      // No fallar la operación si falla el WhatsApp
-    }
+    // TODO: migrar a WhatsApp multi-bot — notificar CAPACITACION_SELECTED con date/time/location/meetingLink
 
     return NextResponse.json({
       success: true,

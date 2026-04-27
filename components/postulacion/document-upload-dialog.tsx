@@ -31,6 +31,7 @@ interface DocumentUploadDialogProps {
   onOpenChange: (open: boolean) => void
   token: string
   onUploadSuccess: () => void
+  preselectedType?: DocumentType
 }
 
 export function DocumentUploadDialog({
@@ -38,8 +39,9 @@ export function DocumentUploadDialog({
   onOpenChange,
   token,
   onUploadSuccess,
+  preselectedType,
 }: DocumentUploadDialogProps) {
-  const [documentType, setDocumentType] = useState<DocumentType | ''>('')
+  const [documentType, setDocumentType] = useState<DocumentType | ''>(preselectedType || '')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
@@ -127,7 +129,7 @@ export function DocumentUploadDialog({
 
   const handleClose = () => {
     if (!isUploading) {
-      setDocumentType('')
+      setDocumentType(preselectedType || '')
       setSelectedFile(null)
       setDragActive(false)
       onOpenChange(false)
@@ -140,27 +142,31 @@ export function DocumentUploadDialog({
         <DialogHeader>
           <DialogTitle>Subir Documento</DialogTitle>
           <DialogDescription>
-            Seleccioná el tipo de documento y subí el archivo (JPG, PNG o PDF, máx. 5MB)
+            {preselectedType
+              ? `Subí el archivo (JPG, PNG o PDF, máx. 5MB)`
+              : `Seleccioná el tipo de documento y subí el archivo (JPG, PNG o PDF, máx. 5MB)`}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Selector de tipo de documento */}
-          <div className="space-y-2">
-            <Label htmlFor="documentType">Tipo de documento</Label>
-            <Select value={documentType} onValueChange={(value) => setDocumentType(value as DocumentType)}>
-              <SelectTrigger id="documentType">
-                <SelectValue placeholder="Seleccioná el tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(DOCUMENT_TYPE_NAMES).map(([type, name]) => (
-                  <SelectItem key={type} value={type}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Selector de tipo de documento (solo si no hay tipo preseleccionado) */}
+          {!preselectedType && (
+            <div className="space-y-2">
+              <Label htmlFor="documentType">Tipo de documento</Label>
+              <Select value={documentType} onValueChange={(value) => setDocumentType(value as DocumentType)}>
+                <SelectTrigger id="documentType">
+                  <SelectValue placeholder="Seleccioná el tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(DOCUMENT_TYPE_NAMES).map(([type, name]) => (
+                    <SelectItem key={type} value={type}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Drag & drop zone */}
           <div

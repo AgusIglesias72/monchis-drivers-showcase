@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   description: 'Gestiona tu postulación, documentos y capacitación',
 }
 
-export default function PortalPage({ params }: { params: { token: string } }) {
-  return <PortalDashboard token={params.token} />
+export default async function PortalPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params
+  return <PortalDashboard token={token} />
 }
