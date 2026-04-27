@@ -9,7 +9,11 @@ const imagesConfig = {
 const nextConfig: NextConfig = {
   /* config options here */
   images: imagesConfig,
-  
+
+  // sharp tiene binarios nativos por plataforma — bundlearlo rompe en Vercel (linux-x64).
+  // Dejarlo como external hace que Node lo resuelva en runtime y use el binario correcto.
+  serverExternalPackages: ['sharp'],
+
   // Aumentar el límite de tamaño del body para Server Actions
   serverActions: {
     bodySizeLimit: '5mb',
