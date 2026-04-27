@@ -8,18 +8,17 @@
 //  - System prompt con cache_control ephemeral → PREPARADO pero inactivo:
 //    Haiku 4.5 solo cachea prefixes ≥ 4096 tokens, y nuestro system está
 //    en ~1600 tokens. Se deja el cache_control puesto para que se active
-//    automáticamente si el system crece en el futuro (p.ej. agregando
-//    few-shot examples o glosario). Sin error ni costo extra por estar ahí.
-//  - Imágenes comprimidas a máx 2048px / ~1.5MB con sharp. Las imágenes
-//    DOMINAN el costo (~6000 de ~8000 tokens input); la palanca principal
-//    para bajar costo es bajar resolución aquí, no optimizar el prompt.
+//    automáticamente si el system crece en el futuro.
+//  - Imágenes pasadas tal cual a Haiku (sin sharp). Si pesan más de 5MB
+//    se rechaza con error claro. Las fotos de celular en Vercel Blob casi
+//    siempre vienen <5MB, así que el caso de error es raro. Renunciamos a
+//    sharp porque su binario nativo rompe con turbopack en Vercel.
 //
 // Por qué no reutilizar AIDocumentValidator:
 //  - ese usa Sonnet (más caro) y devuelve un análisis exhaustivo (50+ campos)
 //  - el agente solo necesita decisiones claras + campos extraídos para audit
 
 import Anthropic from '@anthropic-ai/sdk'
-import sharp from 'sharp'
 
 // Pricing Haiku 4.5 (USD por 1M tokens). Fuente: Anthropic (oct 2025).
 const HAIKU_INPUT_PER_MTOK_USD = 1.0
@@ -29,8 +28,6 @@ const HAIKU_CACHE_WRITE_PER_MTOK_USD = 1.25 // 5-min TTL (default)
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_PDF_BYTES = 32 * 1024 * 1024 // Haiku acepta PDFs hasta 32MB
-const TARGET_IMAGE_BYTES = 1.5 * 1024 * 1024
-const MAX_IMAGE_DIMENSION = 2048 // Haiku acepta hasta ~3000px; 2048 es buen balance calidad/costo
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001'
 
 export interface VisionUsage {
@@ -115,15 +112,44 @@ interface ProcessedFile {
   isPdf: boolean
 }
 
+/**
+ * Detecta el media type leyendo los primeros bytes (magic numbers).
+ * Cubre los 4 formatos que Haiku Vision soporta: JPEG, PNG, WebP, PDF.
+ */
+function detectMediaType(buf: Buffer): SupportedMediaType {
+  const head4 = buf.subarray(0, 4).toString('utf8')
+  if (head4.startsWith('%PDF')) return 'application/pdf'
+
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg'
+  // PNG: 89 50 4E 47
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    return 'image/png'
+  }
+  // WebP: 'RIFF....WEBP'
+  if (
+    buf[0] === 0x52 &&
+    buf[1] === 0x49 &&
+    buf[2] === 0x46 &&
+    buf[3] === 0x46 &&
+    buf.subarray(8, 12).toString('utf8') === 'WEBP'
+  ) {
+    return 'image/webp'
+  }
+  // Default: JPEG (más común para fotos de celular)
+  return 'image/jpeg'
+}
+
 async function downloadAndCompress(imageUrl: string): Promise<ProcessedFile> {
   const res = await fetch(imageUrl)
   if (!res.ok) throw new Error(`Error descargando archivo (${res.status}): ${imageUrl}`)
   const buf = Buffer.from(await res.arrayBuffer())
 
-  const firstBytes = buf.subarray(0, 4).toString('utf8')
+  const mediaType = detectMediaType(buf)
+  const isPdf = mediaType === 'application/pdf'
 
-  // PDFs: Haiku los acepta nativamente como document type. No los comprimimos.
-  if (firstBytes.startsWith('%PDF')) {
+  // PDF: Haiku los acepta nativamente, hasta 32MB
+  if (isPdf) {
     if (buf.length > MAX_PDF_BYTES) {
       throw new Error(
         `PDF demasiado grande: ${(buf.length / 1024 / 1024).toFixed(2)}MB (máx 32MB)`,
@@ -132,33 +158,15 @@ async function downloadAndCompress(imageUrl: string): Promise<ProcessedFile> {
     return { base64: buf.toString('base64'), mediaType: 'application/pdf', isPdf: true }
   }
 
-  let processed: Buffer = buf
-  let mediaType: ImageMediaType = 'image/jpeg'
-
-  if (buf.length > TARGET_IMAGE_BYTES) {
-    processed = await sharp(buf)
-      .rotate()
-      .resize(MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION, {
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: 88, mozjpeg: true })
-      .toBuffer()
-    mediaType = 'image/jpeg'
-  } else {
-    processed = await sharp(buf).rotate().toBuffer()
-    const meta = await sharp(buf).metadata()
-    if (meta.format === 'png') mediaType = 'image/png'
-    else if (meta.format === 'webp') mediaType = 'image/webp'
-    else mediaType = 'image/jpeg'
+  // Imagen: Haiku acepta hasta 5MB. Sin sharp no comprimimos — si la imagen
+  // viene grande, fallamos rápido para que el agente proponga pedirla más liviana.
+  if (buf.length > MAX_IMAGE_BYTES) {
+    throw new Error(
+      `Imagen demasiado grande: ${(buf.length / 1024 / 1024).toFixed(2)}MB (máx 5MB para Haiku Vision). El postulante debería subir una versión más liviana.`,
+    )
   }
 
-  if (processed.length > MAX_IMAGE_BYTES) {
-    processed = await sharp(processed).jpeg({ quality: 72, mozjpeg: true }).toBuffer()
-    mediaType = 'image/jpeg'
-  }
-
-  return { base64: processed.toString('base64'), mediaType, isPdf: false }
+  return { base64: buf.toString('base64'), mediaType, isPdf: false }
 }
 
 // ============================================================================
