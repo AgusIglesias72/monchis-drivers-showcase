@@ -238,3 +238,26 @@ body {
   overflow-y: scroll;
   overflow-x: hidden;
 }
+
+/* ===== InfoWindow del mapa de Pedidos =====
+   Sacamos el botón X de cierre y limpiamos el padding default de Google
+   para que se vea como una card propia (con el header de color que renderiza
+   PointInfo). */
+.pedido-map-wrapper .gm-ui-hover-effect,
+.pedido-map-wrapper button.gm-ui-hover-effect {
+  display: none !important;
+}
+.pedido-map-wrapper .gm-style-iw-c {
+  padding: 0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+  max-width: 320px !important;
+}
+.pedido-map-wrapper .gm-style-iw-d {
+  overflow: hidden !important;
+  padding: 0 !important;
+  max-height: none !important;
+}
+.pedido-map-wrapper .gm-style-iw-tc::after {
+  background: white !important;
+}

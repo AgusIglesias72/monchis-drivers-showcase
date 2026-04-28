@@ -1,8 +1,12 @@
 // app/api/postulaciones/documents/[id]/approve/route.ts
 
 import { prisma } from '@/lib/prisma'
-import { FormDocumentsStatus } from '@prisma/client'
+import { FormDocumentsStatus, WhatsAppMessageSource, WhatsAppMessageType } from '@prisma/client'
 import { NextResponse } from 'next/server'
+import { after } from 'next/server'
+import { sendFlowByKey } from '@/lib/services/manychat-messaging.service'
+
+const POSTULACION_APROBADA_TEMPLATE_KEY = 'capacitaciones'
 
 export async function PATCH(
   request: Request,
@@ -55,14 +59,64 @@ export async function PATCH(
     }
 
     // 3. Actualizar el FormDriver con el nuevo estado
-    await prisma.formDriver.update({
+    const updatedDriver = await prisma.formDriver.update({
       where: { id: document.formDriverId },
       data: {
         documentsStatus: newDocumentStatus as FormDocumentsStatus
       }
     })
 
-    // TODO: migrar a WhatsApp multi-bot — notificar DOCUMENTS_ALL_APPROVED cuando newDocumentStatus pasa a APPROVED
+    // 4. Si este approve dejó documentsStatus = APPROVED y todavía no mandamos el flow
+    //    de "postulación aprobada", lo disparamos por ManyChat. Idempotente vía
+    //    manychatApprovalSentAt: si ya tiene timestamp no se vuelve a mandar.
+    if (newDocumentStatus === 'APPROVED' && !updatedDriver.manychatApprovalSentAt) {
+      // Marcar primero (con condición de carrera mínima): el update solo entra si el campo
+      // sigue null. Si dos approves casi simultáneos pisan, solo uno gana el lock.
+      const lockResult = await prisma.formDriver.updateMany({
+        where: {
+          id: updatedDriver.id,
+          manychatApprovalSentAt: null,
+        },
+        data: {
+          manychatApprovalSentAt: new Date(),
+        },
+      })
+
+      if (lockResult.count === 1) {
+        const driverForFlow = updatedDriver
+        after(async () => {
+          try {
+            const result = await sendFlowByKey(driverForFlow, POSTULACION_APROBADA_TEMPLATE_KEY, {
+              source: WhatsAppMessageSource.TRIGGER,
+              messageType: WhatsAppMessageType.APPLICATION_RECEIVED,
+              step: 'postulacion_aprobada',
+            })
+            if (result.status !== 'sent') {
+              console.warn('[DOC_APPROVE] ManyChat no envió flow de aprobación', {
+                driverId: driverForFlow.id,
+                result,
+              })
+              // Si el envío falló, soltar el lock para reintentar en el próximo approve.
+              if (result.status === 'failed') {
+                await prisma.formDriver.update({
+                  where: { id: driverForFlow.id },
+                  data: { manychatApprovalSentAt: null },
+                })
+              }
+            }
+          } catch (err) {
+            console.error('[DOC_APPROVE] Error inesperado enviando ManyChat', {
+              driverId: driverForFlow.id,
+              error: err instanceof Error ? err.message : err,
+            })
+            await prisma.formDriver.update({
+              where: { id: driverForFlow.id },
+              data: { manychatApprovalSentAt: null },
+            }).catch(() => undefined)
+          }
+        })
+      }
+    }
 
     return NextResponse.json({
       document,

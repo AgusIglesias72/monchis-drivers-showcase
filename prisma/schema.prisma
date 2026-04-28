@@ -208,7 +208,10 @@ model FormDriver {
 
   // Integración ManyChat (bot de adquisición, número +15754194027).
   // Sin @unique: si un candidato re-postula, puede existir el mismo subscriber_id en múltiples FormDrivers.
-  manychatSubscriberId String? @map("manychat_subscriber_id")
+  manychatSubscriberId   String?   @map("manychat_subscriber_id")
+  // Timestamp del envío del flow "postulación aprobada" — candado de idempotencia
+  // para que el approve no remande si se llama N veces o si admin rechaza y reaprueba.
+  manychatApprovalSentAt DateTime? @map("manychat_approval_sent_at")
 
   // Validación RUC (turuc.com.py)
   rucStatus         String?   @default("NOT_CHECKED") @map("ruc_status") // NOT_CHECKED | ACTIVO | INACTIVO | CLAUSURADO | NO_ENCONTRADO | ERROR | etc (string libre, valor crudo del SET)
@@ -755,6 +758,156 @@ model BonusRule {
 
   @@index([date, isActive])
   @@map("bonus_rules")
+}
+
+// ==================== GESTIÓN ADMIN: DRIVERS CACHE ====================
+
+// Cache de la lista de drivers de Monchis (api.monchis-drivers.com/dashboard/driver_read).
+// Se sincroniza diariamente vía cron. Permite resolver driver_id → nombre/teléfono
+// sin pegarle a la API en cada lookup, y armar futuros panels de drivers.
+model MonchisDriverCache {
+  driverId         String    @id @map("driver_id") // 24-char Mongo ObjectId
+  firstName        String?   @map("first_name")
+  lastName         String?   @map("last_name")
+  fullName         String?   @map("full_name")
+  documentNumber   String?   @map("document_number")
+  email            String?
+  phone            String?
+  phoneValidatedAt DateTime? @map("phone_validated_at")
+  birthDate        DateTime? @map("birth_date")
+  enabled          Boolean   @default(false)
+  createdAtRemote  DateTime? @map("created_at_remote")
+  updatedAtRemote  DateTime? @map("updated_at_remote")
+  rawData          Json      @map("raw_data")
+
+  capturedAt DateTime @default(now()) @map("captured_at")
+  syncedAt   DateTime @updatedAt @map("synced_at")
+
+  // ===== Snapshot de stats de los últimos 30 días =====
+  // Actualizado por el cron de procesamiento de attendance (rota por driver).
+  // Permite mostrar métricas de performance en el listado sin recalcular cada vez.
+  attendanceLastProcessedAt DateTime? @map("attendance_last_processed_at")
+  ordersCount30d            Int       @default(0) @map("orders_count_30d")
+  acceptedOrders30d         Int       @default(0) @map("accepted_orders_30d")
+  sessions30d               Int       @default(0) @map("sessions_30d")
+  daysWithActivity30d       Int       @default(0) @map("days_with_activity_30d")
+  hoursWorked30d            Float     @default(0) @map("hours_worked_30d")
+  primaryZone30d            String?   @map("primary_zone_30d")
+  primaryTurn30d            String?   @map("primary_turn_30d")
+
+  @@index([documentNumber])
+  @@index([phone])
+  @@index([enabled])
+  @@index([syncedAt])
+  @@index([attendanceLastProcessedAt])
+  @@index([enabled, attendanceLastProcessedAt])
+  @@map("monchis_driver_cache")
+}
+
+// ==================== GESTIÓN ADMIN: ATTENDANCE DEL DRIVER ====================
+
+// Snapshot de la asistencia y pedidos de un driver, día por día.
+// Se procesa on-demand desde la UI (botón "Procesar últimos N días"). Idempotente:
+// al reprocesar un día ya guardado, se borra y se reinserta (delete+insert en tx).
+model MonchisDriverAttendance {
+  id               String   @id @default(cuid())
+  driverId         String   @map("driver_id") // FK lógico a MonchisDriverCache.driverId
+  day              String // "YYYY-MM-DD"
+  zone             String
+  turn             String
+  turnEntryTime    String   @map("turn_entry_time") // "HH:MM:SS"
+  turnExitTime     String   @map("turn_exit_time")
+  driverEntryAt    DateTime @map("driver_entry_at")
+  driverExitAt     DateTime @map("driver_exit_at")
+  driverExitReason String?  @map("driver_exit_reason")
+  requestQty       Int      @default(0) @map("request_qty")
+  rawData          Json     @map("raw_data")
+  capturedAt       DateTime @default(now()) @map("captured_at")
+
+  requests MonchisDriverAttendanceRequest[]
+
+  @@index([driverId, day])
+  @@index([driverId, zone])
+  @@index([driverId, turn])
+  @@index([day])
+  @@map("monchis_driver_attendance")
+}
+
+model MonchisDriverAttendanceRequest {
+  id              String   @id @default(cuid())
+  attendanceId    String   @map("attendance_id")
+  driverId        String   @map("driver_id") // denormalizado para queries directas
+  day             String // denormalizado, "YYYY-MM-DD"
+  externalOrderId String   @map("external_order_id")
+  requestAt       DateTime @map("request_at")
+  branch          String?
+  accepted        String? // "Aceptado" | "No tomado" | etc
+  reason          String?
+  requestState    String?  @map("request_state")
+  capturedAt      DateTime @default(now()) @map("captured_at")
+
+  attendance MonchisDriverAttendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+
+  @@index([driverId, day])
+  @@index([driverId, accepted])
+  @@index([externalOrderId])
+  @@map("monchis_driver_attendance_request")
+}
+
+// ==================== GESTIÓN ADMIN: COLA DE IMPORTACIÓN DE PEDIDOS ====================
+
+// Cola persistente para importar lotes grandes de pedidos desde un CSV.
+// La UI encola IDs (instantáneo) y un cron los va procesando en background
+// chunk a chunk, llamando a request_histories y poblando MonchisOrderCache.
+//
+// requestId es PK natural → reuploads no duplican.
+model MonchisOrderImportQueue {
+  requestId    String    @id @map("request_id")
+  status       String    @default("pending") // pending | done | failed | not_found
+  attempts     Int       @default(0)
+  enqueuedAt   DateTime  @default(now()) @map("enqueued_at")
+  processedAt  DateTime? @map("processed_at")
+  errorMessage String?   @map("error_message")
+
+  @@index([status, enqueuedAt])
+  @@index([processedAt])
+  @@map("monchis_order_import_queue")
+}
+
+// ==================== GESTIÓN ADMIN: PEDIDOS CACHE ====================
+
+// Cache de detalle de pedidos consultados desde la API externa de Monchis
+// (api.monchis-drivers.com/dashboard/request_histories?request_id=<MongoID>).
+// Una vez que un pedido está FINALIZED es inmutable, así que lo guardamos
+// para no volver a consultarlo. rawData guarda el JSON completo tal como vino.
+model MonchisOrderCache {
+  requestId       String   @id @map("request_id") // 24-char Mongo ObjectId
+  externalOrderId String?  @map("external_order_id")
+  driverId        String?  @map("driver_id")
+  driverName      String?  @map("driver_name")
+  branchName      String?  @map("branch_name")
+  status          String? // driver_request_state: PENDING, ACCEPTED, FINALIZED, etc.
+  totalOrder      String?  @map("total_order")
+  confirmedAt     DateTime? @map("confirmed_at")
+  finalizedAt     DateTime? @map("finalized_at")
+  rawData         Json     @map("raw_data") // payload completo de la API
+
+  // Señales pre-computadas para filtros rápidos en la tabla
+  hasAdminChange         Boolean @default(false) @map("has_admin_change")
+  acceptanceSeconds      Int?    @map("acceptance_seconds")
+  endToEndSeconds        Int?    @map("end_to_end_seconds")
+  offersWithDriverCount  Int     @default(0) @map("offers_with_driver_count")
+
+  capturedAt  DateTime @default(now()) @map("captured_at")
+  refreshedAt DateTime @updatedAt @map("refreshed_at")
+
+  @@index([driverId])
+  @@index([externalOrderId])
+  @@index([status])
+  @@index([refreshedAt])
+  @@index([confirmedAt])
+  @@index([hasAdminChange])
+  @@map("monchis_order_cache")
 }
 
 // ==================== ENUMS ====================

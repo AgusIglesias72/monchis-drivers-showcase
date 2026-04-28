@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Sparkles,
   CalendarClock,
+  ShoppingBag,
 } from "lucide-react"
 
 import {
@@ -78,11 +79,6 @@ const menuItems = [
         icon: Users
       },
       {
-        title: "Drivers Activos",
-        url: "/admin/drivers",
-        icon: BikeIcon,
-      },
-      {
         title: "Pagos",
         url: "/admin/pagos",
         icon: CreditCard,
@@ -96,6 +92,16 @@ const menuItems = [
         title: "Turnos",
         url: "/admin/gestion/turnos",
         icon: CalendarClock,
+      },
+      {
+        title: "Pedidos",
+        url: "/admin/gestion/pedidos",
+        icon: ShoppingBag,
+      },
+      {
+        title: "Drivers",
+        url: "/admin/gestion/drivers",
+        icon: BikeIcon,
       },
     ],
   },
