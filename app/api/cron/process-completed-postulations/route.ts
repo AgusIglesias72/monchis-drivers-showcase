@@ -1,14 +1,19 @@
 // app/api/cron/process-completed-postulations/route.ts
 //
-// Cron que dispara el agente IA sobre postulaciones recién completadas.
-// - Espera 5 minutos desde el complete para darle margen al postulante (puede
-//   estar todavía corrigiendo/subiendo documentos en el portal).
-// - Solo procesa las que NO tienen AgentRun previo (idempotente).
-// - Cota superior de 1 hora atrás: si el cron se cae más tiempo, no procesa
-//   un backlog viejo automáticamente. Usar el script `run-agent-on-recent`
-//   para procesar manualmente postulaciones más antiguas.
-// - Modo REAL: las acciones quedan persistidas como PROPOSED para que el
-//   admin las apruebe en la UI.
+// Cron que dispara el agente IA sobre postulaciones que ya tienen documentos
+// cargados. Procesa dos tipos de candidatos:
+//
+// 1) Recién completadas (status=COMPLETED): completedAt entre 5 y 60 min atrás.
+//    El delay le da margen al postulante a corregir docs en el portal.
+//
+// 2) En curso, paradas en step 5 o 6 (status=IN_PROGRESS): step 4 es la carga
+//    de documentos, así que en step 5/6 los archivos ya están subidos. Usamos
+//    lastActivityAt entre 5 min y 24 h atrás para no agarrar postulantes que
+//    están todavía interactuando, y procesar el backlog que se quedó sin
+//    completar.
+//
+// Idempotente en ambos casos via `agentRuns: { none: {} }`. Modo REAL: las
+// acciones quedan PROPOSED para que el admin las apruebe en la UI.
 //
 // Schedule sugerido: cada 10 minutos.
 // Vercel maxDuration: 300s (5 min) — alcanza para 15 corridas a ~15s c/u.
@@ -21,6 +26,7 @@ export const maxDuration = 300
 
 const PROCESSING_DELAY_MINUTES = 5
 const MAX_AGE_MINUTES = 60
+const IN_PROGRESS_MAX_AGE_HOURS = 24
 const BATCH_LIMIT = 15
 
 export async function GET(request: NextRequest) {
@@ -32,22 +38,51 @@ export async function GET(request: NextRequest) {
 
   const now = new Date()
   const upperBound = new Date(now.getTime() - PROCESSING_DELAY_MINUTES * 60 * 1000)
-  const lowerBound = new Date(now.getTime() - MAX_AGE_MINUTES * 60 * 1000)
+  const completedLowerBound = new Date(now.getTime() - MAX_AGE_MINUTES * 60 * 1000)
+  const inProgressLowerBound = new Date(
+    now.getTime() - IN_PROGRESS_MAX_AGE_HOURS * 60 * 60 * 1000,
+  )
 
   console.log('[cron:process-completed-postulations] Buscando candidatos', {
-    completedBetween: { from: lowerBound.toISOString(), to: upperBound.toISOString() },
+    completedBetween: {
+      from: completedLowerBound.toISOString(),
+      to: upperBound.toISOString(),
+    },
+    inProgressStep5_6Between: {
+      from: inProgressLowerBound.toISOString(),
+      to: upperBound.toISOString(),
+    },
     delay: `${PROCESSING_DELAY_MINUTES}min`,
-    maxAge: `${MAX_AGE_MINUTES}min`,
+    completedMaxAge: `${MAX_AGE_MINUTES}min`,
+    inProgressMaxAge: `${IN_PROGRESS_MAX_AGE_HOURS}h`,
   })
 
   const candidates = await prisma.formDriver.findMany({
     where: {
-      status: 'COMPLETED',
-      completedAt: { gte: lowerBound, lte: upperBound },
       agentRuns: { none: {} },
+      OR: [
+        {
+          status: 'COMPLETED',
+          completedAt: { gte: completedLowerBound, lte: upperBound },
+        },
+        {
+          status: 'IN_PROGRESS',
+          currentStep: { in: [5, 6] },
+          lastActivityAt: { gte: inProgressLowerBound, lte: upperBound },
+        },
+      ],
     },
-    select: { id: true, fullName: true, firstName: true, cedula: true, completedAt: true },
-    orderBy: { completedAt: 'asc' },
+    select: {
+      id: true,
+      fullName: true,
+      firstName: true,
+      cedula: true,
+      status: true,
+      currentStep: true,
+      completedAt: true,
+      lastActivityAt: true,
+    },
+    orderBy: { lastActivityAt: 'asc' },
     take: BATCH_LIMIT,
   })
 
@@ -63,6 +98,7 @@ export async function GET(request: NextRequest) {
 
   for (const driver of candidates) {
     const name = (driver.fullName || driver.firstName || '').trim()
+    const tag = driver.status === 'COMPLETED' ? 'completed' : `step${driver.currentStep}`
     try {
       const r = await runAgentForDriver({
         driverId: driver.id,
@@ -71,11 +107,13 @@ export async function GET(request: NextRequest) {
       })
       totalCostMicroUsd += r.metrics.costMicroUsd
       results.push({ id: driver.id, name, decision: r.decision })
-      console.log(`[cron] ${name} (${driver.cedula}) → ${r.decision} (${r.actions.length} acciones)`)
+      console.log(
+        `[cron:${tag}] ${name} (${driver.cedula}) → ${r.decision} (${r.actions.length} acciones)`,
+      )
     } catch (err: any) {
       const errMsg = err?.message ?? 'Error desconocido'
       results.push({ id: driver.id, name, decision: null, error: errMsg })
-      console.error(`[cron] ${name} (${driver.cedula}) → FAIL: ${errMsg}`)
+      console.error(`[cron:${tag}] ${name} (${driver.cedula}) → FAIL: ${errMsg}`)
     }
   }
 
