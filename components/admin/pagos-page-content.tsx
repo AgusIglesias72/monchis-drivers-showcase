@@ -2,7 +2,7 @@
 
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -111,7 +111,7 @@ export function PagosPageContent({ pagos, stats }: PagosPageContentProps) {
   const paginatedPagos = filteredPagos.slice(startIndex, endIndex)
 
   // Resetear página cuando cambian los filtros
-  useMemo(() => {
+  useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm, statusFilter])
 

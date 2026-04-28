@@ -364,7 +364,7 @@ export function DriverDetailContent({
                   de {processed.total} días con datos guardados.
                   {processed.processed === 0 && !isPending && (
                     <span className="ml-2 text-amber-700">
-                      Apretá "Procesar" para traer los datos.
+                      Apretá &quot;Procesar&quot; para traer los datos.
                     </span>
                   )}
                 </div>
