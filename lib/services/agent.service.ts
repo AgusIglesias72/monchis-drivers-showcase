@@ -324,6 +324,15 @@ async function runDeterministicPipeline(
   const rejectsFromImages: { doc: string; reason: string; docId: string }[] = []
   const reviewsFromImages: { doc: string; concern: string; docId: string }[] = []
   const approvalsFromImages: { doc: string; docId: string }[] = []
+  // Bucket separado para "subió un documento de OTRO tipo" (ej. CV en lugar de
+  // antecedentes, recibo en lugar de cédula). Estos no se rechazan ni escalan
+  // ciegamente — pedimos resubmission con mensaje específico.
+  const wrongTypeFromImages: {
+    doc: string
+    docId: string
+    detectedType: string | null
+    note: string | null
+  }[] = []
 
   // Aplicar overrides antes de clasificar:
   // 1) Override de cédula coincidente: REJECT por nombre pero cédula coincide → APPROVE
@@ -344,9 +353,9 @@ async function runDeterministicPipeline(
     'antecedentes',
   )
 
-  if (cedulaFront) processImageResult(frontResultFinal, 'cédula frente', cedulaFront.id, rejectsFromImages, reviewsFromImages, approvalsFromImages)
-  if (cedulaBack) processImageResult(backResultFinal, 'cédula dorso', cedulaBack.id, rejectsFromImages, reviewsFromImages, approvalsFromImages)
-  if (criminal) processImageResult(criminalResultFinal, 'antecedentes', criminal.id, rejectsFromImages, reviewsFromImages, approvalsFromImages)
+  if (cedulaFront) processImageResult(frontResultFinal, 'cédula frente', cedulaFront.id, rejectsFromImages, reviewsFromImages, approvalsFromImages, wrongTypeFromImages)
+  if (cedulaBack) processImageResult(backResultFinal, 'cédula dorso', cedulaBack.id, rejectsFromImages, reviewsFromImages, approvalsFromImages, wrongTypeFromImages)
+  if (criminal) processImageResult(criminalResultFinal, 'antecedentes', criminal.id, rejectsFromImages, reviewsFromImages, approvalsFromImages, wrongTypeFromImages)
 
   // Detección de typo de cédula: el postulante se equivocó al tipear su cédula
   // en el formulario. Si los documentos son consistentes entre sí y difieren
@@ -395,6 +404,39 @@ async function runDeterministicPipeline(
       input: { reason: summary },
       reasoning: 'Falta confirmación del admin antes de disparar el pedido al postulante.',
     })
+  } else if (wrongTypeFromImages.length > 0) {
+    // El postulante subió un documento de tipo equivocado (ej. CV en lugar de
+    // antecedentes). NO aprobamos por más que la cédula coincida. Pedimos el
+    // documento correcto con mensaje específico.
+    decision = 'NEEDS_REVIEW'
+    summary = `Documento(s) de tipo equivocado: ${wrongTypeFromImages
+      .map((w) => `${w.doc}${w.detectedType ? ` (subió ${w.detectedType})` : ''}`)
+      .join(', ')}. Pedir el documento correcto al postulante.`
+    const firstName = getFirstName(driver)
+    for (const w of wrongTypeFromImages) {
+      const docType = docLabelToType(w.doc)
+      if (!docType) continue
+      const docLabelEs = documentTypeLabelEs(docType)
+      const detectedHint = w.detectedType && w.detectedType !== 'OTHER' ? ` (subió ${w.detectedType})` : ''
+      let whatsappMessage = ''
+      if (docType === 'CRIMINAL_RECORD') {
+        whatsappMessage = `Hola ${firstName || ''}! Revisamos tu postulación y el archivo que subiste como certificado de antecedentes no es el documento correcto. Necesitamos el certificado oficial de antecedentes penales paraguayo (Policía Nacional, Ministerio Público o Ministerio del Interior), con vigencia de 90 días. ¿Podés tramitarlo y subirlo al portal? ¡Gracias!`
+      } else if (docType === 'CEDULA_FRONT' || docType === 'CEDULA_BACK') {
+        const cara = docType === 'CEDULA_FRONT' ? 'frente' : 'dorso'
+        whatsappMessage = `Hola ${firstName || ''}! El archivo que subiste como ${cara} de la cédula no es una cédula paraguaya. ¿Podés subir una foto clara del ${cara} de tu cédula al portal? ¡Gracias!`
+      } else {
+        whatsappMessage = `Hola ${firstName || ''}! El archivo que subiste como ${docLabelEs} no corresponde al documento solicitado. ¿Podés subir el documento correcto al portal? ¡Gracias!`
+      }
+      actions.push({
+        tool: 'propose_request_document_resubmission',
+        input: {
+          documentType: docType,
+          reason: `Tipo de documento incorrecto${detectedHint}: ${w.note ?? 'no es el documento esperado'}.`,
+          whatsappMessage,
+        },
+        reasoning: `Postulante subió ${w.detectedType ?? 'un archivo'} en lugar de ${docLabelEs}. Pedir resubmission con mensaje específico.`,
+      })
+    }
   } else if (rucBlocking) {
     decision = 'REJECTED'
     summary = `RUC en estado ${rucStatus} — bloqueante.`
@@ -718,13 +760,23 @@ function applyCedulaMatchOverride(
   const form = normalizeCedula(formCedula)
   if (!extracted || !form || extracted !== form) return result
 
+  // Guard: si el documento es del tipo equivocado (ej. CV en vez de antecedentes),
+  // NO degradamos a APPROVE aunque la cédula coincida. El override sólo arregla
+  // rechazos por nombre/alias, no por tipo de documento incorrecto.
+  if (result.matchesExpectedType === false) return result
+
   const reason =
     (result.rejectReasonIfAny ?? '') +
     ' ' +
     result.concerns.join(' ')
-  // También chequeamos matchesDriverName=false del modelo
+  // Detectar discrepancia de nombre de forma específica: queremos cosas como
+  // "no coincide", "diferente persona", "otra persona", "nombre distinto", o
+  // matchesDriverName=false. Evitamos matchear concerns que sólo *mencionan*
+  // "nombre" para confirmar que coincide.
   const concernsAboutName =
-    /nombre|apellido|name/i.test(reason) || result.matchesDriverName === false
+    result.matchesDriverName === false ||
+    /(nombre|apellido|name).*(no coincide|distinto|diferente|otra persona|no match|mismatch)/i.test(reason) ||
+    /(no coincide|distinto|diferente|otra persona|no match|mismatch).*(nombre|apellido|name)/i.test(reason)
   if (!concernsAboutName) return result
 
   const prevSuggestion = result.suggestion
@@ -751,9 +803,22 @@ function processImageResult(
   rejects: { doc: string; reason: string; docId: string }[],
   reviews: { doc: string; concern: string; docId: string }[],
   approvals: { doc: string; docId: string }[],
+  wrongTypes: { doc: string; docId: string; detectedType: string | null; note: string | null }[],
 ) {
   if (!result || !result.ok) {
     reviews.push({ doc: docLabel, concern: result?.error ?? 'falla al validar', docId })
+    return
+  }
+  // Tipo de documento equivocado (ej. CV donde debería ir antecedentes). Va
+  // a su propio bucket con prioridad sobre REJECT/MANUAL_REVIEW para que el
+  // agente proponga resubmission con mensaje específico, no rechazo crudo.
+  if (result.matchesExpectedType === false) {
+    wrongTypes.push({
+      doc: docLabel,
+      docId,
+      detectedType: result.documentTypeDetected,
+      note: result.rejectReasonIfAny ?? result.concerns.join('; ') ?? null,
+    })
     return
   }
   if (result.suggestion === 'REJECT') {

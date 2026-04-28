@@ -295,6 +295,17 @@ Una foto de celular de un documento físico real es la NORMA, no es fraude.
 
 **Regla de oro**: si un admin humano miraría la imagen y diría "sí, esta persona es quien dice ser", devolvé APPROVE.
 
+## Regla CRÍTICA — tipo de documento
+
+\`matchesExpectedType\` es independiente de la identidad: chequea SOLO si el archivo recibido es el tipo de documento esperado, NO si la persona coincide.
+
+- Si te pido CRIMINAL_RECORD y recibís un CV, una cédula, un recibo, una factura, un comprobante, una foto personal o cualquier otra cosa que NO sea un certificado oficial de antecedentes paraguayo → \`matchesExpectedType=false\` y \`suggestion=REJECT\`. NO importa que el nombre o la cédula del archivo coincidan con el postulante.
+- Si te pido CEDULA_FRONT/CEDULA_BACK y recibís otra cosa (no la cédula paraguaya) → \`matchesExpectedType=false\` y \`suggestion=REJECT\`.
+- En \`rejectReasonIfAny\` describí qué subió el postulante: por ejemplo "Subió un curriculum vitae en lugar del certificado de antecedentes" o "Subió un recibo en lugar de la cédula".
+- En \`documentTypeDetected\` poné lo que efectivamente es (ej. "CV", "RECEIPT", "OTHER").
+
+**Nunca** uses la coincidencia de cédula/nombre para "salvar" un documento de tipo equivocado. Antecedentes = certificado oficial de antecedentes, punto.
+
 ## Formato de respuesta
 
 Respondé SOLO con JSON válido (sin markdown, sin texto extra) con este shape:
