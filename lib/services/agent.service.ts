@@ -238,8 +238,16 @@ async function runDeterministicPipeline(
     steps.push(
       `La cédula "${driver.cedula}" contiene letras → postulante extranjero. No aplica consulta al SET paraguayo.`,
     )
-  } else if (!rucStatus || rucStatus === 'NOT_CHECKED' || rucAgeDays > RUC_REFRESH_MAX_AGE_DAYS) {
-    steps.push('Consulté turuc.com.py en vivo (no había dato reciente).')
+  } else if (
+    !rucStatus ||
+    rucStatus === 'NOT_CHECKED' ||
+    rucStatus === 'ERROR' ||
+    rucAgeDays > RUC_REFRESH_MAX_AGE_DAYS
+  ) {
+    // Reintentar también cuando el último estado es ERROR (transitorio, ej.
+    // turuc.com.py respondió 5xx). Si seguimos con ERROR persistente, el
+    // pipeline cae a rucUnknown y escala — comportamiento esperado.
+    steps.push('Consulté turuc.com.py en vivo (no había dato reciente o el último estado fue ERROR).')
     const rucResult = await checkRucStatus(driver.cedula)
     rucStatus = rucResult.status
     rucName = rucResult.name
@@ -368,9 +376,29 @@ async function runDeterministicPipeline(
     )
   }
 
+  // Señal de fraude: si los docs muestran ≥2 cédulas distintas que NO son typo
+  // entre sí (diff > 2 chars o long distinto), no es la misma persona — alguien
+  // está mezclando documentos. NO aprobamos ni pedimos resubmission ciegamente.
+  const distinctCedulasInDocs = collectDistinctCedulas([frontResultFinal, backResultFinal, criminalResultFinal])
+  const fraudSignal =
+    !cedulaTypo && distinctCedulasInDocs.length >= 2 // typo ya cubre el caso de un solo "real cedula"
+  if (fraudSignal) {
+    steps.push('')
+    steps.push(
+      `🚨 **Señal de fraude detectada**: los documentos muestran cédulas distintas que NO son typos entre sí (${distinctCedulasInDocs.join(', ')}). Posible mezcla de documentos de personas diferentes. Escalado al admin para revisión manual.`,
+    )
+  }
+
   // Reglas de decisión
   let decision: AgentRunDecision = 'NEEDS_REVIEW'
   let summary = ''
+
+  // Fail-safe: si la validación visual falló por completo (ej. Haiku caído,
+  // ANTHROPIC_API_KEY ausente, JSON no parseable), NO le mandamos resubmission
+  // al postulante por documentos que probablemente sean válidos. Escalamos al
+  // admin con un único action y dejamos que reintente manualmente.
+  const validationFailedGlobally = !validation || !validation.ok
+  const hasUploadedDocs = !!(cedulaFront || cedulaBack || criminal)
 
   if (missingDocs.length > 0) {
     decision = 'NEEDS_REVIEW'
@@ -403,6 +431,43 @@ async function runDeterministicPipeline(
       tool: 'escalate_to_admin',
       input: { reason: summary },
       reasoning: 'Falta confirmación del admin antes de disparar el pedido al postulante.',
+    })
+  } else if (validationFailedGlobally && hasUploadedDocs) {
+    // El postulante subió docs pero el provider de validación no pudo procesarlos.
+    // No es problema del postulante — no le mandamos WhatsApp. Admin reintenta a mano.
+    decision = 'NEEDS_REVIEW'
+    const errMsg = validation?.error ?? 'Validación visual no disponible (provider caído o respuesta no parseable).'
+    summary = `Falla técnica al validar imágenes: ${errMsg}. Sin acciones hacia el postulante; admin debe reintentar manualmente.`
+    actions.push({
+      tool: 'escalate_to_admin',
+      input: {
+        reason: `${errMsg} El postulante subió ${[cedulaFront && 'cédula frente', cedulaBack && 'cédula dorso', criminal && 'antecedentes'].filter(Boolean).join(', ')}; reintentar el agente manualmente o validar a mano.`,
+      },
+      reasoning: 'Provider de visión falló; no atribuir el problema al postulante.',
+    })
+  } else if (rucBlocking) {
+    // RUC bloqueante (CANCELADO, etc.) tiene prioridad sobre cualquier issue
+    // de documento — no tiene sentido pedir resubmission de docs si la
+    // postulación va a rechazarse por motivo fiscal.
+    decision = 'REJECTED'
+    summary = `RUC en estado ${rucStatus} — bloqueante.`
+    actions.push({
+      tool: 'escalate_to_admin',
+      input: { reason: `RUC ${rucStatus}. Requiere decisión administrativa (rechazo o regularización).` },
+      reasoning: 'Estado de RUC es bloqueante — no se puede aprobar directamente.',
+    })
+  } else if (fraudSignal) {
+    // Cédulas distintas entre docs que no son typo → no aprobamos ni mandamos
+    // mensaje al postulante; admin debe verificar a mano si es mezcla
+    // accidental o intento de fraude.
+    decision = 'NEEDS_REVIEW'
+    summary = `Sospecha de fraude: documentos muestran cédulas distintas (${distinctCedulasInDocs.join(', ')}) que no son typo entre sí. Admin debe verificar manualmente antes de cualquier acción.`
+    actions.push({
+      tool: 'escalate_to_admin',
+      input: {
+        reason: `Documentos con cédulas distintas (${distinctCedulasInDocs.join(', ')}). Posible mezcla de archivos de personas diferentes o intento de fraude. Verificar identidad de cada documento antes de aprobar/rechazar.`,
+      },
+      reasoning: 'Múltiples cédulas distintas en docs sin patrón de typo — señal fuerte de fraude.',
     })
   } else if (wrongTypeFromImages.length > 0) {
     // El postulante subió un documento de tipo equivocado (ej. CV en lugar de
@@ -437,31 +502,31 @@ async function runDeterministicPipeline(
         reasoning: `Postulante subió ${w.detectedType ?? 'un archivo'} en lugar de ${docLabelEs}. Pedir resubmission con mensaje específico.`,
       })
     }
-  } else if (rucBlocking) {
-    decision = 'REJECTED'
-    summary = `RUC en estado ${rucStatus} — bloqueante.`
-    actions.push({
-      tool: 'escalate_to_admin',
-      input: { reason: `RUC ${rucStatus}. Requiere decisión administrativa (rechazo o regularización).` },
-      reasoning: 'Estado de RUC es bloqueante — no se puede aprobar directamente.',
-    })
   } else if (rejectsFromImages.length > 0) {
-    // Override: si los rechazos son todos por "cédula no coincide" pero detectamos
-    // typo (docs consistentes entre sí, diff ≤2 chars), NO rechazamos — proponemos
-    // corregir la cédula en el form y re-validar.
-    const allRejectsAreCedulaMismatch = rejectsFromImages.every((r) =>
-      /cédula.*no coincide|cedula.*no coincide|otra persona|diferente persona/i.test(r.reason),
+    // Override: si HAY al menos un rechazo por "cédula no coincide" y detectamos
+    // typo (docs consistentes entre sí, diff ≤2 chars), proponemos corregir
+    // la cédula en el form. Antes exigíamos que TODOS los rejects fueran por
+    // cédula, pero eso fallaba en mixtos legítimos (ej. cédula mismatch + dorso
+    // borroso). Ahora aceptamos típo si hay al menos uno por cédula.
+    const cedulaMismatchRegex = /cédula.*no coincide|cedula.*no coincide|otra persona|diferente persona/i
+    const someRejectIsCedulaMismatch = rejectsFromImages.some((r) =>
+      cedulaMismatchRegex.test(r.reason),
     )
-    if (cedulaTypo && allRejectsAreCedulaMismatch) {
+    if (cedulaTypo && someRejectIsCedulaMismatch) {
       decision = 'NEEDS_REVIEW'
-      summary = `El postulante cargó "${cedulaTypo.formCedula}" en el formulario pero los documentos muestran "${cedulaTypo.realCedula}" — muy probable typo (diferencia: ${cedulaTypo.editDistance} caracteres). Los nombres son compatibles. Proponemos corregir la cédula en el formulario y re-validar.`
+      const otherRejects = rejectsFromImages.filter((r) => !cedulaMismatchRegex.test(r.reason))
+      const otherIssues =
+        otherRejects.length > 0
+          ? ` Además hay otros rechazos no relacionados al typo: ${otherRejects.map((r) => `${r.doc} (${r.reason})`).join('; ')}.`
+          : ''
+      summary = `El postulante cargó "${cedulaTypo.formCedula}" en el formulario pero los documentos muestran "${cedulaTypo.realCedula}" — muy probable typo (diferencia: ${cedulaTypo.editDistance} caracteres). Los nombres son compatibles. Proponemos corregir la cédula en el formulario y re-validar.${otherIssues}`
       actions.push({
         tool: 'propose_update_driver_cedula',
         input: {
           currentCedula: cedulaTypo.formCedula,
           correctedCedula: cedulaTypo.realCedula,
           extractedFullName: cedulaTypo.extractedName,
-          reason: `Todos los documentos subidos muestran la cédula ${cedulaTypo.realCedula}${
+          reason: `Los documentos subidos muestran la cédula ${cedulaTypo.realCedula}${
             cedulaTypo.extractedName ? ` a nombre de ${cedulaTypo.extractedName}` : ''
           }, pero el formulario dice ${cedulaTypo.formCedula}. Diferencia de ${cedulaTypo.editDistance} caracter${cedulaTypo.editDistance === 1 ? '' : 'es'}: muy probable typo al completar el formulario.`,
         },
@@ -470,6 +535,17 @@ async function runDeterministicPipeline(
       steps.push(
         'ℹ️ No rechazo los documentos — propongo corregir la cédula del formulario para que coincida con los documentos, y re-validar todo.',
       )
+      // Si además hay rejects no relacionados al typo (blur, etc.), los flagueamos
+      // como pending para que el admin los considere después de aplicar la corrección.
+      if (otherRejects.length > 0) {
+        actions.push({
+          tool: 'escalate_to_admin',
+          input: {
+            reason: `Después de corregir la cédula y re-validar, revisar también: ${otherRejects.map((r) => `${r.doc} (${r.reason})`).join('; ')}.`,
+          },
+          reasoning: 'Rejects mixtos: typo + otros issues — admin debe atender ambos.',
+        })
+      }
     } else {
       decision = 'REJECTED'
       summary = `Imágenes con problemas claros: ${rejectsFromImages.map((r) => r.doc).join(', ')}.`
@@ -748,6 +824,30 @@ function applyExpiryOverride(
   }
 }
 
+/**
+ * Compara dos cédulas con awareness de cédulas extranjeras (alphanuméricas).
+ * - Si ambas son sólo dígitos, compara dígitos.
+ * - Si una tiene letras y la otra no, devuelve false (formatos distintos).
+ * - Si ambas tienen letras, compara alphanumeric case-insensitive completo
+ *   (evita match falso M371660 vs V371660 vs 371660).
+ */
+function cedulasMatch(rawA: string, rawB: string): boolean {
+  const a = (rawA ?? '').trim()
+  const b = (rawB ?? '').trim()
+  if (!a || !b) return false
+  const aHasLetter = /[A-Za-z]/.test(a)
+  const bHasLetter = /[A-Za-z]/.test(b)
+  if (aHasLetter !== bHasLetter) return false
+  if (aHasLetter && bHasLetter) {
+    const aAlpha = a.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+    const bAlpha = b.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+    return aAlpha.length > 0 && aAlpha === bAlpha
+  }
+  const aDigits = normalizeCedula(a)
+  const bDigits = normalizeCedula(b)
+  return aDigits.length > 0 && aDigits === bDigits
+}
+
 function applyCedulaMatchOverride(
   result: ImageValidationResult | null,
   formCedula: string,
@@ -756,14 +856,18 @@ function applyCedulaMatchOverride(
   if (!result || !result.ok) return result
   if (result.suggestion !== 'REJECT' && result.suggestion !== 'MANUAL_REVIEW') return result
 
-  const extracted = normalizeCedula(result.extractedDocNumber ?? '')
-  const form = normalizeCedula(formCedula)
-  if (!extracted || !form || extracted !== form) return result
+  const extractedRaw = result.extractedDocNumber ?? ''
+  // Match con awareness de extranjero (no dejar que M371660 colapse a 371660
+  // y matchee accidentalmente con un 371660 paraguayo).
+  if (!cedulasMatch(extractedRaw, formCedula)) return result
+  const extracted = normalizeCedula(extractedRaw) || extractedRaw.trim()
+  const form = normalizeCedula(formCedula) || formCedula.trim()
 
-  // Guard: si el documento es del tipo equivocado (ej. CV en vez de antecedentes),
-  // NO degradamos a APPROVE aunque la cédula coincida. El override sólo arregla
-  // rechazos por nombre/alias, no por tipo de documento incorrecto.
-  if (result.matchesExpectedType === false) return result
+  // Guard: si el documento NO es claramente del tipo correcto (false o null),
+  // NO degradamos a APPROVE aunque la cédula coincida. Fail-closed: sólo
+  // disparamos el override cuando el modelo confirma matchesExpectedType=true.
+  // null = no determinó / no confiable → tratar como wrong-type para safety.
+  if (result.matchesExpectedType !== true) return result
 
   const reason =
     (result.rejectReasonIfAny ?? '') +
@@ -821,6 +925,23 @@ function processImageResult(
     })
     return
   }
+  // Soft gates: si la calidad o autenticidad están muy bajas, forzamos
+  // MANUAL_REVIEW aunque el modelo haya sugerido APPROVE. Thresholds
+  // conservadores para no over-trigger sobre fotos típicas de celular.
+  const lowQuality = typeof result.qualityScore === 'number' && result.qualityScore < 40
+  const lowAuthenticity = typeof result.authenticityScore === 'number' && result.authenticityScore < 50
+  if (result.suggestion === 'APPROVE' && (lowQuality || lowAuthenticity)) {
+    const reasons: string[] = []
+    if (lowQuality) reasons.push(`calidad ${result.qualityScore}/100`)
+    if (lowAuthenticity) reasons.push(`autenticidad ${result.authenticityScore}/100`)
+    reviews.push({
+      doc: docLabel,
+      concern: `[gate] Score bajo (${reasons.join(', ')}) — admin revisa antes de aprobar.`,
+      docId,
+    })
+    return
+  }
+
   if (result.suggestion === 'REJECT') {
     rejects.push({
       doc: docLabel,
@@ -840,7 +961,10 @@ function cleanName(name: string): string {
 
 /**
  * Extrae y normaliza el primer nombre del driver, con fallback sensato.
- * Evita "Hola Stiven !" por trailing space en `firstName`.
+ * - Evita "Hola Stiven !" por trailing space en `firstName`.
+ * - Filtra emojis, signos de puntuación y dígitos para no terminar como "Hola !"
+ *   o "Hola 🤙" en mensajes de WhatsApp.
+ * - Si después de limpiar no queda nada utilizable, devuelve string vacío.
  */
 function getFirstName(driver: { firstName: string | null; fullName: string | null }): string {
   const source = driver.firstName?.trim() || driver.fullName?.trim() || ''
@@ -848,8 +972,12 @@ function getFirstName(driver: { firstName: string | null; fullName: string | nul
   if (!cleaned) return ''
   // Tomar solo la primera palabra (primer nombre) por si viene fullName
   const firstWord = cleaned.split(' ')[0]
+  // Quedarnos solo con letras (incluyendo acentos y ñ); descartar emojis,
+  // dígitos y puntuación.
+  const letters = firstWord.replace(/[^\p{L}]/gu, '')
+  if (!letters) return ''
   // Capitalizar: "yeni" → "Yeni", "STIVEN" → "Stiven"
-  return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase()
+  return letters.charAt(0).toUpperCase() + letters.slice(1).toLowerCase()
 }
 
 /**
@@ -889,6 +1017,21 @@ function humanizeQualityReason(concern: string): string {
  *
  * Devuelve null si no hay typo detectable.
  */
+/**
+ * Devuelve el set de cédulas únicas extraídas de los docs (normalizadas).
+ * Usado como señal de fraude cuando hay ≥2 distintas que no encajan como typo.
+ */
+function collectDistinctCedulas(imageResults: Array<ImageValidationResult | null>): string[] {
+  const seen = new Set<string>()
+  for (const r of imageResults) {
+    if (r?.ok && r.extractedDocNumber) {
+      const n = normalizeCedula(r.extractedDocNumber)
+      if (n) seen.add(n)
+    }
+  }
+  return Array.from(seen)
+}
+
 function detectCedulaTypo(
   formCedula: string,
   imageResults: Array<ImageValidationResult | null>,
@@ -963,12 +1106,16 @@ function levenshtein(a: string, b: string): number {
 function classifyConcern(
   concernLower: string,
 ): 'INTERNAL_ERROR' | 'EXPIRED' | 'WRONG_SIDE' | 'QUALITY' | 'OTHER' {
-  if (/pdfs no soportados|error descarg|error procesando|no se pudo|respuesta no-json|timeout/i.test(concernLower)) {
+  if (
+    /pdfs? no soportad|error descarg|error procesando|no se pudo|respuesta no-json|timeout|pdf not supported|pdfs not supported|download error|processing error|failed to (download|process)|provider error|invalid json|no json/i.test(
+      concernLower,
+    )
+  ) {
     return 'INTERNAL_ERROR'
   }
   // EXPIRED: castellano + inglés; "X days later" es común en respuestas del modelo
   if (
-    /venci|antigua|antiguo|vencido|90 d|más de \d+ dí|caduc|expired|expir|days later|days passed|\d{2,} days/i.test(
+    /venci|antigua|antiguo|vencido|90 d|más de \d+ dí|caduc|expired|expir|days later|days passed|\d{2,} days|out of validity|past validity/i.test(
       concernLower,
     )
   ) {
@@ -977,14 +1124,14 @@ function classifyConcern(
   // WRONG_SIDE: subió dorso cuando se pedía frente (o viceversa).
   // Típico: "Imagen etiquetada como CEDULA_FRONT pero contiene dorso" / "es claramente el DORSO"
   if (
-    /dorso.*frente|frente.*dorso|contiene dorso|contiene el dorso|mrz.*barcode.*(no|sin).*foto|claramente el dorso|claramente el frente|lado incorrecto/i.test(
+    /dorso.*frente|frente.*dorso|contiene dorso|contiene el dorso|mrz.*barcode.*(no|sin).*foto|claramente el dorso|claramente el frente|lado incorrecto|wrong side|back side.*expected.*front|front side.*expected.*back|back of the (id|cedula)|front of the (id|cedula)|reverse side/i.test(
       concernLower,
     )
   ) {
     return 'WRONG_SIDE'
   }
   if (
-    /borrosa|blur|reflejo|ilegible|calidad|oscur|ángulo|angulo|baja resol|pixelad|distorsion|rotad|giro/i.test(
+    /borrosa|blur|reflejo|glare|ilegible|illegible|unreadable|calidad|low quality|oscur|dark|ángulo|angulo|angle|baja resol|low resolution|pixelad|pixelat|distorsion|distortion|rotad|rotated|giro|inclinad|tilted|cropped|recortad|cortad|cut off|cropped out|manchad|stained|dañad|damaged|doblad|folded/i.test(
       concernLower,
     )
   ) {

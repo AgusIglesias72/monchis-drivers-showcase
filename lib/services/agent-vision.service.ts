@@ -299,10 +299,13 @@ Una foto de celular de un documento físico real es la NORMA, no es fraude.
 
 \`matchesExpectedType\` es independiente de la identidad: chequea SOLO si el archivo recibido es el tipo de documento esperado, NO si la persona coincide.
 
-- Si te pido CRIMINAL_RECORD y recibís un CV, una cédula, un recibo, una factura, un comprobante, una foto personal o cualquier otra cosa que NO sea un certificado oficial de antecedentes paraguayo → \`matchesExpectedType=false\` y \`suggestion=REJECT\`. NO importa que el nombre o la cédula del archivo coincidan con el postulante.
+- Si te pido CRIMINAL_RECORD y recibís un CV, una cédula, un recibo, una factura, un comprobante, una foto personal/selfie o cualquier otra cosa que NO sea un certificado oficial de antecedentes paraguayo → \`matchesExpectedType=false\` y \`suggestion=REJECT\`. NO importa que el nombre o la cédula del archivo coincidan con el postulante.
 - Si te pido CEDULA_FRONT/CEDULA_BACK y recibís otra cosa (no la cédula paraguaya) → \`matchesExpectedType=false\` y \`suggestion=REJECT\`.
-- En \`rejectReasonIfAny\` describí qué subió el postulante: por ejemplo "Subió un curriculum vitae en lugar del certificado de antecedentes" o "Subió un recibo en lugar de la cédula".
-- En \`documentTypeDetected\` poné lo que efectivamente es (ej. "CV", "RECEIPT", "OTHER").
+- **Selfies / fotos personales sin documento**: si la imagen es la cara del postulante o un retrato sin documento físico visible → \`matchesExpectedType=false\`, \`suggestion=REJECT\`, \`documentTypeDetected="SELFIE"\`, \`rejectReasonIfAny="Subió una selfie/foto personal en lugar de [tipo esperado]"\`.
+- **Capturas de pantalla evidentes** (barra de notificaciones de iOS/Android visible, watermark de WhatsApp/Telegram/Galería, marco de chat) sobre cédula ajena u otro documento → \`authenticityScore < 60\` y \`suggestion=MANUAL_REVIEW\` con concern explicando que es captura de pantalla.
+- En \`rejectReasonIfAny\` describí qué subió el postulante: por ejemplo "Subió un curriculum vitae en lugar del certificado de antecedentes" o "Subió un recibo en lugar de la cédula" o "Subió una selfie en lugar de la cédula".
+- En \`documentTypeDetected\` poné lo que efectivamente es (ej. "CV", "RECEIPT", "SELFIE", "SCREENSHOT", "OTHER").
+- **Si dudás del tipo, devolvé \`matchesExpectedType=false\`** (nunca \`null\`). Es preferible mandar a revisión humana que aprobar un tipo equivocado.
 
 **Nunca** uses la coincidencia de cédula/nombre para "salvar" un documento de tipo equivocado. Antecedentes = certificado oficial de antecedentes, punto.
 
