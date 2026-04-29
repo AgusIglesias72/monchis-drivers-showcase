@@ -44,6 +44,7 @@ export interface FlattenedShift {
   pctHourCompliance: number
   enabled: boolean
   driverNames: string[]
+  driverIds: string[]
 }
 
 export interface FetchResult {

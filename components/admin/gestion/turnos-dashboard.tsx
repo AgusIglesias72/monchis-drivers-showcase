@@ -168,7 +168,9 @@ export function TurnosDashboard({ initialShifts, fetchedAtIso, errors }: Props) 
         }}
         zone={drawerCell?.zone ?? null}
         hour={drawerCell?.hour ?? null}
+        baseDateIso={selectedDate}
         shifts={drawerShifts}
+        allDayShifts={dayShifts}
       />
     </div>
   )

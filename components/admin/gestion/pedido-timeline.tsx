@@ -178,7 +178,7 @@ export function PedidoTimeline({ histories, confirmedAt }: Props) {
                         Sin driver asignado
                       </span>
                     ) : null}
-                    {lat !== null && lng !== null && (
+                    {typeof lat === "number" && typeof lng === "number" && (
                       <span className="inline-flex items-center gap-1 font-mono text-[10px]">
                         <MapPin className="h-3 w-3" />
                         {lat.toFixed(5)}, {lng.toFixed(5)}

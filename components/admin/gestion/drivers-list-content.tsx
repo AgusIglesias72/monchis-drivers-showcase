@@ -7,7 +7,9 @@ import * as RadioGroupPrimitive from "@radix-ui/react-radio-group"
 import { format, formatDistanceToNow, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
 import {
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   Bike,
   CalendarDays,
   ChevronDown,
@@ -60,6 +62,8 @@ interface Props {
   disabledCount: number
   createdFrom: string
   createdTo: string
+  sort: string
+  order: "asc" | "desc"
 }
 
 const FILTER_OPTIONS = [
@@ -67,6 +71,26 @@ const FILTER_OPTIONS = [
   { value: "true", label: "Habilitados" },
   { value: "false", label: "Deshabilitados" },
 ]
+
+const SORT_OPTIONS = [
+  { value: "orders", label: "Pedidos 30d" },
+  { value: "accepted", label: "Aceptados 30d" },
+  { value: "sessions", label: "Sesiones 30d" },
+  { value: "hours", label: "Horas 30d" },
+  { value: "days", label: "Días activos 30d" },
+  { value: "name", label: "Nombre" },
+  { value: "enabled", label: "Estado" },
+]
+
+const SORT_DEFAULT_ORDER: Record<string, "asc" | "desc"> = {
+  orders: "desc",
+  accepted: "desc",
+  sessions: "desc",
+  hours: "desc",
+  days: "desc",
+  enabled: "desc",
+  name: "asc",
+}
 
 export function DriversListContent({
   drivers,
@@ -80,6 +104,8 @@ export function DriversListContent({
   disabledCount,
   createdFrom,
   createdTo,
+  sort,
+  order,
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -113,6 +139,25 @@ export function DriversListContent({
   }
 
   const hasDateFilter = createdFrom || createdTo
+
+  const handleSortClick = (value: string) => {
+    if (value === sort) {
+      // Mismo campo: invertir dirección
+      const next = order === "desc" ? "asc" : "desc"
+      // Si la dirección invertida coincide con el default, omitimos el param
+      const defaultOrder = SORT_DEFAULT_ORDER[value]
+      updateParams({ sort: value, order: next === defaultOrder ? null : next })
+    } else {
+      // Otro campo: usamos su dirección default y limpiamos `order` de la URL
+      updateParams({ sort: value, order: null })
+    }
+  }
+
+  const flipOrder = () => {
+    const next = order === "desc" ? "asc" : "desc"
+    const defaultOrder = SORT_DEFAULT_ORDER[sort]
+    updateParams({ order: next === defaultOrder ? null : next })
+  }
 
   const toggleExpanded = (driverId: string) => {
     setExpanded((prev) => {
@@ -263,6 +308,61 @@ export function DriversListContent({
                   )
                 })}
               </RadioGroupPrimitive.Root>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground block">
+                Ordenar por
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                {SORT_OPTIONS.map((opt) => {
+                  const isSelected = sort === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleSortClick(opt.value)}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-md border px-3.5 py-1.5 text-sm transition-colors outline-none",
+                        "hover:bg-accent hover:text-accent-foreground",
+                        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                        isSelected
+                          ? "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background"
+                          : "border-border bg-background text-foreground",
+                      )}
+                    >
+                      {opt.label}
+                      {isSelected &&
+                        (order === "desc" ? (
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        ) : (
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        ))}
+                    </button>
+                  )
+                })}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={flipOrder}
+                  disabled={isPending}
+                  className="ml-1 gap-1.5"
+                  title={order === "desc" ? "Mayor a menor" : "Menor a mayor"}
+                >
+                  {order === "desc" ? (
+                    <>
+                      <ArrowDown className="h-3.5 w-3.5" />
+                      Mayor a menor
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUp className="h-3.5 w-3.5" />
+                      Menor a mayor
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

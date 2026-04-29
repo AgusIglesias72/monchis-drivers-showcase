@@ -12,10 +12,32 @@ interface PageProps {
     page?: string
     createdFrom?: string
     createdTo?: string
+    sort?: string
+    order?: string
   }>
 }
 
 const PAGE_SIZE = 50
+
+const SORT_FIELD_MAP: Record<string, string> = {
+  orders: "ordersCount30d",
+  accepted: "acceptedOrders30d",
+  sessions: "sessions30d",
+  hours: "hoursWorked30d",
+  days: "daysWithActivity30d",
+  enabled: "enabled",
+  name: "fullName",
+}
+
+const DEFAULT_ORDER_BY_SORT: Record<string, "asc" | "desc"> = {
+  orders: "desc",
+  accepted: "desc",
+  sessions: "desc",
+  hours: "desc",
+  days: "desc",
+  enabled: "desc",
+  name: "asc",
+}
 
 function parseDateOrNull(s: string | undefined, endOfDay = false): Date | null {
   if (!s) return null
@@ -31,6 +53,18 @@ export default async function DriversPage({ searchParams }: PageProps) {
   const enabled = params.enabled // "true" | "false" | undefined
   const page = Math.max(1, Number(params.page) || 1)
   const skip = (page - 1) * PAGE_SIZE
+
+  const sort = SORT_FIELD_MAP[params.sort || ""] ? params.sort! : "orders"
+  const order: "asc" | "desc" =
+    params.order === "asc" || params.order === "desc"
+      ? params.order
+      : DEFAULT_ORDER_BY_SORT[sort]
+  const sortField = SORT_FIELD_MAP[sort]
+
+  const orderBy: Record<string, "asc" | "desc">[] =
+    sortField === "fullName"
+      ? [{ fullName: order }]
+      : [{ [sortField]: order }, { fullName: "asc" }]
 
   const createdFrom = parseDateOrNull(params.createdFrom)
   const createdTo = parseDateOrNull(params.createdTo, true)
@@ -57,7 +91,7 @@ export default async function DriversPage({ searchParams }: PageProps) {
   const [drivers, total, lastSync, enabledCount, disabledCount] = await Promise.all([
     prisma.monchisDriverCache.findMany({
       where,
-      orderBy: [{ enabled: "desc" }, { fullName: "asc" }],
+      orderBy,
       skip,
       take: PAGE_SIZE,
       select: {
@@ -109,6 +143,8 @@ export default async function DriversPage({ searchParams }: PageProps) {
       disabledCount={disabledCount}
       createdFrom={params.createdFrom || ""}
       createdTo={params.createdTo || ""}
+      sort={sort}
+      order={order}
     />
   )
 }

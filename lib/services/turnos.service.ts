@@ -61,6 +61,7 @@ function flattenShift(raw: RawShift): FlattenedShift | null {
     driverNames: (raw.drivers || [])
       .map((d) => `${(d.first_name || "").trim()} ${(d.last_name || "").trim()}`.trim())
       .filter(Boolean),
+    driverIds: (raw.driver_id || []).filter(Boolean),
   }
 }
 

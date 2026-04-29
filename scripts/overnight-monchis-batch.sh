@@ -29,8 +29,10 @@ if [ -z "$CRON_SECRET" ]; then
   exit 1
 fi
 
-DRIVER_LIMIT="${DRIVER_LIMIT:-15}"
+DRIVER_LIMIT="${DRIVER_LIMIT:-10}"
+DRIVER_TIMEOUT="${DRIVER_TIMEOUT:-800}"
 QUEUE_LIMIT="${QUEUE_LIMIT:-400}"
+QUEUE_TIMEOUT="${QUEUE_TIMEOUT:-320}"
 SLEEP_SEC="${SLEEP_SEC:-30}"
 
 echo "▶  Loop iniciado"
@@ -49,14 +51,14 @@ while true; do
   echo "===== Ciclo $cycle · $(date '+%Y-%m-%d %H:%M:%S') ====="
 
   # Drivers
-  (curl -s -m 320 -H "Authorization: Bearer $CRON_SECRET" \
+  (curl -s -m "$DRIVER_TIMEOUT" -H "Authorization: Bearer $CRON_SECRET" \
       "${BASE_URL}/api/cron/process-driver-attendance-batch?limit=${DRIVER_LIMIT}" \
     | head -c 300 \
     | sed 's/^/    drivers » /') &
   PID_D=$!
 
   # Pedidos queue
-  (curl -s -m 320 -H "Authorization: Bearer $CRON_SECRET" \
+  (curl -s -m "$QUEUE_TIMEOUT" -H "Authorization: Bearer $CRON_SECRET" \
       "${BASE_URL}/api/cron/process-pedidos-import-queue?limit=${QUEUE_LIMIT}" \
     | head -c 300 \
     | sed 's/^/    pedidos » /') &

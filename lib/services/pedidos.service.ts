@@ -240,7 +240,11 @@ export async function searchOrders(params: SearchOrdersParams = {}) {
     sortOrder = "desc",
   } = params
 
-  const where: Record<string, unknown> = {}
+  // Excluimos pedidos sin confirmedAt — son data inconsistente que la API
+  // devuelve a veces y no aporta nada en la tabla.
+  const where: Record<string, unknown> = {
+    confirmedAt: { not: null },
+  }
 
   if (status === "finalized") where.status = "FINALIZED"
   else if (status === "cancelled") where.status = "CANCELLED"
@@ -256,9 +260,9 @@ export async function searchOrders(params: SearchOrdersParams = {}) {
     where.endToEndSeconds = { gt: LONG_E2E_THRESHOLD }
 
   if (from || to) {
-    where.confirmedAt = {}
-    if (from) (where.confirmedAt as Record<string, Date>).gte = from
-    if (to) (where.confirmedAt as Record<string, Date>).lte = to
+    const cf = where.confirmedAt as Record<string, unknown>
+    if (from) cf.gte = from
+    if (to) cf.lte = to
   }
 
   if (q && q.trim()) {
@@ -299,11 +303,18 @@ export async function searchOrders(params: SearchOrdersParams = {}) {
 }
 
 export async function getOrdersGlobalStats() {
+  const baseWhere = { confirmedAt: { not: null } }
   const [total, finalized, cancelled, withAdminChange] = await Promise.all([
-    prisma.monchisOrderCache.count(),
-    prisma.monchisOrderCache.count({ where: { status: "FINALIZED" } }),
-    prisma.monchisOrderCache.count({ where: { status: "CANCELLED" } }),
-    prisma.monchisOrderCache.count({ where: { hasAdminChange: true } }),
+    prisma.monchisOrderCache.count({ where: baseWhere }),
+    prisma.monchisOrderCache.count({
+      where: { ...baseWhere, status: "FINALIZED" },
+    }),
+    prisma.monchisOrderCache.count({
+      where: { ...baseWhere, status: "CANCELLED" },
+    }),
+    prisma.monchisOrderCache.count({
+      where: { ...baseWhere, hasAdminChange: true },
+    }),
   ])
   return { total, finalized, cancelled, withAdminChange }
 }
