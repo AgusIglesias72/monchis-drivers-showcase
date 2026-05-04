@@ -14,16 +14,23 @@
 // Criterios de auto-aprobación validados aquí (defensivo — el caller también filtra):
 //  - mode = REAL
 //  - decision = APPROVED
-//  - Todas las AgentActions del run son `propose_approve_document` (sin overrides:
+//  - Todas las AgentActions del run son `propose_approve_document` o el
+//    `propose_send_whatsapp_template` con clave "capacitaciones" (que es la
+//    plantilla estándar que el agente sugiere al aprobar limpio). Sin overrides:
 //    sin propose_update_driver_cedula, sin propose_waive_ruc_inactive, sin
-//    propose_request_document_resubmission, etc.).
+//    propose_request_document_resubmission, sin escalate_to_admin.
 //  - Todas las AgentActions están en estado PROPOSED.
+//
+// Nota: las acciones `propose_send_whatsapp_template('capacitaciones')` se marcan
+// como EXECUTED porque approveAllDocumentsForDriver ya dispara ManyChat con esa
+// misma plantilla — la AgentAction queda como auditoría.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { approveAllDocumentsForDriver } from '@/lib/services/document-approval.service'
 
-const ALLOWED_TOOLS = new Set(['propose_approve_document'])
+const ALLOWED_TOOLS = new Set(['propose_approve_document', 'propose_send_whatsapp_template'])
+const ALLOWED_TEMPLATE_KEYS = new Set(['capacitaciones'])
 const APPROVED_BY_TAG = 'agent:auto'
 
 export async function POST(request: NextRequest) {
@@ -81,6 +88,24 @@ export async function POST(request: NextRequest) {
       {
         error: 'AgentRun tiene acciones fuera del set permitido para auto-approve',
         disallowedTools: Array.from(new Set(disallowed.map((a) => a.tool))),
+      },
+      { status: 409 },
+    )
+  }
+
+  // Para propose_send_whatsapp_template solo aceptamos plantillas conocidas (capacitaciones).
+  // Cualquier otra plantilla sugerida por el agente requiere revisión humana.
+  const badTemplate = run.actions.find((a) => {
+    if (a.tool !== 'propose_send_whatsapp_template') return false
+    const tk = (a.input as { templateKey?: string } | null)?.templateKey
+    return !tk || !ALLOWED_TEMPLATE_KEYS.has(tk)
+  })
+  if (badTemplate) {
+    const tk = (badTemplate.input as { templateKey?: string } | null)?.templateKey
+    return NextResponse.json(
+      {
+        error: 'AgentRun sugiere una plantilla WhatsApp fuera del set permitido para auto-approve',
+        templateKey: tk ?? null,
       },
       { status: 409 },
     )

@@ -1336,7 +1336,11 @@ function emptyMetrics() {
 
 const AUTO_APPROVE_ALLOWED_TOOLS = new Set<ProposedToolCall['tool']>([
   'propose_approve_document',
+  'propose_send_whatsapp_template',
 ])
+// Solo se considera auto-approvable si las plantillas WhatsApp sugeridas son del
+// set "estándar" del flow APPROVED limpio. Cualquier otra cosa queda PROPOSED.
+const AUTO_APPROVE_ALLOWED_TEMPLATE_KEYS = new Set<string>(['capacitaciones'])
 
 interface MaybeAutoApproveParams {
   agentRunId: string
@@ -1354,6 +1358,13 @@ async function maybeTriggerAutoApprove(params: MaybeAutoApproveParams): Promise<
   if (decision !== 'APPROVED') return
   if (actions.length === 0) return
   if (!actions.every((a) => AUTO_APPROVE_ALLOWED_TOOLS.has(a.tool))) return
+  // Si hay propose_send_whatsapp_template, asegurar que la clave esté en el set permitido.
+  const hasUnknownTemplate = actions.some(
+    (a) =>
+      a.tool === 'propose_send_whatsapp_template' &&
+      !AUTO_APPROVE_ALLOWED_TEMPLATE_KEYS.has(a.input.templateKey),
+  )
+  if (hasUnknownTemplate) return
 
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) {

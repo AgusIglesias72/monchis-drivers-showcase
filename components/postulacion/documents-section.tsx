@@ -38,6 +38,9 @@ interface DocSectionDef {
   icon: typeof CreditCard
   types: DocumentType[]
   description: string
+  /** Si true, el postulante puede subir N imágenes para la sección (caso típico: cédula
+   *  frente + dorso, o varias fotos). Si false, solo 1 (criminal record, tributario). */
+  allowMultiple?: boolean
 }
 
 const DOC_SECTIONS: DocSectionDef[] = [
@@ -47,6 +50,7 @@ const DOC_SECTIONS: DocSectionDef[] = [
     icon: CreditCard,
     types: ['CEDULA'],
     description: 'Foto de tu cédula de identidad (podés subir una o más imágenes)',
+    allowMultiple: true,
   },
   {
     key: 'antecedentes',
@@ -251,37 +255,51 @@ export function DocumentsSection({
                   </div>
                 )}
 
-                {/* Upload buttons per type — direct file picker */}
+                {/* Upload buttons per type — direct file picker.
+                    Para secciones allowMultiple (cédula): mientras no esté aprobada, el
+                    postulante puede agregar más imágenes (ej. frente, dorso, foto extra).
+                    Para single (criminal_record, tributario): solo si no hay subida o si
+                    la actual está rechazada. */}
                 <div className="flex flex-wrap gap-2 mt-1">
                   {section.types.map((type) => {
-                    const hasDoc = sectionDocs.some((d) => d.documentType === type)
-                    const rejectedDoc = sectionDocs.find(
-                      (d) => d.documentType === type && d.status === 'REJECTED'
-                    )
+                    const docsOfType = sectionDocs.filter((d) => d.documentType === type)
+                    const hasDoc = docsOfType.length > 0
+                    const isApproved = docsOfType.some((d) => d.status === 'APPROVED')
+                    const rejectedDoc = docsOfType.find((d) => d.status === 'REJECTED')
                     const isUploading = uploadingType === type
+                    const typeLabel = section.title
 
-                    if (!hasDoc || rejectedDoc) {
-                      const typeLabel = section.title
-
-                      return (
-                        <Button
-                          key={type}
-                          variant="outline"
-                          size="sm"
-                          className="text-xs"
-                          disabled={isUploading}
-                          onClick={() => handleDirectUpload(type)}
-                        >
-                          {isUploading ? (
-                            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                          ) : (
-                            <Upload className="w-3.5 h-3.5 mr-1.5" />
-                          )}
-                          {isUploading ? 'Subiendo...' : rejectedDoc ? `Resubir ${typeLabel}` : `Subir ${typeLabel}`}
-                        </Button>
-                      )
+                    let label: string | null = null
+                    if (section.allowMultiple) {
+                      // Mientras no esté aprobada, el postulante puede seguir agregando.
+                      if (!isApproved) {
+                        label = hasDoc ? `Subir otra imagen` : `Subir ${typeLabel}`
+                      }
+                    } else if (!hasDoc) {
+                      label = `Subir ${typeLabel}`
+                    } else if (rejectedDoc) {
+                      label = `Resubir ${typeLabel}`
                     }
-                    return null
+
+                    if (!label) return null
+
+                    return (
+                      <Button
+                        key={type}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        disabled={isUploading}
+                        onClick={() => handleDirectUpload(type)}
+                      >
+                        {isUploading ? (
+                          <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                        ) : (
+                          <Upload className="w-3.5 h-3.5 mr-1.5" />
+                        )}
+                        {isUploading ? 'Subiendo...' : label}
+                      </Button>
+                    )
                   })}
                 </div>
 

@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# backups locales de migraciones (contienen URLs de blobs reales)
+/backups/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
