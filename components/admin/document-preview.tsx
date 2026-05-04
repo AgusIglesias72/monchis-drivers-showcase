@@ -70,7 +70,7 @@ interface DocumentPreviewProps {
 
 // ✅ Tipos de documento simplificados - solo opciones esenciales para subir
 const documentTypes = [
-  { value: 'CEDULA_FRONT', label: 'Cédula', group: 'CEDULA' },
+  { value: 'CEDULA', label: 'Cédula', group: 'CEDULA' },
   { value: 'LICENSE_FRONT', label: 'Licencia de Conducir', group: 'LICENSE' },
   { value: 'CRIMINAL_RECORD', label: 'Certificado de Antecedentes Penales', group: 'CRIMINAL_RECORD' },
   { value: 'VEHICLE_PHOTO_FRONT', label: 'Foto del Vehículo', group: 'VEHICLE' },
@@ -81,8 +81,7 @@ const documentTypes = [
 
 // ✅ Mapeo para mostrar correctamente TODOS los tipos que pueden existir en la BD
 const allDocumentLabels: Record<string, { label: string; group: string }> = {
-  CEDULA_FRONT: { label: 'Cédula', group: 'CEDULA' },
-  CEDULA_BACK: { label: 'Cédula', group: 'CEDULA' },
+  CEDULA: { label: 'Cédula', group: 'CEDULA' },
   LICENSE_FRONT: { label: 'Licencia', group: 'LICENSE' },
   LICENSE_BACK: { label: 'Licencia', group: 'LICENSE' },
   CRIMINAL_RECORD: { label: 'Antecedentes Penales', group: 'CRIMINAL_RECORD' },

@@ -320,7 +320,7 @@ export class AIDocumentValidator {
     const responseFormat = `
     Responde ÚNICAMENTE con un JSON válido con la siguiente estructura:
     {
-      "documentType": "CEDULA_FRONT|CEDULA_BACK|LICENSE_FRONT|LICENSE_BACK|CRIMINAL_RECORD|VEHICLE_REGISTRATION|etc",
+      "documentType": "CEDULA|LICENSE_FRONT|LICENSE_BACK|CRIMINAL_RECORD|VEHICLE_REGISTRATION|etc",
       "documentSide": "FRONT|BACK|BOTH|UNKNOWN",
       "confidence": 0-100,
       "extractedData": {

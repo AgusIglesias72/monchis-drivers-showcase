@@ -63,8 +63,8 @@ export interface DriverDocumentsValidationResult {
   ok: boolean
   error?: string
 
-  cedulaFront: ImageValidationResult | null
-  cedulaBack: ImageValidationResult | null
+  /** Una entrada por imagen de cédula recibida, en el mismo orden que `cedulaUrls`. */
+  cedulaResults: ImageValidationResult[]
   criminalRecord: ImageValidationResult | null
 
   usage: VisionUsage // agregada de toda la llamada
@@ -72,8 +72,8 @@ export interface DriverDocumentsValidationResult {
 }
 
 export interface DriverDocumentsInput {
-  cedulaFrontUrl: string | null
-  cedulaBackUrl: string | null
+  /** Una o más URLs de imágenes de cédula. Cada postulante puede subir N imágenes. */
+  cedulaUrls: string[]
   criminalRecordUrl: string | null
   driverCedula: string
   driverName: string
@@ -197,15 +197,14 @@ function computeCostMicroUsd(usage: {
 // System prompt (cacheable) + esquema de respuesta
 // ============================================================================
 
-const SYSTEM_PROMPT = `Sos un validador pragmático de documentos de postulantes paraguayos para Monchis (app de delivery). Te voy a mandar entre 1 y 3 imágenes de una postulación, y tu tarea es validar cada una. Trabajás como filtro: dejás pasar casos legítimos y detectás los que claramente no cumplen.
+const SYSTEM_PROMPT = `Sos un validador pragmático de documentos de postulantes paraguayos para Monchis (app de delivery). Te voy a mandar entre 1 y N imágenes de una postulación, y tu tarea es validar cada una. Trabajás como filtro: dejás pasar casos legítimos y detectás los que claramente no cumplen.
 
 ## Documentos que podés recibir
 
-1. **CEDULA_FRONT** — Cara frontal de la cédula paraguaya (foto del titular + datos personales). A veces viene como "CEDULA" genérico.
-2. **CEDULA_BACK** — Cara posterior de la cédula paraguaya (MRZ + barcode). Opcional.
-3. **CRIMINAL_RECORD** — Certificado de antecedentes penales paraguayo (Policía Nacional, Ministerio Público o Ministerio del Interior).
+1. **CEDULA** — Cédula de identidad paraguaya. El postulante puede subir UNA o MÁS imágenes (puede ser solo el frente, solo el dorso, o ambos juntos). Tratamos a la cédula como UN ÚNICO concepto: cualquier imagen legible que sea una cédula paraguaya válida cuenta. NO penalices por "subió el dorso en vez del frente" — ambos lados son válidos.
+2. **CRIMINAL_RECORD** — Certificado de antecedentes penales paraguayo (Policía Nacional, Ministerio Público o Ministerio del Interior).
 
-En el user message te voy a indicar qué documento es cada imagen y los datos del postulante (cédula y nombre del formulario).
+En el user message te voy a indicar cuántas imágenes de cédula recibís y los datos del postulante (cédula y nombre del formulario).
 
 ## Cómo confirmar identidad (CRÍTICO)
 
@@ -254,12 +253,15 @@ Una foto de celular de un documento físico real es la NORMA, no es fraude.
 
 ## Reglas específicas por documento
 
-### Cédula paraguaya (CEDULA_FRONT / CEDULA_BACK)
+### Cédula paraguaya (CEDULA)
 - Verificá que sea cédula paraguaya (no licencia, pasaporte, recibo).
-- Extraé número de cédula y nombre completo visible.
-- Si es el FRENTE, esperás foto del titular + datos personales.
-- Si es el DORSO, esperás código MRZ (IDPRY...) + barcode.
-- El tipo genérico "CEDULA" se trata como frente.
+- Aceptás CUALQUIER cara de la cédula:
+  - Frente: foto del titular + datos personales (nombre, apellido, número de cédula, fecha de nacimiento).
+  - Dorso: código MRZ (IDPRY...) + barcode + a veces datos repetidos.
+- Si recibís SOLO el dorso, igual es válido — del MRZ se puede extraer cédula y nombre. NO marques matchesExpectedType=false ni REJECT por "subió el dorso en vez del frente".
+- Si recibís SOLO el frente, también válido.
+- Extraé número de cédula y nombre completo siempre que se puedan leer.
+- Solo \`matchesExpectedType=false\` cuando lo que ves NO es una cédula paraguaya en absoluto (es un pasaporte, una licencia, una selfie, un recibo, etc.).
 
 ### Certificado de antecedentes (CRIMINAL_RECORD)
 - Debe ser paraguayo oficial (Policía Nacional, Ministerio Público, Ministerio del Interior, o Poder Judicial / CSJ).
@@ -300,11 +302,11 @@ Una foto de celular de un documento físico real es la NORMA, no es fraude.
 \`matchesExpectedType\` es independiente de la identidad: chequea SOLO si el archivo recibido es el tipo de documento esperado, NO si la persona coincide.
 
 - Si te pido CRIMINAL_RECORD y recibís un CV, una cédula, un recibo, una factura, un comprobante, una foto personal/selfie o cualquier otra cosa que NO sea un certificado oficial de antecedentes paraguayo → \`matchesExpectedType=false\` y \`suggestion=REJECT\`. NO importa que el nombre o la cédula del archivo coincidan con el postulante.
-- Si te pido CEDULA_FRONT/CEDULA_BACK y recibís otra cosa (no la cédula paraguaya) → \`matchesExpectedType=false\` y \`suggestion=REJECT\`.
+- Si te pido CEDULA y recibís otra cosa (pasaporte, licencia, selfie, recibo, factura, captura de pantalla de chat, etc.) → \`matchesExpectedType=false\` y \`suggestion=REJECT\`. **OJO**: el frente y el dorso de la cédula son AMBOS CEDULA — no rechaces por lado.
 - **Selfies / fotos personales sin documento**: si la imagen es la cara del postulante o un retrato sin documento físico visible → \`matchesExpectedType=false\`, \`suggestion=REJECT\`, \`documentTypeDetected="SELFIE"\`, \`rejectReasonIfAny="Subió una selfie/foto personal en lugar de [tipo esperado]"\`.
 - **Capturas de pantalla evidentes** (barra de notificaciones de iOS/Android visible, watermark de WhatsApp/Telegram/Galería, marco de chat) sobre cédula ajena u otro documento → \`authenticityScore < 60\` y \`suggestion=MANUAL_REVIEW\` con concern explicando que es captura de pantalla.
 - En \`rejectReasonIfAny\` describí qué subió el postulante: por ejemplo "Subió un curriculum vitae en lugar del certificado de antecedentes" o "Subió un recibo en lugar de la cédula" o "Subió una selfie en lugar de la cédula".
-- En \`documentTypeDetected\` poné lo que efectivamente es (ej. "CV", "RECEIPT", "SELFIE", "SCREENSHOT", "OTHER").
+- En \`documentTypeDetected\` poné lo que efectivamente es (ej. "CEDULA" si es cédula paraguaya, "CV", "RECEIPT", "SELFIE", "SCREENSHOT", "OTHER").
 - **Si dudás del tipo, devolvé \`matchesExpectedType=false\`** (nunca \`null\`). Es preferible mandar a revisión humana que aprobar un tipo equivocado.
 
 **Nunca** uses la coincidencia de cédula/nombre para "salvar" un documento de tipo equivocado. Antecedentes = certificado oficial de antecedentes, punto.
@@ -315,9 +317,8 @@ Respondé SOLO con JSON válido (sin markdown, sin texto extra) con este shape:
 
 \`\`\`
 {
-  "cedulaFront": ImageValidationResult | null,   // null si no fue subida
-  "cedulaBack": ImageValidationResult | null,
-  "criminalRecord": ImageValidationResult | null
+  "cedulas": ImageValidationResult[],          // un objeto por cada imagen de cédula recibida, EN EL MISMO ORDEN que te pasé
+  "criminalRecord": ImageValidationResult | null   // null si no fue subido
 }
 \`\`\`
 
@@ -325,7 +326,7 @@ Donde cada ImageValidationResult es:
 
 \`\`\`
 {
-  "documentTypeDetected": string,           // ej "CEDULA_FRONT", "CRIMINAL_RECORD", "OTHER"
+  "documentTypeDetected": string,           // ej "CEDULA", "CRIMINAL_RECORD", "OTHER"
   "matchesExpectedType": boolean,
   "isReadable": boolean,
   "qualityScore": 0-100,
@@ -340,7 +341,7 @@ Donde cada ImageValidationResult es:
 }
 \`\`\`
 
-Si un documento no fue subido (te lo indico en el user message), devolvé \`null\` en esa clave. No inventes resultados para documentos ausentes.`
+Si no hay imágenes de cédula, \`cedulas\` debe ser \`[]\`. Si no hay antecedentes, \`criminalRecord\` debe ser \`null\`. No inventes resultados para documentos ausentes.`
 
 // ============================================================================
 // Función principal: validar todos los documentos en una sola llamada
@@ -360,27 +361,35 @@ export async function validateDriverDocuments(
   }
 
   try {
-    // Descargar y comprimir imágenes disponibles en paralelo
-    const [front, back, criminal] = await Promise.all([
-      input.cedulaFrontUrl
-        ? downloadAndCompress(input.cedulaFrontUrl).catch((e) => ({ error: e?.message ?? 'fallo descarga' }))
-        : Promise.resolve(null),
-      input.cedulaBackUrl
-        ? downloadAndCompress(input.cedulaBackUrl).catch((e) => ({ error: e?.message ?? 'fallo descarga' }))
-        : Promise.resolve(null),
-      input.criminalRecordUrl
-        ? downloadAndCompress(input.criminalRecordUrl).catch((e) => ({ error: e?.message ?? 'fallo descarga' }))
-        : Promise.resolve(null),
-    ])
+    // Descargar todas las cédulas + antecedentes en paralelo. Cada cédula puede
+    // fallar individualmente (URL rota) sin tirar la corrida entera.
+    const cedulaDownloads = await Promise.all(
+      input.cedulaUrls.map((url) =>
+        downloadAndCompress(url).catch((e) => ({ error: e?.message ?? 'fallo descarga' })),
+      ),
+    )
+    const criminal = input.criminalRecordUrl
+      ? await downloadAndCompress(input.criminalRecordUrl).catch((e) => ({
+          error: e?.message ?? 'fallo descarga',
+        }))
+      : null
 
     // Armar el user content: texto + imágenes ordenadas
     const userContent: Anthropic.Messages.ContentBlockParam[] = []
 
     const documentsManifest: string[] = []
-    if (front && 'base64' in front) documentsManifest.push('- CEDULA_FRONT: sí (primera imagen)')
-    else documentsManifest.push(`- CEDULA_FRONT: ${front ? `FALLO (${(front as any).error})` : 'no subida'}`)
-    if (back && 'base64' in back) documentsManifest.push('- CEDULA_BACK: sí')
-    else documentsManifest.push(`- CEDULA_BACK: ${back ? `FALLO (${(back as any).error})` : 'no subida (opcional)'}`)
+    if (input.cedulaUrls.length === 0) {
+      documentsManifest.push('- CEDULA: 0 imágenes (no subió nada)')
+    } else {
+      documentsManifest.push(`- CEDULA: ${input.cedulaUrls.length} imagen(es)`)
+      cedulaDownloads.forEach((c, idx) => {
+        if (c && 'error' in c && !('base64' in c)) {
+          documentsManifest.push(`  · imagen ${idx + 1}: FALLO (${c.error})`)
+        } else {
+          documentsManifest.push(`  · imagen ${idx + 1}: OK`)
+        }
+      })
+    }
     if (criminal && 'base64' in criminal) documentsManifest.push('- CRIMINAL_RECORD: sí')
     else documentsManifest.push(`- CRIMINAL_RECORD: ${criminal ? `FALLO (${(criminal as any).error})` : 'no subido'}`)
 
@@ -409,13 +418,17 @@ export async function validateDriverDocuments(
         'Documentos adjuntos (en orden):',
         ...documentsManifest,
         '',
-        'Validá cada documento disponible siguiendo las reglas del system prompt. Para documentos no subidos o fallidos, devolvé `null` en la clave correspondiente.',
+        'Validá cada documento disponible siguiendo las reglas del system prompt. Para imágenes de cédula con fallo de descarga, devolvé en `cedulas` el objeto correspondiente con suggestion=MANUAL_REVIEW y un concern descriptivo. Si no hay antecedentes, `criminalRecord` debe ser `null`.',
       ].join('\n'),
     })
 
-    // Agregar archivos en orden. El manifest indica cuál es cuál.
+    // Agregar archivos en orden: primero todas las cédulas, después antecedentes.
     // Haiku soporta imágenes y PDFs nativamente — usamos el content type correcto.
-    for (const file of [front, back, criminal]) {
+    const orderedFiles: Array<typeof criminal | (typeof cedulaDownloads)[number]> = [
+      ...cedulaDownloads,
+      criminal,
+    ]
+    for (const file of orderedFiles) {
       if (file && 'base64' in file) {
         if (file.isPdf) {
           userContent.push({
@@ -468,18 +481,28 @@ export async function validateDriverDocuments(
       return {
         ok: false,
         error: `No se pudo parsear respuesta JSON. Texto: ${text.slice(0, 200)}`,
-        cedulaFront: null,
-        cedulaBack: null,
+        cedulaResults: [],
         criminalRecord: null,
         usage,
         rawResponse: text,
       }
     }
 
+    const parsedCedulas: any[] = Array.isArray(parsed.cedulas) ? parsed.cedulas : []
+    const cedulaResults: ImageValidationResult[] = input.cedulaUrls.map((url, idx) => {
+      const downloadResult = cedulaDownloads[idx]
+      const parsedSlot = parsedCedulas[idx] ?? null
+      // El normalize devuelve null cuando url es null. Para cédulas siempre tenemos url,
+      // así que el null no debería ocurrir; el `??` cubre por defensa.
+      return (
+        normalizeImageResult(parsedSlot, url, usage, downloadResult) ??
+        makeErrorResult('El modelo no devolvió análisis para esta imagen', usage)
+      )
+    })
+
     return {
       ok: true,
-      cedulaFront: normalizeImageResult(parsed.cedulaFront, input.cedulaFrontUrl, usage, front),
-      cedulaBack: normalizeImageResult(parsed.cedulaBack, input.cedulaBackUrl, usage, back),
+      cedulaResults,
       criminalRecord: normalizeImageResult(parsed.criminalRecord, input.criminalRecordUrl, usage, criminal),
       usage,
       rawResponse: parsed,
@@ -488,8 +511,7 @@ export async function validateDriverDocuments(
     return {
       ok: false,
       error: err?.message ?? 'Error desconocido llamando a Claude',
-      cedulaFront: null,
-      cedulaBack: null,
+      cedulaResults: [],
       criminalRecord: null,
       usage: emptyUsage,
     }

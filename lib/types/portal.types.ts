@@ -200,8 +200,7 @@ export interface GenerateTokenResponse {
  * Tipos de documentos traducidos al español
  */
 export const DOCUMENT_TYPE_NAMES: Record<DocumentType, string> = {
-  CEDULA_FRONT: 'Cédula (Frente)',
-  CEDULA_BACK: 'Cédula (Dorso)',
+  CEDULA: 'Cédula',
   LICENSE_FRONT: 'Licencia de Conducir (Frente)',
   LICENSE_BACK: 'Licencia de Conducir (Dorso)',
   CRIMINAL_RECORD: 'Certificado de Antecedentes Penales',

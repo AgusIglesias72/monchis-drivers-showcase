@@ -14,7 +14,7 @@ const DOCUMENT_MAPPINGS: DocumentColumnMapping[] = [
   // Documentos de identidad
   {
     columnPatterns: ['cedula de identidad', 'cédula de identidad', 'ci frente', 'ci dorso', 'cedula frente', 'cedula dorso'],
-    documentType: 'CEDULA_FRONT',
+    documentType: 'CEDULA',
     category: 'identity'
   },
   {

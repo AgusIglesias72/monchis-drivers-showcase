@@ -45,8 +45,8 @@ const DOC_SECTIONS: DocSectionDef[] = [
     key: 'cedula',
     title: 'Cédula de Identidad',
     icon: CreditCard,
-    types: ['CEDULA_FRONT', 'CEDULA_BACK'],
-    description: 'Frente y dorso de tu cédula de identidad',
+    types: ['CEDULA'],
+    description: 'Foto de tu cédula de identidad (podés subir una o más imágenes)',
   },
   {
     key: 'antecedentes',
@@ -261,12 +261,7 @@ export function DocumentsSection({
                     const isUploading = uploadingType === type
 
                     if (!hasDoc || rejectedDoc) {
-                      const typeLabel =
-                        type === 'CEDULA_FRONT'
-                          ? 'Frente'
-                          : type === 'CEDULA_BACK'
-                            ? 'Dorso'
-                            : section.title
+                      const typeLabel = section.title
 
                       return (
                         <Button

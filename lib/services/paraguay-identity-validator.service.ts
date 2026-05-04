@@ -80,7 +80,7 @@ export class ParaguayIdentityValidator {
         where: {
           formDriverId,
           documentType: {
-            in: ['CEDULA_FRONT', 'CEDULA_BACK', 'CRIMINAL_RECORD']
+            in: ['CEDULA', 'CRIMINAL_RECORD']
           }
         },
         include: {
@@ -91,9 +91,7 @@ export class ParaguayIdentityValidator {
         }
       });
 
-      const cedulaDocs = documents.filter(d =>
-        d.documentType === 'CEDULA_FRONT' || d.documentType === 'CEDULA_BACK'
-      );
+      const cedulaDocs = documents.filter(d => d.documentType === 'CEDULA');
       const antecedentesDocs = documents.filter(d =>
         d.documentType === 'CRIMINAL_RECORD'
       );
@@ -650,7 +648,7 @@ Si ES un certificado válido, responde:
           const relevantErrors: string[] = [];
 
           // Identificar si es cédula o antecedentes
-          const isCedula = doc.documentType === 'CEDULA_FRONT' || doc.documentType === 'CEDULA_BACK';
+          const isCedula = doc.documentType === 'CEDULA';
           const isAntecedentes = doc.documentType === 'CRIMINAL_RECORD';
 
           // Mapeo de códigos de error a mensajes cortos
@@ -896,7 +894,7 @@ Si ES un certificado válido, responde:
           documents: {
             some: {
               documentType: {
-                in: ['CEDULA_FRONT', 'CEDULA_BACK', 'CRIMINAL_RECORD']
+                in: ['CEDULA', 'CRIMINAL_RECORD']
               },
               status: 'PENDING'
             }
@@ -906,7 +904,7 @@ Si ES un certificado válido, responde:
           documents: {
             where: {
               documentType: {
-                in: ['CEDULA_FRONT', 'CEDULA_BACK', 'CRIMINAL_RECORD']
+                in: ['CEDULA', 'CRIMINAL_RECORD']
               }
             }
           }
@@ -1000,8 +998,7 @@ Si ES un certificado válido, responde:
 
       // Mapeo de tipos de documento a nombres legibles
       const documentTypeNames: Record<string, string> = {
-        'CEDULA_FRONT': 'Cédula (Frente)',
-        'CEDULA_BACK': 'Cédula (Reverso)',
+        'CEDULA': 'Cédula',
         'CRIMINAL_RECORD': 'Certificado de Antecedentes Penales',
         'ANTECEDENTES': 'Certificado de Antecedentes Penales',
       };

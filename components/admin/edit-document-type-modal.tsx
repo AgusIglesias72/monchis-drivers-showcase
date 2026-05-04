@@ -32,8 +32,7 @@ interface EditDocumentTypeModalProps {
 
 // Todos los tipos de documento disponibles
 const allDocumentTypes = [
-  { value: 'CEDULA_FRONT', label: 'Cédula (Frente)' },
-  { value: 'CEDULA_BACK', label: 'Cédula (Dorso)' },
+  { value: 'CEDULA', label: 'Cédula' },
   { value: 'LICENSE_FRONT', label: 'Licencia (Frente)' },
   { value: 'LICENSE_BACK', label: 'Licencia (Dorso)' },
   { value: 'CRIMINAL_RECORD', label: 'Antecedentes Penales' },

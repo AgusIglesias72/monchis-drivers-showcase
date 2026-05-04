@@ -68,8 +68,7 @@ const statusColors = {
 }
 
 const documentTypeLabels: Record<string, string> = {
-  CEDULA_FRONT: "Cédula (Frente)",
-  CEDULA_BACK: "Cédula (Dorso)",
+  CEDULA: "Cédula",
   LICENSE_FRONT: "Licencia (Frente)",
   LICENSE_BACK: "Licencia (Dorso)",
   CRIMINAL_RECORD: "Antecedentes",

@@ -67,8 +67,7 @@ const FALLBACK: AgentActionLabel = {
 
 function documentTypeLabel(type: string): string {
   const map: Record<string, string> = {
-    CEDULA_FRONT: 'nueva foto de cédula (frente)',
-    CEDULA_BACK: 'nueva foto de cédula (dorso)',
+    CEDULA: 'nueva foto de cédula',
     CRIMINAL_RECORD: 'nuevo certificado de antecedentes',
     TAX_COMPLIANCE: 'nuevo certificado tributario',
   }

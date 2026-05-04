@@ -60,7 +60,7 @@ export const formDocumentsService = {
     const reasons: string[] = [];
 
     // Verificar documentos obligatorios
-    const requiredDocs = ['CEDULA_FRONT', 'CRIMINAL_RECORD'];
+    const requiredDocs = ['CEDULA', 'CRIMINAL_RECORD'];
     const uploadedTypes = formDriver.documents.map(d => d.documentType);
     const missingDocs = requiredDocs.filter((type: string) => !uploadedTypes.includes(type as DocumentType));
 

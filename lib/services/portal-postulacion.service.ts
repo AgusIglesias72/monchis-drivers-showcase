@@ -227,9 +227,9 @@ export async function getAvailableCapacitaciones(token: string): Promise<{
   const formDriver = await validateAccessToken(token)
 
   // Verificar elegibilidad usando documentos individuales (no el campo resumen)
-  // Requisitos: Cédula (frente o dorso) + Antecedentes Policiales aprobados
+  // Requisitos: Cédula + Antecedentes Policiales aprobados
   const cedulaOk = formDriver.documents.some(
-    (d: any) => (d.documentType === 'CEDULA_FRONT' || d.documentType === 'CEDULA_BACK') && d.status === 'APPROVED'
+    (d: any) => d.documentType === 'CEDULA' && d.status === 'APPROVED'
   )
   const antecedentesOk = formDriver.documents.some(
     (d: any) => d.documentType === 'CRIMINAL_RECORD' && d.status === 'APPROVED'
@@ -297,7 +297,7 @@ export async function selectCapacitacion(
 
   // Verificar elegibilidad usando documentos individuales
   const hasCedula = formDriver.documents.some(
-    (d: any) => (d.documentType === 'CEDULA_FRONT' || d.documentType === 'CEDULA_BACK') && d.status === 'APPROVED'
+    (d: any) => d.documentType === 'CEDULA' && d.status === 'APPROVED'
   )
   const hasAntecedentes = formDriver.documents.some(
     (d: any) => d.documentType === 'CRIMINAL_RECORD' && d.status === 'APPROVED'

@@ -33,7 +33,7 @@ export type ProposedToolCall =
   | {
       tool: 'propose_request_document_resubmission'
       input: {
-        documentType: 'CEDULA_FRONT' | 'CEDULA_BACK' | 'CRIMINAL_RECORD' | 'TAX_COMPLIANCE'
+        documentType: 'CEDULA' | 'CRIMINAL_RECORD' | 'TAX_COMPLIANCE'
         reason: string
         whatsappMessage: string
       }
@@ -275,26 +275,21 @@ async function runDeterministicPipeline(
   }
 
   // --- 2. Imágenes ---
-  // La cédula se acepta como CEDULA_FRONT o CEDULA (tipo genérico legacy).
-  // CEDULA_BACK es opcional — si está, la validamos como bonus; si no, ignoramos.
-  const cedulaFront =
-    pickLatestDoc(driver.documents, 'CEDULA_FRONT') ??
-    pickLatestDoc(driver.documents, 'CEDULA')
-  const cedulaBack = pickLatestDoc(driver.documents, 'CEDULA_BACK')
+  // CEDULA es un único tipo: el postulante puede subir una o más imágenes
+  // (frente, dorso, ambas). El agente las trata como un set sin diferenciar lado.
+  const cedulas = pickAllDocs(driver.documents, 'CEDULA')
   const criminal = pickLatestDoc(driver.documents, 'CRIMINAL_RECORD')
 
   const missingDocs: string[] = []
-  if (!cedulaFront) missingDocs.push('cédula')
+  if (cedulas.length === 0) missingDocs.push('cédula')
   if (!criminal) missingDocs.push('certificado de antecedentes')
-  // cédula dorso (CEDULA_BACK) es opcional
 
   // Validación unificada: una sola llamada a Haiku con todas las imágenes disponibles
   // + system prompt con prompt caching (cache hits en corridas dentro de 5 min).
   const validation = await validateDriverDocuments({
     driverCedula: driver.cedula,
     driverName,
-    cedulaFrontUrl: cedulaFront?.blobUrl ?? null,
-    cedulaBackUrl: cedulaBack?.blobUrl ?? null,
+    cedulaUrls: cedulas.map((c) => c.blobUrl),
     criminalRecordUrl: criminal?.blobUrl ?? null,
     isForeign: foreignCedula,
   }).catch((err) => {
@@ -302,8 +297,7 @@ async function runDeterministicPipeline(
     return null
   })
 
-  let frontResult: ImageValidationResult | null = validation?.cedulaFront ?? null
-  let backResult: ImageValidationResult | null = validation?.cedulaBack ?? null
+  let cedulaResults: ImageValidationResult[] = validation?.cedulaResults ?? []
   let criminalResult: ImageValidationResult | null = validation?.criminalRecord ?? null
 
   // Métricas agregadas (vienen todas en validation.usage, una sola llamada)
@@ -321,8 +315,9 @@ async function runDeterministicPipeline(
   // mande a revisión humana.
   if (!validation || !validation.ok) {
     const errMsg = validation?.error ?? 'Validación visual no disponible'
-    if (cedulaFront && !frontResult) frontResult = buildCaughtErrorResult(new Error(errMsg))
-    if (cedulaBack && !backResult) backResult = buildCaughtErrorResult(new Error(errMsg))
+    if (cedulas.length > 0 && cedulaResults.length === 0) {
+      cedulaResults = cedulas.map(() => buildCaughtErrorResult(new Error(errMsg)))
+    }
     if (criminal && !criminalResult) criminalResult = buildCaughtErrorResult(new Error(errMsg))
   }
 
@@ -354,18 +349,15 @@ async function runDeterministicPipeline(
     note: string | null
   }[] = []
 
-  // Aplicar overrides antes de clasificar:
+  // Aplicar overrides antes de clasificar a cada imagen:
   // 1) Override de cédula coincidente: REJECT por nombre pero cédula coincide → APPROVE
   // 2) Override de vencimiento: REJECT por "vencido/expired" → MANUAL_REVIEW (renovable, no fraude)
-  const frontResultFinal = applyExpiryOverride(
-    applyCedulaMatchOverride(frontResult, driver.cedula, steps),
-    steps,
-    'cédula frente',
-  )
-  const backResultFinal = applyExpiryOverride(
-    applyCedulaMatchOverride(backResult, driver.cedula, steps),
-    steps,
-    'cédula dorso',
+  const cedulaResultsFinal = cedulaResults.map((r, idx) =>
+    applyExpiryOverride(
+      applyCedulaMatchOverride(r, driver.cedula, steps),
+      steps,
+      cedulas.length === 1 ? 'cédula' : `cédula (imagen ${idx + 1})`,
+    ),
   )
   const criminalResultFinal = applyExpiryOverride(
     applyCedulaMatchOverride(criminalResult, driver.cedula, steps),
@@ -373,14 +365,24 @@ async function runDeterministicPipeline(
     'antecedentes',
   )
 
-  if (cedulaFront) processImageResult(frontResultFinal, 'cédula frente', cedulaFront.id, rejectsFromImages, reviewsFromImages, approvalsFromImages, wrongTypeFromImages)
-  if (cedulaBack) processImageResult(backResultFinal, 'cédula dorso', cedulaBack.id, rejectsFromImages, reviewsFromImages, approvalsFromImages, wrongTypeFromImages)
+  cedulas.forEach((doc, idx) => {
+    const label = cedulas.length === 1 ? 'cédula' : `cédula (imagen ${idx + 1})`
+    processImageResult(
+      cedulaResultsFinal[idx] ?? null,
+      label,
+      doc.id,
+      rejectsFromImages,
+      reviewsFromImages,
+      approvalsFromImages,
+      wrongTypeFromImages,
+    )
+  })
   if (criminal) processImageResult(criminalResultFinal, 'antecedentes', criminal.id, rejectsFromImages, reviewsFromImages, approvalsFromImages, wrongTypeFromImages)
 
   // Detección de typo de cédula: el postulante se equivocó al tipear su cédula
   // en el formulario. Si los documentos son consistentes entre sí y difieren
   // del form por ≤2 caracteres, es un typo, no fraude.
-  const cedulaTypo = detectCedulaTypo(driver.cedula, [frontResultFinal, backResultFinal, criminalResultFinal])
+  const cedulaTypo = detectCedulaTypo(driver.cedula, [...cedulaResultsFinal, criminalResultFinal])
   if (cedulaTypo) {
     steps.push('')
     steps.push(
@@ -391,7 +393,7 @@ async function runDeterministicPipeline(
   // Señal de fraude: si los docs muestran ≥2 cédulas distintas que NO son typo
   // entre sí (diff > 2 chars o long distinto), no es la misma persona — alguien
   // está mezclando documentos. NO aprobamos ni pedimos resubmission ciegamente.
-  const distinctCedulasInDocs = collectDistinctCedulas([frontResultFinal, backResultFinal, criminalResultFinal])
+  const distinctCedulasInDocs = collectDistinctCedulas([...cedulaResultsFinal, criminalResultFinal])
   const fraudSignal =
     !cedulaTypo && distinctCedulasInDocs.length >= 2 // typo ya cubre el caso de un solo "real cedula"
   if (fraudSignal) {
@@ -410,20 +412,20 @@ async function runDeterministicPipeline(
   // al postulante por documentos que probablemente sean válidos. Escalamos al
   // admin con un único action y dejamos que reintente manualmente.
   const validationFailedGlobally = !validation || !validation.ok
-  const hasUploadedDocs = !!(cedulaFront || cedulaBack || criminal)
+  const hasUploadedDocs = cedulas.length > 0 || !!criminal
 
   if (missingDocs.length > 0) {
     decision = 'NEEDS_REVIEW'
     summary = `Faltan documentos obligatorios: ${missingDocs.join(', ')}.`
     // Proponer solicitar cada documento faltante al postulante por WhatsApp
     const firstName = getFirstName(driver)
-    if (!cedulaFront) {
+    if (cedulas.length === 0) {
       actions.push({
         tool: 'propose_request_document_resubmission',
         input: {
-          documentType: 'CEDULA_FRONT',
+          documentType: 'CEDULA',
           reason: 'No se subió la foto de la cédula.',
-          whatsappMessage: `Hola ${firstName || ''}! Para avanzar con tu postulación en Monchis necesitamos que subas una foto clara del frente de tu cédula. Entrá al portal y subila cuando puedas, gracias!`,
+          whatsappMessage: `Hola ${firstName || ''}! Para avanzar con tu postulación en Monchis necesitamos que subas una foto clara de tu cédula. Entrá al portal y subila cuando puedas, gracias!`,
         },
         reasoning: 'La postulación no tiene foto de cédula. Pedirla al postulante.',
       })
@@ -450,10 +452,16 @@ async function runDeterministicPipeline(
     decision = 'NEEDS_REVIEW'
     const errMsg = validation?.error ?? 'Validación visual no disponible (provider caído o respuesta no parseable).'
     summary = `Falla técnica al validar imágenes: ${errMsg}. Sin acciones hacia el postulante; admin debe reintentar manualmente.`
+    const uploadedSummary = [
+      cedulas.length > 0 && `${cedulas.length} imagen(es) de cédula`,
+      criminal && 'antecedentes',
+    ]
+      .filter(Boolean)
+      .join(', ')
     actions.push({
       tool: 'escalate_to_admin',
       input: {
-        reason: `${errMsg} El postulante subió ${[cedulaFront && 'cédula frente', cedulaBack && 'cédula dorso', criminal && 'antecedentes'].filter(Boolean).join(', ')}; reintentar el agente manualmente o validar a mano.`,
+        reason: `${errMsg} El postulante subió ${uploadedSummary}; reintentar el agente manualmente o validar a mano.`,
       },
       reasoning: 'Provider de visión falló; no atribuir el problema al postulante.',
     })
@@ -498,9 +506,8 @@ async function runDeterministicPipeline(
       let whatsappMessage = ''
       if (docType === 'CRIMINAL_RECORD') {
         whatsappMessage = `Hola ${firstName || ''}! Revisamos tu postulación y el archivo que subiste como certificado de antecedentes no es el documento correcto. Necesitamos el certificado oficial de antecedentes penales paraguayo (Policía Nacional, Ministerio Público o Ministerio del Interior), con vigencia de 90 días. ¿Podés tramitarlo y subirlo al portal? ¡Gracias!`
-      } else if (docType === 'CEDULA_FRONT' || docType === 'CEDULA_BACK') {
-        const cara = docType === 'CEDULA_FRONT' ? 'frente' : 'dorso'
-        whatsappMessage = `Hola ${firstName || ''}! El archivo que subiste como ${cara} de la cédula no es una cédula paraguaya. ¿Podés subir una foto clara del ${cara} de tu cédula al portal? ¡Gracias!`
+      } else if (docType === 'CEDULA') {
+        whatsappMessage = `Hola ${firstName || ''}! El archivo que subiste como cédula no es una cédula paraguaya. ¿Podés subir una foto clara de tu cédula al portal? ¡Gracias!`
       } else {
         whatsappMessage = `Hola ${firstName || ''}! El archivo que subiste como ${docLabelEs} no corresponde al documento solicitado. ¿Podés subir el documento correcto al portal? ¡Gracias!`
       }
@@ -605,19 +612,6 @@ async function runDeterministicPipeline(
             whatsappMessage: `Hola ${firstName || ''}! Revisamos tu postulación y el certificado de antecedentes que subiste está vencido (vigencia 90 días corridos desde la emisión). Podés tramitarlo de nuevo en la Policía Nacional y subirlo al portal. Apenas lo tengas seguimos. ¡Gracias!`,
           },
           reasoning: `Certificado vencido: ${rev.concern}`,
-        })
-      } else if (classification === 'WRONG_SIDE') {
-        // Postulante subió el dorso cuando se pedía el frente (caso común).
-        const expectedSide = docType === 'CEDULA_FRONT' ? 'frente' : 'dorso'
-        const submittedSide = docType === 'CEDULA_FRONT' ? 'dorso' : 'frente'
-        actions.push({
-          tool: 'propose_request_document_resubmission',
-          input: {
-            documentType: docType,
-            reason: `El postulante subió el ${submittedSide} de la cédula cuando se esperaba el ${expectedSide}.`,
-            whatsappMessage: `Hola ${firstName || ''}! Vimos que en lugar del ${expectedSide} de la cédula subiste el ${submittedSide} (el que tiene el código de barras y el MRZ). Podés subir la cara del ${expectedSide} (la que muestra tu foto y los datos personales)? ¡Gracias!`,
-          },
-          reasoning: `Lado incorrecto: ${rev.concern}`,
         })
       } else if (classification === 'QUALITY') {
         actions.push({
@@ -763,11 +757,14 @@ async function runDeterministicPipeline(
   // Agregar análisis de documentos al reasoning
   steps.push('')
   steps.push('📸 **Análisis de documentos**')
-  steps.push(describeImageResult('Cédula (frente)', frontResultFinal, !!cedulaFront))
-  if (cedulaBack) {
-    steps.push(describeImageResult('Cédula (dorso)', backResultFinal, true))
+  if (cedulas.length === 0) {
+    steps.push('**Cédula:** no fue subida.')
+  } else if (cedulas.length === 1) {
+    steps.push(describeImageResult('Cédula', cedulaResultsFinal[0] ?? null, true))
   } else {
-    steps.push('**Cédula (dorso):** no fue subida — no es obligatoria, se ignora.')
+    cedulas.forEach((_, idx) => {
+      steps.push(describeImageResult(`Cédula (imagen ${idx + 1})`, cedulaResultsFinal[idx] ?? null, true))
+    })
   }
   steps.push(describeImageResult('Certificado de antecedentes', criminalResultFinal, !!criminal))
 
@@ -794,6 +791,15 @@ function pickLatestDoc<T extends { documentType: string; createdAt: Date }>(
   const matches = docs.filter((d) => d.documentType === type)
   if (matches.length === 0) return null
   return matches.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]
+}
+
+function pickAllDocs<T extends { documentType: string; createdAt: Date }>(
+  docs: T[],
+  type: string,
+): T[] {
+  return docs
+    .filter((d) => d.documentType === type)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
 }
 
 /**
@@ -998,11 +1004,10 @@ function getFirstName(driver: { firstName: string | null; fullName: string | nul
  */
 function docLabelToType(
   label: string,
-): 'CEDULA_FRONT' | 'CEDULA_BACK' | 'CRIMINAL_RECORD' | null {
+): 'CEDULA' | 'CRIMINAL_RECORD' | null {
   const l = label.toLowerCase()
   if (l.includes('antecedentes')) return 'CRIMINAL_RECORD'
-  if (l.includes('dorso')) return 'CEDULA_BACK'
-  if (l.includes('frente') || l.includes('cédula')) return 'CEDULA_FRONT'
+  if (l.includes('cédula') || l.includes('cedula')) return 'CEDULA'
   return null
 }
 
@@ -1109,7 +1114,6 @@ function levenshtein(a: string, b: string): number {
  * Clasifica un concern del modelo para elegir la acción correcta:
  * - INTERNAL_ERROR: fallo nuestro (PDF rechazado, descarga fallida, etc.) → escalate
  * - EXPIRED: certificado vencido → resubmission específica
- * - WRONG_SIDE: subió dorso en vez de frente (o viceversa) → resubmission específica
  * - QUALITY: imagen borrosa/reflejo/ángulo → resubmission genérica
  * - OTHER: inconsistencia de datos, fecha rara, firma dudosa → escalate (admin decide)
  *
@@ -1117,7 +1121,7 @@ function levenshtein(a: string, b: string): number {
  */
 function classifyConcern(
   concernLower: string,
-): 'INTERNAL_ERROR' | 'EXPIRED' | 'WRONG_SIDE' | 'QUALITY' | 'OTHER' {
+): 'INTERNAL_ERROR' | 'EXPIRED' | 'QUALITY' | 'OTHER' {
   if (
     /pdfs? no soportad|error descarg|error procesando|no se pudo|respuesta no-json|timeout|pdf not supported|pdfs not supported|download error|processing error|failed to (download|process)|provider error|invalid json|no json/i.test(
       concernLower,
@@ -1133,15 +1137,6 @@ function classifyConcern(
   ) {
     return 'EXPIRED'
   }
-  // WRONG_SIDE: subió dorso cuando se pedía frente (o viceversa).
-  // Típico: "Imagen etiquetada como CEDULA_FRONT pero contiene dorso" / "es claramente el DORSO"
-  if (
-    /dorso.*frente|frente.*dorso|contiene dorso|contiene el dorso|mrz.*barcode.*(no|sin).*foto|claramente el dorso|claramente el frente|lado incorrecto|wrong side|back side.*expected.*front|front side.*expected.*back|back of the (id|cedula)|front of the (id|cedula)|reverse side/i.test(
-      concernLower,
-    )
-  ) {
-    return 'WRONG_SIDE'
-  }
   if (
     /borrosa|blur|reflejo|glare|ilegible|illegible|unreadable|calidad|low quality|oscur|dark|ángulo|angulo|angle|baja resol|low resolution|pixelad|pixelat|distorsion|distortion|rotad|rotated|giro|inclinad|tilted|cropped|recortad|cortad|cut off|cropped out|manchad|stained|dañad|damaged|doblad|folded/i.test(
       concernLower,
@@ -1153,11 +1148,10 @@ function classifyConcern(
 }
 
 function documentTypeLabelEs(
-  docType: 'CEDULA_FRONT' | 'CEDULA_BACK' | 'CRIMINAL_RECORD' | 'TAX_COMPLIANCE',
+  docType: 'CEDULA' | 'CRIMINAL_RECORD' | 'TAX_COMPLIANCE',
 ): string {
   const map: Record<typeof docType, string> = {
-    CEDULA_FRONT: 'cédula (frente)',
-    CEDULA_BACK: 'cédula (dorso)',
+    CEDULA: 'cédula',
     CRIMINAL_RECORD: 'certificado de antecedentes',
     TAX_COMPLIANCE: 'certificado tributario',
   }
@@ -1169,7 +1163,7 @@ function documentTypeLabelEs(
  * calidad/otro motivo (no vencimiento).
  */
 function reviewMessageForDoc(
-  docType: 'CEDULA_FRONT' | 'CEDULA_BACK' | 'CRIMINAL_RECORD' | 'TAX_COMPLIANCE',
+  docType: 'CEDULA' | 'CRIMINAL_RECORD' | 'TAX_COMPLIANCE',
   concern: string,
 ): string {
   const docEs = documentTypeLabelEs(docType)

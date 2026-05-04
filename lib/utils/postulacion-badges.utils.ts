@@ -42,50 +42,48 @@ export function calculatePostulacionBadges(postulacion: any): PostulacionBadges 
 
 /**
  * Determina el estado de documentos (SIEMPRE retorna un estado)
- * Solo evalúa documentos principales: CRIMINAL_RECORD, CEDULA_FRONT, CEDULA_BACK
+ * Solo evalúa documentos principales: CRIMINAL_RECORD, CEDULA
  */
 function getDocumentsBadge(postulacion: any): BadgeType {
   const documents = postulacion.documents || []
-  
+
   // Filtrar solo documentos principales
   const criminalRecords = documents.filter((d: any) => d.documentType === 'CRIMINAL_RECORD')
-  const cedulaFront = documents.filter(
-    (d: any) => d.documentType === 'CEDULA_FRONT' || d.documentType === 'CEDULA',
-  )
-  const cedulaBack = documents.filter((d: any) => d.documentType === 'CEDULA_BACK')
+  const cedulas = documents.filter((d: any) => d.documentType === 'CEDULA')
 
-  // Verificar documentos requeridos (CEDULA_BACK es opcional)
+  // Verificar documentos requeridos: al menos una cédula con status válido
+  const validStatuses = ['APPROVED', 'IN_REVIEW', 'PENDING', 'RESUBMITTED']
   const hasCriminalRecord = criminalRecords.length > 0
-  const hasCedula = cedulaFront.length > 0 || cedulaBack.length > 0
-  
+  const hasCedula = cedulas.some((d: any) => validStatuses.includes(d.status))
+
   // Si faltan documentos requeridos → ROJO
   if (!hasCriminalRecord || !hasCedula) {
     return 'DOCUMENTOS_PENDIENTES' // Rojo
   }
-  
-  // Documentos principales (solo los que existen)
-  const mainDocuments = [...criminalRecords, ...cedulaFront, ...cedulaBack]
-  
-  // Si alguno está rechazado → ROJO
-  const hasRejected = mainDocuments.some((d: any) => d.status === 'REJECTED')
-  if (hasRejected) {
+
+  // Si todos los criminal records están rechazados → ROJO
+  const hasRejectedCriminal = criminalRecords.length > 0 && criminalRecords.every((d: any) => d.status === 'REJECTED')
+  const hasRejectedCedula = cedulas.length > 0 && cedulas.every((d: any) => d.status === 'REJECTED')
+  if (hasRejectedCriminal || hasRejectedCedula) {
     return 'DOCUMENTOS_PENDIENTES' // Rojo
   }
-  
+
+  // Si al menos una cédula y un criminal record están APROBADOS → VERDE
+  const hasApprovedCedula = cedulas.some((d: any) => d.status === 'APPROVED')
+  const hasApprovedCriminal = criminalRecords.some((d: any) => d.status === 'APPROVED')
+  if (hasApprovedCedula && hasApprovedCriminal) {
+    return 'DOCUMENTOS_COMPLETOS' // Verde
+  }
+
   // Si alguno está pendiente o en revisión → AMARILLO
-  const hasPending = mainDocuments.some((d: any) => 
-    d.status === 'PENDING' || d.status === 'IN_REVIEW'
+  const mainDocuments = [...criminalRecords, ...cedulas]
+  const hasPending = mainDocuments.some((d: any) =>
+    d.status === 'PENDING' || d.status === 'IN_REVIEW' || d.status === 'RESUBMITTED'
   )
   if (hasPending) {
     return 'DOCUMENTOS_EN_REVISION' // Amarillo
   }
-  
-  // Si todos están aprobados → VERDE
-  const allApproved = mainDocuments.every((d: any) => d.status === 'APPROVED')
-  if (allApproved) {
-    return 'DOCUMENTOS_COMPLETOS' // Verde
-  }
-  
+
   // Default → ROJO
   return 'DOCUMENTOS_PENDIENTES'
 }

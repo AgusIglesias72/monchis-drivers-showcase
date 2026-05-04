@@ -21,9 +21,7 @@ function calculateDocumentColorStatus(postulacion: any): DocColorStatus {
 
   // Documentos de cédula
   const cedulaDocs = documents.filter((doc: any) =>
-    doc.documentType === 'CEDULA' ||
-    doc.documentType === 'CEDULA_FRONT' ||
-    doc.documentType === 'CEDULA_BACK'
+    doc.documentType === 'CEDULA'
   )
   
   // Documentos de antecedentes
@@ -563,17 +561,16 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
       const documents = p.documents || []
       
       const criminalRecords = documents.filter(d => d.documentType === 'CRIMINAL_RECORD')
-      const cedulaFront = documents.filter(d => d.documentType === 'CEDULA_FRONT')
-      const cedulaBack = documents.filter(d => d.documentType === 'CEDULA_BACK')
-      
+      const cedulas = documents.filter(d => d.documentType === 'CEDULA')
+
       const hasCriminalRecord = criminalRecords.length > 0
-      const hasCedula = cedulaFront.length > 0 || cedulaBack.length > 0
-      
+      const hasCedula = cedulas.length > 0
+
       if (!hasCriminalRecord || !hasCedula) {
         return params.documentStatus === 'pendientes'
       }
-      
-      const mainDocuments = [...criminalRecords, ...cedulaFront, ...cedulaBack]
+
+      const mainDocuments = [...criminalRecords, ...cedulas]
       const hasRejected = mainDocuments.some(d => d.status === 'REJECTED')
       
       if (hasRejected) {

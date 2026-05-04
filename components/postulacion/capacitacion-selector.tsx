@@ -78,9 +78,9 @@ interface CapacitacionSelectorProps {
 
 // Check if required document groups are approved (cédula + antecedentes)
 function areDocumentsComplete(documents: DocumentWithStatus[]): boolean {
-  // Cédula: al menos uno (frente o dorso) aprobado
+  // Cédula aprobada
   const cedulaApproved = documents.some(
-    (d) => (d.documentType === 'CEDULA_FRONT' || d.documentType === 'CEDULA_BACK') && d.status === 'APPROVED'
+    (d) => d.documentType === 'CEDULA' && d.status === 'APPROVED'
   )
   const antecedentesApproved = documents.some(
     (d) => d.documentType === 'CRIMINAL_RECORD' && d.status === 'APPROVED'
@@ -284,7 +284,7 @@ export function CapacitacionSelector({
           <div className="space-y-2 text-xs">
             <RequirementRow label="Datos personales completos" done={dataComplete} />
             <RequirementRow label="Cédula de identidad aprobada" done={
-              documents.some((d) => (d.documentType === 'CEDULA_FRONT' || d.documentType === 'CEDULA_BACK') && d.status === 'APPROVED')
+              documents.some((d) => d.documentType === 'CEDULA' && d.status === 'APPROVED')
             } />
             <RequirementRow label="Cert. antecedentes policiales aprobado" done={
               documents.some((d) => d.documentType === 'CRIMINAL_RECORD' && d.status === 'APPROVED')

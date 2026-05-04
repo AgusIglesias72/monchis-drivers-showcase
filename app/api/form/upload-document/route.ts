@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     // Mapear documentType del frontend a DocumentType enum de Prisma
     const docTypeMap: Record<string, DocumentType> = {
-      cedula: "CEDULA_FRONT",
+      cedula: "CEDULA",
       license: "CRIMINAL_RECORD",
       vehicle: "VEHICLE_PHOTO_FRONT",
       taxCompliance: "TAX_COMPLIANCE",

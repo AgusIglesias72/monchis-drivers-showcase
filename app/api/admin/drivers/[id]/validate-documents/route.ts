@@ -45,7 +45,7 @@ export async function POST(
 
     const documentTypes = new Set(documents.map(d => d.documentType));
     const hasIdentityDocs =
-      (documentTypes.has('CEDULA_FRONT') || documentTypes.has('CEDULA_BACK')) &&
+      documentTypes.has('CEDULA') &&
       documentTypes.has('CRIMINAL_RECORD');
 
     let results: any;

@@ -530,7 +530,7 @@ async function saveDriver(driverData: DriverRow, sessionId: string): Promise<voi
         await prisma.formDocument.create({
           data: {
             formDriverId: formDriver.id,
-            documentType: idx === 0 ? 'CEDULA_FRONT' : 'CEDULA_BACK',
+            documentType: 'CEDULA',
             blobUrl: url,
             fileName: `cedula-${idx}.jpg`,
             status: 'PENDING',

@@ -1054,8 +1054,7 @@ enum OnboardingAttendeeStatus {
 }
 
 enum DocumentType {
-  CEDULA_FRONT
-  CEDULA_BACK
+  CEDULA // Cédula de identidad (cualquier cara — el postulante sube N imágenes)
   LICENSE_FRONT
   LICENSE_BACK
   CRIMINAL_RECORD
@@ -1065,7 +1064,7 @@ enum DocumentType {
   VEHICLE_PHOTO_BACK
   VEHICLE_PHOTO_SIDE
   TAX_COMPLIANCE
-  PAYMENT_PROOF // ✅ NUEVO
+  PAYMENT_PROOF
   SELFIE
   OTHER
 }

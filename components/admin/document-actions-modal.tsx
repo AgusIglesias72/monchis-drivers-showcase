@@ -88,8 +88,7 @@ export function DocumentActionsModal({
 
   const getDocumentTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
-      CEDULA_FRONT: 'Cédula (Frente)',
-      CEDULA_BACK: 'Cédula (Reverso)',
+      CEDULA: 'Cédula',
       LICENCIA_FRONT: 'Licencia (Frente)',
       LICENCIA_BACK: 'Licencia (Reverso)',
       LICENSE_FRONT: 'Licencia (Frente)',

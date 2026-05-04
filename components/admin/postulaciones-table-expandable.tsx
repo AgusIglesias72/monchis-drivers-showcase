@@ -264,9 +264,7 @@ export function PostulacionesTableExpandable({
 
                       // Documentos de cédula
                       const cedulaDocs = documents.filter((doc: any) =>
-                        doc.documentType === 'CEDULA' ||
-                        doc.documentType === 'CEDULA_FRONT' ||
-                        doc.documentType === 'CEDULA_BACK'
+                        doc.documentType === 'CEDULA'
                       )
 
                       // Documentos de antecedentes

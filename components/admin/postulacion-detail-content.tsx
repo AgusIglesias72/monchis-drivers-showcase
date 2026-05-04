@@ -118,7 +118,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
 
   // Verificar si tiene documentos de identidad pendientes
   const hasIdentityDocs = documents.some((doc: any) =>
-    (doc.documentType === 'CEDULA_FRONT' || doc.documentType === 'CEDULA_BACK') &&
+    doc.documentType === 'CEDULA' &&
     doc.status === 'PENDING'
   ) && documents.some((doc: any) =>
     doc.documentType === 'CRIMINAL_RECORD' &&
