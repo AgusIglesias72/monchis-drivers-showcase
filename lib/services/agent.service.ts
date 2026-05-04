@@ -153,6 +153,18 @@ export async function runAgentForDriver(params: RunAgentParams): Promise<AgentRu
       })
     }
 
+    // Auto-aprobación cuando el agente decide APPROVED limpio desde un cron.
+    // Criterios estrictos: REAL + cron + APPROVED + todas las actions son
+    // propose_approve_document. Cualquier otra cosa queda PROPOSED para revisión
+    // humana en la UI.
+    await maybeTriggerAutoApprove({
+      agentRunId: run.id,
+      mode,
+      triggeredBy,
+      decision: result.decision,
+      actions: result.actions,
+    })
+
     return { ...result, agentRunId: run.id }
   } catch (err: any) {
     console.error('[agent.service] runAgentForDriver error:', err)
@@ -1317,5 +1329,81 @@ function emptyMetrics() {
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
     costMicroUsd: 0,
+  }
+}
+
+// ============================================================================
+// Auto-approve: cuando el agente decide APPROVED limpio desde un cron, dispara
+// el endpoint /api/agent/auto-approve que aprueba docs + manda ManyChat. Si las
+// condiciones no se cumplen (admin manual, decisión amarilla/roja, overrides),
+// las AgentActions quedan PROPOSED para revisión humana — sin cambio de
+// comportamiento previo.
+// ============================================================================
+
+const AUTO_APPROVE_ALLOWED_TOOLS = new Set<ProposedToolCall['tool']>([
+  'propose_approve_document',
+])
+
+interface MaybeAutoApproveParams {
+  agentRunId: string
+  mode: AgentRunMode
+  triggeredBy: string
+  decision: AgentRunDecision | null
+  actions: ProposedToolCall[]
+}
+
+async function maybeTriggerAutoApprove(params: MaybeAutoApproveParams): Promise<void> {
+  const { agentRunId, mode, triggeredBy, decision, actions } = params
+
+  if (mode !== 'REAL') return
+  if (!triggeredBy.startsWith('cron:')) return
+  if (decision !== 'APPROVED') return
+  if (actions.length === 0) return
+  if (!actions.every((a) => AUTO_APPROVE_ALLOWED_TOOLS.has(a.tool))) return
+
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret) {
+    console.warn('[agent.service] auto-approve skip: CRON_SECRET no configurado', {
+      agentRunId,
+    })
+    return
+  }
+
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    'http://localhost:3000'
+
+  try {
+    const response = await fetch(`${baseUrl}/api/agent/auto-approve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${cronSecret}`,
+      },
+      body: JSON.stringify({ agentRunId }),
+    })
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      console.error('[agent.service] auto-approve falló', {
+        agentRunId,
+        status: response.status,
+        body: text.slice(0, 500),
+      })
+      return
+    }
+
+    const json = (await response.json().catch(() => null)) as
+      | { manychatStatus?: string; manychatTriggered?: boolean; alreadyExecuted?: boolean }
+      | null
+    console.log('[agent.service] auto-approve OK', {
+      agentRunId,
+      manychat: json?.manychatStatus ?? (json?.manychatTriggered ? 'triggered' : 'not-triggered'),
+      alreadyExecuted: json?.alreadyExecuted ?? false,
+    })
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    console.error('[agent.service] auto-approve excepción', { agentRunId, error: errMsg })
   }
 }
