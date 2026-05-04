@@ -67,6 +67,7 @@ import { ContactButton } from "@/components/admin/postulaciones/contact-button"
 import { RejectButton } from "@/components/admin/postulaciones/reject-button"
 import { SendOnboardingListButton } from "@/components/admin/send-onboarding-list-button"
 import { SendOnboardingReminderButton } from "@/components/admin/send-onboarding-reminder-button"
+import { TriggerManychatFlowButton } from "@/components/admin/trigger-manychat-flow-button"
 import { getContactStatus } from "@/lib/utils/contact-status.utils"
 import { toast } from "sonner"
 import {
@@ -677,6 +678,18 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                           driverName={postulacion.fullName || 'Driver'}
                           phoneNumber={postulacion.phoneNumber}
                           inDropdown={true}
+                        />
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={(e) => e.preventDefault()}
+                        className="p-0"
+                      >
+                        <TriggerManychatFlowButton
+                          driverId={postulacion.id}
+                          driverName={postulacion.fullName || 'Driver'}
+                          manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
+                          inDropdown={true}
+                          onSuccess={handleActionSuccess}
                         />
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
