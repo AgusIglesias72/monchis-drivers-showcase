@@ -68,6 +68,7 @@ import { RejectButton } from "@/components/admin/postulaciones/reject-button"
 import { SendOnboardingListButton } from "@/components/admin/send-onboarding-list-button"
 import { SendOnboardingReminderButton } from "@/components/admin/send-onboarding-reminder-button"
 import { TriggerManychatFlowButton } from "@/components/admin/trigger-manychat-flow-button"
+import { AgentRunSummaryCard } from "@/components/admin/agent-runs/agent-run-summary-card"
 import { getContactStatus } from "@/lib/utils/contact-status.utils"
 import { toast } from "sonner"
 import {
@@ -748,6 +749,17 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
             )}
           </div>
         </div>
+
+        {/* Card del agente IA: visible siempre que haya un AgentRun.
+            Muestra decisión, summary, conteo de acciones y un click-through al
+            sheet con el razonamiento completo. */}
+        {postulacion.agentRuns?.[0] && (
+          <AgentRunSummaryCard
+            run={postulacion.agentRuns[0]}
+            driverName={postulacion.fullName || 'Driver'}
+            cedula={postulacion.cedula}
+          />
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
           <PersonalInfoCard

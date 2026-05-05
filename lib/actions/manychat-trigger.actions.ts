@@ -95,9 +95,11 @@ export async function triggerManychatApprovalFlow(
         error: result.reason || 'Mensaje no enviado (plantilla inactiva o sin flow ID configurado)',
       }
     }
+    // En `failed`, priorizamos `reason` (que ya incorpora los `details` del API
+    // ManyChat) por encima de `error` para que el admin vea qué validación falló.
     return {
       success: false,
-      error: result.error || result.reason || 'Falló el envío del flow ManyChat',
+      error: result.reason || result.error || 'Falló el envío del flow ManyChat',
     }
   } catch (err) {
     await prisma.formDriver

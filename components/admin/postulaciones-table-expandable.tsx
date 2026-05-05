@@ -52,6 +52,7 @@ import { getRucBadgeConfig } from "@/lib/utils/postulacion-ruc-badge.utils"
 import { AssistedCompletionButton } from "./postulaciones/assisted-completion-button"
 import { RefreshRucButton } from "./postulaciones/refresh-ruc-button"
 import { RunAgentButton } from "./postulaciones/run-agent-button"
+import { TriggerManychatFlowButton } from "./trigger-manychat-flow-button"
 import { AgentRunBadge } from "./agent-runs/agent-run-badge"
 
 interface PostulacionesTableProps {
@@ -687,6 +688,22 @@ export function PostulacionesTableExpandable({
                                     driverId={postulacion.id}
                                     hasExistingRun={(postulacion.agentRuns?.length ?? 0) > 0}
                                   />
+
+                                  {postulacion.phoneNumber && (
+                                    <DropdownMenuItem
+                                      onSelect={(e) => e.preventDefault()}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="p-0"
+                                    >
+                                      <TriggerManychatFlowButton
+                                        driverId={postulacion.id}
+                                        driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
+                                        manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
+                                        inDropdown={true}
+                                        onSuccess={() => router.refresh()}
+                                      />
+                                    </DropdownMenuItem>
+                                  )}
 
                                   <DropdownMenuSeparator />
 

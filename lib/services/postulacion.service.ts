@@ -58,7 +58,16 @@ export class PostulacionService {
             source: true,
             metadata: true,
           }
-        }
+        },
+        agentRuns: {
+          orderBy: { createdAt: 'desc' },
+          take: 1, // último run; el sheet completo se ve desde la card
+          include: {
+            actions: {
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
       }
     })
 

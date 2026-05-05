@@ -106,16 +106,33 @@ export async function sendFlowByKey(
     await manychatSendFlow(subscriberId, template.manychatFlowId);
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
+    // ManyChatError trae `details` con info estructurada del API (campos inválidos,
+    // motivos específicos, etc.). Lo serializamos al log y al `reason` para que el
+    // admin vea por qué falló sin tener que abrir Vercel logs.
+    const details = (err as { details?: unknown } | null)?.details;
+    const detailsStr = details
+      ? typeof details === 'string'
+        ? details
+        : (() => {
+            try {
+              return JSON.stringify(details);
+            } catch {
+              return String(details);
+            }
+          })()
+      : null;
     console.error('[MANYCHAT_MSG] sendFlow failed', {
       driverId: driver.id,
       templateKey,
       flowId: template.manychatFlowId,
       subscriberId,
       error,
+      details,
     });
+    const reason = detailsStr ? `sendFlow error — ${error} (${detailsStr})` : `sendFlow error — ${error}`;
     return {
       status: 'failed',
-      reason: 'sendFlow error',
+      reason,
       flowId: template.manychatFlowId,
       subscriberId,
       error,
