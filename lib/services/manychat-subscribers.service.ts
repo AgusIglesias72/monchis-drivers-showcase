@@ -126,12 +126,17 @@ export async function getOrCreateManychatSubscriber(
 }
 
 function isAlreadyExistsError(err: ManyChatError): boolean {
+  // Antes considerábamos cualquier 400 como "already exists", lo cual
+  // enmascaraba errores genuinos de validation (consent_phrase mal, bot
+  // STOPPED, WhatsApp desconectado, etc.) intentando un findByCustomField
+  // que también fallaba. Ahora exigimos que el mensaje del API mencione
+  // duplicado/exists, o que el código sea 409 (conflict) explícito.
   const msg = err.apiMessage.toLowerCase();
   return (
-    err.httpStatus === 400 ||
     err.httpStatus === 409 ||
     msg.includes('already') ||
     msg.includes('exists') ||
-    msg.includes('duplicate')
+    msg.includes('duplicate') ||
+    msg.includes('subscriber with this phone')
   );
 }

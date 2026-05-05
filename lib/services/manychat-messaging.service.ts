@@ -94,12 +94,28 @@ export async function sendFlowByKey(
     subscriberId = await getOrCreateManychatSubscriber(driver);
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
+    const details = (err as { details?: unknown } | null)?.details;
+    const detailsStr = details
+      ? typeof details === 'string'
+        ? details
+        : (() => {
+            try {
+              return JSON.stringify(details);
+            } catch {
+              return String(details);
+            }
+          })()
+      : null;
     console.error('[MANYCHAT_MSG] resolve subscriber failed', {
       driverId: driver.id,
       templateKey,
       error,
+      details,
     });
-    return { status: 'failed', reason: 'No se pudo resolver/crear subscriber', error };
+    const reason = detailsStr
+      ? `No se pudo resolver/crear subscriber — ${error} (${detailsStr})`
+      : `No se pudo resolver/crear subscriber — ${error}`;
+    return { status: 'failed', reason, error };
   }
 
   try {

@@ -1,20 +1,16 @@
 // components/admin/agent-runs/agent-run-summary-card.tsx
 //
-// Card visible en la página de detalle de la postulación que resume el último
-// AgentRun del agente IA. Reusa el AgentRunBadge subyacente para abrir el sheet
-// con el detalle completo cuando el admin quiere profundizar.
+// Card compacta del último AgentRun en la página de detalle de la postulación.
+// Una sola línea: decisión + summary + counts + meta + click-through al sheet.
 
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
   Bot,
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  ClipboardList,
-  Zap,
 } from 'lucide-react'
 import { AgentRunBadge } from './agent-run-badge'
 
@@ -55,147 +51,103 @@ interface AgentRunSummaryCardProps {
 }
 
 export function AgentRunSummaryCard({ run, driverName, cedula }: AgentRunSummaryCardProps) {
-  if (!run) {
-    return (
-      <Card>
-        <CardHeader className="pb-3 border-b">
-          <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
-            <Bot className="h-4 w-4" />
-            Análisis del Agente IA
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <p className="text-sm text-muted-foreground">
-            El agente todavía no procesó esta postulación. Cuando se ejecute (manual o
-            via cron) vas a ver acá la decisión, el razonamiento y las acciones propuestas.
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
+  if (!run) return null
 
   const createdAt = new Date(run.createdAt)
-  const decisionConfig = getDecisionConfig(run.decision)
-  const Icon = decisionConfig.Icon
+  const cfg = getDecisionConfig(run.decision)
+  const Icon = cfg.Icon
 
-  // Contar acciones por estado
   const actionsByStatus: Record<string, number> = {}
-  for (const a of run.actions) {
-    actionsByStatus[a.status] = (actionsByStatus[a.status] ?? 0) + 1
-  }
+  for (const a of run.actions) actionsByStatus[a.status] = (actionsByStatus[a.status] ?? 0) + 1
   const proposed = actionsByStatus['PROPOSED'] ?? 0
   const executed = actionsByStatus['EXECUTED'] ?? 0
   const failed = actionsByStatus['FAILED'] ?? 0
-  const dismissed = (actionsByStatus['REJECTED'] ?? 0) + (actionsByStatus['APPROVED'] ?? 0)
 
   const triggerLabel = describeTrigger(run.triggeredBy)
   const costUsd = run.costMicroUsd != null ? (run.costMicroUsd / 1_000_000).toFixed(4) : null
+  const dateLabel = createdAt.toLocaleString('es-PY', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 
   return (
-    <Card>
-      <CardHeader className="pb-3 border-b">
-        <CardTitle className="text-base font-bold flex items-center justify-between gap-2 tracking-tight">
-          <span className="flex items-center gap-2">
-            <Bot className="h-4 w-4" />
-            Análisis del Agente IA
-          </span>
-          <span className="text-xs font-normal text-muted-foreground">
-            {createdAt.toLocaleString('es-PY')}
-          </span>
-        </CardTitle>
-      </CardHeader>
+    <div
+      className={`flex items-center gap-3 rounded-md border ${cfg.border} ${cfg.bg} px-3 py-2`}
+    >
+      <Bot className="h-4 w-4 text-muted-foreground flex-shrink-0" />
 
-      <CardContent className="pt-4 space-y-4">
-        {/* Decisión */}
-        <div className={`flex items-center gap-3 rounded-md border p-3 ${decisionConfig.bg} ${decisionConfig.border}`}>
-          <Icon className={`h-5 w-5 ${decisionConfig.text} flex-shrink-0`} />
-          <div className="flex-1 min-w-0">
-            <div className={`text-sm font-semibold ${decisionConfig.text}`}>
-              {decisionConfig.label}
-            </div>
-            {run.summary && (
-              <div className="text-xs text-foreground mt-0.5 leading-snug">{run.summary}</div>
-            )}
-          </div>
-        </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <Icon className={`h-4 w-4 ${cfg.text}`} />
+        <span className={`text-xs font-bold uppercase tracking-wide ${cfg.text}`}>
+          {cfg.label}
+        </span>
+      </div>
 
-        {/* Acciones */}
+      {run.summary && (
+        <span className="text-sm text-foreground truncate flex-1 min-w-0" title={run.summary}>
+          — {run.summary}
+        </span>
+      )}
+
+      <div className="flex items-center gap-1.5 flex-shrink-0">
         {run.actions.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-              <ClipboardList className="h-3.5 w-3.5" />
-              Acciones ({run.actions.length})
-            </h4>
-            <div className="flex flex-wrap gap-1.5">
-              {executed > 0 && (
-                <Badge variant="outline" className="bg-success-soft text-success border-success/25 gap-1">
-                  <Zap className="h-3 w-3" />
-                  {executed} ejecutada{executed === 1 ? '' : 's'}
-                </Badge>
-              )}
-              {proposed > 0 && (
-                <Badge variant="outline" className="bg-warning-soft text-warning border-warning/30">
-                  {proposed} propuesta{proposed === 1 ? '' : 's'}
-                </Badge>
-              )}
-              {failed > 0 && (
-                <Badge variant="outline" className="bg-danger-soft text-danger border-danger/25">
-                  {failed} fallida{failed === 1 ? '' : 's'}
-                </Badge>
-              )}
-              {dismissed > 0 && (
-                <Badge variant="outline" className="text-muted-foreground">
-                  {dismissed} resuelta{dismissed === 1 ? '' : 's'}
-                </Badge>
-              )}
-            </div>
-          </div>
+          <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+            {run.actions.length} acción{run.actions.length === 1 ? '' : 'es'}
+            {executed > 0 && ` · ${executed} ejec`}
+            {proposed > 0 && ` · ${proposed} prop`}
+            {failed > 0 && ` · ${failed} fail`}
+          </Badge>
         )}
+      </div>
 
-        {/* Metadata compacta */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pt-2 border-t">
-          <span>
-            Disparado por: <strong className="text-foreground">{triggerLabel}</strong>
-          </span>
-          {run.mode === 'DRY_RUN' && (
-            <span className="text-warning">Modo simulación</span>
-          )}
-          {costUsd != null && <span>Costo: ${costUsd} USD</span>}
-        </div>
+      <div className="hidden md:flex items-center gap-3 text-[11px] text-muted-foreground flex-shrink-0">
+        <span>{dateLabel}</span>
+        <span>·</span>
+        <span>{triggerLabel}</span>
+        {costUsd != null && (
+          <>
+            <span>·</span>
+            <span>${costUsd}</span>
+          </>
+        )}
+        {run.mode === 'DRY_RUN' && (
+          <>
+            <span>·</span>
+            <span className="text-warning">simulación</span>
+          </>
+        )}
+      </div>
 
-        {/* CTA: ver detalle completo. AgentRunBadge ya abre el sheet con todo. */}
-        <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
-          <AgentRunBadge
-            driverName={driverName}
-            cedula={cedula}
-            run={{
-              id: run.id,
-              mode: run.mode,
-              status: run.status,
-              decision: run.decision,
-              summary: run.summary,
-              reasoning: run.reasoning,
-              model: run.model,
-              inputTokens: run.inputTokens,
-              outputTokens: run.outputTokens,
-              costMicroUsd: run.costMicroUsd,
-              createdAt: typeof run.createdAt === 'string' ? run.createdAt : run.createdAt.toISOString(),
-              error: run.error,
-              humanFeedback: run.humanFeedback ?? null,
-              humanFeedbackNote: run.humanFeedbackNote ?? null,
-              humanFeedbackAt: run.humanFeedbackAt ?? null,
-              actions: run.actions.map((a) => ({
-                tool: a.tool,
-                input: a.input,
-                reasoning: a.reasoning,
-                status: a.status,
-              })),
-            }}
-          />
-          <span>Click en el ícono para ver razonamiento completo, acciones y métricas.</span>
-        </div>
-      </CardContent>
-    </Card>
+      <AgentRunBadge
+        driverName={driverName}
+        cedula={cedula}
+        run={{
+          id: run.id,
+          mode: run.mode,
+          status: run.status,
+          decision: run.decision,
+          summary: run.summary,
+          reasoning: run.reasoning,
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          costMicroUsd: run.costMicroUsd,
+          createdAt: typeof run.createdAt === 'string' ? run.createdAt : run.createdAt.toISOString(),
+          error: run.error,
+          humanFeedback: run.humanFeedback ?? null,
+          humanFeedbackNote: run.humanFeedbackNote ?? null,
+          humanFeedbackAt: run.humanFeedbackAt ?? null,
+          actions: run.actions.map((a) => ({
+            tool: a.tool,
+            input: a.input,
+            reasoning: a.reasoning,
+            status: a.status,
+          })),
+        }}
+      />
+    </div>
   )
 }
 
@@ -208,7 +160,7 @@ function getDecisionConfig(decision: Decision): {
 } {
   if (decision === 'APPROVED') {
     return {
-      label: 'APROBADO',
+      label: 'Aprobado',
       bg: 'bg-success-soft',
       border: 'border-success/25',
       text: 'text-success',
@@ -217,7 +169,7 @@ function getDecisionConfig(decision: Decision): {
   }
   if (decision === 'REJECTED') {
     return {
-      label: 'RECHAZADO',
+      label: 'Rechazado',
       bg: 'bg-danger-soft',
       border: 'border-danger/25',
       text: 'text-danger',
@@ -226,7 +178,7 @@ function getDecisionConfig(decision: Decision): {
   }
   if (decision === 'NEEDS_REVIEW') {
     return {
-      label: 'REVISIÓN MANUAL',
+      label: 'Revisión manual',
       bg: 'bg-warning-soft',
       border: 'border-warning/30',
       text: 'text-warning',
@@ -243,10 +195,9 @@ function getDecisionConfig(decision: Decision): {
 }
 
 function describeTrigger(triggeredBy: string | null | undefined): string {
-  if (!triggeredBy) return 'Sistema'
-  if (triggeredBy.startsWith('cron:')) return 'Cron automático'
-  if (triggeredBy === 'SYSTEM') return 'Sistema'
-  // Si es un clerkId, mostrarlo abreviado
-  if (triggeredBy.startsWith('user_')) return `Admin (${triggeredBy.slice(0, 12)}…)`
-  return triggeredBy
+  if (!triggeredBy) return 'sistema'
+  if (triggeredBy.startsWith('cron:')) return 'cron'
+  if (triggeredBy === 'SYSTEM') return 'sistema'
+  if (triggeredBy.startsWith('user_')) return 'admin'
+  return triggeredBy.length > 12 ? `${triggeredBy.slice(0, 12)}…` : triggeredBy
 }
