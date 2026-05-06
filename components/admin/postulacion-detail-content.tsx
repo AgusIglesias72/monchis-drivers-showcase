@@ -560,6 +560,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                 contactStatus={contactStatus}
                 templates={postulacion.whatsappTemplates || []}
                 showLabel={true}
+                manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
               />
             )}
 

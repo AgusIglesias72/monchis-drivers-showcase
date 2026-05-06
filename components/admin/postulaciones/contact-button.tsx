@@ -50,6 +50,37 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
+// Logo ManyChat — usado en el badge sobre el botón Contactar cuando se envió flow.
+const ManyChatIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 80.6 57.6"
+    className={className}
+    fill="currentColor"
+    aria-hidden="true"
+  >
+    <path d="M68.2,0h-0.6C51.2,0,43.2,24.6,43.2,24.6V5.7H0v51.9h17.3V23h9.2v34.6H45c0,0,9.5-41,18.4-38c6,2.3-10.9,37.9-10.9,37.9H77c0,0,3.4-23.2,3.4-31.3C81.2,12.6,79,0,68.2,0" />
+  </svg>
+)
+
+/**
+ * Badge ManyChat absoluto que se monta sobre el botón Contactar cuando se
+ * envió el flow de aprobación (manychatApprovalSentAt seteado). Sirve como
+ * indicador visual rápido sin abrir el detalle.
+ */
+const ManyChatSentBadge = ({ sentAt }: { sentAt: Date | string }) => {
+  const date = typeof sentAt === 'string' ? new Date(sentAt) : sentAt
+  const label = `Mensaje ManyChat enviado el ${date.toLocaleString('es-PY')}`
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className="absolute -top-1 -right-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-[#0084FF] ring-2 ring-background pointer-events-none"
+    >
+      <ManyChatIcon className="h-2.5 w-2.5 text-white" />
+    </span>
+  )
+}
+
 // Tipo para las plantillas
 export interface WhatsAppTemplateForContact {
   id: string
@@ -67,6 +98,8 @@ interface ContactButtonProps {
   showLabel?: boolean // Si es true, muestra el texto del botón
   size?: 'sm' | 'default' // Tamaño del botón
   inDropdown?: boolean // ✅ NUEVO: Si está dentro de un dropdown "Acciones"
+  /** Timestamp del último envío de flow ManyChat. Si está, muestra badge sobre el botón. */
+  manychatApprovalSentAt?: string | Date | null
 }
 
 export function ContactButton({
@@ -77,8 +110,10 @@ export function ContactButton({
   templates,
   showLabel = false,
   size = 'sm',
-  inDropdown = false
+  inDropdown = false,
+  manychatApprovalSentAt = null,
 }: ContactButtonProps) {
+  const showManychatBadge = !!manychatApprovalSentAt
   const router = useRouter()
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -179,15 +214,20 @@ export function ContactButton({
             <DropdownMenu>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    size={size}
-                    disabled={isDisabled || isPending}
-                    className="gap-2 bg-[#25D366] text-white hover:bg-[#1fb955] border-[#25D366]"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <WhatsAppIcon className="h-4 w-4" />
-                    Contactar
-                  </Button>
+                  <div className="relative inline-flex">
+                    <Button
+                      size={size}
+                      disabled={isDisabled || isPending}
+                      className="gap-2 bg-[#25D366] text-white hover:bg-[#1fb955] border-[#25D366]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <WhatsAppIcon className="h-4 w-4" />
+                      Contactar
+                    </Button>
+                    {showManychatBadge && manychatApprovalSentAt && (
+                      <ManyChatSentBadge sentAt={manychatApprovalSentAt} />
+                    )}
+                  </div>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               
@@ -409,15 +449,20 @@ export function ContactButton({
           <DropdownMenu>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size={size}
-                  disabled={isDisabled || isPending}
-                  className={`h-8 w-8 p-0 rounded-full ${config.bg} ${config.text} ${config.hoverBg}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MessageCircle className="h-4 w-4" />
-                </Button>
+                <div className="relative inline-flex">
+                  <Button
+                    variant="ghost"
+                    size={size}
+                    disabled={isDisabled || isPending}
+                    className={`h-8 w-8 p-0 rounded-full ${config.bg} ${config.text} ${config.hoverBg}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                  </Button>
+                  {showManychatBadge && manychatApprovalSentAt && (
+                    <ManyChatSentBadge sentAt={manychatApprovalSentAt} />
+                  )}
+                </div>
               </DropdownMenuTrigger>
             </TooltipTrigger>
             

@@ -618,6 +618,7 @@ export function PostulacionesTableExpandable({
                                 phoneNumber={postulacion.phoneNumber}
                                 contactStatus={postulacion.contactStatus}
                                 templates={postulacion.whatsappTemplates || []}
+                                manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
                               />
 
                               <DropdownMenu>
