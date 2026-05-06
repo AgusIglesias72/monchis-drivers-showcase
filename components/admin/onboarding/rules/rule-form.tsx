@@ -541,7 +541,7 @@ export function RuleForm({ mode, rule, admins }: Props) {
             <CardHeader>
               <CardTitle>Link virtual</CardTitle>
               <CardDescription>
-                El link se incluye en el email de confirmación y en la pantalla de "Mi reserva".
+                El link se incluye en el email de confirmación y en la pantalla de «Mi reserva».
               </CardDescription>
             </CardHeader>
             <CardContent>

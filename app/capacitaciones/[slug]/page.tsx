@@ -6,6 +6,8 @@ import { Calendar, Clock, MapPin, Users, Video, Zap } from 'lucide-react'
 import { ModalityBadge } from '@/components/capacitaciones/modality-badge'
 import { BookingCalendar } from '@/components/capacitaciones/booking-calendar'
 import { AutoIdentify } from '@/components/capacitaciones/auto-identify'
+import { LandingBanner } from '@/components/capacitaciones/landing-banner'
+import { resolveIdentityFromCookie } from '@/lib/services/onboarding-identity'
 import LocationMap from '@/components/capacitaciones/location-map-lazy'
 import { Badge } from '@/components/ui/badge'
 import { RichTextDisplay } from '@/components/ui/rich-text-editor'
@@ -106,10 +108,15 @@ export default async function RuleDetailPage({
   searchParams: Promise<{ session?: string }>
 }) {
   const { slug } = await params
-  const { session } = await searchParams
+  const { session: sessionFromUrl } = await searchParams
   const rule = await getRule(slug)
 
   if (!rule) return notFound()
+
+  // SSR identity: si el browser tiene cookie del portal, resolvemos acá y le
+  // pasamos el shareToken al BookingCalendar sin pasar por AutoIdentify cliente.
+  const identity = await resolveIdentityFromCookie()
+  const session = sessionFromUrl || identity.shareToken || undefined
 
   // Pre-cargamos los slots de los próximos 2 meses para evitar el round-trip
   // inicial al renderizar el calendario en cliente.
@@ -124,7 +131,19 @@ export default async function RuleDetailPage({
 
   return (
     <div className="max-w-4xl mx-auto px-4 lg:px-6 py-6 lg:py-10 pb-24 md:pb-10">
-      {!session && <AutoIdentify />}
+      {/* Identity SSR */}
+      {identity.found && identity.driver && (
+        <LandingBanner
+          ssrIdentity={{
+            firstName: identity.driver.firstName,
+            isEligible: identity.driver.isEligible,
+            notEligibleReason: identity.driver.notEligibleReason,
+            postulationStatus: identity.driver.postulationStatus,
+            portalToken: identity.portalToken,
+          }}
+        />
+      )}
+      {!identity.found && !sessionFromUrl && <AutoIdentify />}
       {/* Hero gradient (sin imagen) */}
       <div className="rounded-xl overflow-hidden mb-6 border">
         <div className="h-24 bg-gradient-to-br from-brand to-brand-hover" />

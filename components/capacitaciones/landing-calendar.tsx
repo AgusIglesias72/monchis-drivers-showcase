@@ -16,6 +16,13 @@ import {
   Info,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { ymdInTZ, formatPYLong } from '@/lib/utils/onboarding-time'
 import { useBookingFlow } from './use-booking-flow'
 import { BookingFlowDialogs } from './booking-flow-dialogs'
@@ -58,6 +65,7 @@ export function LandingCalendar({ initialSlots = [], sessionToken }: Props) {
   })
   const [loading, setLoading] = useState(initialSlots.length === 0)
   const [selectedDay, setSelectedDay] = useState<Date | undefined>(undefined)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   // Fetch + prefetch del mes siguiente
   useEffect(() => {
@@ -183,7 +191,13 @@ export function LandingCalendar({ initialSlots = [], sessionToken }: Props) {
             <DayPicker
               mode="single"
               selected={selectedDay}
-              onSelect={setSelectedDay}
+              onSelect={(d) => {
+                setSelectedDay(d)
+                // En mobile, abrimos el drawer al elegir un día
+                if (d && typeof window !== 'undefined' && window.innerWidth < 1024) {
+                  setMobileOpen(true)
+                }
+              }}
               month={month}
               onMonthChange={setMonth}
               modifiers={{ available: availableDays }}
@@ -236,106 +250,183 @@ export function LandingCalendar({ initialSlots = [], sessionToken }: Props) {
           </div>
         </div>
 
-        {/* Detalle del día */}
-        <div className="rounded-xl border bg-card p-4 lg:p-5 shadow-sm min-h-[20rem]">
-          {!selectedDay ? (
-            <div className="h-full flex flex-col items-center justify-center text-center py-8">
-              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                <Calendar className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div className="font-semibold text-sm">Elegí una fecha</div>
-              <div className="text-xs text-muted-foreground mt-1 max-w-[200px]">
-                Tocá un día marcado para ver qué capacitaciones hay disponibles.
-              </div>
-            </div>
-          ) : selectedDaySlots.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-8">
-              No hay capacitaciones este día
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="pb-2.5 border-b">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                  {selectedDaySlots.length === 1
-                    ? '1 capacitación disponible'
-                    : `${selectedDaySlots.length} capacitaciones disponibles`}
-                </div>
-                <div className="text-base font-semibold first-letter:uppercase mt-0.5">
-                  {formatPYLong(selectedDay).split(',')[0]}
-                </div>
-              </div>
-
-              {selectedDaySlots.map((s, i) => {
-                const Icon = MODALITY_ICON[s.modality]
-                const disabled = s.isFull || s.isPast || s.isPastNotice
-                const detailHref = flow.sessionToken
-                  ? `/capacitaciones/${s.ruleSlug}?session=${flow.sessionToken}`
-                  : `/capacitaciones/${s.ruleSlug}`
-                return (
-                  <div
-                    key={`${s.ruleId}-${i}`}
-                    className={`group rounded-lg border p-3 transition-all ${
-                      disabled
-                        ? 'opacity-60 bg-muted/20'
-                        : 'hover:border-brand/40 hover:shadow-sm'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <div className="flex items-center gap-1.5 text-xs">
-                        <span
-                          className={`h-5 w-5 rounded-full flex items-center justify-center text-white ${MODALITY_DOT_CLASS[s.modality]}`}
-                        >
-                          <Icon className="h-3 w-3" />
-                        </span>
-                        <span className="font-medium text-muted-foreground">
-                          {MODALITY_LABEL[s.modality]}
-                        </span>
-                      </div>
-                      <span className="text-sm font-semibold tabular-nums">
-                        {s.startTime} — {s.endTime}
-                      </span>
-                    </div>
-                    <div className="font-semibold text-sm leading-tight mb-1">{s.ruleTitle}</div>
-                    <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mb-3">
-                      <Users className="h-3 w-3" />
-                      {disabled
-                        ? s.isFull
-                          ? 'Sin cupos disponibles'
-                          : 'Cerrado'
-                        : `${s.availableSlots} de ${s.maxCapacity} cupos`}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => flow.startBooking(s)}
-                        className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-md text-sm font-semibold transition-colors h-9 px-3 ${
-                          disabled
-                            ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                            : 'bg-brand text-brand-foreground hover:bg-brand-hover'
-                        }`}
-                      >
-                        Reservar
-                        {!disabled && (
-                          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                        )}
-                      </button>
-                      <Link
-                        href={detailHref}
-                        aria-label="Ver detalles de la capacitación"
-                        className="inline-flex items-center justify-center h-9 w-9 rounded-md border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                      >
-                        <Info className="h-4 w-4" />
-                      </Link>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+        {/* Detalle del día — solo desktop. En mobile usamos un Sheet (abajo). */}
+        <div className="hidden lg:block rounded-xl border bg-card p-4 lg:p-5 shadow-sm min-h-[20rem]">
+          <DaySlotsContent
+            selectedDay={selectedDay}
+            slots={selectedDaySlots}
+            sessionToken={flow.sessionToken}
+            onReservar={(s) => flow.startBooking(s)}
+          />
         </div>
       </div>
+
+      {/* Mobile: Sheet (drawer) que se abre cuando hay día seleccionado */}
+      <Sheet
+        open={mobileOpen}
+        onOpenChange={(v) => {
+          setMobileOpen(v)
+          if (!v) setSelectedDay(undefined)
+        }}
+      >
+        <SheetContent side="bottom" className="lg:hidden max-h-[85vh] overflow-y-auto">
+          <SheetHeader className="text-left pb-2">
+            <SheetTitle className="text-base first-letter:uppercase">
+              {selectedDay ? formatPYLong(selectedDay).split(',')[0] : 'Detalle'}
+            </SheetTitle>
+            <SheetDescription>
+              {selectedDaySlots.length === 1
+                ? '1 capacitación disponible'
+                : `${selectedDaySlots.length} capacitaciones disponibles`}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-2 space-y-3 pb-4">
+            {selectedDaySlots.map((s, i) => (
+              <SlotItem
+                key={`${s.ruleId}-${i}`}
+                slot={s}
+                sessionToken={flow.sessionToken}
+                onReservar={() => {
+                  setMobileOpen(false)
+                  flow.startBooking(s)
+                }}
+              />
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <BookingFlowDialogs flow={flow} />
     </section>
+  )
+}
+
+// ───────────────────── Sub-componentes ─────────────────────
+
+function DaySlotsContent({
+  selectedDay,
+  slots,
+  sessionToken,
+  onReservar,
+}: {
+  selectedDay: Date | undefined
+  slots: SlotResponse[]
+  sessionToken: string | undefined
+  onReservar: (slot: SlotResponse) => void
+}) {
+  if (!selectedDay) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-center py-8">
+        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+          <Calendar className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <div className="font-semibold text-sm">Elegí una fecha</div>
+        <div className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+          Tocá un día marcado para ver qué capacitaciones hay disponibles.
+        </div>
+      </div>
+    )
+  }
+  if (slots.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-8">
+        No hay capacitaciones este día
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-3">
+      <div className="pb-2.5 border-b">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+          {slots.length === 1
+            ? '1 capacitación disponible'
+            : `${slots.length} capacitaciones disponibles`}
+        </div>
+        <div className="text-base font-semibold first-letter:uppercase mt-0.5">
+          {formatPYLong(selectedDay).split(',')[0]}
+        </div>
+      </div>
+      {slots.map((s, i) => (
+        <SlotItem
+          key={`${s.ruleId}-${i}`}
+          slot={s}
+          sessionToken={sessionToken}
+          onReservar={() => onReservar(s)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function SlotItem({
+  slot,
+  sessionToken,
+  onReservar,
+}: {
+  slot: SlotResponse
+  sessionToken: string | undefined
+  onReservar: () => void
+}) {
+  const Icon = MODALITY_ICON[slot.modality]
+  const disabled = slot.isFull || slot.isPast || slot.isPastNotice
+  const detailHref = sessionToken
+    ? `/capacitaciones/${slot.ruleSlug}?session=${sessionToken}`
+    : `/capacitaciones/${slot.ruleSlug}`
+
+  return (
+    <div
+      className={`group rounded-lg border p-3 transition-all ${
+        disabled ? 'opacity-60 bg-muted/20' : 'hover:border-brand/40 hover:shadow-sm'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-1.5 text-xs">
+          <span
+            className={`h-5 w-5 rounded-full flex items-center justify-center text-white ${MODALITY_DOT_CLASS[slot.modality]}`}
+          >
+            <Icon className="h-3 w-3" />
+          </span>
+          <span className="font-medium text-muted-foreground">
+            {MODALITY_LABEL[slot.modality]}
+          </span>
+        </div>
+        <span className="text-sm font-semibold tabular-nums">
+          {slot.startTime} — {slot.endTime}
+        </span>
+      </div>
+      <div className="font-semibold text-sm leading-tight mb-1">{slot.ruleTitle}</div>
+      <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mb-3">
+        <Users className="h-3 w-3" />
+        {disabled
+          ? slot.isFull
+            ? 'Sin cupos disponibles'
+            : 'Cerrado'
+          : `${slot.availableSlots} de ${slot.maxCapacity} cupos`}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onReservar}
+          className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-md text-sm font-semibold transition-colors h-9 px-3 ${
+            disabled
+              ? 'bg-muted text-muted-foreground cursor-not-allowed'
+              : 'bg-brand text-brand-foreground hover:bg-brand-hover'
+          }`}
+        >
+          Reservar
+          {!disabled && (
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          )}
+        </button>
+        <Link
+          href={detailHref}
+          aria-label="Ver detalles de la capacitación"
+          className="inline-flex items-center justify-center h-9 w-9 rounded-md border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <Info className="h-4 w-4" />
+        </Link>
+      </div>
+    </div>
   )
 }

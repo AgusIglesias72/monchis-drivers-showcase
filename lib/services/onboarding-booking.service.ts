@@ -271,7 +271,10 @@ export async function getBookingByConfirmationToken(token: string): Promise<Book
   const canCancel = isActive && beforeDeadline
   const canReschedule = canCancel
 
-  const base = buildBookingResponseFromEvent(token, attendee.id, event)
+  const base = buildBookingResponseFromEvent(token, attendee.id, {
+    ...event,
+    ruleSlug: event.scheduleRule?.slug ?? null,
+  })
 
   return {
     ...base,
@@ -522,6 +525,7 @@ interface EventForResponse {
   locationAddress: string | null
   meetingLink: string | null
   title: string | null
+  ruleSlug?: string | null // se popula cuando incluimos scheduleRule en el query
   instructions: string | null
   durationMinutes: number | null
 }
@@ -556,6 +560,7 @@ function buildBookingResponseFromEvent(
     locationAddress: event.locationAddress,
     meetingLink: event.meetingLink,
     ruleTitle: event.title ?? 'Capacitación',
+    ruleSlug: event.ruleSlug ?? '',
     instructions: event.instructions,
   }
 }

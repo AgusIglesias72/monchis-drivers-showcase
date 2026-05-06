@@ -233,7 +233,7 @@ function LocationFormDialog({
                 className="h-11"
               />
               <p className="text-xs text-muted-foreground">
-                Para identificarla en el selector. Ej: "HUB Asunción", "Sucursal Encarnación".
+                Para identificarla en el selector. Ej: «HUB Asunción», «Sucursal Encarnación».
               </p>
             </div>
             <div className="space-y-2">
@@ -255,7 +255,7 @@ function LocationFormDialog({
                 className="h-11"
               />
               <p className="text-xs text-muted-foreground">
-                Abrí Google Maps → buscá el lugar → "Compartir" → copiá el link.
+                Abrí Google Maps → buscá el lugar → «Compartir» → copiá el link.
               </p>
             </div>
             <div className="space-y-2">

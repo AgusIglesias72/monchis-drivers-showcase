@@ -16,7 +16,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { ModalityBadge } from './modality-badge'
-import { formatPYShort } from '@/lib/utils/onboarding-time'
+import { formatPYShort, dayOfWeekInTZ } from '@/lib/utils/onboarding-time'
 import { useBookingFlow } from './use-booking-flow'
 import { BookingFlowDialogs } from './booking-flow-dialogs'
 import {
@@ -185,7 +185,7 @@ export function RuleCard({ rule, sessionToken }: { rule: RuleWithSlots; sessionT
                 </div>
                 <div className="mt-1 flex items-baseline gap-2 flex-wrap">
                   <span className="font-semibold capitalize">
-                    {DAY_NAMES_ES_LONG[new Date(next.scheduledDateUTC).getDay()]}
+                    {DAY_NAMES_ES_LONG[dayOfWeekInTZ(new Date(next.scheduledDateUTC))]}
                   </span>
                   <span className="text-sm text-muted-foreground">
                     {formatPYShort(new Date(next.scheduledDateUTC))}

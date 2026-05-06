@@ -1,5 +1,6 @@
 // app/capacitaciones/reserva/[token]/page.tsx
 
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { headers } from 'next/headers'
 import { CheckCircle2, Calendar, Clock, MapPin, Video, Download, ExternalLink } from 'lucide-react'
@@ -48,10 +49,7 @@ export default async function ReservaPage({ params }: { params: Promise<{ token:
 
   const start = new Date(booking.scheduledDateUTC)
   const isCancelled = booking.status === 'CANCELLED' || booking.status === 'NO_SHOW'
-
-  // Read ruleSlug — backend doesn't return it on BookingDetail; we do best-effort by a separate fetch later.
-  // Para simplicidad: el reschedule envía a /capacitaciones (landing) si no tenemos slug.
-  const reschedTarget = ''
+  const reschedTarget = booking.ruleSlug || ''
 
   return (
     <div className="max-w-2xl mx-auto px-4 lg:px-6 py-8 lg:py-12">
@@ -61,7 +59,7 @@ export default async function ReservaPage({ params }: { params: Promise<{ token:
             <div className="text-2xl font-semibold">Reserva cancelada</div>
             <p className="text-muted-foreground">Esta reserva ya no está activa.</p>
             <Button asChild className="bg-brand text-brand-foreground hover:bg-brand-hover">
-              <a href="/capacitaciones">Ver capacitaciones disponibles</a>
+              <Link href="/capacitaciones">Ver capacitaciones disponibles</Link>
             </Button>
           </CardContent>
         </Card>

@@ -5,14 +5,13 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
 /**
- * Si el driver ya pasó por /postulacion/[token], su accessToken queda guardado
- * en localStorage. Al entrar a /capacitaciones lo intercambiamos en silencio
- * por un shareToken vigente y agregamos `?session=` a la URL — así no le
- * pedimos cédula+teléfono al hacer click en Reservar.
+ * Fallback de identificación cliente: solo se monta cuando el server no pudo
+ * resolver la identidad por cookie. Usamos localStorage como segundo intento
+ * (driver puede haber pasado por /postulacion/[token] antes de que tuviéramos
+ * cookies, o navegó en privado y la cookie no se persistió).
  *
- * Se monta solo cuando no hay ?session= en la URL. Si el intercambio falla
- * (token vencido, postulación no aprobada), no hace nada — queda el flow
- * manual del IdentityModal como fallback.
+ * Si encuentra portalToken local, intercambia por shareToken y refresca la
+ * página con ?session= para que el server-side la próxima vez ya identifique.
  */
 export function AutoIdentify() {
   const router = useRouter()
@@ -27,7 +26,6 @@ export function AutoIdentify() {
     let portalToken: string | null = null
     try {
       portalToken = localStorage.getItem('monchis.driver.portalToken')
-      // Si ya tenemos shareToken vigente, no hace falta intercambiar
       const existingShareToken = localStorage.getItem('monchis.bookingShareToken')
       if (existingShareToken) {
         const params = new URLSearchParams(searchParams.toString())
@@ -53,6 +51,12 @@ export function AutoIdentify() {
           try {
             localStorage.setItem('monchis.bookingShareToken', data.shareToken)
           } catch {}
+          // Persistir también la cookie para que el SSR identifique en próximos renders
+          try {
+            const days = 60
+            const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
+            document.cookie = `monchis_portal_token=${portalToken}; expires=${expires}; path=/; samesite=lax`
+          } catch {}
           const params = new URLSearchParams(searchParams.toString())
           params.set('session', data.shareToken)
           router.replace(`${pathname}?${params.toString()}`)
@@ -66,11 +70,9 @@ export function AutoIdentify() {
     return () => {
       cancelled = true
     }
-    // Solo corre una vez al montarse (con el snapshot inicial de searchParams)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // No renderiza UI; el banner / flow normal se encarga del resto
   if (!resolving) return null
 
   return (

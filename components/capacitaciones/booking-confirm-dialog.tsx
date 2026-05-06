@@ -221,23 +221,34 @@ export function BookingConfirmDialog({
                     required
                   />
                 </div>
-                {profile.email && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="email" className="text-xs font-medium">
-                      Email
-                    </Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={profile.email}
-                      onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))}
-                      placeholder="tu@email.com"
-                      className="h-10"
-                      autoComplete="email"
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      Te enviamos la confirmación con el ICS para tu calendario.
-                    </p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className="text-xs font-medium">
+                    Email <span className="text-muted-foreground font-normal">(opcional)</span>
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={profile.email}
+                    onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))}
+                    placeholder="tu@email.com"
+                    className="h-10"
+                    autoComplete="email"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Te enviamos la confirmación + ICS para tu calendario.
+                  </p>
+                </div>
+                {/* Tips finales */}
+                {selectedSlot?.modality !== 'VIRTUAL' && (
+                  <div className="rounded-md border bg-info-soft/50 px-3 py-2 text-xs text-foreground/80">
+                    <strong className="font-semibold">Tip:</strong> llegá 10 minutos antes con tu
+                    cédula y carnet de conducir.
+                  </div>
+                )}
+                {selectedSlot?.modality === 'VIRTUAL' && (
+                  <div className="rounded-md border bg-info-soft/50 px-3 py-2 text-xs text-foreground/80">
+                    <strong className="font-semibold">Tip:</strong> conectate 5 min antes para
+                    verificar tu micro y cámara.
                   </div>
                 )}
               </>

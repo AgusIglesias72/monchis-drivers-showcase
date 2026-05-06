@@ -237,6 +237,7 @@ export interface BookingResponse {
   locationAddress: string | null
   meetingLink: string | null
   ruleTitle: string
+  ruleSlug: string
   instructions: string | null
 }
 

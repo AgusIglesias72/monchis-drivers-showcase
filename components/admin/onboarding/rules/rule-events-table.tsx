@@ -83,7 +83,7 @@ export function RuleEventsTable({ ruleId, events }: { ruleId: string; events: Ev
         <div className="font-medium text-foreground">Sin cupos próximos</div>
         <div>
           Los slots se generan automáticamente cada noche. Si querés generarlos ahora, usá
-          "Materializar" desde la lista de eventos.
+          «Materializar» desde la lista de eventos.
         </div>
       </div>
     )

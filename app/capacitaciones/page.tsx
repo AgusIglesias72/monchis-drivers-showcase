@@ -9,6 +9,7 @@ import { HowItWorks } from '@/components/capacitaciones/how-it-works'
 import { RulesGrid } from '@/components/capacitaciones/rules-grid'
 import { EmptyState } from '@/components/capacitaciones/empty-state'
 import { AutoIdentify } from '@/components/capacitaciones/auto-identify'
+import { resolveIdentityFromCookie } from '@/lib/services/onboarding-identity'
 import type { RuleSummary, SlotResponse } from '@/lib/types/onboarding-rules.types'
 
 export const dynamic = 'force-dynamic'
@@ -53,35 +54,77 @@ async function getInitialCombinedSlots(): Promise<SlotResponse[]> {
   return json?.slots || []
 }
 
+function hasUsableSlots(rules: RulePayload[]): boolean {
+  for (const r of rules) {
+    if (r.nextSlots.some((s) => !s.isFull && !s.isPastNotice && !s.isPast)) {
+      return true
+    }
+  }
+  return false
+}
+
 export default async function CapacitacionesPage({
   searchParams,
 }: {
   searchParams: Promise<{ session?: string }>
 }) {
-  const { session } = await searchParams
-  const [rules, initialSlots] = await Promise.all([getRules(), getInitialCombinedSlots()])
+  const { session: sessionFromUrl } = await searchParams
+
+  // SSR identity: leemos cookie del portal y resolvemos en el server. Esto
+  // elimina el flicker del AutoIdentify cliente porque ya llega identificado.
+  const identity = await resolveIdentityFromCookie()
+  const sessionToken = sessionFromUrl || identity.shareToken || undefined
+
+  const [rules, initialSlots] = await Promise.all([
+    getRules(),
+    getInitialCombinedSlots(),
+  ])
+
+  // Driver identificado y eligible → ocultamos contenido "para no-postulantes"
+  const showOnboardingContent = !identity.found || !identity.driver?.isEligible
+  const noUsableSlots = rules.length > 0 && !hasUsableSlots(rules)
 
   return (
     <div className="max-w-6xl mx-auto px-4 lg:px-6 py-6 lg:py-10">
-      {/* Identificación silenciosa: si el driver ya pasó por /postulacion/[token],
-          intercambiamos su accessToken por un shareToken sin pedirle nada. */}
-      {!session && <AutoIdentify />}
-      {session && <LandingBanner sessionToken={session} />}
+      {/* Fallback cliente: si el server no encontró cookie, intentamos
+          identificar via localStorage (legacy). */}
+      {!identity.found && !sessionFromUrl && <AutoIdentify />}
+
+      {/* Banner SSR: si el server resolvió la identidad la mostramos al toque */}
+      {identity.found && identity.driver && (
+        <LandingBanner
+          ssrIdentity={{
+            firstName: identity.driver.firstName,
+            isEligible: identity.driver.isEligible,
+            notEligibleReason: identity.driver.notEligibleReason,
+            postulationStatus: identity.driver.postulationStatus,
+            portalToken: identity.portalToken,
+          }}
+        />
+      )}
+      {/* Si no hay SSR identity pero sí session en URL, validamos en cliente */}
+      {!identity.found && sessionFromUrl && <LandingBanner sessionToken={sessionFromUrl} />}
 
       <LandingHero availableCount={rules.length} />
 
-      {rules.length === 0 ? (
-        <EmptyState />
+      {rules.length === 0 || noUsableSlots ? (
+        <EmptyState noSlots={noUsableSlots} />
       ) : (
         <>
-          <RulesGrid rules={rules} sessionToken={session} />
-          <LandingCalendar initialSlots={initialSlots} sessionToken={session} />
+          <RulesGrid rules={rules} sessionToken={sessionToken} />
+          <LandingCalendar initialSlots={initialSlots} sessionToken={sessionToken} />
         </>
       )}
 
-      <HowItWorks />
-
-      <LandingFooter />
+      {/* "Cómo funciona" + footer "¿no postulaste?" → solo para anónimos o
+          drivers que aún no completaron postulación. Drivers ya elegibles no
+          necesitan ver esto. */}
+      {showOnboardingContent && (
+        <>
+          <HowItWorks />
+          <LandingFooter />
+        </>
+      )}
     </div>
   )
 }
