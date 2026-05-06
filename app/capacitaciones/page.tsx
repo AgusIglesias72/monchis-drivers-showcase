@@ -72,7 +72,11 @@ export default async function CapacitacionesPage({
 
   // SSR identity: leemos cookie del portal y resolvemos en el server. Esto
   // elimina el flicker del AutoIdentify cliente porque ya llega identificado.
-  const identity = await resolveIdentityFromCookie()
+  // Si vino ?session= en URL le damos prioridad (link compartido) y no usamos
+  // la cookie — son dos identidades potencialmente distintas.
+  const identity = sessionFromUrl
+    ? { found: false, shareToken: null, portalToken: null, driver: null }
+    : await resolveIdentityFromCookie()
   const sessionToken = sessionFromUrl || identity.shareToken || undefined
 
   const [rules, initialSlots] = await Promise.all([

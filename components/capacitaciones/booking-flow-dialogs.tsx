@@ -27,6 +27,7 @@ export function BookingFlowDialogs({ flow }: { flow: Flow }) {
         ruleTitle={flow.pendingTitle}
         onConfirm={flow.handleConfirm}
         loading={flow.booking}
+        isReschedule={flow.isReschedule}
       />
     </>
   )

@@ -55,7 +55,18 @@ export function BookingActions({ confirmationToken, ruleSlug, canCancel, canResc
     <div className="flex flex-col sm:flex-row gap-2 mt-6 pt-6 border-t">
       <p className="text-sm text-muted-foreground flex-1">¿No vas a poder asistir?</p>
       {canReschedule && (
-        <Button variant="outline" size="sm" onClick={() => router.push(`/capacitaciones/${ruleSlug}?reschedule=${confirmationToken}`)}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            // Si tenemos slug navegamos a la rule específica; sino a la landing
+            // (defensa para bookings creados antes de que ruleSlug existiera)
+            const target = ruleSlug
+              ? `/capacitaciones/${ruleSlug}?reschedule=${confirmationToken}`
+              : `/capacitaciones?reschedule=${confirmationToken}`
+            router.push(target)
+          }}
+        >
           <CalendarClock className="mr-2 h-4 w-4" />
           Cambiar fecha
         </Button>

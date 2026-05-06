@@ -33,6 +33,8 @@ interface Props {
   ruleTitle?: string
   onConfirm: (confirmedProfile: Profile) => Promise<void>
   loading: boolean
+  /** Si true, mostramos copy de "cambiar fecha" y omitimos el form de perfil */
+  isReschedule?: boolean
 }
 
 const MODALITY_ICON = {
@@ -55,6 +57,7 @@ export function BookingConfirmDialog({
   ruleTitle,
   onConfirm,
   loading,
+  isReschedule = false,
 }: Props) {
   const [profile, setProfile] = useState<Profile>({
     firstName: '',
@@ -66,8 +69,9 @@ export function BookingConfirmDialog({
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileLoaded, setProfileLoaded] = useState(false)
 
-  // Cargar el perfil cuando el dialog se abre
+  // Cargar el perfil cuando el dialog se abre (no en modo reschedule)
   useEffect(() => {
+    if (isReschedule) return
     if (!open || !shareToken || profileLoaded) return
     let cancelled = false
     setProfileLoading(true)
@@ -107,6 +111,11 @@ export function BookingConfirmDialog({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    // En reschedule no validamos el form (no se muestra)
+    if (isReschedule) {
+      void onConfirm(profile)
+      return
+    }
     if (!profile.firstName.trim() || !profile.lastName.trim() || !profile.cedula.trim() || !profile.phoneNumber.trim()) {
       return
     }
@@ -120,9 +129,13 @@ export function BookingConfirmDialog({
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Confirmá tus datos</DialogTitle>
+            <DialogTitle>
+              {isReschedule ? 'Cambiar tu reserva' : 'Confirmá tus datos'}
+            </DialogTitle>
             <DialogDescription>
-              Verificá que esté todo correcto antes de reservar tu lugar.
+              {isReschedule
+                ? 'Vas a mover tu lugar a la siguiente fecha. La reserva anterior se libera automáticamente.'
+                : 'Verificá que esté todo correcto antes de reservar tu lugar.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -154,8 +167,8 @@ export function BookingConfirmDialog({
             </div>
           )}
 
-          {/* Form */}
-          <div className="grid gap-4 py-4">
+          {/* Form (solo en booking nuevo, no en reschedule) */}
+          {!isReschedule && <div className="grid gap-4 py-4">
             {profileLoading ? (
               <>
                 <Skeleton className="h-10 w-full" />
@@ -253,7 +266,7 @@ export function BookingConfirmDialog({
                 )}
               </>
             )}
-          </div>
+          </div>}
 
           <DialogFooter>
             <Button
@@ -266,11 +279,11 @@ export function BookingConfirmDialog({
             </Button>
             <Button
               type="submit"
-              disabled={loading || profileLoading}
+              disabled={loading || (!isReschedule && profileLoading)}
               className="bg-brand text-brand-foreground hover:bg-brand-hover"
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirmar reserva
+              {isReschedule ? 'Confirmar cambio' : 'Confirmar reserva'}
             </Button>
           </DialogFooter>
         </form>

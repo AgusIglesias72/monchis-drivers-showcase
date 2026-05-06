@@ -17,8 +17,11 @@ interface ConfirmedProfile {
  * Centraliza el flow de reserva: gating de identidad, dialog de confirmación y
  * POST al endpoint. Tanto el calendar overview de la landing como las cards de
  * cada rule lo usan para abrir el booking sin tener que navegar al detail.
+ *
+ * Si se pasa `rescheduleToken`, los flows POST van a /reschedule en lugar de
+ * crear una reserva nueva (no hace falta pedir confirmedProfile en ese caso).
  */
-export function useBookingFlow(initialSession?: string) {
+export function useBookingFlow(initialSession?: string, rescheduleToken?: string) {
   const router = useRouter()
   const [sessionToken, setSessionToken] = useState<string | undefined>(initialSession)
   const [pendingSlot, setPendingSlot] = useState<SlotResponse | null>(null)
@@ -26,6 +29,7 @@ export function useBookingFlow(initialSession?: string) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [showIdentity, setShowIdentity] = useState(false)
   const [booking, setBooking] = useState(false)
+  const isReschedule = Boolean(rescheduleToken)
 
   // Recovery del shareToken desde localStorage si no vino en URL ni initial.
   useEffect(() => {
@@ -56,33 +60,53 @@ export function useBookingFlow(initialSession?: string) {
   }
 
   async function handleConfirm(profile: ConfirmedProfile) {
-    if (!pendingSlot || !sessionToken) return
+    if (!pendingSlot) return
+    if (!isReschedule && !sessionToken) return
+
     setBooking(true)
     try {
-      const res = await fetch('/api/public/booking', {
+      const url = isReschedule
+        ? `/api/public/booking/${rescheduleToken}/reschedule`
+        : '/api/public/booking'
+      const body = isReschedule
+        ? {
+            eventId: pendingSlot.eventId || undefined,
+            ruleId: pendingSlot.ruleId,
+            scheduledDateUTC: pendingSlot.scheduledDateUTC,
+          }
+        : {
+            shareToken: sessionToken,
+            eventId: pendingSlot.eventId || undefined,
+            ruleId: pendingSlot.ruleId,
+            scheduledDateUTC: pendingSlot.scheduledDateUTC,
+            confirmedProfile: profile,
+          }
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shareToken: sessionToken,
-          eventId: pendingSlot.eventId || undefined,
-          ruleId: pendingSlot.ruleId,
-          scheduledDateUTC: pendingSlot.scheduledDateUTC,
-          confirmedProfile: profile,
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'No pudimos reservar')
+        throw new Error(err.error || (isReschedule ? 'No pudimos reagendar' : 'No pudimos reservar'))
       }
       const data = await res.json()
-      toast.success('¡Reserva confirmada!')
+      toast.success(isReschedule ? '¡Reserva reagendada!' : '¡Reserva confirmada!')
       setShowConfirm(false)
-      router.push(`/capacitaciones/reserva/${data.confirmationToken}`)
+      const newToken = isReschedule ? rescheduleToken : data.confirmationToken
+      router.push(`/capacitaciones/reserva/${newToken}`)
     } catch (err: any) {
-      toast.error(err?.message || 'No pudimos reservar')
+      toast.error(err?.message || (isReschedule ? 'No pudimos reagendar' : 'No pudimos reservar'))
     } finally {
       setBooking(false)
     }
+  }
+
+  function startBookingForReschedule(slot: SlotResponse, ruleTitle?: string) {
+    // En reschedule no hace falta identity — el rescheduleToken ya autentica
+    setPendingSlot(slot)
+    setPendingTitle(ruleTitle ?? slot.ruleTitle)
+    setShowConfirm(true)
   }
 
   return {
@@ -94,7 +118,8 @@ export function useBookingFlow(initialSession?: string) {
     showIdentity,
     setShowIdentity,
     booking,
-    startBooking,
+    isReschedule,
+    startBooking: isReschedule ? startBookingForReschedule : startBooking,
     handleIdentityValidated,
     handleConfirm,
   }

@@ -19,12 +19,20 @@ interface Props {
   initialSession?: string
   initialSlots?: SlotResponse[]
   ruleTitle?: string
+  /** Si está presente, todo POST va al endpoint de reschedule */
+  rescheduleToken?: string
 }
 
 const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 
-export function BookingCalendar({ slug, initialSession, initialSlots = [], ruleTitle }: Props) {
-  const flow = useBookingFlow(initialSession)
+export function BookingCalendar({
+  slug,
+  initialSession,
+  initialSlots = [],
+  ruleTitle,
+  rescheduleToken,
+}: Props) {
+  const flow = useBookingFlow(initialSession, rescheduleToken)
   const [month, setMonth] = useState<Date>(new Date())
   const [slots, setSlots] = useState<SlotResponse[]>(initialSlots)
   // Meses ya cargados (key: "YYYY-MM"). Empezamos asumiendo que el server
@@ -285,7 +293,7 @@ export function BookingCalendar({ slug, initialSession, initialSlots = [], ruleT
               className="w-full bg-brand text-brand-foreground hover:bg-brand-hover"
               size="lg"
             >
-              Reservar {selectedSlot.startTime} — {selectedSlot.endTime}
+              {flow.isReschedule ? 'Reagendar' : 'Reservar'} {selectedSlot.startTime} — {selectedSlot.endTime}
             </Button>
           </div>
           <div className="hidden md:flex justify-end pt-4 pb-12">
@@ -295,7 +303,7 @@ export function BookingCalendar({ slug, initialSession, initialSlots = [], ruleT
               className="bg-brand text-brand-foreground hover:bg-brand-hover"
               size="lg"
             >
-              Reservar {selectedSlot.startTime} — {selectedSlot.endTime}
+              {flow.isReschedule ? 'Reagendar' : 'Reservar'} {selectedSlot.startTime} — {selectedSlot.endTime}
             </Button>
           </div>
         </>

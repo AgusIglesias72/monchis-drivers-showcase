@@ -105,17 +105,20 @@ export default async function RuleDetailPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ session?: string }>
+  searchParams: Promise<{ session?: string; reschedule?: string }>
 }) {
   const { slug } = await params
-  const { session: sessionFromUrl } = await searchParams
+  const { session: sessionFromUrl, reschedule: rescheduleToken } = await searchParams
   const rule = await getRule(slug)
 
   if (!rule) return notFound()
 
   // SSR identity: si el browser tiene cookie del portal, resolvemos acá y le
   // pasamos el shareToken al BookingCalendar sin pasar por AutoIdentify cliente.
-  const identity = await resolveIdentityFromCookie()
+  // ?session= en URL gana sobre cookie (link compartido).
+  const identity = sessionFromUrl
+    ? { found: false, shareToken: null, portalToken: null, driver: null }
+    : await resolveIdentityFromCookie()
   const session = sessionFromUrl || identity.shareToken || undefined
 
   // Pre-cargamos los slots de los próximos 2 meses para evitar el round-trip
@@ -236,6 +239,7 @@ export default async function RuleDetailPage({
           initialSession={session}
           initialSlots={initialSlots}
           ruleTitle={rule.title}
+          rescheduleToken={rescheduleToken}
         />
       </section>
     </div>
