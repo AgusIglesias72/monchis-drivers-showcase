@@ -84,7 +84,7 @@ export function SendOnboardingReminderButton({
               <Bell className="h-4 w-4" />
             )}
             <span className="flex-1">
-              {isSending ? 'Enviando…' : 'Recordar capacitación'}
+              {isSending ? 'Enviando…' : 'Enviar recordatorio'}
             </span>
           </Button>
         ) : (

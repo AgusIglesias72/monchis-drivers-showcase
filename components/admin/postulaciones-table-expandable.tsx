@@ -678,7 +678,7 @@ export function PostulacionesTableExpandable({
                                           <GraduationCap className="mr-2 h-4 w-4 text-muted-foreground" />
                                           <span>Capacitación</span>
                                         </DropdownMenuSubTrigger>
-                                        <DropdownMenuSubContent className="w-56">
+                                        <DropdownMenuSubContent className="w-60">
                                           <DropdownMenuItem
                                             onSelect={(e) => e.preventDefault()}
                                             onClick={(e) => e.stopPropagation()}
@@ -711,7 +711,7 @@ export function PostulacionesTableExpandable({
                                           <Send className="mr-2 h-4 w-4 text-muted-foreground" />
                                           <span>Aprobación ManyChat</span>
                                         </DropdownMenuSubTrigger>
-                                        <DropdownMenuSubContent className="w-56">
+                                        <DropdownMenuSubContent className="w-60">
                                           <DropdownMenuItem
                                             onSelect={(e) => e.preventDefault()}
                                             onClick={(e) => e.stopPropagation()}
