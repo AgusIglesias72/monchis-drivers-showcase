@@ -262,7 +262,10 @@ export function LivePanelContent({ initial }: Props) {
           onHighlight={setHighlight}
         />
 
-        <div ref={mapWrapperRef} className="scroll-mt-20">
+        {/* relative + z-0 + isolate crea un stacking context que contiene los
+            panes internos de Leaflet (z-index 200-700 por default), evitando
+            que se monten encima del Sheet de detalle (z-50). */}
+        <div ref={mapWrapperRef} className="relative z-0 isolate scroll-mt-20">
           <LiveMap
             zones={data.zones}
             drivers={data.drivers}
