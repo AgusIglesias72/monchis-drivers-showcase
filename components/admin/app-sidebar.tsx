@@ -21,7 +21,9 @@ import {
   ChevronRight,
   Sparkles,
   CalendarClock,
+  CalendarRange,
   ShoppingBag,
+  Radio,
 } from "lucide-react"
 
 import {
@@ -79,6 +81,11 @@ const menuItems = [
         icon: Users
       },
       {
+        title: "Eventos de capacitación",
+        url: "/admin/onboarding/reglas",
+        icon: CalendarRange,
+      },
+      {
         title: "Pagos",
         url: "/admin/pagos",
         icon: CreditCard,
@@ -88,6 +95,12 @@ const menuItems = [
   {
     title: "Gestión Admin",
     items: [
+      {
+        title: "Live",
+        url: "/admin/gestion/live",
+        icon: Radio,
+        badge: "WIP",
+      },
       {
         title: "Turnos",
         url: "/admin/gestion/turnos",
@@ -226,12 +239,18 @@ export function AppSidebar() {
 
                   // Item normal sin subItems
                   const isActive = pathname === item.url
+                  const itemBadge = "badge" in item ? item.badge : undefined
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
                         <Link href={item.url}>
                           {item.icon && <item.icon />}
                           <span>{item.title}</span>
+                          {itemBadge && (
+                            <span className="ml-auto rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                              {itemBadge}
+                            </span>
+                          )}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

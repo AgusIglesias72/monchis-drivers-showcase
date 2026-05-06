@@ -71,3 +71,23 @@ export function rawTs(s: string | null | undefined): number | null {
   const t = new Date(s).getTime()
   return isNaN(t) ? null : t
 }
+
+/**
+ * Convierte un timestamp PY mal etiquetado (sufijo Z pero wall-clock es PY
+ * local UTC-3) al instante UTC real. Útil cuando necesitamos comparar con
+ * `Date.now()` (p.ej. para calcular cuánto tiempo lleva un pedido en el
+ * sistema en el panel Live).
+ *
+ * Asunción es UTC-3 fijo desde 2024 (no usa DST). Si vuelve a aplicar DST,
+ * este offset deja de servir y hay que computarlo dinámicamente.
+ */
+const PY_OFFSET_MS = 3 * 60 * 60 * 1000
+
+export function pyLocalIsoToRealIso(
+  iso: string | null | undefined,
+): string | null {
+  if (!iso) return null
+  const ms = new Date(iso).getTime()
+  if (isNaN(ms)) return null
+  return new Date(ms + PY_OFFSET_MS).toISOString()
+}
