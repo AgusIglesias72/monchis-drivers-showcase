@@ -50,14 +50,39 @@ function getConsentPhrase(): string {
 }
 
 /**
- * Normaliza un número a formato E.164 (`+<digits>`). Asume que el número ya incluye
- * código de país — no intenta inferirlo. Si `phoneNumber` del FormDriver viene en
- * formato local sin 595, este helper NO lo corrige.
+ * Normaliza un número a formato E.164 (`+<digits>`) asumiendo Paraguay por defecto.
+ * Acepta formatos comunes:
+ *   - `0981234567` (local con 0) → `+595981234567`
+ *   - `981234567`  (local sin 0) → `+595981234567`
+ *   - `595981234567` (con código país) → `+595981234567`
+ *   - `+595981234567` (ya E.164) → `+595981234567`
+ * Si el número ya empieza con otro código de país (54 Argentina, etc) se respeta.
+ *
+ * ManyChat rechaza con 400 "Validation error" si recibe un E.164 inválido (ej `+0981...`).
  */
 function normalizeE164(phone: string): string {
-  const cleaned = phone.replace(/[^\d+]/g, '');
-  if (!cleaned) throw new Error('Teléfono vacío o inválido');
-  return cleaned.startsWith('+') ? cleaned : `+${cleaned}`;
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) throw new Error('Teléfono vacío o inválido');
+
+  // Ya tiene código país explícito reconocido → respetar.
+  if (digits.startsWith('595')) return `+${digits}`;
+  if (digits.startsWith('54') && digits.length >= 12) return `+${digits}`;
+
+  // Formato local PY con 0 inicial: 0981234567 (10 dígitos).
+  if (digits.startsWith('0') && digits.length === 10) {
+    return `+595${digits.substring(1)}`;
+  }
+
+  // Formato local PY sin 0: 981234567 (9 dígitos).
+  if (digits.length === 9) {
+    return `+595${digits}`;
+  }
+
+  // Largo suficiente para asumir código país de otro lado → respetar.
+  if (digits.length >= 12) return `+${digits}`;
+
+  // Fallback: asumimos PY.
+  return `+595${digits}`;
 }
 
 /**
