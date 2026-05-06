@@ -257,7 +257,6 @@ export function LivePanelContent({ initial }: Props) {
 
         <LiveZonesGrid
           zones={data.zones}
-          active={data.active}
           highlight={highlight}
           onHighlight={setHighlight}
         />
