@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { WhatsAppMessageSource, WhatsAppMessageType } from '@prisma/client'
 import { getEligibleDriversForReminder, logReminderExecution } from '@/lib/services/automatic-reminders.service'
 import { recordMessageSent, type MessageConcept } from '@/lib/services/messaging-frequency.service'
-import { sendOnboardingReminderMessageInternal } from '@/lib/actions/send-onboarding-list.actions'
 import { sendFlowByKey } from '@/lib/services/manychat-messaging.service'
 
 /**
@@ -275,17 +274,13 @@ async function sendMessageByConcept(
 ): Promise<SendByConceptResult> {
   const driverName = driver.firstName || driver.fullName || 'Conductor'
 
-  // Capacitación mantiene el canal existente (multi-bot).
+  // Capacitación: el canal multi-bot quedó deprecated tras la migración a
+  // ManyChat. Los conceptos SCHEDULE_CAPACITACION / CAPACITACION_REMINDER
+  // se saltean hasta que se cree un Flow de ManyChat equivalente.
   if (concept === 'SCHEDULE_CAPACITACION' || concept === 'CAPACITACION_REMINDER') {
-    const result = await sendOnboardingReminderMessageInternal({
-      driverId: driver.id,
-      driverName,
-      phoneNumber: driver.phoneNumber,
-    })
     return {
-      sent: true,
-      success: result.success,
-      error: result.success ? undefined : result.error,
+      sent: false,
+      reason: 'Capacitación desactivada — pendiente migrar a ManyChat',
     }
   }
 

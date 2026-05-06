@@ -1,4 +1,11 @@
 // app/api/cron/check-pending-applications/route.ts
+//
+// ⚠️ DEPRECATED — multi-bot caído.
+// Este cron mandaba recordatorios via 'bot-adquisicion-prod' (multi-bot homegrown
+// que dejó de funcionar tras la baja de Braze 2026-04-23). Está fuera de
+// vercel.json desde 2026-05-06 — no se invoca más. El código queda como
+// referencia para una eventual migración a ManyChat (sendFlowByKey con un
+// Flow de "recordatorio postulación pendiente").
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';

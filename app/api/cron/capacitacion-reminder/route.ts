@@ -1,4 +1,11 @@
-// app/api/cron/capacitation-reminder/route.ts
+// app/api/cron/capacitacion-reminder/route.ts
+//
+// ⚠️ DEPRECATED — multi-bot caído.
+// Este cron mandaba recordatorios de capacitación via multi-bot homegrown que
+// dejó de funcionar tras la baja de Braze 2026-04-23. Está fuera de vercel.json
+// desde 2026-05-06 — no se invoca más. El código queda como referencia para
+// una eventual migración a ManyChat (sendFlowByKey con un Flow de
+// recordatorio de capacitación).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';

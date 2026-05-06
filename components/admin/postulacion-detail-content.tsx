@@ -52,8 +52,6 @@ import {
   MoreVertical,
   ExternalLink,
   Copy,
-  GraduationCap,
-  Send,
 } from "lucide-react"
 import { DocumentPreview } from "@/components/admin/document-preview"
 import { ManageOnboardingModal } from "@/components/admin/manage-onboarding-modal"
@@ -67,8 +65,6 @@ import {
 } from "@/components/admin/postulacion-helpers"
 import { ContactButton } from "@/components/admin/postulaciones/contact-button"
 import { RejectButton } from "@/components/admin/postulaciones/reject-button"
-import { SendOnboardingListButton } from "@/components/admin/send-onboarding-list-button"
-import { SendOnboardingReminderButton } from "@/components/admin/send-onboarding-reminder-button"
 import { TriggerManychatFlowButton } from "@/components/admin/trigger-manychat-flow-button"
 import { LinkManychatSubscriberButton } from "@/components/admin/link-manychat-subscriber-button"
 import { AgentRunSummaryCard } from "@/components/admin/agent-runs/agent-run-summary-card"
@@ -96,9 +92,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
 } from "../ui/dropdown-menu"
 
 interface PostulacionDetailContentProps {
@@ -570,7 +563,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                 driverName={postulacion.fullName || 'Driver'}
                 phoneNumber={postulacion.phoneNumber}
                 contactStatus={contactStatus}
-                templates={postulacion.whatsappTemplates || []}
                 showLabel={true}
                 manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
               />
@@ -680,72 +672,33 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                         Contacto
                       </DropdownMenuLabel>
 
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>
-                          <GraduationCap className="mr-2 h-4 w-4 text-muted-foreground" />
-                          <span>Capacitación</span>
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="w-60">
-                          <DropdownMenuItem
-                            onSelect={(e) => e.preventDefault()}
-                            className="p-0"
-                          >
-                            <SendOnboardingListButton
-                              driverId={postulacion.id}
-                              driverName={postulacion.fullName || 'Driver'}
-                              phoneNumber={postulacion.phoneNumber}
-                              inDropdown={true}
-                            />
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={(e) => e.preventDefault()}
-                            className="p-0"
-                          >
-                            <SendOnboardingReminderButton
-                              driverId={postulacion.id}
-                              driverName={postulacion.fullName || 'Driver'}
-                              phoneNumber={postulacion.phoneNumber}
-                              inDropdown={true}
-                            />
-                          </DropdownMenuItem>
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>
-                          <Send className="mr-2 h-4 w-4 text-muted-foreground" />
-                          <span>Aprobación ManyChat</span>
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="w-64">
-                          <DropdownMenuItem
-                            onSelect={(e) => e.preventDefault()}
-                            className="p-0"
-                          >
-                            <TriggerManychatFlowButton
-                              driverId={postulacion.id}
-                              driverName={postulacion.fullName || 'Driver'}
-                              manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
-                              inDropdown={true}
-                              onSuccess={handleActionSuccess}
-                            />
-                          </DropdownMenuItem>
-                          {!postulacion.manychatSubscriberId && (
-                            <DropdownMenuItem
-                              onSelect={(e) => e.preventDefault()}
-                              className="p-0"
-                            >
-                              <LinkManychatSubscriberButton
-                                driverId={postulacion.id}
-                                driverName={postulacion.fullName || 'Driver'}
-                                driverPhone={postulacion.phoneNumber}
-                                manychatSubscriberId={postulacion.manychatSubscriberId}
-                                inDropdown={true}
-                                onSuccess={handleActionSuccess}
-                              />
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
+                      <DropdownMenuItem
+                        onSelect={(e) => e.preventDefault()}
+                        className="p-0"
+                      >
+                        <TriggerManychatFlowButton
+                          driverId={postulacion.id}
+                          driverName={postulacion.fullName || 'Driver'}
+                          manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
+                          inDropdown={true}
+                          onSuccess={handleActionSuccess}
+                        />
+                      </DropdownMenuItem>
+                      {!postulacion.manychatSubscriberId && (
+                        <DropdownMenuItem
+                          onSelect={(e) => e.preventDefault()}
+                          className="p-0"
+                        >
+                          <LinkManychatSubscriberButton
+                            driverId={postulacion.id}
+                            driverName={postulacion.fullName || 'Driver'}
+                            driverPhone={postulacion.phoneNumber}
+                            manychatSubscriberId={postulacion.manychatSubscriberId}
+                            inDropdown={true}
+                            onSuccess={handleActionSuccess}
+                          />
+                        </DropdownMenuItem>
+                      )}
 
                       <DropdownMenuSeparator />
                     </>

@@ -13,9 +13,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -43,8 +40,6 @@ import {
   MessageSquare,
   ExternalLink,
   Copy,
-  GraduationCap,
-  Send,
 } from "lucide-react"
 import { toast } from "sonner"
 import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
@@ -59,8 +54,6 @@ import { AssistedCompletionButton } from "./postulaciones/assisted-completion-bu
 import { RefreshRucButton } from "./postulaciones/refresh-ruc-button"
 import { RunAgentButton } from "./postulaciones/run-agent-button"
 import { TriggerManychatFlowButton } from "./trigger-manychat-flow-button"
-import { SendOnboardingListButton } from "./send-onboarding-list-button"
-import { SendOnboardingReminderButton } from "./send-onboarding-reminder-button"
 import { AgentRunBadge } from "./agent-runs/agent-run-badge"
 
 interface PostulacionesTableProps {
@@ -625,7 +618,6 @@ export function PostulacionesTableExpandable({
                                 driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
                                 phoneNumber={postulacion.phoneNumber}
                                 contactStatus={postulacion.contactStatus}
-                                templates={postulacion.whatsappTemplates || []}
                                 manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
                               />
 
@@ -673,60 +665,19 @@ export function PostulacionesTableExpandable({
                                         Contacto
                                       </DropdownMenuLabel>
 
-                                      <DropdownMenuSub>
-                                        <DropdownMenuSubTrigger>
-                                          <GraduationCap className="mr-2 h-4 w-4 text-muted-foreground" />
-                                          <span>Capacitación</span>
-                                        </DropdownMenuSubTrigger>
-                                        <DropdownMenuSubContent className="w-60">
-                                          <DropdownMenuItem
-                                            onSelect={(e) => e.preventDefault()}
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="p-0"
-                                          >
-                                            <SendOnboardingListButton
-                                              driverId={postulacion.id}
-                                              driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
-                                              phoneNumber={postulacion.phoneNumber}
-                                              inDropdown={true}
-                                            />
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            onSelect={(e) => e.preventDefault()}
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="p-0"
-                                          >
-                                            <SendOnboardingReminderButton
-                                              driverId={postulacion.id}
-                                              driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
-                                              phoneNumber={postulacion.phoneNumber}
-                                              inDropdown={true}
-                                            />
-                                          </DropdownMenuItem>
-                                        </DropdownMenuSubContent>
-                                      </DropdownMenuSub>
-
-                                      <DropdownMenuSub>
-                                        <DropdownMenuSubTrigger>
-                                          <Send className="mr-2 h-4 w-4 text-muted-foreground" />
-                                          <span>Aprobación ManyChat</span>
-                                        </DropdownMenuSubTrigger>
-                                        <DropdownMenuSubContent className="w-60">
-                                          <DropdownMenuItem
-                                            onSelect={(e) => e.preventDefault()}
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="p-0"
-                                          >
-                                            <TriggerManychatFlowButton
-                                              driverId={postulacion.id}
-                                              driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
-                                              manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
-                                              inDropdown={true}
-                                              onSuccess={() => router.refresh()}
-                                            />
-                                          </DropdownMenuItem>
-                                        </DropdownMenuSubContent>
-                                      </DropdownMenuSub>
+                                      <DropdownMenuItem
+                                        onSelect={(e) => e.preventDefault()}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="p-0"
+                                      >
+                                        <TriggerManychatFlowButton
+                                          driverId={postulacion.id}
+                                          driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
+                                          manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
+                                          inDropdown={true}
+                                          onSuccess={() => router.refresh()}
+                                        />
+                                      </DropdownMenuItem>
 
                                       <DropdownMenuSeparator />
                                     </>
