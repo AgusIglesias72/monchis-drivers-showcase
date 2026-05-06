@@ -647,17 +647,17 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
-                  {/* === ACCESO === */}
+                  {/* === PORTAL PÚBLICO === */}
                   {postulacion.accessToken && (
                     <>
                       <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                        Acceso
+                        Portal Público
                       </DropdownMenuLabel>
                       <DropdownMenuItem
                         onClick={() => window.open(`/postulacion/${postulacion.accessToken}`, '_blank')}
                       >
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                        Abrir portal del postulante
+                        <ExternalLink className="mr-2 h-4 w-4 text-muted-foreground" />
+                        Abrir portal
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => {
@@ -666,24 +666,23 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                           toast.success('Link del portal copiado al portapapeles')
                         }}
                       >
-                        <Copy className="mr-2 h-4 w-4" />
+                        <Copy className="mr-2 h-4 w-4 text-muted-foreground" />
                         Copiar link del portal
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                     </>
                   )}
 
-                  {/* === COMUNICACIÓN === */}
+                  {/* === CONTACTO === */}
                   {postulacion.phoneNumber && (
                     <>
                       <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                        Comunicación
+                        Contacto
                       </DropdownMenuLabel>
 
-                      {/* Submenu Capacitaciones */}
                       <DropdownMenuSub>
                         <DropdownMenuSubTrigger>
-                          <GraduationCap className="mr-2 h-4 w-4" />
+                          <GraduationCap className="mr-2 h-4 w-4 text-muted-foreground" />
                           <span>Capacitación</span>
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent className="w-56">
@@ -712,10 +711,9 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
 
-                      {/* Submenu Aprobación / ManyChat */}
                       <DropdownMenuSub>
                         <DropdownMenuSubTrigger>
-                          <Send className="mr-2 h-4 w-4" />
+                          <Send className="mr-2 h-4 w-4 text-muted-foreground" />
                           <span>Aprobación ManyChat</span>
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent className="w-64">
@@ -753,9 +751,9 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                     </>
                   )}
 
-                  {/* === AUTOMATIZACIÓN === */}
+                  {/* === GESTIONAR === */}
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                    Automatización
+                    Gestionar
                   </DropdownMenuLabel>
                   <DropdownMenuItem
                     onSelect={(e) => e.preventDefault()}
@@ -775,13 +773,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                       hasExistingRun={(postulacion.agentRuns?.length ?? 0) > 0}
                     />
                   </DropdownMenuItem>
-
-                  <DropdownMenuSeparator />
-
-                  {/* === ESTADO === */}
-                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                    Estado
-                  </DropdownMenuLabel>
                   {postulacion.status === 'IN_PROGRESS' && (
                     <DropdownMenuItem
                       onSelect={(e) => e.preventDefault()}

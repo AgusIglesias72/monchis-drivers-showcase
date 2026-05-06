@@ -252,7 +252,7 @@ export function ContactButton({
                   onClick={handleWhatsApp}
                   className="cursor-pointer"
                 >
-                  <WhatsAppIcon className="mr-2 h-4 w-4 text-green-600" />
+                  <WhatsAppIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                   <span>Abrir WhatsApp</span>
                 </DropdownMenuItem>
 
@@ -274,7 +274,7 @@ export function ContactButton({
                       className="cursor-pointer"
                       disabled={isSendingMessage}
                     >
-                      <Send className="mr-2 h-4 w-4 text-blue-600" />
+                      <Send className="mr-2 h-4 w-4 text-muted-foreground" />
                       <span>{template.name}</span>
                     </DropdownMenuItem>
                   ))
@@ -287,15 +287,19 @@ export function ContactButton({
                   className="cursor-pointer"
                   disabled={contactStatus === 'contacted'}
                 >
-                  <Phone className="mr-2 h-4 w-4 text-blue-600" />
+                  <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
                   <span>Registrar Contacto</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            
-            <TooltipContent>
-              <p>{config.tooltip}</p>
-            </TooltipContent>
+
+            {/* Suprimimos el tooltip de status cuando hay badge ManyChat para
+                no doblar tooltips al hacer hover. */}
+            {!showManychatBadge && (
+              <TooltipContent>
+                <p>{config.tooltip}</p>
+              </TooltipContent>
+            )}
           </Tooltip>
         </TooltipProvider>
 
@@ -315,7 +319,7 @@ export function ContactButton({
               <AlertDialogCancel disabled={isRegistering}>
                 Cancelar
               </AlertDialogCancel>
-              <AlertDialogAction 
+              <AlertDialogAction
                 onClick={confirmRegister}
                 disabled={isRegistering}
               >
@@ -369,7 +373,7 @@ export function ContactButton({
               onClick={handleWhatsApp}
               className="cursor-pointer"
             >
-              <WhatsAppIcon className="mr-2 h-4 w-4 text-green-600" />
+              <WhatsAppIcon className="mr-2 h-4 w-4 text-muted-foreground" />
               <span>Abrir WhatsApp</span>
             </DropdownMenuItem>
 
@@ -391,7 +395,7 @@ export function ContactButton({
                   className="cursor-pointer"
                   disabled={isSendingMessage}
                 >
-                  <Send className="mr-2 h-4 w-4 text-blue-600" />
+                  <Send className="mr-2 h-4 w-4 text-muted-foreground" />
                   <span>{template.name}</span>
                 </DropdownMenuItem>
               ))
@@ -404,7 +408,7 @@ export function ContactButton({
               className="cursor-pointer"
               disabled={contactStatus === 'contacted'}
             >
-              <Phone className="mr-2 h-4 w-4 text-blue-600" />
+              <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
               <span>Registrar Contacto</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -487,7 +491,7 @@ export function ContactButton({
                 onClick={handleWhatsApp}
                 className="cursor-pointer"
               >
-                <WhatsAppIcon className="mr-2 h-4 w-4 text-green-600" />
+                <WhatsAppIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span>Abrir WhatsApp</span>
               </DropdownMenuItem>
 
@@ -509,7 +513,7 @@ export function ContactButton({
                     className="cursor-pointer"
                     disabled={isSendingMessage}
                   >
-                    <Send className="mr-2 h-4 w-4 text-blue-600" />
+                    <Send className="mr-2 h-4 w-4 text-muted-foreground" />
                     <span>{template.name}</span>
                   </DropdownMenuItem>
                 ))
@@ -522,15 +526,17 @@ export function ContactButton({
                 className="cursor-pointer"
                 disabled={contactStatus === 'contacted'}
               >
-                <Phone className="mr-2 h-4 w-4 text-blue-600" />
+                <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span>Registrar Contacto</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <TooltipContent>
-            <p>{config.tooltip}</p>
-          </TooltipContent>
+          {!showManychatBadge && (
+            <TooltipContent>
+              <p>{config.tooltip}</p>
+            </TooltipContent>
+          )}
         </Tooltip>
       </TooltipProvider>
 
