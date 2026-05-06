@@ -118,7 +118,7 @@ export function RunAgentButton({ driverId, hasExistingRun = false }: RunAgentBut
         size="sm"
         onClick={runDryRun}
         disabled={isLoading || hasExistingRun}
-        className={`w-full justify-start text-left gap-2 h-auto py-2 px-2 font-normal ${
+        className={`w-full justify-start text-left gap-2 h-auto py-1.5 px-2 text-sm font-normal ${
           hasExistingRun ? 'text-muted-foreground cursor-not-allowed' : ''
         }`}
         title={hasExistingRun ? 'Ya existe una corrida — abrí el ícono de bot junto al nombre' : undefined}

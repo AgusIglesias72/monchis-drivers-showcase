@@ -87,7 +87,7 @@ export function LinkManychatSubscriberButton({
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start text-left gap-2 h-auto py-2 px-2 font-normal"
+            className="w-full justify-start text-left gap-2 h-auto py-1.5 px-2 text-sm font-normal"
           >
             <Link2 className="h-4 w-4" />
             <span className="flex-1">Vincular subscriber ManyChat</span>

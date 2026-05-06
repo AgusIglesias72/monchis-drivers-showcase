@@ -49,7 +49,7 @@ export function RefreshRucButton({ driverId, onSuccess }: RefreshRucButtonProps)
       size="sm"
       onClick={handleClick}
       disabled={isLoading}
-      className="w-full justify-start text-left gap-2 h-auto py-2 px-2 font-normal"
+      className="w-full justify-start text-left gap-2 h-auto py-1.5 px-2 text-sm font-normal"
     >
       <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
       <span className="flex-1">{isLoading ? 'Consultando…' : 'Actualizar RUC'}</span>

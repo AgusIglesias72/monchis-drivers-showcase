@@ -160,7 +160,7 @@ export function AssistedCompletionButton({
           variant="ghost"
           size="sm"
           onClick={handleClick}
-          className="w-full justify-start text-left gap-2 h-auto py-2 px-2 font-normal"
+          className="w-full justify-start text-left gap-2 h-auto py-1.5 px-2 text-sm font-normal"
         >
           <UserX className="h-4 w-4" />
           <span className="flex-1">Desmarcar Asistida</span>
@@ -203,7 +203,7 @@ export function AssistedCompletionButton({
         variant="ghost"
         size="sm"
         onClick={handleClick}
-        className="w-full justify-start text-left gap-2 h-auto py-2 px-2 font-normal"
+        className="w-full justify-start text-left gap-2 h-auto py-1.5 px-2 text-sm font-normal"
       >
         <UserCheck className="h-4 w-4" />
         <span className="flex-1">Marcar como Asistida</span>

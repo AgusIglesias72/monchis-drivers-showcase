@@ -11,7 +11,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -39,6 +43,8 @@ import {
   MessageSquare,
   ExternalLink,
   Copy,
+  GraduationCap,
+  Send,
 } from "lucide-react"
 import { toast } from "sonner"
 import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
@@ -53,6 +59,8 @@ import { AssistedCompletionButton } from "./postulaciones/assisted-completion-bu
 import { RefreshRucButton } from "./postulaciones/refresh-ruc-button"
 import { RunAgentButton } from "./postulaciones/run-agent-button"
 import { TriggerManychatFlowButton } from "./trigger-manychat-flow-button"
+import { SendOnboardingListButton } from "./send-onboarding-list-button"
+import { SendOnboardingReminderButton } from "./send-onboarding-reminder-button"
 import { AgentRunBadge } from "./agent-runs/agent-run-badge"
 
 interface PostulacionesTableProps {
@@ -627,23 +635,21 @@ export function PostulacionesTableExpandable({
                                     <MoreVertical className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={(e) => handleViewDetails(postulacion.id, e)}>
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    Ver detalles
-                                  </DropdownMenuItem>
-
+                                <DropdownMenuContent align="end" className="w-56">
+                                  {/* === PORTAL PÚBLICO === */}
                                   {postulacion.accessToken && (
                                     <>
-                                      <DropdownMenuSeparator />
+                                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                                        Portal Público
+                                      </DropdownMenuLabel>
                                       <DropdownMenuItem
                                         onClick={(e) => {
                                           e.stopPropagation()
                                           window.open(`/postulacion/${postulacion.accessToken}`, '_blank')
                                         }}
                                       >
-                                        <ExternalLink className="mr-2 h-4 w-4" />
-                                        Ver Portal del Postulante
+                                        <ExternalLink className="mr-2 h-4 w-4 text-muted-foreground" />
+                                        Abrir portal
                                       </DropdownMenuItem>
                                       <DropdownMenuItem
                                         onClick={(e) => {
@@ -653,65 +659,107 @@ export function PostulacionesTableExpandable({
                                           toast.success('Link del portal copiado')
                                         }}
                                       >
-                                        <Copy className="mr-2 h-4 w-4" />
-                                        Copiar Link del Portal
+                                        <Copy className="mr-2 h-4 w-4 text-muted-foreground" />
+                                        Copiar link del portal
                                       </DropdownMenuItem>
-                                    </>
-                                  )}
-
-                                  {canSchedule && (
-                                    <>
                                       <DropdownMenuSeparator />
-                                      <DropdownMenuItem onClick={(e) => handleScheduleOnboarding(postulacion, e)}>
-                                        <Calendar className="mr-2 h-4 w-4" />
-                                        Agendar Onboarding
-                                      </DropdownMenuItem>
                                     </>
                                   )}
 
-                                  <DropdownMenuSeparator />
+                                  {/* === CONTACTO === */}
+                                  {postulacion.phoneNumber && (
+                                    <>
+                                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                                        Contacto
+                                      </DropdownMenuLabel>
 
-                                  <RejectButton
-                                    driverId={postulacion.id}
-                                    driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
-                                    isRejected={postulacion.status === 'REJECTED'}
-                                    onSuccess={() => window.location.reload()}
-                                  />
+                                      <DropdownMenuSub>
+                                        <DropdownMenuSubTrigger>
+                                          <GraduationCap className="mr-2 h-4 w-4 text-muted-foreground" />
+                                          <span>Capacitación</span>
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent className="w-56">
+                                          <DropdownMenuItem
+                                            onSelect={(e) => e.preventDefault()}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="p-0"
+                                          >
+                                            <SendOnboardingListButton
+                                              driverId={postulacion.id}
+                                              driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
+                                              phoneNumber={postulacion.phoneNumber}
+                                              inDropdown={true}
+                                            />
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            onSelect={(e) => e.preventDefault()}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="p-0"
+                                          >
+                                            <SendOnboardingReminderButton
+                                              driverId={postulacion.id}
+                                              driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
+                                              phoneNumber={postulacion.phoneNumber}
+                                              inDropdown={true}
+                                            />
+                                          </DropdownMenuItem>
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
 
-                                  <DropdownMenuSeparator />
+                                      <DropdownMenuSub>
+                                        <DropdownMenuSubTrigger>
+                                          <Send className="mr-2 h-4 w-4 text-muted-foreground" />
+                                          <span>Aprobación ManyChat</span>
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent className="w-56">
+                                          <DropdownMenuItem
+                                            onSelect={(e) => e.preventDefault()}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="p-0"
+                                          >
+                                            <TriggerManychatFlowButton
+                                              driverId={postulacion.id}
+                                              driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
+                                              manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
+                                              inDropdown={true}
+                                              onSuccess={() => router.refresh()}
+                                            />
+                                          </DropdownMenuItem>
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
 
+                                      <DropdownMenuSeparator />
+                                    </>
+                                  )}
+
+                                  {/* === GESTIONAR === */}
+                                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                                    Gestionar
+                                  </DropdownMenuLabel>
+                                  {canSchedule && (
+                                    <DropdownMenuItem onClick={(e) => handleScheduleOnboarding(postulacion, e)}>
+                                      <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
+                                      Agendar Onboarding
+                                    </DropdownMenuItem>
+                                  )}
                                   <RefreshRucButton
                                     driverId={postulacion.id}
                                     onSuccess={() => router.refresh()}
                                   />
-
                                   <RunAgentButton
                                     driverId={postulacion.id}
                                     hasExistingRun={(postulacion.agentRuns?.length ?? 0) > 0}
                                   />
-
-                                  {postulacion.phoneNumber && (
-                                    <DropdownMenuItem
-                                      onSelect={(e) => e.preventDefault()}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="p-0"
-                                    >
-                                      <TriggerManychatFlowButton
-                                        driverId={postulacion.id}
-                                        driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
-                                        manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
-                                        inDropdown={true}
-                                        onSuccess={() => router.refresh()}
-                                      />
-                                    </DropdownMenuItem>
-                                  )}
-
-                                  <DropdownMenuSeparator />
-
                                   <AssistedCompletionButton
                                     driverId={postulacion.id}
                                     driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
                                     isAssisted={postulacion.assistedCompletion || false}
+                                    onSuccess={() => window.location.reload()}
+                                  />
+                                  <RejectButton
+                                    driverId={postulacion.id}
+                                    driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
+                                    isRejected={postulacion.status === 'REJECTED'}
                                     onSuccess={() => window.location.reload()}
                                   />
                                 </DropdownMenuContent>
