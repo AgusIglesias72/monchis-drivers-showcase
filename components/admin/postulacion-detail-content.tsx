@@ -68,6 +68,7 @@ import { RejectButton } from "@/components/admin/postulaciones/reject-button"
 import { SendOnboardingListButton } from "@/components/admin/send-onboarding-list-button"
 import { SendOnboardingReminderButton } from "@/components/admin/send-onboarding-reminder-button"
 import { TriggerManychatFlowButton } from "@/components/admin/trigger-manychat-flow-button"
+import { LinkManychatSubscriberButton } from "@/components/admin/link-manychat-subscriber-button"
 import { AgentRunSummaryCard } from "@/components/admin/agent-runs/agent-run-summary-card"
 import { getContactStatus } from "@/lib/utils/contact-status.utils"
 import { toast } from "sonner"
@@ -693,6 +694,21 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                           onSuccess={handleActionSuccess}
                         />
                       </DropdownMenuItem>
+                      {!postulacion.manychatSubscriberId && (
+                        <DropdownMenuItem
+                          onSelect={(e) => e.preventDefault()}
+                          className="p-0"
+                        >
+                          <LinkManychatSubscriberButton
+                            driverId={postulacion.id}
+                            driverName={postulacion.fullName || 'Driver'}
+                            driverPhone={postulacion.phoneNumber}
+                            manychatSubscriberId={postulacion.manychatSubscriberId}
+                            inDropdown={true}
+                            onSuccess={handleActionSuccess}
+                          />
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuSeparator />
                     </>
                   )}
