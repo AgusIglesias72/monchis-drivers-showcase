@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import {
   createSubscriber,
   findSubscriberByCustomField,
+  findSubscriberBySystemField,
   setCustomField,
   ManyChatError,
   type ManyChatSubscriber,
@@ -109,20 +110,39 @@ export async function getOrCreateManychatSubscriber(
       lastName: driver.lastName ?? undefined,
     });
   } catch (err) {
-    // Si el subscriber ya existe, resolverlo por el mirror field.
-    if (err instanceof ManyChatError && isAlreadyExistsError(err) && mirrorFieldId) {
-      const existing = await findSubscriberByCustomField(mirrorFieldId, phone);
-      if (!existing) {
-        console.error('[MANYCHAT_SUBSCRIBERS] createSubscriber reportó duplicado pero findByCustomField no lo encontró', {
-          driverId: driver.id,
-          phone,
-        });
-        throw err;
-      }
-      subscriber = existing;
-    } else {
+    if (!(err instanceof ManyChatError) || !isAlreadyExistsError(err)) {
       throw err;
     }
+
+    // Subscriber duplicado en ManyChat (creado manualmente o por código viejo).
+    // Hay que encontrarlo y vincularlo. Probamos varios caminos porque dependiendo
+    // de cómo nació el subscriber, puede o no tener el custom field espejo seteado.
+    const phoneNoPlus = phone.replace(/^\+/, '');
+    const found = await locateExistingSubscriber({
+      mirrorFieldId,
+      phoneE164: phone,
+      phoneNoPlus,
+    });
+
+    if (!found) {
+      console.error(
+        '[MANYCHAT_SUBSCRIBERS] subscriber duplicado pero no resoluble vía findBy*',
+        {
+          driverId: driver.id,
+          phone,
+          mirrorFieldId,
+          apiDetails: err.details,
+        }
+      );
+      throw new ManyChatError(
+        err.httpStatus,
+        `Subscriber ya existe en ManyChat (${phone}) pero no se puede resolver automáticamente. ` +
+          `Verifica que MANYCHAT_WHATSAPP_PHONE_FIELD_ID esté configurado y que el subscriber existente tenga ese custom field populado, ` +
+          `o vinculá manualmente el manychatSubscriberId al FormDriver desde el panel.`,
+        err.details
+      );
+    }
+    subscriber = found;
   }
 
   // Espejar el teléfono en el custom field (best effort — si falla, seguimos).
@@ -151,17 +171,58 @@ export async function getOrCreateManychatSubscriber(
 }
 
 function isAlreadyExistsError(err: ManyChatError): boolean {
-  // Antes considerábamos cualquier 400 como "already exists", lo cual
-  // enmascaraba errores genuinos de validation (consent_phrase mal, bot
-  // STOPPED, WhatsApp desconectado, etc.) intentando un findByCustomField
-  // que también fallaba. Ahora exigimos que el mensaje del API mencione
-  // duplicado/exists, o que el código sea 409 (conflict) explícito.
-  const msg = err.apiMessage.toLowerCase();
+  // ManyChat tira 400 "Validation error" como apiMessage genérico y mete el motivo
+  // real en err.details — ej:
+  //   { messages: { wa_id: { message: ["This WhatsApp ID already exists: 5959..."] } } }
+  // Antes mirábamos sólo apiMessage, así que perdíamos este caso (que es justo el
+  // que necesita el fallback findByCustomField).
+  if (err.httpStatus === 409) return true;
+
+  const haystack = (err.apiMessage + ' ' + safeStringify(err.details)).toLowerCase();
   return (
-    err.httpStatus === 409 ||
-    msg.includes('already') ||
-    msg.includes('exists') ||
-    msg.includes('duplicate') ||
-    msg.includes('subscriber with this phone')
+    haystack.includes('already exists') ||
+    haystack.includes('already') ||
+    haystack.includes('duplicate') ||
+    haystack.includes('subscriber with this phone') ||
+    haystack.includes('whatsapp id already')
   );
+}
+
+function safeStringify(v: unknown): string {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
+/**
+ * Resuelve un subscriber existente probando, en orden:
+ * 1. Custom field espejo (`whatsapp_phone_mirror`) con E.164 — el caso normal.
+ * 2. Custom field espejo sin `+` — para subscribers viejos que se guardaron sin el `+`.
+ * 3. System field `phone` — best effort; la API oficial avisa que rara vez funciona
+ *    con subscribers solo-WhatsApp, pero costo cero probar.
+ * Si nada matchea, devuelve null y el caller decide qué hacer.
+ */
+async function locateExistingSubscriber(params: {
+  mirrorFieldId: number | null;
+  phoneE164: string;
+  phoneNoPlus: string;
+}): Promise<ManyChatSubscriber | null> {
+  const { mirrorFieldId, phoneE164, phoneNoPlus } = params;
+
+  if (mirrorFieldId) {
+    const byMirrorE164 = await findSubscriberByCustomField(mirrorFieldId, phoneE164);
+    if (byMirrorE164) return byMirrorE164;
+
+    const byMirrorNoPlus = await findSubscriberByCustomField(mirrorFieldId, phoneNoPlus);
+    if (byMirrorNoPlus) return byMirrorNoPlus;
+  }
+
+  const bySystem = await findSubscriberBySystemField('phone', phoneE164);
+  if (bySystem) return bySystem;
+
+  return null;
 }
