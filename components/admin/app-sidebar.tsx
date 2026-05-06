@@ -121,11 +121,9 @@ const menuItems = [
   {
     title: "Comunicaciones",
     items: [
-      {
-        title: "WhatsApp",
-        url: "/admin/comunicaciones",
-        icon: MessageSquare,
-      },
+      // /admin/comunicaciones (panel multi-bot) escondido — multi-bot caído
+      // tras la baja de Braze. Página sigue accesible por URL si hace falta
+      // ver histórico, pero no se promociona en el sidebar.
       {
         title: "Plantillas WhatsApp",
         url: "/admin/plantillas-whatsapp",
