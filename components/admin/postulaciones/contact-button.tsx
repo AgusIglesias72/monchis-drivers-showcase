@@ -69,15 +69,31 @@ const ManyChatIcon = ({ className }: { className?: string }) => (
  */
 const ManyChatSentBadge = ({ sentAt }: { sentAt: Date | string }) => {
   const date = typeof sentAt === 'string' ? new Date(sentAt) : sentAt
-  const label = `Mensaje ManyChat enviado el ${date.toLocaleString('es-PY')}`
+  const dateLabel = date.toLocaleString('es-PY', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
   return (
-    <span
-      title={label}
-      aria-label={label}
-      className="absolute -top-1 -right-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-[#0084FF] ring-2 ring-background pointer-events-none"
-    >
-      <ManyChatIcon className="h-2.5 w-2.5 text-white" />
-    </span>
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            aria-label={`Flow ManyChat enviado el ${dateLabel}`}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute -top-1 -right-1 z-10 flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-[#0084FF] ring-2 ring-background"
+          >
+            <ManyChatIcon className="h-2.5 w-2.5 text-white" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" align="end" className="text-xs">
+          <div className="font-medium">Flow ManyChat enviado</div>
+          <div className="text-muted-foreground">{dateLabel}</div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 

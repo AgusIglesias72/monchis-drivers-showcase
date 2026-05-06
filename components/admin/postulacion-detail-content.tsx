@@ -52,6 +52,8 @@ import {
   MoreVertical,
   ExternalLink,
   Copy,
+  GraduationCap,
+  Send,
 } from "lucide-react"
 import { DocumentPreview } from "@/components/admin/document-preview"
 import { ManageOnboardingModal } from "@/components/admin/manage-onboarding-modal"
@@ -87,7 +89,17 @@ import { AssistedCompletionButton } from "./postulaciones/assisted-completion-bu
 import { RefreshRucButton } from "./postulaciones/refresh-ruc-button"
 import { RunAgentButton } from "./postulaciones/run-agent-button"
 import { AgentRunBadge } from "./agent-runs/agent-run-badge"
-import { DropdownMenu, DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuSeparator } from "../ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from "../ui/dropdown-menu"
 
 interface PostulacionDetailContentProps {
   postulacion: any
@@ -635,9 +647,12 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
-                  {/* Portal del postulante */}
+                  {/* === ACCESO === */}
                   {postulacion.accessToken && (
                     <>
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                        Acceso
+                      </DropdownMenuLabel>
                       <DropdownMenuItem
                         onClick={() => window.open(`/postulacion/${postulacion.accessToken}`, '_blank')}
                       >
@@ -658,63 +673,90 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                     </>
                   )}
 
-                  {/* Comunicación: capacitaciones */}
+                  {/* === COMUNICACIÓN === */}
                   {postulacion.phoneNumber && (
                     <>
-                      <DropdownMenuItem
-                        onSelect={(e) => e.preventDefault()}
-                        className="p-0"
-                      >
-                        <SendOnboardingListButton
-                          driverId={postulacion.id}
-                          driverName={postulacion.fullName || 'Driver'}
-                          phoneNumber={postulacion.phoneNumber}
-                          inDropdown={true}
-                        />
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={(e) => e.preventDefault()}
-                        className="p-0"
-                      >
-                        <SendOnboardingReminderButton
-                          driverId={postulacion.id}
-                          driverName={postulacion.fullName || 'Driver'}
-                          phoneNumber={postulacion.phoneNumber}
-                          inDropdown={true}
-                        />
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={(e) => e.preventDefault()}
-                        className="p-0"
-                      >
-                        <TriggerManychatFlowButton
-                          driverId={postulacion.id}
-                          driverName={postulacion.fullName || 'Driver'}
-                          manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
-                          inDropdown={true}
-                          onSuccess={handleActionSuccess}
-                        />
-                      </DropdownMenuItem>
-                      {!postulacion.manychatSubscriberId && (
-                        <DropdownMenuItem
-                          onSelect={(e) => e.preventDefault()}
-                          className="p-0"
-                        >
-                          <LinkManychatSubscriberButton
-                            driverId={postulacion.id}
-                            driverName={postulacion.fullName || 'Driver'}
-                            driverPhone={postulacion.phoneNumber}
-                            manychatSubscriberId={postulacion.manychatSubscriberId}
-                            inDropdown={true}
-                            onSuccess={handleActionSuccess}
-                          />
-                        </DropdownMenuItem>
-                      )}
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                        Comunicación
+                      </DropdownMenuLabel>
+
+                      {/* Submenu Capacitaciones */}
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          <GraduationCap className="mr-2 h-4 w-4" />
+                          <span>Capacitación</span>
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="w-56">
+                          <DropdownMenuItem
+                            onSelect={(e) => e.preventDefault()}
+                            className="p-0"
+                          >
+                            <SendOnboardingListButton
+                              driverId={postulacion.id}
+                              driverName={postulacion.fullName || 'Driver'}
+                              phoneNumber={postulacion.phoneNumber}
+                              inDropdown={true}
+                            />
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={(e) => e.preventDefault()}
+                            className="p-0"
+                          >
+                            <SendOnboardingReminderButton
+                              driverId={postulacion.id}
+                              driverName={postulacion.fullName || 'Driver'}
+                              phoneNumber={postulacion.phoneNumber}
+                              inDropdown={true}
+                            />
+                          </DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+
+                      {/* Submenu Aprobación / ManyChat */}
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          <Send className="mr-2 h-4 w-4" />
+                          <span>Aprobación ManyChat</span>
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="w-64">
+                          <DropdownMenuItem
+                            onSelect={(e) => e.preventDefault()}
+                            className="p-0"
+                          >
+                            <TriggerManychatFlowButton
+                              driverId={postulacion.id}
+                              driverName={postulacion.fullName || 'Driver'}
+                              manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
+                              inDropdown={true}
+                              onSuccess={handleActionSuccess}
+                            />
+                          </DropdownMenuItem>
+                          {!postulacion.manychatSubscriberId && (
+                            <DropdownMenuItem
+                              onSelect={(e) => e.preventDefault()}
+                              className="p-0"
+                            >
+                              <LinkManychatSubscriberButton
+                                driverId={postulacion.id}
+                                driverName={postulacion.fullName || 'Driver'}
+                                driverPhone={postulacion.phoneNumber}
+                                manychatSubscriberId={postulacion.manychatSubscriberId}
+                                inDropdown={true}
+                                onSuccess={handleActionSuccess}
+                              />
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+
                       <DropdownMenuSeparator />
                     </>
                   )}
 
-                  {/* Automatización */}
+                  {/* === AUTOMATIZACIÓN === */}
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Automatización
+                  </DropdownMenuLabel>
                   <DropdownMenuItem
                     onSelect={(e) => e.preventDefault()}
                     className="p-0"
@@ -734,27 +776,25 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                     />
                   </DropdownMenuItem>
 
-                  {/* Marcar como Asistida - solo si está IN_PROGRESS */}
-                  {postulacion.status === 'IN_PROGRESS' && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onSelect={(e) => e.preventDefault()}
-                        className="p-0"
-                      >
-                        <AssistedCompletionButton
-                          driverId={postulacion.id}
-                          driverName={postulacion.fullName || 'Driver'}
-                          isAssisted={postulacion.assistedCompletion || false}
-                          onSuccess={handleActionSuccess}
-                        />
-                      </DropdownMenuItem>
-                    </>
-                  )}
-
                   <DropdownMenuSeparator />
 
-                  {/* Rechazar/Habilitar */}
+                  {/* === ESTADO === */}
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Estado
+                  </DropdownMenuLabel>
+                  {postulacion.status === 'IN_PROGRESS' && (
+                    <DropdownMenuItem
+                      onSelect={(e) => e.preventDefault()}
+                      className="p-0"
+                    >
+                      <AssistedCompletionButton
+                        driverId={postulacion.id}
+                        driverName={postulacion.fullName || 'Driver'}
+                        isAssisted={postulacion.assistedCompletion || false}
+                        onSuccess={handleActionSuccess}
+                      />
+                    </DropdownMenuItem>
+                  )}
                   <RejectButton
                     driverId={postulacion.id}
                     driverName={postulacion.fullName || 'Driver'}
