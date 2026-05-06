@@ -168,8 +168,8 @@ export function RejectButton({
           }}
           className="cursor-pointer"
         >
-          <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-          <span className="text-green-600">Habilitar</span>
+          <CheckCircle className="mr-2 h-4 w-4" />
+          <span>Habilitar</span>
         </DropdownMenuItem>
 
         <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
@@ -212,8 +212,8 @@ export function RejectButton({
         }}
         className="cursor-pointer"
       >
-        <XCircle className="mr-2 h-4 w-4 text-red-600" />
-        <span className="text-red-600">Rechazar</span>
+        <XCircle className="mr-2 h-4 w-4 text-destructive" />
+        <span className="text-destructive">Rechazar</span>
       </DropdownMenuItem>
 
       <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
