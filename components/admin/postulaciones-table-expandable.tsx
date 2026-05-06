@@ -54,6 +54,7 @@ import { AssistedCompletionButton } from "./postulaciones/assisted-completion-bu
 import { RefreshRucButton } from "./postulaciones/refresh-ruc-button"
 import { RunAgentButton } from "./postulaciones/run-agent-button"
 import { TriggerManychatFlowButton } from "./trigger-manychat-flow-button"
+import { LinkManychatSubscriberButton } from "./link-manychat-subscriber-button"
 import { AgentRunBadge } from "./agent-runs/agent-run-badge"
 
 interface PostulacionesTableProps {
@@ -678,6 +679,22 @@ export function PostulacionesTableExpandable({
                                           onSuccess={() => router.refresh()}
                                         />
                                       </DropdownMenuItem>
+                                      {!postulacion.manychatSubscriberId && (
+                                        <DropdownMenuItem
+                                          onSelect={(e) => e.preventDefault()}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="p-0"
+                                        >
+                                          <LinkManychatSubscriberButton
+                                            driverId={postulacion.id}
+                                            driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
+                                            driverPhone={postulacion.phoneNumber}
+                                            manychatSubscriberId={postulacion.manychatSubscriberId}
+                                            inDropdown={true}
+                                            onSuccess={() => router.refresh()}
+                                          />
+                                        </DropdownMenuItem>
+                                      )}
 
                                       <DropdownMenuSeparator />
                                     </>
