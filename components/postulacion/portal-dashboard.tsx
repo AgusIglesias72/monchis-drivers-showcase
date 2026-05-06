@@ -8,6 +8,7 @@ import type { PortalData } from '@/lib/types/portal.types'
 import { DocumentsSection } from './documents-section'
 import { PersonalDataSection } from './personal-data-section'
 import { CapacitacionSelector } from './capacitacion-selector'
+import { BookingRecoveryButton } from './booking-recovery-button'
 
 const MONCHIS_RED = '#e7243f'
 
@@ -31,6 +32,14 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
       setShowGuide(true)
       localStorage.setItem(key, '1')
     }
+  }, [token])
+
+  // Recordamos el token del portal para que /capacitaciones identifique al
+  // driver automáticamente sin pedirle cédula+phone de nuevo.
+  useEffect(() => {
+    try {
+      localStorage.setItem('monchis.driver.portalToken', token)
+    } catch {}
   }, [token])
 
   useEffect(() => {
@@ -171,16 +180,46 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
           )}
 
           {activeTab === 'capacitacion' && (
-            <CapacitacionSelector
-              token={token}
-              documents={data.documents}
-              personalData={data.personalData}
-              status={data.status}
-              documentsStatus={data.documentsStatus}
-              assignedCapacitacion={data.assignedCapacitacion}
-              payment={data.payment}
-              onUpdate={refreshData}
-            />
+            <>
+              {/* Acceso rápido a la nueva pantalla pública de capacitaciones */}
+              {(() => {
+                const cedulaOk = data.documents?.some(
+                  (d: any) => d.documentType === 'CEDULA' && d.status === 'APPROVED',
+                )
+                const antecedentesOk = data.documents?.some(
+                  (d: any) => d.documentType === 'CRIMINAL_RECORD' && d.status === 'APPROVED',
+                )
+                const eligible =
+                  !!cedulaOk &&
+                  !!antecedentesOk &&
+                  !!data.personalData?.firstName &&
+                  !!data.personalData?.lastName &&
+                  data.status !== 'REJECTED'
+                return (
+                  <div className="mb-4">
+                    <BookingRecoveryButton
+                      portalToken={token}
+                      disabled={!eligible}
+                      disabledReason={
+                        !eligible
+                          ? 'Completá tus datos y validá cédula + antecedentes para reservar'
+                          : undefined
+                      }
+                    />
+                  </div>
+                )
+              })()}
+              <CapacitacionSelector
+                token={token}
+                documents={data.documents}
+                personalData={data.personalData}
+                status={data.status}
+                documentsStatus={data.documentsStatus}
+                assignedCapacitacion={data.assignedCapacitacion}
+                payment={data.payment}
+                onUpdate={refreshData}
+              />
+            </>
           )}
         </div>
       </div>

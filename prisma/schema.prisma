@@ -43,22 +43,24 @@ model AdminUser {
   lastLoginAt DateTime? @map("last_login_at")
 
   // Relaciones
-  formNotesCreated                FormNote[]           @relation("FormNoteCreatedBy")
-  documentsUploaded               FormDocument[]       @relation("DocumentUploadedBy")
-  documentReviews                 FormDocument[]       @relation("DocumentReviewedBy")
-  finalApprovalsGiven             FormDriver[]         @relation("FinalApprovedBy")
-  onboardingEventsOrganized       OnboardingEvent[]    @relation("EventOrganizer")
-  onboardingAttendeesInvited      OnboardingAttendee[] @relation("AttendeeInvitedBy")
-  onboardingAttendeesCheckedIn    OnboardingAttendee[] @relation("AttendeeCheckedInBy")
-  onboardingAttendeesCancelled    OnboardingAttendee[] @relation("AttendeeCancelledBy")
-  onboardingAttendeesMarkedNoShow OnboardingAttendee[] @relation("AttendeeMarkedNoShowBy")
-  onboardingAttendeesRescheduled  OnboardingAttendee[] @relation("AttendeeRescheduledBy")
-  onboardingEventsCompleted       OnboardingEvent[]    @relation("EventCompletedBy")
-  equipmentPaymentsVerified       EquipmentPayment[]   @relation("PaymentVerifiedBy")
-  driverContactsCreated           DriverContact[]      @relation("ContactCreatedBy")
-  whatsappMessagesSent WhatsAppMessage[] @relation("WhatsAppMessagesSent")
-  whatsappTemplatesCreated WhatsAppTemplate[] @relation("TemplatesCreated")
-  whatsappTemplatesUpdated WhatsAppTemplate[] @relation("TemplatesUpdated")
+  formNotesCreated                FormNote[]               @relation("FormNoteCreatedBy")
+  documentsUploaded               FormDocument[]           @relation("DocumentUploadedBy")
+  documentReviews                 FormDocument[]           @relation("DocumentReviewedBy")
+  finalApprovalsGiven             FormDriver[]             @relation("FinalApprovedBy")
+  onboardingEventsOrganized       OnboardingEvent[]        @relation("EventOrganizer")
+  onboardingAttendeesInvited      OnboardingAttendee[]     @relation("AttendeeInvitedBy")
+  onboardingAttendeesCheckedIn    OnboardingAttendee[]     @relation("AttendeeCheckedInBy")
+  onboardingAttendeesCancelled    OnboardingAttendee[]     @relation("AttendeeCancelledBy")
+  onboardingAttendeesMarkedNoShow OnboardingAttendee[]     @relation("AttendeeMarkedNoShowBy")
+  onboardingAttendeesRescheduled  OnboardingAttendee[]     @relation("AttendeeRescheduledBy")
+  onboardingEventsCompleted       OnboardingEvent[]        @relation("EventCompletedBy")
+  onboardingRulesOrganized        OnboardingScheduleRule[] @relation("RuleDefaultOrganizer")
+  onboardingRulesCreated          OnboardingScheduleRule[] @relation("RuleCreatedBy")
+  equipmentPaymentsVerified       EquipmentPayment[]       @relation("PaymentVerifiedBy")
+  driverContactsCreated           DriverContact[]          @relation("ContactCreatedBy")
+  whatsappMessagesSent            WhatsAppMessage[]        @relation("WhatsAppMessagesSent")
+  whatsappTemplatesCreated        WhatsAppTemplate[]       @relation("TemplatesCreated")
+  whatsappTemplatesUpdated        WhatsAppTemplate[]       @relation("TemplatesUpdated")
 
   @@index([email])
   @@index([role])
@@ -215,8 +217,8 @@ model FormDriver {
 
   // Validación RUC (turuc.com.py)
   rucStatus         String?   @default("NOT_CHECKED") @map("ruc_status") // NOT_CHECKED | ACTIVO | INACTIVO | CLAUSURADO | NO_ENCONTRADO | ERROR | etc (string libre, valor crudo del SET)
-  rucName           String?   @map("ruc_name")          // razonSocial
-  rucDv             Int?      @map("ruc_dv")            // dígito verificador
+  rucName           String?   @map("ruc_name") // razonSocial
+  rucDv             Int?      @map("ruc_dv") // dígito verificador
   rucIsLegalEntity  Boolean?  @map("ruc_is_legal_entity")
   rucIsPublicEntity Boolean?  @map("ruc_is_public_entity")
   rucLastCheckedAt  DateTime? @map("ruc_last_checked_at")
@@ -224,10 +226,10 @@ model FormDriver {
 
   // Admin: marca "RUC Inactivo" (postulante va a corregir su situación fiscal).
   // Cuando es true, el certificado tributario cuenta como completo a los fines del badge.
-  rucInactiveWaived    Boolean   @default(false) @map("ruc_inactive_waived")
-  rucInactiveWaivedBy  String?   @map("ruc_inactive_waived_by")   // clerkId del admin
-  rucInactiveWaivedAt  DateTime? @map("ruc_inactive_waived_at")
-  rucInactiveWaivedNote String?  @map("ruc_inactive_waived_note") @db.Text
+  rucInactiveWaived     Boolean   @default(false) @map("ruc_inactive_waived")
+  rucInactiveWaivedBy   String?   @map("ruc_inactive_waived_by") // clerkId del admin
+  rucInactiveWaivedAt   DateTime? @map("ruc_inactive_waived_at")
+  rucInactiveWaivedNote String?   @map("ruc_inactive_waived_note") @db.Text
 
   // Timestamps
   startedAt      DateTime  @default(now()) @map("started_at")
@@ -241,11 +243,12 @@ model FormDriver {
   notes                 FormNote[]
   documents             FormDocument[]
   onboardingAttendances OnboardingAttendee[]
+  publicBookingSessions PublicBookingSession[]
   equipmentPayments     EquipmentPayment[]
   driverContacts        DriverContact[]
   financialService      FinancialService?
-  whatsappMessagesSent WhatsAppMessage[]
-  agentRuns            AgentRun[]
+  whatsappMessagesSent  WhatsAppMessage[]
+  agentRuns             AgentRun[]
 
   @@index([cedula])
   @@index([phoneNumber])
@@ -478,7 +481,7 @@ model WhatsAppMessage {
 
   // Tipo de mensaje y contenido
   messageType   WhatsAppMessageType @map("message_type")
-  step          String?              // Para form_incomplete: personal_info, documents, etc
+  step          String? // Para form_incomplete: personal_info, documents, etc
   message       String              @db.Text // Mensaje completo enviado
   messageLength Int                 @map("message_length") // Longitud del mensaje
 
@@ -503,11 +506,11 @@ model WhatsAppMessage {
   formDriver   FormDriver? @relation(fields: [formDriverId], references: [id], onDelete: SetNull)
 
   // Auditoría y origen
-  botId      String?                @map("bot-adquisicion-id") // bot-adquisicion-prod, bot-reactivacion-prod
-  
+  botId String? @map("bot-adquisicion-id") // bot-adquisicion-prod, bot-reactivacion-prod
+
   source     WhatsAppMessageSource @default(MANUAL) // manual, cron, trigger, api
-  sentBy     String?                @map("sent_by") // clerkId del admin que lo envió (si es manual)
-  sentByUser AdminUser?             @relation("WhatsAppMessagesSent", fields: [sentBy], references: [id], onDelete: SetNull)
+  sentBy     String?               @map("sent_by") // clerkId del admin que lo envió (si es manual)
+  sentByUser AdminUser?            @relation("WhatsAppMessagesSent", fields: [sentBy], references: [id], onDelete: SetNull)
 
   // Contexto de la request
   ipAddress String? @map("ip_address")
@@ -524,7 +527,7 @@ model WhatsAppMessage {
   @@index([formDriverId])
   @@index([sentBy])
   @@index([sentAt])
-  @@index([botId])  // ✅ NUEVO índice
+  @@index([botId]) // ✅ NUEVO índice
   @@map("whatsapp_messages")
 }
 
@@ -553,7 +556,7 @@ model WhatsAppTemplate {
   manychatFlowId String? @map("manychat_flow_id")
 
   // Estadísticas de uso
-  usageCount Int @default(0) @map("usage_count")
+  usageCount Int       @default(0) @map("usage_count")
   lastUsedAt DateTime? @map("last_used_at")
 
   // Auditoría
@@ -576,9 +579,19 @@ model WhatsAppTemplate {
 model OnboardingEvent {
   id String @id @default(cuid())
 
+  // Vínculo con la regla recurrente que lo generó (null = evento manual / legacy)
+  scheduleRuleId String?                 @map("schedule_rule_id")
+  scheduleRule   OnboardingScheduleRule? @relation("RuleEvents", fields: [scheduleRuleId], references: [id], onDelete: SetNull)
+
   // Información del evento (ahora opcionales)
   title       String? // ✅ AHORA OPCIONAL
   description String? @db.Text
+
+  // Snapshot de la regla al momento de materializar (no se mueve si la rule cambia después)
+  modality        OnboardingModality? // null = evento legacy
+  instructions    String?             @db.Text
+  durationMinutes Int?                @map("duration_minutes")
+  timezone        String              @default("America/Asuncion")
 
   // Fecha y hora (lo importante)
   scheduledDate DateTime @map("scheduled_date")
@@ -593,6 +606,9 @@ model OnboardingEvent {
   // Capacidad
   maxCapacity     Int? @map("max_capacity")
   currentCapacity Int  @default(0) @map("current_capacity")
+
+  // OCC: previene race conditions al reservar el último cupo
+  version Int @default(0)
 
   // Estado del evento
   status OnboardingEventStatus @default(SCHEDULED)
@@ -628,6 +644,8 @@ model OnboardingEvent {
   @@index([scheduledDate])
   @@index([status])
   @@index([organizer])
+  @@index([scheduleRuleId])
+  @@index([scheduledDate, status])
   @@map("onboarding_events")
 }
 
@@ -682,17 +700,156 @@ model OnboardingAttendee {
   metadata Json?
 
   // Timestamps
-  invitedAt     DateTime  @default(now()) @map("invited_at")
+  invitedAt     DateTime   @default(now()) @map("invited_at")
   invitedBy     String?    @map("invited_by") // clerkId or null for self-service
   invitedByUser AdminUser? @relation("AttendeeInvitedBy", fields: [invitedBy], references: [id])
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
 
   @@unique([eventId, formDriverId])
   @@index([eventId])
   @@index([formDriverId])
   @@index([status])
   @@map("onboarding_attendees")
+}
+
+// ==================== ONBOARDING SCHEDULE RULES ====================
+// Reglas recurrentes tipo Calendly Event Type. Cada rule genera N OnboardingEvent
+// (instancias materializadas por cron) y soporta excepciones puntuales.
+
+// Ubicaciones físicas reusables para capacitaciones presenciales/híbridas.
+// Permite que el admin guarde una vez la dirección + link de Google Maps y la
+// reutilice en múltiples reglas (HUB Asunción, sucursal Encarnación, etc.).
+model OnboardingLocation {
+  id            String  @id @default(cuid())
+  name          String  @unique // Nombre interno: "HUB Asunción"
+  address       String  // Dirección legible
+  googleMapsUrl String  @map("google_maps_url") // URL completa copiada de Google Maps
+  notes         String? @db.Text // Referencias / cómo entrar / piso
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdBy String   @map("created_by") // clerkId
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rules OnboardingScheduleRule[]
+
+  @@index([isActive])
+  @@map("onboarding_locations")
+}
+
+model OnboardingScheduleRule {
+  id String @id @default(cuid())
+
+  // Identificación pública
+  slug         String  @unique // "capacitacion-presencial-hub"
+  title        String
+  description  String? @db.Text // Descripción larga (marketing)
+  instructions String? @db.Text // Qué traer, cómo prepararse — separado de description
+
+  // Modalidad y ubicación
+  modality        OnboardingModality
+  // Ubicación: o bien guardada (locationId) o bien ad-hoc (locationAddress + googleMapsUrl)
+  locationId      String?             @map("location_id")
+  savedLocation   OnboardingLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  location        String? // Nombre legible del lugar ("HUB Asunción") — usado si no hay locationId
+  locationAddress String?            @map("location_address")
+  googleMapsUrl   String?            @map("google_maps_url") // link copiado desde Google Maps
+  // DEPRECATED: lat/lng se reemplazaron por googleMapsUrl + address (no se borran por compat)
+  locationLat     Float?             @map("location_lat")
+  locationLng     Float?             @map("location_lng")
+  meetingLink     String?            @map("meeting_link") // si VIRTUAL/HYBRID
+  meetingPlatform String?            @map("meeting_platform") // "Google Meet" | "Zoom" | "Teams" (free text)
+
+  // Recurrencia
+  frequency       OnboardingFrequency @default(WEEKLY)
+  daysOfWeek      Int[]               @default([]) @map("days_of_week") // 0=domingo..6=sábado
+  startTime       String              @map("start_time") // "10:00"
+  durationMinutes Int                 @default(120) @map("duration_minutes")
+  timezone        String              @default("America/Asuncion")
+
+  // Validez de la regla
+  validFrom DateTime  @map("valid_from")
+  validTo   DateTime? @map("valid_to") // null = indefinida
+
+  // Reglas de booking
+  maxCapacity         Int                   @default(20) @map("max_capacity")
+  minNoticeHours      Int                   @default(2) @map("min_notice_hours")
+  maxFutureDays       Int                   @default(60) @map("max_future_days")
+  bufferBeforeMin     Int                   @default(0) @map("buffer_before_min")
+  bufferAfterMin      Int                   @default(0) @map("buffer_after_min")
+  cancelDeadlineHours Int                   @default(4) @map("cancel_deadline_hours")
+  paymentMode         OnboardingPaymentMode @default(POST_EVENT) @map("payment_mode")
+
+  // Estado / visibilidad
+  isActive Boolean @default(true) @map("is_active")
+  isPublic Boolean @default(true) @map("is_public") // visible en /capacitaciones
+
+  // Organizador por defecto
+  defaultOrganizer String    @map("default_organizer") // clerkId
+  organizerUser    AdminUser @relation("RuleDefaultOrganizer", fields: [defaultOrganizer], references: [id])
+
+  // Auditoría
+  createdBy     String     @map("created_by") // clerkId
+  createdByUser AdminUser? @relation("RuleCreatedBy", fields: [createdBy], references: [id])
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  // Relaciones
+  events     OnboardingEvent[]             @relation("RuleEvents")
+  exceptions OnboardingScheduleException[]
+
+  @@index([slug])
+  @@index([isActive, isPublic])
+  @@index([modality])
+  @@map("onboarding_schedule_rules")
+}
+
+// Excepciones a la regla: feriados (CANCELLED) o cambios puntuales (OVERRIDE).
+model OnboardingScheduleException {
+  id     String                 @id @default(cuid())
+  ruleId String                 @map("rule_id")
+  rule   OnboardingScheduleRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  date DateTime // Día calendario afectado (00:00 en timezone de la rule)
+  type OnboardingExceptionType
+
+  // Override (solo si type = OVERRIDE; null = se usa el valor de la rule)
+  overrideStartTime   String? @map("override_start_time")
+  overrideDurationMin Int?    @map("override_duration_min")
+  overrideMaxCapacity Int?    @map("override_max_capacity")
+  overrideMeetingLink String? @map("override_meeting_link")
+
+  reason String? @db.Text
+
+  createdBy String   @map("created_by") // clerkId
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([ruleId, date])
+  @@index([date])
+  @@map("onboarding_schedule_exceptions")
+}
+
+// Token efímero para el flujo público de booking. Se emite al postulante elegible
+// y se envía por WhatsApp/email post-aprobación. Sin OTP — recovery vía portal viejo.
+model PublicBookingSession {
+  id String @id @default(cuid())
+
+  formDriverId String     @map("form_driver_id")
+  formDriver   FormDriver @relation(fields: [formDriverId], references: [id], onDelete: Cascade)
+
+  shareToken String    @unique @map("share_token") // 32 chars, en URL: ?session=XXX
+  expiresAt  DateTime  @map("expires_at") // típicamente +30 días desde issue
+  usedAt     DateTime? @map("used_at") // se setea al confirmar reserva (no invalida — sirve para tracking)
+
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([shareToken])
+  @@index([formDriverId])
+  @@index([expiresAt])
+  @@map("public_booking_sessions")
 }
 
 model BackgroundJob {
@@ -725,17 +882,17 @@ model BackgroundJob {
 
 model BonusAssignment {
   id            String   @id @default(cuid())
-  executionDate DateTime @map("execution_date")  // Cuándo se ejecutó el proceso
-  bonusDate     DateTime @map("bonus_date")      // Fecha de los pedidos bonificados
+  executionDate DateTime @map("execution_date") // Cuándo se ejecutó el proceso
+  bonusDate     DateTime @map("bonus_date") // Fecha de los pedidos bonificados
   driverCedula  String   @map("driver_cedula")
   driverName    String?  @map("driver_name")
-  orderCount    Int      @map("order_count")     // Pedidos que calificaron
-  bonusAmount   Decimal  @map("bonus_amount")    // Monto total del bono
-  extraName     String   @map("extra_name")      // "18/1 (9)- 3.000 Gs"
-  ruleId        String?  @map("rule_id")         // Regla que aplicó
+  orderCount    Int      @map("order_count") // Pedidos que calificaron
+  bonusAmount   Decimal  @map("bonus_amount") // Monto total del bono
+  extraName     String   @map("extra_name") // "18/1 (9)- 3.000 Gs"
+  ruleId        String?  @map("rule_id") // Regla que aplicó
 
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([executionDate])
   @@index([bonusDate])
@@ -745,16 +902,16 @@ model BonusAssignment {
 }
 
 model BonusRule {
-  id            String   @id @default(cuid())
-  date          DateTime                         // Fecha para la que aplica
-  startTime     String   @map("start_time")     // "14:00"
-  endTime       String   @map("end_time")       // "18:00"
-  zones         String[]                         // ["Centro", "Villa Morra"] o ["ALL"]
-  amountPerOrder Decimal @map("amount_per_order") // Monto por pedido
-  isActive      Boolean  @default(true) @map("is_active")
+  id             String   @id @default(cuid())
+  date           DateTime // Fecha para la que aplica
+  startTime      String   @map("start_time") // "14:00"
+  endTime        String   @map("end_time") // "18:00"
+  zones          String[] // ["Centro", "Villa Morra"] o ["ALL"]
+  amountPerOrder Decimal  @map("amount_per_order") // Monto por pedido
+  isActive       Boolean  @default(true) @map("is_active")
 
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([date, isActive])
   @@map("bonus_rules")
@@ -881,22 +1038,22 @@ model MonchisOrderImportQueue {
 // Una vez que un pedido está FINALIZED es inmutable, así que lo guardamos
 // para no volver a consultarlo. rawData guarda el JSON completo tal como vino.
 model MonchisOrderCache {
-  requestId       String   @id @map("request_id") // 24-char Mongo ObjectId
-  externalOrderId String?  @map("external_order_id")
-  driverId        String?  @map("driver_id")
-  driverName      String?  @map("driver_name")
-  branchName      String?  @map("branch_name")
+  requestId       String    @id @map("request_id") // 24-char Mongo ObjectId
+  externalOrderId String?   @map("external_order_id")
+  driverId        String?   @map("driver_id")
+  driverName      String?   @map("driver_name")
+  branchName      String?   @map("branch_name")
   status          String? // driver_request_state: PENDING, ACCEPTED, FINALIZED, etc.
-  totalOrder      String?  @map("total_order")
+  totalOrder      String?   @map("total_order")
   confirmedAt     DateTime? @map("confirmed_at")
   finalizedAt     DateTime? @map("finalized_at")
-  rawData         Json     @map("raw_data") // payload completo de la API
+  rawData         Json      @map("raw_data") // payload completo de la API
 
   // Señales pre-computadas para filtros rápidos en la tabla
-  hasAdminChange         Boolean @default(false) @map("has_admin_change")
-  acceptanceSeconds      Int?    @map("acceptance_seconds")
-  endToEndSeconds        Int?    @map("end_to_end_seconds")
-  offersWithDriverCount  Int     @default(0) @map("offers_with_driver_count")
+  hasAdminChange        Boolean @default(false) @map("has_admin_change")
+  acceptanceSeconds     Int?    @map("acceptance_seconds")
+  endToEndSeconds       Int?    @map("end_to_end_seconds")
+  offersWithDriverCount Int     @default(0) @map("offers_with_driver_count")
 
   capturedAt  DateTime @default(now()) @map("captured_at")
   refreshedAt DateTime @updatedAt @map("refreshed_at")
@@ -1051,6 +1208,27 @@ enum OnboardingAttendeeStatus {
   NO_SHOW // No se presentó
   CANCELLED // Canceló
   RESCHEDULED // Reagendado
+}
+
+enum OnboardingModality {
+  IN_PERSON // Presencial
+  VIRTUAL // Solo online (Meet/Zoom)
+  HYBRID // Presencial + streaming opcional
+}
+
+enum OnboardingFrequency {
+  WEEKLY // Se repite en daysOfWeek de la semana
+  ONE_OFF // No recurrente (uso interno; equivale a evento manual)
+}
+
+enum OnboardingExceptionType {
+  CANCELLED // No se realiza ese día (feriado, cancelación puntual)
+  OVERRIDE // Cambio puntual de hora/capacidad/link sin cancelar
+}
+
+enum OnboardingPaymentMode {
+  POST_EVENT // Pago post-capacitación (status quo Monchis)
+  PRE_BOOKING // Pre-pago al reservar (V2, no implementado en MVP)
 }
 
 enum DocumentType {

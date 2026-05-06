@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -260,4 +261,192 @@ body {
 }
 .pedido-map-wrapper .gm-style-iw-tc::after {
   background: white !important;
+}
+
+/* ──────────────────────────────────────────────────────────
+   DayPicker v9 — calendario público de capacitaciones
+   Estilos visuales viven en .rdp-day_button (el botón interno);
+   .rdp-day es solo el contenedor.
+   IMPORTANTE: el style.css de react-day-picker fija variables como
+   --rdp-day-width: 44px y se carga después de globals.css. Por eso
+   sobreescribimos con !important en los anchos críticos.
+   ────────────────────────────────────────────────────────── */
+.monchis-day-picker {
+  --rdp-day-height: 2.5rem !important;
+  --rdp-day-width: 100% !important;
+  --rdp-day_button-width: 100% !important;
+  --rdp-day_button-height: 2.5rem !important;
+  --rdp-day_button-border: none !important;
+  --rdp-day_button-border-radius: 0.5rem !important;
+  --rdp-accent-color: var(--brand) !important;
+  --rdp-outline: none !important;
+  --rdp-outline-selected: none !important;
+  --rdp-selected-border: none !important;
+  --rdp-nav-height: 2.25rem !important;
+  width: 100%;
+  margin: 0;
+}
+.monchis-day-picker .rdp-months {
+  width: 100% !important;
+  display: block !important;
+  margin: 0 !important;
+}
+.monchis-day-picker .rdp-month {
+  width: 100% !important;
+  margin: 0 !important;
+  display: block;
+}
+
+/* Caption: título a la izquierda, botones de nav a la derecha */
+.monchis-day-picker .rdp-month_caption {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 2.25rem;
+  margin-bottom: 0.5rem;
+  padding: 0 0.25rem;
+}
+.monchis-day-picker .rdp-caption_label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-transform: capitalize;
+}
+.monchis-day-picker .rdp-nav {
+  display: flex;
+  gap: 0.25rem;
+}
+.monchis-day-picker .rdp-button_previous,
+.monchis-day-picker .rdp-button_next {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 120ms ease;
+}
+.monchis-day-picker .rdp-button_previous:hover:not(:disabled):not([aria-disabled='true']),
+.monchis-day-picker .rdp-button_next:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: var(--muted);
+}
+.monchis-day-picker .rdp-chevron {
+  fill: currentColor;
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Grid de meses: ocupa todo el ancho disponible */
+.monchis-day-picker .rdp-month_grid {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: separate !important;
+  border-spacing: 4px !important;
+  margin: 0 !important;
+}
+.monchis-day-picker .rdp-weekdays {
+  width: 100%;
+}
+.monchis-day-picker .rdp-weekday {
+  width: calc(100% / 7);
+  padding: 0.25rem 0;
+  font-weight: 500;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+.monchis-day-picker .rdp-week {
+  width: 100%;
+}
+
+/* TD del día: solo contenedor (sin estilos visuales propios) */
+.monchis-day-picker .rdp-day {
+  width: calc(100% / 7) !important;
+  height: var(--rdp-day-height) !important;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Botón visible: acá vive todo el styling. */
+.monchis-day-picker .rdp-day_button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: var(--rdp-day-height) !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: transparent;
+  border-radius: 0.5rem !important; /* rounded-md, no cápsula */
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Sin outline azul nativo en ningún estado */
+.monchis-day-picker .rdp-day_button,
+.monchis-day-picker .rdp-day_button:focus,
+.monchis-day-picker .rdp-day_button:focus-visible,
+.monchis-day-picker .rdp-day_button:active {
+  outline: none !important;
+}
+
+/* Día disponible (con capacitación) */
+.monchis-day-picker .rdp-day.rdp-available .rdp-day_button {
+  background-color: color-mix(in srgb, var(--brand) 10%, transparent);
+  font-weight: 600;
+}
+.monchis-day-picker .rdp-day.rdp-available .rdp-day_button:hover {
+  background-color: color-mix(in srgb, var(--brand) 18%, transparent);
+}
+
+/* Hoy: solo bold */
+.monchis-day-picker .rdp-day.rdp-today:not(.rdp-selected) .rdp-day_button {
+  font-weight: 700;
+}
+
+/* Disabled (pasados, llenos, sin capacitación): tachado diagonal + opaco */
+.monchis-day-picker .rdp-day.rdp-disabled .rdp-day_button,
+.monchis-day-picker .rdp-day_button:disabled {
+  color: var(--muted-foreground);
+  cursor: not-allowed;
+  font-weight: 500;
+  background-image: linear-gradient(
+    to top right,
+    transparent 47%,
+    color-mix(in srgb, var(--muted-foreground) 35%, transparent) 48%,
+    color-mix(in srgb, var(--muted-foreground) 35%, transparent) 52%,
+    transparent 53%
+  );
+}
+.monchis-day-picker .rdp-day.rdp-disabled .rdp-day_button:hover,
+.monchis-day-picker .rdp-day_button:disabled:hover {
+  background-color: transparent;
+}
+
+/* Seleccionado: fondo brand sólido + sombra */
+.monchis-day-picker .rdp-day.rdp-selected .rdp-day_button {
+  background-color: var(--brand) !important;
+  background-image: none !important;
+  color: var(--brand-foreground) !important;
+  font-weight: 700;
+  border: none !important;
+  box-shadow: 0 6px 14px -3px color-mix(in srgb, var(--brand) 50%, transparent),
+    0 2px 5px -1px color-mix(in srgb, var(--brand) 35%, transparent);
+}
+.monchis-day-picker .rdp-day.rdp-selected .rdp-day_button:hover {
+  background-color: var(--brand-hover) !important;
+}
+
+/* Días "outside" (mes anterior/siguiente que aparecen): atenuados */
+.monchis-day-picker .rdp-outside .rdp-day_button {
+  color: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
 }

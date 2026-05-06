@@ -9,6 +9,8 @@ const isPublicRoute = createRouteMatcher([
   '/reset-password',
   '/sso-callback',
   '/postulacion(.*)', // ← Portal de autogestión (rutas públicas con token)
+  '/capacitaciones(.*)', // ← Pantalla pública de capacitaciones (gating al reservar)
+  '/api/public(.*)', // ← APIs públicas (capacitaciones, auth via shareToken)
   '/api/form(.*)',
   '/api/postulacion/(.*)', // ← APIs del portal (generate-token tiene auth interna)
   '/api/webhooks(.*)',
