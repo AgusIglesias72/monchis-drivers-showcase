@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import {
@@ -35,8 +35,6 @@ type State =
 
 export function IdentityModal({ open, onOpenChange, onValidated }: Props) {
   const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
   const [cedula, setCedula] = useState('')
   const [phoneLast4, setPhoneLast4] = useState('')
   const [busy, setBusy] = useState(false)
@@ -90,14 +88,14 @@ export function IdentityModal({ open, onOpenChange, onValidated }: Props) {
         return
       }
 
-      // Match exitoso y elegible: persistimos el token y notificamos
+      // Match exitoso y elegible: persistimos el token y notificamos.
+      // La cookie ya quedó seteada por la respuesta del endpoint, así que no
+      // hace falta polucionar la URL con ?session= — un router.refresh()
+      // alcanza para que el SSR vuelva a hidratar con la nueva identidad.
       const token = data.shareToken as string
       try {
         localStorage.setItem('monchis.bookingShareToken', token)
       } catch {}
-      const params = new URLSearchParams(searchParams.toString())
-      params.set('session', token)
-      router.replace(`${pathname}?${params.toString()}`)
       toast.success(
         data.formDriver.firstName
           ? `Hola ${data.formDriver.firstName}, ya podés reservar`
@@ -105,6 +103,7 @@ export function IdentityModal({ open, onOpenChange, onValidated }: Props) {
       )
       onValidated?.(token)
       onOpenChange(false)
+      router.refresh()
       // Reset para próxima apertura
       setTimeout(reset, 300)
     } catch {

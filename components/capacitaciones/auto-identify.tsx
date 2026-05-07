@@ -51,15 +51,16 @@ export function AutoIdentify() {
           try {
             localStorage.setItem('monchis.bookingShareToken', data.shareToken)
           } catch {}
-          // Persistir también la cookie para que el SSR identifique en próximos renders
+          // Persistir la cookie para que el SSR identifique en próximos renders.
+          // Con la cookie seteada, no hace falta meter ?session= en la URL — el
+          // router.refresh() vuelve a correr el server component y resuelve la
+          // identidad por cookie. URL queda limpia.
           try {
             const days = 60
             const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
             document.cookie = `monchis_portal_token=${portalToken}; expires=${expires}; path=/; samesite=lax`
           } catch {}
-          const params = new URLSearchParams(searchParams.toString())
-          params.set('session', data.shareToken)
-          router.replace(`${pathname}?${params.toString()}`)
+          router.refresh()
         }
       })
       .catch(() => {})

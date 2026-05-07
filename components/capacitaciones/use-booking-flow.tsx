@@ -92,6 +92,15 @@ export function useBookingFlow(initialSession?: string, rescheduleToken?: string
       }
       const data = await res.json()
       toast.success(isReschedule ? '¡Reserva reagendada!' : '¡Reserva confirmada!')
+      // Con WhatsApp aún caído y email opcional, un driver sin email queda sin
+      // ningún canal de confirmación además de la URL. Le avisamos para que
+      // bookmarkee la página de detalle a la que estamos por redirigir.
+      if (!isReschedule && !profile.email?.trim()) {
+        toast('No nos diste email — guardá esta página para volver a verla.', {
+          duration: 7000,
+          icon: '📌',
+        })
+      }
       setShowConfirm(false)
       // El reschedule genera un nuevo confirmationToken (la attendee anterior queda
       // CANCELLED); siempre usamos el que devuelve el API.
