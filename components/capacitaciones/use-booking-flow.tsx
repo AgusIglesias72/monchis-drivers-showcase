@@ -93,8 +93,9 @@ export function useBookingFlow(initialSession?: string, rescheduleToken?: string
       const data = await res.json()
       toast.success(isReschedule ? '¡Reserva reagendada!' : '¡Reserva confirmada!')
       setShowConfirm(false)
-      const newToken = isReschedule ? rescheduleToken : data.confirmationToken
-      router.push(`/capacitaciones/reserva/${newToken}`)
+      // El reschedule genera un nuevo confirmationToken (la attendee anterior queda
+      // CANCELLED); siempre usamos el que devuelve el API.
+      router.push(`/capacitaciones/reserva/${data.confirmationToken}`)
     } catch (err: any) {
       toast.error(err?.message || (isReschedule ? 'No pudimos reagendar' : 'No pudimos reservar'))
     } finally {

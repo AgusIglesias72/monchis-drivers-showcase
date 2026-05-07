@@ -9,6 +9,7 @@ import { HowItWorks } from '@/components/capacitaciones/how-it-works'
 import { RulesGrid } from '@/components/capacitaciones/rules-grid'
 import { EmptyState } from '@/components/capacitaciones/empty-state'
 import { AutoIdentify } from '@/components/capacitaciones/auto-identify'
+import { AnonymousIdentifyCTA } from '@/components/capacitaciones/anonymous-identify-cta'
 import { resolveIdentityFromCookie } from '@/lib/services/onboarding-identity'
 import type { RuleSummary, SlotResponse } from '@/lib/types/onboarding-rules.types'
 
@@ -93,6 +94,10 @@ export default async function CapacitacionesPage({
       {/* Fallback cliente: si el server no encontró cookie, intentamos
           identificar via localStorage (legacy). */}
       {!identity.found && !sessionFromUrl && <AutoIdentify />}
+
+      {/* CTA explícito para postulantes que llegan en frío via link compartido.
+          Solo aparece si no encontramos nada en localStorage tampoco. */}
+      {!identity.found && !sessionFromUrl && <AnonymousIdentifyCTA />}
 
       {/* Banner SSR: si el server resolvió la identidad la mostramos al toque */}
       {identity.found && identity.driver && (
