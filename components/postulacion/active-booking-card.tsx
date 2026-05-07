@@ -70,12 +70,14 @@ export function ActiveBookingCard({ booking, onUpdate }: Props) {
   const Icon = booking.modality ? MODALITY_ICON[booking.modality] : Calendar
   const modalityLabel = booking.modality ? MODALITY_LABEL[booking.modality] : null
 
-  // Reschedule: si tenemos slug, vamos al detalle de la rule. Si no (reserva
-  // legacy sin rule), caemos al landing de capacitaciones — ahí va a poder
-  // ver/elegir otra rule.
-  const reschedHref = booking.ruleSlug
+  // Reschedule solo es viable cuando tenemos slug — la landing no lee el
+  // query reschedule, así que el fallback genérico crearía una reserva nueva
+  // en lugar de reagendar. Para legacy sin rule mostramos solo cancelar +
+  // WhatsApp como camino para cambiar fecha.
+  const canReschedule = Boolean(booking.ruleSlug)
+  const reschedHref = canReschedule
     ? `/capacitaciones/${booking.ruleSlug}?reschedule=${booking.confirmationToken}`
-    : `/capacitaciones?reschedule=${booking.confirmationToken}`
+    : null
 
   const detailHref = `/capacitaciones/reserva/${booking.confirmationToken}`
 
@@ -170,7 +172,11 @@ export function ActiveBookingCard({ booking, onUpdate }: Props) {
       </div>
 
       {/* Acciones */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <div
+        className={`grid grid-cols-1 ${
+          canReschedule ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
+        } gap-2`}
+      >
         <Button
           asChild
           variant="outline"
@@ -182,17 +188,19 @@ export function ActiveBookingCard({ booking, onUpdate }: Props) {
             Ver detalles
           </Link>
         </Button>
-        <Button
-          asChild
-          variant="outline"
-          size="sm"
-          className="border-green-300 text-green-800 hover:bg-green-50"
-        >
-          <Link href={reschedHref}>
-            <Pencil className="h-3.5 w-3.5 mr-1.5" />
-            Cambiar fecha
-          </Link>
-        </Button>
+        {canReschedule && reschedHref && (
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="border-green-300 text-green-800 hover:bg-green-50"
+          >
+            <Link href={reschedHref}>
+              <Pencil className="h-3.5 w-3.5 mr-1.5" />
+              Cambiar fecha
+            </Link>
+          </Button>
+        )}
         {canCancel ? (
           <Button
             variant="outline"
@@ -220,8 +228,8 @@ export function ActiveBookingCard({ booking, onUpdate }: Props) {
       <div className="mt-3 pt-3 border-t border-green-100 flex items-center gap-1.5 text-[11px] text-gray-500">
         <Clock className="h-3 w-3" />
         {canCancel
-          ? `Cambio o cancelación gratis hasta ${booking.cancelDeadlineHours}h antes.`
-          : 'Ya pasó el plazo para cambiar online — escribinos por WhatsApp.'}
+          ? `${canReschedule ? 'Cambio o c' : 'C'}ancelación gratis hasta ${booking.cancelDeadlineHours}h antes.`
+          : 'Ya pasó el plazo online — escribinos por WhatsApp.'}
       </div>
 
       {/* Confirm cancel */}
