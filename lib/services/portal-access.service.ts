@@ -20,7 +20,19 @@ const formDriverPortalInclude = {
   },
   onboardingAttendances: {
     include: {
-      event: true,
+      event: {
+        include: {
+          scheduleRule: {
+            select: {
+              slug: true,
+              title: true,
+              modality: true,
+              cancelDeadlineHours: true,
+              durationMinutes: true,
+            },
+          },
+        },
+      },
     },
     orderBy: { invitedAt: 'desc' as const },
   },

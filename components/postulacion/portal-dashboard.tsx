@@ -181,34 +181,38 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
 
           {activeTab === 'capacitacion' && (
             <>
-              {/* Acceso rápido a la nueva pantalla pública de capacitaciones */}
-              {(() => {
-                const cedulaOk = data.documents?.some(
-                  (d: any) => d.documentType === 'CEDULA' && d.status === 'APPROVED',
-                )
-                const antecedentesOk = data.documents?.some(
-                  (d: any) => d.documentType === 'CRIMINAL_RECORD' && d.status === 'APPROVED',
-                )
-                const eligible =
-                  !!cedulaOk &&
-                  !!antecedentesOk &&
-                  !!data.personalData?.firstName &&
-                  !!data.personalData?.lastName &&
-                  data.status !== 'REJECTED'
-                return (
-                  <div className="mb-4">
-                    <BookingRecoveryButton
-                      portalToken={token}
-                      disabled={!eligible}
-                      disabledReason={
-                        !eligible
-                          ? 'Completá tus datos y validá cédula + antecedentes para reservar'
-                          : undefined
-                      }
-                    />
-                  </div>
-                )
-              })()}
+              {/* Acceso rápido a la nueva pantalla pública de capacitaciones —
+                  solo si todavía no agendaron. Si ya tienen reserva activa,
+                  el ActiveBookingCard de adentro de CapacitacionSelector ya
+                  expone "Ver detalles / Cambiar fecha / Cancelar". */}
+              {!data.assignedCapacitacion &&
+                (() => {
+                  const cedulaOk = data.documents?.some(
+                    (d: any) => d.documentType === 'CEDULA' && d.status === 'APPROVED',
+                  )
+                  const antecedentesOk = data.documents?.some(
+                    (d: any) => d.documentType === 'CRIMINAL_RECORD' && d.status === 'APPROVED',
+                  )
+                  const eligible =
+                    !!cedulaOk &&
+                    !!antecedentesOk &&
+                    !!data.personalData?.firstName &&
+                    !!data.personalData?.lastName &&
+                    data.status !== 'REJECTED'
+                  return (
+                    <div className="mb-4">
+                      <BookingRecoveryButton
+                        portalToken={token}
+                        disabled={!eligible}
+                        disabledReason={
+                          !eligible
+                            ? 'Completá tus datos y validá cédula + antecedentes para reservar'
+                            : undefined
+                        }
+                      />
+                    </div>
+                  )
+                })()}
               <CapacitacionSelector
                 token={token}
                 documents={data.documents}

@@ -40,6 +40,7 @@ import type {
   PaymentInfo,
 } from '@/lib/types/portal.types'
 import type { FormDocumentsStatus, FormDriverStatus } from '@prisma/client'
+import { ActiveBookingCard } from './active-booking-card'
 
 const MONCHIS_RED = '#e7243f'
 
@@ -293,60 +294,20 @@ export function CapacitacionSelector({
         </div>
       )}
 
-      {/* Assigned Training */}
+      {/* Assigned Training — card con acciones (ver / cambiar / cancelar) */}
       {assignedCapacitacion && (
-        <div className="bg-green-50 rounded-2xl p-4 border border-green-200">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <p className="font-semibold text-sm text-green-800">Tu Capacitación Confirmada</p>
-            </div>
-            <Badge className="bg-green-600 text-white text-xs">
-              {STATUS_LABELS[assignedCapacitacion.status] || assignedCapacitacion.status}
-            </Badge>
-          </div>
-          <div className="space-y-2 text-sm text-green-900">
-            <div className="flex items-start gap-2">
-              <Calendar className="h-4 w-4 mt-0.5 text-green-700" />
-              <div>
-                <p className="font-medium">{formatDate(assignedCapacitacion.scheduledDate)}</p>
-                <p className="text-xs text-green-700">
-                  {assignedCapacitacion.startTime} - {assignedCapacitacion.endTime}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-2">
-              <MapPin className="h-4 w-4 mt-0.5 text-green-700" />
-              <div>
-                <p className="font-medium">{assignedCapacitacion.location}</p>
-                <p className="text-xs text-green-700">{assignedCapacitacion.locationAddress}</p>
-              </div>
-            </div>
-            {assignedCapacitacion.meetingLink && (
-              <div className="flex items-start gap-2">
-                <LinkIcon className="h-4 w-4 mt-0.5 text-green-700" />
-                <a
-                  href={assignedCapacitacion.meetingLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-green-700 hover:underline break-all"
-                >
-                  {assignedCapacitacion.meetingLink}
-                </a>
-              </div>
-            )}
-          </div>
-        </div>
+        <ActiveBookingCard booking={assignedCapacitacion} onUpdate={onUpdate} />
       )}
 
-      {/* Event selection — always visible */}
-      {!isRejected && (
+      {/* Event selection — solo si no hay reserva activa.
+          Cuando ya tienen una reserva, "Cambiar fecha" del ActiveBookingCard
+          los lleva al flow nuevo en /capacitaciones — no necesitan ver el
+          selector viejo acá. */}
+      {!isRejected && !assignedCapacitacion && (
         <div className={!canSelect ? 'opacity-50 pointer-events-none' : ''}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-700">
-              {assignedCapacitacion?.canChange
-                ? 'Cambiar a otra fecha'
-                : 'Seleccioná tu fecha de capacitación'}
+              Seleccioná tu fecha de capacitación
             </h3>
             <Button
               variant="outline"
@@ -381,19 +342,15 @@ export function CapacitacionSelector({
             </div>
           ) : (
             <div className="space-y-3">
-              {availableEvents
-                .filter((e) => !assignedCapacitacion || e.id !== assignedCapacitacion.eventId)
-                .map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    onSelect={() =>
-                      assignedCapacitacion ? handleChangeEvent(event) : handleSelectEvent(event)
-                    }
-                    buttonText={assignedCapacitacion ? 'Cambiar a esta fecha' : 'Seleccionar'}
-                    disabled={!canSelect}
-                  />
-                ))}
+              {availableEvents.map((event) => (
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  onSelect={() => handleSelectEvent(event)}
+                  buttonText="Seleccionar"
+                  disabled={!canSelect}
+                />
+              ))}
             </div>
           )}
         </div>

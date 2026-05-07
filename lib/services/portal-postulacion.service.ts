@@ -359,7 +359,7 @@ export async function selectCapacitacion(
       invitedAt: new Date(),
     },
     include: {
-      event: true,
+      event: { include: { scheduleRule: true } },
     },
   })
 
@@ -382,19 +382,7 @@ export async function selectCapacitacion(
     },
   })
 
-  return {
-    id: attendee.id,
-    eventId: attendee.eventId,
-    scheduledDate: attendee.event.scheduledDate,
-    startTime: attendee.event.startTime || '09:00',
-    endTime: attendee.event.endTime || '12:00',
-    location: attendee.event.location || 'Oficina Central',
-    locationAddress: attendee.event.locationAddress || '',
-    meetingLink: attendee.event.meetingLink,
-    status: attendee.status,
-    canChange: true,
-    confirmedAt: attendee.confirmedAt,
-  }
+  return buildAssignedCapacitacionInfo(attendee)
 }
 
 /**
@@ -493,7 +481,7 @@ export async function changeCapacitacion(
       invitedBy: currentAssignment.invitedBy,
     },
     include: {
-      event: true,
+      event: { include: { scheduleRule: true } },
     },
   })
 
@@ -517,19 +505,7 @@ export async function changeCapacitacion(
 
   return {
     previousEvent,
-    newAssignment: {
-      id: newAttendee.id,
-      eventId: newAttendee.eventId,
-      scheduledDate: newAttendee.event.scheduledDate,
-      startTime: newAttendee.event.startTime || '09:00',
-      endTime: newAttendee.event.endTime || '12:00',
-      location: newAttendee.event.location || 'Oficina Central',
-      locationAddress: newAttendee.event.locationAddress || '',
-      meetingLink: newAttendee.event.meetingLink,
-      status: newAttendee.status,
-      canChange: true,
-      confirmedAt: newAttendee.confirmedAt,
-    },
+    newAssignment: buildAssignedCapacitacionInfo(newAttendee),
   }
 }
 
@@ -612,6 +588,34 @@ function getPaymentInfo(formDriver: any): PaymentInfo | null {
 /**
  * Obtiene la capacitación asignada si existe
  */
+/**
+ * Mapea un attendee con event + scheduleRule al shape público AssignedCapacitacionInfo.
+ * scheduleRule puede ser null para attendees legacy creados antes del modelo de Rules;
+ * en ese caso caemos a campos del event y a un deadline default de 4h.
+ */
+function buildAssignedCapacitacionInfo(attendee: any): AssignedCapacitacionInfo {
+  const rule = attendee.event.scheduleRule
+  return {
+    id: attendee.id,
+    eventId: attendee.eventId,
+    confirmationToken: attendee.confirmationToken,
+    scheduledDate: attendee.event.scheduledDate,
+    startTime: attendee.event.startTime || '09:00',
+    endTime: attendee.event.endTime || '12:00',
+    location: attendee.event.location || rule?.title || 'Oficina Central',
+    locationAddress: attendee.event.locationAddress || '',
+    meetingLink: attendee.event.meetingLink,
+    status: attendee.status,
+    canChange: true,
+    confirmedAt: attendee.confirmedAt,
+    ruleSlug: rule?.slug ?? null,
+    ruleTitle: rule?.title ?? attendee.event.title ?? null,
+    modality: rule?.modality ?? attendee.event.modality ?? null,
+    cancelDeadlineHours: rule?.cancelDeadlineHours ?? 4,
+    durationMinutes: rule?.durationMinutes ?? attendee.event.durationMinutes ?? null,
+  }
+}
+
 function getAssignedCapacitacion(formDriver: any): AssignedCapacitacionInfo | null {
   const activeAssignment = formDriver.onboardingAttendances.find(
     (attendance: any) =>
@@ -624,19 +628,7 @@ function getAssignedCapacitacion(formDriver: any): AssignedCapacitacionInfo | nu
     return null
   }
 
-  return {
-    id: activeAssignment.id,
-    eventId: activeAssignment.eventId,
-    scheduledDate: activeAssignment.event.scheduledDate,
-    startTime: activeAssignment.event.startTime || '09:00',
-    endTime: activeAssignment.event.endTime || '12:00',
-    location: activeAssignment.event.location || 'Oficina Central',
-    locationAddress: activeAssignment.event.locationAddress || '',
-    meetingLink: activeAssignment.event.meetingLink,
-    status: activeAssignment.status,
-    canChange: true,
-    confirmedAt: activeAssignment.confirmedAt,
-  }
+  return buildAssignedCapacitacionInfo(activeAssignment)
 }
 
 /**

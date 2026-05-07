@@ -6,6 +6,7 @@ import type {
   FormDocumentStatus,
   DocumentType,
   OnboardingAttendeeStatus,
+  OnboardingModality,
   FormDriverStatus,
   FormDocumentsStatus,
   OnboardingStatus,
@@ -125,6 +126,8 @@ export interface NextStepsInfo {
 export interface AssignedCapacitacionInfo {
   id: string
   eventId: string
+  /** Token público para gestionar la reserva via /api/public/booking/<token>/* */
+  confirmationToken: string
   scheduledDate: Date
   startTime: string
   endTime: string
@@ -134,6 +137,12 @@ export interface AssignedCapacitacionInfo {
   status: OnboardingAttendeeStatus
   canChange: boolean
   confirmedAt: Date | null
+  /** Datos de la rule asociada (nuevo modelo de capacitaciones) */
+  ruleSlug: string | null
+  ruleTitle: string | null
+  modality: OnboardingModality | null
+  cancelDeadlineHours: number
+  durationMinutes: number | null
 }
 
 /**
