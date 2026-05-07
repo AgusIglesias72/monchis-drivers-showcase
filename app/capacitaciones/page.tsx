@@ -10,7 +10,9 @@ import { RulesGrid } from '@/components/capacitaciones/rules-grid'
 import { EmptyState } from '@/components/capacitaciones/empty-state'
 import { AutoIdentify } from '@/components/capacitaciones/auto-identify'
 import { AnonymousIdentifyCTA } from '@/components/capacitaciones/anonymous-identify-cta'
+import { PreviewModeToggle } from '@/components/preview/preview-mode-toggle'
 import { resolveIdentityFromCookie } from '@/lib/services/onboarding-identity'
+import { getPreviewIdentity, resolvePreviewState } from '@/lib/services/preview-identity'
 import type { RuleSummary, SlotResponse } from '@/lib/types/onboarding-rules.types'
 
 export const dynamic = 'force-dynamic'
@@ -67,18 +69,26 @@ function hasUsableSlots(rules: RulePayload[]): boolean {
 export default async function CapacitacionesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ session?: string }>
+  searchParams: Promise<{ session?: string; preview?: string }>
 }) {
-  const { session: sessionFromUrl } = await searchParams
+  const { session: sessionFromUrl, preview: previewParam } = await searchParams
+
+  // Preview mode: solo aplica para usuarios autenticados con Clerk (admin/dev).
+  // Si pasa el gate, devuelve identidad mockeada y bypaseamos cookie + URL session.
+  const previewState = await resolvePreviewState(previewParam)
 
   // SSR identity: leemos cookie del portal y resolvemos en el server. Esto
   // elimina el flicker del AutoIdentify cliente porque ya llega identificado.
   // Si vino ?session= en URL le damos prioridad (link compartido) y no usamos
   // la cookie — son dos identidades potencialmente distintas.
-  const identity = sessionFromUrl
-    ? { found: false, shareToken: null, portalToken: null, driver: null }
-    : await resolveIdentityFromCookie()
-  const sessionToken = sessionFromUrl || identity.shareToken || undefined
+  const identity = previewState
+    ? getPreviewIdentity(previewState)
+    : sessionFromUrl
+      ? { found: false, shareToken: null, portalToken: null, driver: null }
+      : await resolveIdentityFromCookie()
+  const sessionToken = previewState
+    ? identity.shareToken || undefined
+    : sessionFromUrl || identity.shareToken || undefined
 
   const [rules, initialSlots] = await Promise.all([
     getRules(),
@@ -88,16 +98,20 @@ export default async function CapacitacionesPage({
   // Driver identificado y eligible → ocultamos contenido "para no-postulantes"
   const showOnboardingContent = !identity.found || !identity.driver?.isEligible
   const noUsableSlots = rules.length > 0 && !hasUsableSlots(rules)
+  const isAnonymous = !identity.found && !sessionFromUrl
 
   return (
     <div className="max-w-6xl mx-auto px-4 lg:px-6 py-6 lg:py-10">
       {/* Fallback cliente: si el server no encontró cookie, intentamos
-          identificar via localStorage (legacy). */}
-      {!identity.found && !sessionFromUrl && <AutoIdentify />}
+          identificar via localStorage (legacy). En preview mode lo skipeamos
+          para que el admin vea el estado mockeado puro. */}
+      {!previewState && isAnonymous && <AutoIdentify />}
 
       {/* CTA explícito para postulantes que llegan en frío via link compartido.
-          Solo aparece si no encontramos nada en localStorage tampoco. */}
-      {!identity.found && !sessionFromUrl && <AnonymousIdentifyCTA />}
+          En preview mode forzamos render para no depender del localStorage. */}
+      {(isAnonymous || previewState === 'anonymous') && (
+        <AnonymousIdentifyCTA forceShow={previewState === 'anonymous'} />
+      )}
 
       {/* Banner SSR: si el server resolvió la identidad la mostramos al toque */}
       {identity.found && identity.driver && (
@@ -134,6 +148,8 @@ export default async function CapacitacionesPage({
           <LandingFooter />
         </>
       )}
+
+      <PreviewModeToggle />
     </div>
   )
 }

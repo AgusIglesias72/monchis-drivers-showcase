@@ -13,12 +13,20 @@ const DISMISS_KEY = 'monchis.identifyCtaDismissed'
  *
  * Se oculta solo cuando: hay session en URL (lo maneja el server), hay algo en
  * localStorage (AutoIdentify lo va a recuperar), o el usuario lo descartó.
+ *
+ * `forceShow` lo usa el modo preview de QA — bypasea las heurísticas de
+ * localStorage para que el admin pueda ver el banner aunque tenga datos
+ * cacheados de pruebas anteriores.
  */
-export function AnonymousIdentifyCTA() {
-  const [show, setShow] = useState(false)
+export function AnonymousIdentifyCTA({ forceShow = false }: { forceShow?: boolean }) {
+  const [show, setShow] = useState(forceShow)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
+    if (forceShow) {
+      setShow(true)
+      return
+    }
     try {
       const hasShareToken = localStorage.getItem('monchis.bookingShareToken')
       const hasPortalToken = localStorage.getItem('monchis.driver.portalToken')
@@ -28,7 +36,7 @@ export function AnonymousIdentifyCTA() {
     } catch {
       setShow(true)
     }
-  }, [])
+  }, [forceShow])
 
   function handleDismiss() {
     try {

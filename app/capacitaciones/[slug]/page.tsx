@@ -8,6 +8,8 @@ import { BookingCalendar } from '@/components/capacitaciones/booking-calendar'
 import { AutoIdentify } from '@/components/capacitaciones/auto-identify'
 import { LandingBanner } from '@/components/capacitaciones/landing-banner'
 import { resolveIdentityFromCookie } from '@/lib/services/onboarding-identity'
+import { getPreviewIdentity, resolvePreviewState } from '@/lib/services/preview-identity'
+import { PreviewModeToggle } from '@/components/preview/preview-mode-toggle'
 import LocationMap from '@/components/capacitaciones/location-map-lazy'
 import { Badge } from '@/components/ui/badge'
 import { RichTextDisplay } from '@/components/ui/rich-text-editor'
@@ -105,21 +107,32 @@ export default async function RuleDetailPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ session?: string; reschedule?: string }>
+  searchParams: Promise<{ session?: string; reschedule?: string; preview?: string }>
 }) {
   const { slug } = await params
-  const { session: sessionFromUrl, reschedule: rescheduleToken } = await searchParams
+  const {
+    session: sessionFromUrl,
+    reschedule: rescheduleToken,
+    preview: previewParam,
+  } = await searchParams
   const rule = await getRule(slug)
 
   if (!rule) return notFound()
 
+  // Preview mode: solo aplica para usuarios autenticados con Clerk.
+  const previewState = await resolvePreviewState(previewParam)
+
   // SSR identity: si el browser tiene cookie del portal, resolvemos acá y le
   // pasamos el shareToken al BookingCalendar sin pasar por AutoIdentify cliente.
   // ?session= en URL gana sobre cookie (link compartido).
-  const identity = sessionFromUrl
-    ? { found: false, shareToken: null, portalToken: null, driver: null }
-    : await resolveIdentityFromCookie()
-  const session = sessionFromUrl || identity.shareToken || undefined
+  const identity = previewState
+    ? getPreviewIdentity(previewState)
+    : sessionFromUrl
+      ? { found: false, shareToken: null, portalToken: null, driver: null }
+      : await resolveIdentityFromCookie()
+  const session = previewState
+    ? identity.shareToken || undefined
+    : sessionFromUrl || identity.shareToken || undefined
 
   // Pre-cargamos los slots de los próximos 2 meses para evitar el round-trip
   // inicial al renderizar el calendario en cliente.
@@ -146,7 +159,7 @@ export default async function RuleDetailPage({
           }}
         />
       )}
-      {!identity.found && !sessionFromUrl && <AutoIdentify />}
+      {!previewState && !identity.found && !sessionFromUrl && <AutoIdentify />}
       {/* Hero gradient (sin imagen) */}
       <div className="rounded-xl overflow-hidden mb-6 border">
         <div className="h-24 bg-gradient-to-br from-brand to-brand-hover" />
@@ -242,6 +255,8 @@ export default async function RuleDetailPage({
           rescheduleToken={rescheduleToken}
         />
       </section>
+
+      <PreviewModeToggle />
     </div>
   )
 }
