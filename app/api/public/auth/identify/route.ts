@@ -131,7 +131,21 @@ export async function POST(request: NextRequest) {
       response.shareToken = session.shareToken
     }
 
-    return NextResponse.json(response)
+    // Persistimos la cookie del portal apenas hay match — independiente de
+    // elegibilidad. Esto permite que /postulacion identifique al driver en SSR
+    // sin necesidad de visitar /postulacion/<token> primero, y que el banner
+    // de /capacitaciones aparezca pre-resuelto en la próxima carga.
+    const res = NextResponse.json(response)
+    if (driver.accessToken) {
+      res.cookies.set('monchis_portal_token', driver.accessToken, {
+        httpOnly: false,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 24 * 60, // 60 días
+        path: '/',
+      })
+    }
+    return res
   } catch (err) {
     console.error('[identify error]', err)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

@@ -1,82 +1,44 @@
 // app/postulacion/page.tsx
 //
-// Landing del portal del postulante: si el browser tiene guardado el portalToken
-// del driver (porque ya pasó alguna vez por /postulacion/[token]), lo redirige
-// a su portal directamente. Si no, lo manda a la landing pública del form.
+// Entry único del portal del postulante. Resuelve identidad server-side via
+// cookie monchis_portal_token; si no la hay, muestra un form para identificarse
+// con cédula + 4 últimos del teléfono. El form llama al endpoint de identify
+// que setea la cookie, después un router.refresh() vuelve a hidratar este SSR
+// y ya renderiza el portal.
 //
-// Existe para evitar el 404 en /postulacion sin token, que era una mala UX
-// cuando alguien copiaba la URL base.
+// /postulacion/<token> sigue funcionando como deep-link (links viejos de
+// WhatsApp): valida el token, setea la cookie y redirige acá.
 
-'use client'
+import { cookies } from 'next/headers'
+import { prisma } from '@/lib/prisma'
+import { PortalDashboard } from '@/components/postulacion/portal-dashboard'
+import { PortalIdentifyForm } from '@/components/postulacion/portal-identify-form'
+import type { Metadata } from 'next'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { Loader2, FileEdit, ArrowLeft } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+export const metadata: Metadata = {
+  title: 'Mi Postulación - Monchis Drivers',
+  description: 'Gestiona tu postulación, documentos y capacitación',
+}
 
-export default function PostulacionLandingPage() {
-  const router = useRouter()
-  const [resolved, setResolved] = useState<'redirecting' | 'no-token'>('redirecting')
+export const dynamic = 'force-dynamic'
 
-  useEffect(() => {
-    let token: string | null = null
-    try {
-      token = localStorage.getItem('monchis.driver.portalToken')
-    } catch {}
+const PORTAL_TOKEN_COOKIE = 'monchis_portal_token'
 
-    if (token) {
-      router.replace(`/postulacion/${token}`)
-    } else {
-      setResolved('no-token')
+export default async function PostulacionPage() {
+  const cookieStore = await cookies()
+  const token = cookieStore.get(PORTAL_TOKEN_COOKIE)?.value
+
+  if (token) {
+    // Validamos que la cookie corresponda a un FormDriver real antes de
+    // renderizar — protege contra cookies stale (driver borrado, token rotado).
+    const driver = await prisma.formDriver.findUnique({
+      where: { accessToken: token },
+      select: { id: true },
+    })
+    if (driver) {
+      return <PortalDashboard token={token} />
     }
-  }, [router])
-
-  if (resolved === 'redirecting') {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Buscando tu postulación…
-        </div>
-      </div>
-    )
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10">
-      <div className="max-w-md w-full">
-        <div className="rounded-2xl border bg-card p-6 lg:p-8 text-center shadow-sm">
-          <div className="mx-auto h-14 w-14 rounded-full bg-brand-soft text-brand flex items-center justify-center mb-4">
-            <FileEdit className="h-6 w-6" />
-          </div>
-          <h1 className="text-xl font-semibold tracking-tight mb-2">¿Querés ser driver?</h1>
-          <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-            Para acceder a tu portal necesitamos el link que te enviamos por WhatsApp cuando
-            empezaste tu postulación. Si nunca te postulaste, podés hacerlo ahora.
-          </p>
-          <div className="flex flex-col gap-2">
-            <Button asChild className="bg-brand text-brand-foreground hover:bg-brand-hover">
-              <Link href="/">Empezar mi postulación</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <a
-                href="https://wa.me/15754194027?text=Hola%2C%20perd%C3%AD%20mi%20link%20de%20postulaci%C3%B3n"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                ¿Perdiste el link? Pedinos por WhatsApp
-              </a>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="mt-1">
-              <Link href="/capacitaciones">
-                <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-                Volver a capacitaciones
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+  return <PortalIdentifyForm />
 }
