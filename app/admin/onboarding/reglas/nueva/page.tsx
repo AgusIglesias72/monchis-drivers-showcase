@@ -26,9 +26,9 @@ export default async function NuevaReglaPage() {
     <div className="px-4 lg:px-6 py-6 max-w-7xl mx-auto w-full">
       <div className="mb-6">
         <Button variant="ghost" size="sm" asChild className="mb-2 -ml-2">
-          <Link href="/admin/onboarding/reglas">
+          <Link href="/admin/onboarding?tab=capacitaciones">
             <ChevronLeft className="mr-1 h-4 w-4" />
-            Eventos
+            Capacitaciones
           </Link>
         </Button>
         <h1 className="text-2xl font-semibold tracking-tight">Nuevo evento</h1>

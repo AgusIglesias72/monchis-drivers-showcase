@@ -1,28 +1,40 @@
 // app/admin/onboarding/page.tsx
+//
+// Página unificada: capacitaciones (reglas) + eventos generados, en tabs.
+// La página vieja /admin/onboarding/reglas redirige acá con ?tab=capacitaciones.
 
 import { onboardingService } from '@/lib/services/onboarding.service'
-import { OnboardingPageContent } from '@/components/admin/onboarding/onboarding-page-content'
-import { OnboardingEventWithRelations } from '@/types/onboarding'
+import { prisma } from '@/lib/prisma'
+import { UnifiedOnboardingTabs } from '@/components/admin/onboarding/unified-onboarding-tabs'
+import type { OnboardingEventWithRelations } from '@/types/onboarding'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 interface PageProps {
   searchParams: Promise<{
     status?: string
+    tab?: string
   }>
 }
 
-export default async function OnBoardingPage({ searchParams }: PageProps) {
+export default async function OnboardingPage({ searchParams }: PageProps) {
   const params = await searchParams
-  
-  // Cargar eventos desde el servidor
-  const events = await onboardingService.getAllEvents({
-    status: params.status as any
-  })
+
+  const [events, rules] = await Promise.all([
+    onboardingService.getAllEvents({ status: params.status as any }),
+    prisma.onboardingScheduleRule.findMany({
+      include: {
+        _count: { select: { events: true, exceptions: true } },
+        organizerUser: { select: { fullName: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ])
 
   return (
-    <OnboardingPageContent
-      initialEvents={events as OnboardingEventWithRelations[]}
+    <UnifiedOnboardingTabs
+      rules={rules}
+      events={events as OnboardingEventWithRelations[]}
       currentStatus={params.status}
     />
   )

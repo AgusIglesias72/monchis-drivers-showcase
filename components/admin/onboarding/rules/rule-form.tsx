@@ -332,7 +332,7 @@ export function RuleForm({ mode, rule, admins }: Props) {
       const res = await fetch(`/api/admin/onboarding/rules/${rule.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
       toast.success('Evento desactivado')
-      router.push('/admin/onboarding/reglas')
+      router.push('/admin/onboarding?tab=capacitaciones')
       router.refresh()
     } catch {
       toast.error('No se pudo desactivar')

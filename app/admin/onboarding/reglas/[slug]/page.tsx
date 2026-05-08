@@ -110,9 +110,9 @@ export default async function ReglaDetailPage({
     <div className="px-4 lg:px-6 py-6 max-w-7xl mx-auto w-full">
       {/* Back link */}
       <Button variant="ghost" size="sm" asChild className="mb-3 -ml-2">
-        <Link href="/admin/onboarding/reglas">
+        <Link href="/admin/onboarding?tab=capacitaciones">
           <ChevronLeft className="mr-1 h-4 w-4" />
-          Eventos
+          Capacitaciones
         </Link>
       </Button>
 

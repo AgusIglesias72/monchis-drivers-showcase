@@ -66,11 +66,15 @@ type SortDirection = 'asc' | 'desc'
 interface OnboardingPageContentProps {
   initialEvents: OnboardingEventWithRelations[]
   currentStatus?: string
+  /** Cuando se renderiza dentro de tabs, ocultamos AdminHeader, container y
+   *  el título h1 — ese chrome lo provee la página padre. */
+  hideOuterChrome?: boolean
 }
 
-export function OnboardingPageContent({ 
+export function OnboardingPageContent({
   initialEvents,
-  currentStatus 
+  currentStatus,
+  hideOuterChrome = false,
 }: OnboardingPageContentProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -350,34 +354,55 @@ export function OnboardingPageContent({
     )
   }
 
-  return (
-    <div className="flex flex-1 flex-col container mx-auto">
-      <AdminHeader
-        breadcrumbs={[
-          { label: "On Boarding" }
-        ]}
-      />
+  const Outer = hideOuterChrome
+    ? ({ children }: { children: React.ReactNode }) => <>{children}</>
+    : ({ children }: { children: React.ReactNode }) => (
+        <div className="flex flex-1 flex-col container mx-auto">{children}</div>
+      )
 
-      <div className="flex-1 p-8 space-y-8">
-        {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">On Boarding</h1>
-            <p className="text-muted-foreground mt-1">
-              Gestiona las sesiones de incorporación de nuevos drivers
-            </p>
-          </div>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Button className="gap-2 md:mt-0 cursor-pointer" onClick={handleCreateEvent}>
+  const Inner = hideOuterChrome
+    ? ({ children }: { children: React.ReactNode }) => (
+        <div className="space-y-6">{children}</div>
+      )
+    : ({ children }: { children: React.ReactNode }) => (
+        <div className="flex-1 p-8 space-y-8">{children}</div>
+      )
+
+  return (
+    <Outer>
+      {!hideOuterChrome && (
+        <AdminHeader breadcrumbs={[{ label: 'On Boarding' }]} />
+      )}
+
+      <Inner>
+        {/* Header — dentro de tabs solo dejamos la acción a la derecha */}
+        {hideOuterChrome ? (
+          <div className="flex justify-end">
+            <Button className="gap-2 cursor-pointer" onClick={handleCreateEvent}>
               <Plus className="h-4 w-4" />
               Nueva Sesión
             </Button>
-          </motion.div>
-        </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">On Boarding</h1>
+              <p className="text-muted-foreground mt-1">
+                Gestiona las sesiones de incorporación de nuevos drivers
+              </p>
+            </div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Button className="gap-2 md:mt-0 cursor-pointer" onClick={handleCreateEvent}>
+                <Plus className="h-4 w-4" />
+                Nueva Sesión
+              </Button>
+            </motion.div>
+          </div>
+        )}
 
         {/* Next Event Card */}
         {nextEvent && (
@@ -711,7 +736,7 @@ export function OnboardingPageContent({
           </CardContent>
         </Card>
         </motion.div>
-      </div>
+      </Inner>
 
       {/* Event Form Dialog */}
       <EventFormDialog
@@ -746,6 +771,6 @@ export function OnboardingPageContent({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Outer>
   )
 }

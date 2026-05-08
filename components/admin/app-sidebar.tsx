@@ -76,13 +76,8 @@ const menuItems = [
     title: "Gestión",
     items: [
       {
-        title: "On Boarding",
+        title: "Capacitaciones",
         url: "/admin/onboarding",
-        icon: Users
-      },
-      {
-        title: "Eventos de capacitación",
-        url: "/admin/onboarding/reglas",
         icon: CalendarRange,
       },
       {
