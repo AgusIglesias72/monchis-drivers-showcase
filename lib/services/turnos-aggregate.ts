@@ -10,10 +10,18 @@ export function uniqueDates(shifts: FlattenedShift[]): string[] {
   return Array.from(new Set(shifts.map((s) => s.dateIso))).sort()
 }
 
+// Encarnación y Kennedy Encarnación van fijas al final del listado (orden
+// solicitado por ops: las zonas de Asunción primero, las de Encarnación
+// agrupadas al cierre).
+const ZONES_AT_END = ["Encarnación", "Kennedy Encarnación"]
+
 export function uniqueZones(shifts: FlattenedShift[]): string[] {
-  return Array.from(new Set(shifts.map((s) => s.zoneName))).sort((a, b) =>
-    a.localeCompare(b, "es"),
-  )
+  const all = Array.from(new Set(shifts.map((s) => s.zoneName)))
+  const pinned = ZONES_AT_END.filter((z) => all.includes(z))
+  const rest = all
+    .filter((z) => !ZONES_AT_END.includes(z))
+    .sort((a, b) => a.localeCompare(b, "es"))
+  return [...rest, ...pinned]
 }
 
 export function shiftsForDate(

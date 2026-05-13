@@ -370,9 +370,11 @@ export function LivePanelContent({ initial }: Props) {
           />
         )}
 
-        {/* Layout principal: lista (izq) + mapa (der), 50/50 */}
+        {/* Layout principal: lista (izq) + mapa (der), 50/50.
+            min-w-0 en cada celda fuerza que respeten el ancho del grid; sin
+            esto Leaflet expande su celda a su intrinsic size y rompe el split. */}
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <div>
+          <div className="min-w-0">
             {view === "pedidos" && (
               <PedidosTab
                 pending={data.pending}
@@ -408,7 +410,7 @@ export function LivePanelContent({ initial }: Props) {
               que se monten encima del Sheet de detalle (z-50). */}
           <div
             ref={mapWrapperRef}
-            className="relative z-0 isolate scroll-mt-20"
+            className="relative z-0 isolate min-w-0 scroll-mt-20"
           >
             <LiveMap
               zones={data.zones}
