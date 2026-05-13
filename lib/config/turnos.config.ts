@@ -8,6 +8,9 @@ export const TURNOS_CONFIG = {
   timezone: "America/Asuncion",
 } as const
 
+// IDs de las zonas que consultamos al API de turnos. El nombre legible viene
+// en cada response (`zone_name`), no lo cableamos acá — los comentarios sirven
+// solo de referencia para identificar la zona al leer/agregar.
 export const TURNOS_ZONE_IDS = [
   "5fd8b03985c2e20008de3a7d",
   "659d82cae4e2a700082ec0b8",
@@ -17,6 +20,8 @@ export const TURNOS_ZONE_IDS = [
   "5ffda05415f492000810dd52",
   "67ee7bd3eadac7d84ab73b7c",
   "6243265a4e0dce0009b2353f",
+  "67b3dc2b3d48d4f3e322f189", // Encarnación
+  "67db00e442f00c678d2faf48", // Kennedy Encarnación
 ] as const
 
 export const TURNOS_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24] as const

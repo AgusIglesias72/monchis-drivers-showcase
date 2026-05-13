@@ -10,9 +10,12 @@ const nextConfig: NextConfig = {
   /* config options here */
   images: imagesConfig,
 
-  // Aumentar el límite de tamaño del body para Server Actions
-  serverActions: {
-    bodySizeLimit: '5mb',
+  // Aumentar el límite de tamaño del body para Server Actions.
+  // En Next 15 esto vive bajo experimental.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '5mb',
+    },
   },
 };
 
