@@ -13,6 +13,8 @@ import {
 import { toast } from "sonner"
 
 import { AdminHeader } from "@/components/admin/admin-header"
+import { CommerceDetailSheet } from "@/components/admin/gestion/live/commerce-detail-sheet"
+import { DriverDetailSheet } from "@/components/admin/gestion/live/driver-detail-sheet"
 import type { PedidoFilter } from "@/components/admin/gestion/live/live-filters"
 import { LiveComerciosGrid } from "@/components/admin/gestion/live/live-comercios-grid"
 import { LiveDriversLoad } from "@/components/admin/gestion/live/live-drivers-load"
@@ -31,6 +33,7 @@ import { LIVE_PANEL_CONFIG } from "@/lib/config/live-panel.config"
 import { aggregateCommerces } from "@/lib/services/live-commerces"
 import type {
   LivePanelPayload,
+  LiveRequest,
   LiveRoute,
 } from "@/lib/types/live-panel.types"
 
@@ -441,6 +444,46 @@ export function LivePanelContent({ initial }: Props) {
         routeLoading={routeLoading}
         delayedSet={new Set(data.delayed.map((r) => r.requestId))}
         onClose={() => setHighlight(null)}
+      />
+
+      <DriverDetailSheet
+        driver={
+          highlight?.kind === "driver"
+            ? data.drivers.find((d) => d.driverId === highlight.id) ?? null
+            : null
+        }
+        driverRequests={
+          highlight?.kind === "driver"
+            ? data.active.filter((r) => r.driverId === highlight.id)
+            : []
+        }
+        onClose={() => setHighlight(null)}
+        onRequestClick={(id) => setHighlight({ kind: "request", id })}
+      />
+
+      <CommerceDetailSheet
+        commerce={
+          highlight?.kind === "commerce"
+            ? commerces.find(
+                (c) => String(c.branchId) === highlight.id,
+              ) ?? null
+            : null
+        }
+        commerceRequests={
+          highlight?.kind === "commerce"
+            ? (() => {
+                const branchId = Number(highlight.id)
+                const merged = new Map<string, LiveRequest>()
+                for (const r of data.pending) merged.set(r.requestId, r)
+                for (const r of data.active) merged.set(r.requestId, r)
+                return [...merged.values()].filter(
+                  (r) => r.branchId === branchId,
+                )
+              })()
+            : []
+        }
+        onClose={() => setHighlight(null)}
+        onRequestClick={(id) => setHighlight({ kind: "request", id })}
       />
     </>
   )

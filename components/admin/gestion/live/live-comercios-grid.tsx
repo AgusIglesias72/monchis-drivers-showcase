@@ -387,30 +387,8 @@ function CommerceCard({
         )}
       </div>
 
-      {/* Lista expandible de requestIds cuando la tarjeta está focuseada. */}
-      {focused && commerce.requestIds.length > 0 && (
-        <div className="flex flex-wrap gap-1 border-t pt-1.5">
-          {commerce.requestIds.slice(0, 12).map((rid, idx) => (
-            <button
-              key={rid}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onRequestClick(rid)
-              }}
-              className="rounded border bg-background px-1.5 py-0.5 text-[10px] font-mono tabular-nums hover:bg-muted"
-              title={rid}
-            >
-              #{idx + 1}
-            </button>
-          ))}
-          {commerce.requestIds.length > 12 && (
-            <span className="px-1 text-[10px] text-muted-foreground">
-              +{commerce.requestIds.length - 12}
-            </span>
-          )}
-        </div>
-      )}
+      {/* Al clickear la card se abre el CommerceDetailSheet con la lista
+          completa de pedidos + KPIs. */}
     </div>
   )
 }
