@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
+import { requireCronAuth } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    // 1. Verificar autenticación del cron
-    const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    const cronError = requireCronAuth(request)
+    if (cronError) {
       console.error('❌ [CRON] Unauthorized request to refresh-google-token')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return cronError
     }
 
     console.log('🔄 [CRON] Starting Google token refresh...')

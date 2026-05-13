@@ -7,6 +7,7 @@
 // Schedule sugerido: "0 5 * * *" (diario 05:00 UTC, ~01:00 PY).
 
 import { NextRequest, NextResponse } from 'next/server'
+import { requireCronAuth } from '@/lib/auth'
 import { materializeAllActiveRules } from '@/lib/services/onboarding-materialization.service'
 
 export const maxDuration = 300
@@ -14,11 +15,8 @@ export const maxDuration = 300
 const DEFAULT_WEEKS_AHEAD = 8
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('authorization')
-  const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const cronError = requireCronAuth(request)
+  if (cronError) return cronError
 
   const { searchParams } = new URL(request.url)
   const weeksAheadParam = searchParams.get('weeksAhead')

@@ -9,6 +9,7 @@
 //   (sin ?date, reporta sobre el día anterior a la ejecución)
 
 import { NextRequest, NextResponse } from 'next/server'
+import { requireCronAuth } from '@/lib/auth'
 import { dailyReportService } from '@/lib/services/daily-report.service'
 import { emailService } from '@/lib/services/email.service'
 
@@ -16,12 +17,8 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now()
 
   try {
-    // Auth: Vercel Cron o invocación manual con CRON_SECRET
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const cronError = requireCronAuth(request)
+    if (cronError) return cronError
 
     // Permitir override de fecha con ?date=YYYY-MM-DD (útil para backfill/testing)
     const dateParam = request.nextUrl.searchParams.get('date')

@@ -1,6 +1,7 @@
 // app/api/cron/send-daily-reminders/route.ts
 
 import { NextRequest, NextResponse } from 'next/server'
+import { requireCronAuth } from '@/lib/auth'
 import { WhatsAppMessageSource, WhatsAppMessageType } from '@prisma/client'
 import { getEligibleDriversForReminder, logReminderExecution } from '@/lib/services/automatic-reminders.service'
 import { recordMessageSent, type MessageConcept } from '@/lib/services/messaging-frequency.service'
@@ -21,13 +22,8 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now()
 
   try {
-    // Verificar autorización
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const cronError = requireCronAuth(request)
+    if (cronError) return cronError
 
     console.log('[DAILY REMINDERS] Starting with frequency control...')
 

@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 
+import { requireCronAuth } from "@/lib/auth"
 import { processDriverAttendanceBatch } from "@/lib/services/monchis-driver-attendance.service"
 
 export const maxDuration = 300
@@ -21,10 +22,10 @@ const DEFAULT_LIMIT = 15
 const MAX_LIMIT = 40
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronError = requireCronAuth(request)
+  if (cronError) {
     console.error("❌ [CRON] Unauthorized request to process-driver-attendance-batch")
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return cronError
   }
 
   const url = new URL(request.url)

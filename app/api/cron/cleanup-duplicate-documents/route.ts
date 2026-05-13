@@ -1,6 +1,7 @@
 // app/api/cron/cleanup-duplicate-documents/route.ts
 
 import { NextRequest, NextResponse } from 'next/server'
+import { requireCronAuth } from '@/lib/auth'
 import { cleanupDuplicateDocuments } from '@/lib/services/document-cleanup.service'
 
 /**
@@ -16,20 +17,8 @@ import { cleanupDuplicateDocuments } from '@/lib/services/document-cleanup.servi
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verificar autorización (solo para requests de Vercel Cron o con auth header)
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-
-    // Solo validar en producción
-    const isProduction = process.env.NODE_ENV === 'production'
-
-    // Si existe CRON_SECRET y estamos en producción, validar
-    if (isProduction && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      )
-    }
+    const cronError = requireCronAuth(request)
+    if (cronError) return cronError
 
     // Obtener parámetros de la URL
     const searchParams = request.nextUrl.searchParams

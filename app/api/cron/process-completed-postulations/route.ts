@@ -19,6 +19,7 @@
 // Vercel maxDuration: 300s (5 min) — alcanza para 15 corridas a ~15s c/u.
 
 import { NextRequest, NextResponse } from 'next/server'
+import { requireCronAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { runAgentForDriver } from '@/lib/services/agent.service'
 
@@ -30,11 +31,8 @@ const IN_PROGRESS_MAX_AGE_HOURS = 24
 const BATCH_LIMIT = 15
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('authorization')
-  const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const cronError = requireCronAuth(request)
+  if (cronError) return cronError
 
   const now = new Date()
   const upperBound = new Date(now.getTime() - PROCESSING_DELAY_MINUTES * 60 * 1000)

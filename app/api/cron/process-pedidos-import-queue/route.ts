@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 
+import { requireCronAuth } from "@/lib/auth"
 import { processOrderImportQueueBatch } from "@/lib/services/pedidos-import-queue.service"
 
 export const maxDuration = 300
@@ -16,10 +17,10 @@ const DEFAULT_LIMIT = 200
 const MAX_LIMIT = 400
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronError = requireCronAuth(request)
+  if (cronError) {
     console.error("❌ [CRON] Unauthorized request to process-pedidos-import-queue")
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return cronError
   }
 
   const url = new URL(request.url)

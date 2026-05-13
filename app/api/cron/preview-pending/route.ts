@@ -1,7 +1,7 @@
 // app/api/cron/preview-pending/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { requireCronAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { FormDriverStatus } from '@prisma/client';
 
@@ -46,15 +46,8 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // Verificar autenticación
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      );
-    }
+    const cronError = requireCronAuth(request);
+    if (cronError) return cronError;
 
     console.log('🔍 [PREVIEW] Starting preview-pending job...');
 

@@ -5,15 +5,16 @@
 
 import { NextRequest, NextResponse } from "next/server"
 
+import { requireCronAuth } from "@/lib/auth"
 import { syncMonchisDrivers } from "@/lib/services/monchis-drivers-sync.service"
 
 export const maxDuration = 300 // hasta 5 min — el endpoint devuelve ~4k drivers
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronError = requireCronAuth(request)
+  if (cronError) {
     console.error("❌ [CRON] Unauthorized request to sync-monchis-drivers")
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return cronError
   }
 
   console.log("🔄 [CRON] Starting Monchis drivers sync...")
