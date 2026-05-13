@@ -28,6 +28,7 @@ export function BookingFlowDialogs({ flow }: { flow: Flow }) {
         onConfirm={flow.handleConfirm}
         loading={flow.booking}
         isReschedule={flow.isReschedule}
+        currentBooking={flow.currentBooking}
       />
     </>
   )

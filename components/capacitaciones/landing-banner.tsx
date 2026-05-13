@@ -57,7 +57,30 @@ export function LandingBanner({ ssrIdentity, sessionToken }: Props) {
     eligible = info.formDriver.isEligible
     notEligibleReason = info.formDriver.notEligibleReason
   } else if (error) {
-    return null
+    // El sessionToken vino en URL pero validate respondió error (probablemente
+    // expirado o token inválido). Mostramos un banner amigable invitando a
+    // re-identificarse en lugar de quedar en silencio — sin esto el driver con
+    // un link de WhatsApp viejo (>30d) no entiende por qué no ve su identidad.
+    return (
+      <div className="rounded-xl border border-warning/30 bg-warning-soft px-4 py-3.5 mb-6 flex items-start gap-3">
+        <div className="shrink-0 h-9 w-9 rounded-full bg-warning/15 text-warning flex items-center justify-center">
+          <AlertCircle className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm">Tu link expiró</div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            Necesitás identificarte con tu cédula y los últimos 4 dígitos del teléfono para volver a ver tus datos.
+          </div>
+          <Link
+            href="/postulacion"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-warning hover:underline mt-2"
+          >
+            Identificarme
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        </div>
+      </div>
+    )
   } else {
     return null
   }

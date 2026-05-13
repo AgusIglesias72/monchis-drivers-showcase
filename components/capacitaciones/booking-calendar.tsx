@@ -220,10 +220,10 @@ export function BookingCalendar({
                 const isSelected = selectedSlot?.scheduledDateUTC === s.scheduledDateUTC
                 const stateLabel = disabled
                   ? s.isFull
-                    ? 'Lleno'
+                    ? 'Sin cupos disponibles'
                     : s.isPastNotice
-                      ? 'Cerrado'
-                      : 'Pasó'
+                      ? 'Cierre de inscripción anticipado'
+                      : 'Ya pasó'
                   : `${s.availableSlots} de ${s.maxCapacity} cupos`
                 return (
                   <button
@@ -266,7 +266,7 @@ export function BookingCalendar({
                         variant="secondary"
                         className="shrink-0 bg-muted text-muted-foreground border-0"
                       >
-                        {s.isFull ? 'Lleno' : 'Cerrado'}
+                        {s.isFull ? 'Lleno' : s.isPastNotice ? 'Cierre' : 'Pasó'}
                       </Badge>
                     ) : isSelected ? (
                       <CheckCircle2 className="h-5 w-5 shrink-0" />

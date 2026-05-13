@@ -33,15 +33,14 @@ import type {
 import { checkEligibility } from './onboarding-eligibility'
 
 // Mantenemos los últimos 3 dígitos visibles para que el postulante reconozca
-// el número sin exponerlo entero. "+595 9** *** 678".
+// el número sin exponerlo entero. Genérico, sin asumir prefijo de país (la
+// versión anterior cableaba "+595 9** *** XXX" y mostraba "+155 9** *** XXX"
+// a usuarios con números no paraguayos).
 function maskPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
   if (digits.length < 6) return phone
   const last3 = digits.slice(-3)
-  // Formato fijo aproximado para PY: prefijo + asteriscos + last3.
-  // Si el usuario tiene formato no PY, fallback a stars + last3.
-  const prefix = digits.startsWith('595') ? '+595' : `+${digits.slice(0, 3)}`
-  return `${prefix} 9** *** ${last3}`
+  return `••• ••• ${last3}`
 }
 
 // ==================== VALIDATE SESSION ====================
@@ -279,6 +278,7 @@ export async function getBookingByConfirmationToken(token: string): Promise<Book
   return {
     ...base,
     status: attendee.status,
+    cancelledReason: attendee.cancelledReason ?? null,
     cancelDeadlineHours,
     canCancel,
     canReschedule,

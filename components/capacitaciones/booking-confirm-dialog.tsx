@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { formatPYLong } from '@/lib/utils/onboarding-time'
 import type { SlotResponse } from '@/lib/types/onboarding-rules.types'
+import type { CurrentBookingSummary } from './use-booking-flow'
 
 interface Profile {
   firstName: string
@@ -35,6 +36,8 @@ interface Props {
   loading: boolean
   /** Si true, mostramos copy de "cambiar fecha" y omitimos el form de perfil */
   isReschedule?: boolean
+  /** Detalle de la reserva actual (para mostrar comparativo De/A en reschedule). */
+  currentBooking?: CurrentBookingSummary | null
 }
 
 const MODALITY_ICON = {
@@ -58,6 +61,7 @@ export function BookingConfirmDialog({
   onConfirm,
   loading,
   isReschedule = false,
+  currentBooking = null,
 }: Props) {
   const [profile, setProfile] = useState<Profile>({
     firstName: '',
@@ -139,8 +143,44 @@ export function BookingConfirmDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {/* Resumen del slot seleccionado */}
-          {selectedSlot && (
+          {/* Comparativo De → A para reschedule. Si no llegó currentBooking
+              (fallo de fetch o todavía cargando), simplemente no lo mostramos
+              y el dialog cae al resumen del nuevo slot. */}
+          {isReschedule && currentBooking && selectedSlot && (
+            <div className="mt-4 rounded-lg border bg-muted/30 p-3.5 space-y-2">
+              <div className="flex items-start gap-2 text-xs">
+                <span className="shrink-0 inline-flex items-center justify-center h-5 w-12 rounded bg-gray-200 text-gray-700 font-semibold text-[10px] uppercase tracking-wider">
+                  De
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-foreground first-letter:uppercase line-through decoration-muted-foreground/40">
+                    {formatPYLong(new Date(currentBooking.scheduledDateUTC))}
+                  </div>
+                  <div className="text-muted-foreground tabular-nums">
+                    {currentBooking.startTime} — {currentBooking.endTime}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 text-xs">
+                <span className="shrink-0 inline-flex items-center justify-center h-5 w-12 rounded bg-brand-soft text-brand font-semibold text-[10px] uppercase tracking-wider">
+                  A
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-foreground first-letter:uppercase">
+                    {formatPYLong(new Date(selectedSlot.scheduledDateUTC))}
+                  </div>
+                  <div className="text-muted-foreground tabular-nums">
+                    {selectedSlot.startTime} — {selectedSlot.endTime}
+                    <span className="ml-2">· {MODALITY_LABEL[selectedSlot.modality]}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Resumen del slot seleccionado — para booking nuevo y como fallback
+              en reschedule cuando no llegó currentBooking. */}
+          {selectedSlot && !(isReschedule && currentBooking) && (
             <div className="mt-4 rounded-lg border bg-muted/30 p-3.5">
               <div className="flex items-start gap-3">
                 <div className="shrink-0 h-10 w-10 rounded-md bg-brand-soft text-brand flex items-center justify-center">

@@ -201,7 +201,7 @@ export interface PublicBookingSessionInfo {
   formDriver: {
     firstName: string | null
     lastName: string | null
-    phoneMasked: string // "+595 9** *** 678"
+    phoneMasked: string // "••• ••• 678" (últimos 3 visibles, sin asumir prefijo)
     isEligible: boolean
     notEligibleReason: string | null
   }
@@ -243,6 +243,9 @@ export interface BookingResponse {
 
 export interface BookingDetail extends BookingResponse {
   status: string
+  /** Razón de cancelación: 'self' (driver cancela), 'reschedule' (cambió fecha),
+   *  o null si no está cancelada. Permite distinguir UI post-cancelación. */
+  cancelledReason: string | null
   cancelDeadlineHours: number
   canCancel: boolean // computado: status activo + dentro del deadline
   canReschedule: boolean
