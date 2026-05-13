@@ -81,7 +81,7 @@ const STAGES: Stage[] = [
   },
   {
     key: "OUTSIDE",
-    label: "Llegando al cliente",
+    label: "Afuera",
     icon: Navigation,
     color: "text-cyan-700 dark:text-cyan-400",
     bg: "bg-cyan-50 dark:bg-cyan-950/30",

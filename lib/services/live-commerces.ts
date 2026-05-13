@@ -96,6 +96,7 @@ export function aggregateCommerces({
       countByState,
       maxStateAgeSeconds: maxAge,
       requestIds: requestsWithAge.map((x) => x.r.requestId),
+      requests: requestsWithAge.map((x) => x.r),
       drivers: [...driversMap.entries()].map(([driverId, driverName]) => ({
         driverId,
         driverName,
@@ -106,9 +107,24 @@ export function aggregateCommerces({
     })
   }
 
-  // Orden por defecto: con alerta primero, luego por demora máxima desc.
+  // Orden por defecto (tier-based):
+  //   1) Comercios con pedidos críticos (>15min en estado) o delayed primero.
+  //   2) Comercios con pedidos buscando driver van segundos.
+  //   3) Resto.
+  // Dentro de cada tier: por cantidad de pedidos desc, luego demora máxima desc.
+  // Cumple "más a menos pedidos, pero priorizando los que tienen tiempos altos".
+  const CRITICAL_SEC = 15 * 60
+  function tierFor(c: LiveCommerce): number {
+    if ((c.maxStateAgeSeconds ?? 0) >= CRITICAL_SEC || c.delayedCount > 0)
+      return 0
+    if (c.pendingNoDriverCount > 0) return 1
+    return 2
+  }
   commerces.sort((a, b) => {
-    if (a.hasAlert !== b.hasAlert) return a.hasAlert ? -1 : 1
+    const ta = tierFor(a)
+    const tb = tierFor(b)
+    if (ta !== tb) return ta - tb
+    if (a.totalActive !== b.totalActive) return b.totalActive - a.totalActive
     return (b.maxStateAgeSeconds ?? -1) - (a.maxStateAgeSeconds ?? -1)
   })
   return commerces

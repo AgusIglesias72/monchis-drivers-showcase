@@ -183,6 +183,8 @@ export interface LiveCommerce {
   maxStateAgeSeconds: number | null
   // RequestIds incluidos, ordenados por demora desc (los más viejos primero)
   requestIds: string[]
+  // Mismo orden que requestIds — objetos completos para renderizar inline en la card.
+  requests: LiveRequest[]
   drivers: { driverId: string; driverName: string }[]
   pendingNoDriverCount: number
   delayedCount: number

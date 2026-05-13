@@ -20,12 +20,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import type { LiveRequest, LiveRoute } from "@/lib/types/live-panel.types"
+import type {
+  LiveDriver,
+  LiveRequest,
+} from "@/lib/types/live-panel.types"
 
 interface Props {
   pedido: LiveRequest | null
-  route: LiveRoute | null
-  routeLoading: boolean
+  driver: LiveDriver | null
   delayedSet: Set<string>
   onClose: () => void
 }
@@ -74,7 +76,7 @@ function stateLabel(state: string | null): string {
     case "DELIVERY":
       return "En camino"
     case "OUTSIDE":
-      return "Llegando al cliente"
+      return "Afuera"
     case "ASSIGNED":
     case "ASSIGNED_DELIVERY":
       return "Asignado por admin"
@@ -126,8 +128,7 @@ const TONE_BIG: Record<
 
 export function PedidoDetailSheet({
   pedido,
-  route,
-  routeLoading,
+  driver,
   delayedSet,
   onClose,
 }: Props) {
@@ -141,8 +142,7 @@ export function PedidoDetailSheet({
         {pedido ? (
           <PedidoDetail
             pedido={pedido}
-            route={route}
-            routeLoading={routeLoading}
+            driver={driver}
             isDelayed={pedido.isDelayed || delayedSet.has(pedido.requestId)}
           />
         ) : null}
@@ -153,13 +153,11 @@ export function PedidoDetailSheet({
 
 function PedidoDetail({
   pedido: r,
-  route,
-  routeLoading,
+  driver,
   isDelayed,
 }: {
   pedido: LiveRequest
-  route: LiveRoute | null
-  routeLoading: boolean
+  driver: LiveDriver | null
   isDelayed: boolean
 }) {
   const stateMin = elapsedMinutesSince(r.currentStateSince || r.createdAt)
@@ -181,7 +179,7 @@ function PedidoDetail({
             {stateLabel(r.state)}
           </span>
           {isDelayed && (
-            <span className="inline-flex items-center gap-1 rounded bg-destructive px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
+            <span className="inline-flex items-center gap-1 rounded bg-destructive px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
               <Timer className="h-2.5 w-2.5" />
               Demorado
             </span>
@@ -225,12 +223,18 @@ function PedidoDetail({
           </div>
         </div>
 
-        {/* Mapa con trayecto */}
+        {/* Mapa: vista simple del tramo actual del driver */}
         <div>
           <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Trayecto
+            Tramo actual
           </h3>
-          <PedidoSheetMap route={route} loading={routeLoading} />
+          <PedidoSheetMap
+            state={r.state}
+            driverPosition={driver?.position ?? null}
+            driverName={driver?.fullName ?? r.driverName ?? null}
+            origin={r.origin}
+            destination={r.destination}
+          />
         </div>
 
         {/* Driver */}

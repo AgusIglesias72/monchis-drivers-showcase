@@ -3,11 +3,14 @@
 import { Fragment, useMemo, useState } from "react"
 import Link from "next/link"
 import {
+  Hourglass,
   Bike,
   BikeIcon,
   Building2,
   ChefHat,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   CreditCard,
   ExternalLink,
   Handshake,
@@ -21,10 +24,16 @@ import {
   Timer,
   type LucideIcon,
 } from "lucide-react"
+import { toast } from "sonner"
 
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CopyableOrderId } from "@/components/admin/gestion/live/copyable-order-id"
 import type { PedidoFilter } from "@/components/admin/gestion/live/live-filters"
+import {
+  formatDistance,
+  remainingDistanceForRequest,
+} from "@/lib/utils/geo"
 import type {
   LiveDriver,
   LiveRequest,
@@ -89,7 +98,7 @@ const FILTERS: FilterDef[] = [
   },
   {
     key: "OUTSIDE",
-    label: "Llegando",
+    label: "Afuera",
     icon: Navigation,
     bg: "bg-cyan-100/60 hover:bg-cyan-100 text-cyan-800 dark:bg-cyan-950/30 dark:text-cyan-300",
     bgActive: "bg-cyan-600 text-white hover:bg-cyan-700",
@@ -152,7 +161,7 @@ function stateLabel(state: string | null): string {
     case "DELIVERY":
       return "En camino"
     case "OUTSIDE":
-      return "Llegando al cliente"
+      return "Afuera"
     case "ASSIGNED":
     case "ASSIGNED_DELIVERY":
       return "Asignado por admin"
@@ -236,6 +245,14 @@ export function LiveSidePanel({
 // ============================================================================
 
 type PedidosViewMode = "cards" | "table"
+type CardStyle = "default" | "side-bar" | "hero-time" | "dense"
+
+const CARD_STYLE_LABEL: Record<CardStyle, string> = {
+  default: "Default",
+  "side-bar": "Barra",
+  "hero-time": "Tiempo",
+  dense: "Densa",
+}
 
 export function PedidosTab({
   pending,
@@ -255,6 +272,7 @@ export function PedidosTab({
   onFilterChange: (f: FilterKey) => void
 }) {
   const [viewMode, setViewMode] = useState<PedidosViewMode>("cards")
+  const [cardStyle, setCardStyle] = useState<CardStyle>("default")
 
   // Dedup por requestId — la API legacy a veces devuelve el mismo pedido en
   // `pending` y en `active` (race entre polls). Preferimos la versión de
@@ -348,7 +366,12 @@ export function PedidosTab({
             )
           })}
         </div>
-        <ViewToggle viewMode={viewMode} onChange={setViewMode} />
+        <div className="flex items-center gap-2">
+          {viewMode === "cards" && (
+            <CardStyleToggle value={cardStyle} onChange={setCardStyle} />
+          )}
+          <ViewToggle viewMode={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -360,25 +383,32 @@ export function PedidosTab({
           }
         />
       ) : viewMode === "cards" ? (
-        <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {filtered.map((r) => (
-            <PedidoCard
-              key={r.requestId}
-              r={r}
-              isDelayed={r.isDelayed || delayedSet.has(r.requestId)}
-              isHighlighted={
-                highlight?.kind === "request" && highlight.id === r.requestId
-              }
-              onClick={() =>
-                onHighlight(
-                  highlight?.kind === "request" &&
-                    highlight.id === r.requestId
-                    ? null
-                    : { kind: "request", id: r.requestId },
-                )
-              }
-            />
-          ))}
+        <div
+          className={
+            // Variantes compactas entran 4 por fila desde xl; la default
+            // mantiene 3 columnas porque tiene header/body/footer separados.
+            cardStyle === "default"
+              ? "grid grid-cols-1 gap-3 p-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+              : "grid grid-cols-1 gap-2 p-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          }
+        >
+          {filtered.map((r) => {
+            const isDelayed = r.isDelayed || delayedSet.has(r.requestId)
+            const isHighlighted =
+              highlight?.kind === "request" && highlight.id === r.requestId
+            const onClick = () =>
+              onHighlight(
+                isHighlighted ? null : { kind: "request", id: r.requestId },
+              )
+            const common = { r, isDelayed, isHighlighted, onClick }
+            if (cardStyle === "side-bar")
+              return <PedidoCardSideBar key={r.requestId} {...common} />
+            if (cardStyle === "hero-time")
+              return <PedidoCardHeroTime key={r.requestId} {...common} />
+            if (cardStyle === "dense")
+              return <PedidoCardDense key={r.requestId} {...common} />
+            return <PedidoCard key={r.requestId} {...common} />
+          })}
         </div>
       ) : (
         <PedidosTable
@@ -427,6 +457,330 @@ function ViewToggle({
         <List className="h-3 w-3" />
         Tabla
       </button>
+    </div>
+  )
+}
+
+// Toggle de estilo de card. Solo se muestra en viewMode=cards.
+function CardStyleToggle({
+  value,
+  onChange,
+}: {
+  value: CardStyle
+  onChange: (s: CardStyle) => void
+}) {
+  const styles: CardStyle[] = ["default", "side-bar", "hero-time", "dense"]
+  return (
+    <div className="inline-flex shrink-0 items-center gap-0.5 rounded-md border bg-background p-0.5">
+      {styles.map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => onChange(s)}
+          className={`inline-flex items-center rounded px-2 py-1 text-[11px] font-medium transition ${
+            value === s
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          title={`Estilo: ${CARD_STYLE_LABEL[s]}`}
+        >
+          {CARD_STYLE_LABEL[s]}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ============================================================================
+// Helpers compartidos por las variantes compactas.
+// ============================================================================
+
+interface CardCommonProps {
+  r: LiveRequest
+  isDelayed: boolean
+  isHighlighted: boolean
+  onClick: () => void
+}
+
+const STATE_BADGE_CLASS: Record<string, string> = {
+  PENDING: "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300",
+  ACCEPTED: "bg-violet-100 text-violet-900 dark:bg-violet-900/30 dark:text-violet-300",
+  WAITING_ORDER: "bg-sky-100 text-sky-900 dark:bg-sky-900/30 dark:text-sky-300",
+  DELIVERY: "bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300",
+  OUTSIDE: "bg-cyan-100 text-cyan-900 dark:bg-cyan-900/30 dark:text-cyan-300",
+  ASSIGNED: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
+  ASSIGNED_DELIVERY: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
+  ASSIGNED_PICKUP: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
+}
+
+const STATE_BAR_CLASS: Record<string, string> = {
+  PENDING: "bg-amber-400",
+  ACCEPTED: "bg-violet-500",
+  WAITING_ORDER: "bg-sky-500",
+  DELIVERY: "bg-blue-600",
+  OUTSIDE: "bg-cyan-600",
+  ASSIGNED: "bg-fuchsia-500",
+  ASSIGNED_DELIVERY: "bg-fuchsia-500",
+  ASSIGNED_PICKUP: "bg-fuchsia-500",
+}
+
+const TIME_TONE_BG: Record<
+  "fresh" | "warm" | "hot" | "critical",
+  string
+> = {
+  fresh: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  warm: "bg-amber-50 text-amber-800 ring-amber-200",
+  hot: "bg-orange-50 text-orange-800 ring-orange-200",
+  critical: "bg-red-50 text-red-800 ring-red-300",
+}
+
+const TIME_TONE_SOLID: Record<
+  "fresh" | "warm" | "hot" | "critical",
+  string
+> = {
+  fresh: "bg-emerald-500 text-white",
+  warm: "bg-amber-500 text-white",
+  hot: "bg-orange-500 text-white",
+  critical: "bg-red-500 text-white",
+}
+
+function useCardMetrics(r: LiveRequest) {
+  const stateMin = elapsedMinutesSince(r.currentStateSince || r.createdAt)
+  return {
+    stateMin,
+    stateTone: bucketTone(stateMin),
+    stateBadgeClass: r.state
+      ? STATE_BADGE_CLASS[r.state] ?? "bg-muted text-foreground/70"
+      : "bg-muted text-foreground/70",
+    stateBarClass: r.state
+      ? STATE_BAR_CLASS[r.state] ?? "bg-muted-foreground/30"
+      : "bg-muted-foreground/30",
+  }
+}
+
+function DemoradoChip() {
+  return (
+    <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+      <Timer className="h-2.5 w-2.5" />
+      Demorado
+    </span>
+  )
+}
+
+function CardExternalLink({ requestId }: { requestId: string }) {
+  return (
+    <Link
+      href={`/admin/gestion/pedidos/${requestId}`}
+      target="_blank"
+      className="shrink-0 text-muted-foreground opacity-60 transition hover:text-foreground"
+      onClick={(e) => e.stopPropagation()}
+      title="Abrir detalle"
+    >
+      <ExternalLink className="h-3.5 w-3.5" />
+    </Link>
+  )
+}
+
+function DriverZoneLine({ r }: { r: LiveRequest }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+      {r.driverName ? (
+        <span className="inline-flex items-center gap-1">
+          <BikeIcon className="h-3 w-3 text-muted-foreground" />
+          <span className="font-medium text-foreground/85">{r.driverName}</span>
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 italic text-muted-foreground">
+          <Search className="h-3 w-3" />
+          Sin driver
+        </span>
+      )}
+      <span className="inline-flex items-center gap-1">
+        <span
+          className="inline-block h-2 w-2 rounded-full"
+          style={{ backgroundColor: r.zoneColor || "#94a3b8" }}
+        />
+        <span className="text-muted-foreground">
+          {r.zoneName || "Sin zona"}
+        </span>
+      </span>
+      {r.totalOrder && (
+        <span className="inline-flex items-center gap-1 font-medium text-foreground/85">
+          <CreditCard className="h-3 w-3 text-muted-foreground" />₲{" "}
+          {formatGuaranies(r.totalOrder)}
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// Variante A — Barra lateral de estado
+// ============================================================================
+
+function PedidoCardSideBar({ r, isDelayed, isHighlighted, onClick }: CardCommonProps) {
+  const { stateMin, stateTone, stateBadgeClass, stateBarClass } = useCardMetrics(r)
+  const barColorClass = isDelayed ? "bg-red-500" : stateBarClass
+  const timeClass = TIME_TONE_BG[stateTone]
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className={`group flex cursor-pointer overflow-hidden rounded-md border bg-card transition hover:shadow-md ${
+        isHighlighted ? "ring-2 ring-foreground/30" : ""
+      }`}
+    >
+      <div className={`w-1 shrink-0 ${barColorClass}`} aria-hidden />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <CopyableOrderId
+              externalOrderId={r.externalOrderId}
+              requestId={r.requestId}
+            />
+            {isDelayed && <DemoradoChip />}
+          </div>
+          <CardExternalLink requestId={r.requestId} />
+        </div>
+        <div className="truncate text-[13px] font-semibold leading-tight">
+          {r.origin?.name || "Comercio sin nombre"}
+        </div>
+        <DriverZoneLine r={r} />
+        <div className="flex items-center justify-between gap-2 border-t pt-1.5">
+          <span
+            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${stateBadgeClass}`}
+          >
+            {stateLabel(r.state)}
+          </span>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ring-1 ${timeClass}`}
+          >
+            <Timer className="h-3 w-3" />
+            {formatElapsed(stateMin)}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// Variante B — Tiempo en estado como hero
+// ============================================================================
+
+function PedidoCardHeroTime({ r, isDelayed, isHighlighted, onClick }: CardCommonProps) {
+  const { stateMin, stateTone, stateBadgeClass } = useCardMetrics(r)
+  const heroClass = TIME_TONE_SOLID[stateTone]
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className={`group cursor-pointer rounded-md border bg-card p-2.5 transition hover:shadow-md ${
+        isHighlighted ? "ring-2 ring-foreground/30" : ""
+      } ${isDelayed ? "border-red-300" : ""}`}
+    >
+      <div className="flex items-stretch gap-2.5">
+        <div
+          className={`flex w-16 shrink-0 flex-col items-center justify-center rounded-md px-1 py-1.5 ${heroClass}`}
+          title="Tiempo en el estado actual"
+        >
+          <Timer className="h-3 w-3 opacity-80" />
+          <div className="text-base font-bold leading-none tabular-nums">
+            {formatElapsed(stateMin)}
+          </div>
+          <div className="mt-0.5 text-[9px] uppercase tracking-wider opacity-90">
+            en estado
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <CopyableOrderId
+                externalOrderId={r.externalOrderId}
+                requestId={r.requestId}
+              />
+              <span
+                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${stateBadgeClass}`}
+              >
+                {stateLabel(r.state)}
+              </span>
+              {isDelayed && <DemoradoChip />}
+            </div>
+            <CardExternalLink requestId={r.requestId} />
+          </div>
+          <div className="truncate text-[13px] font-semibold leading-tight">
+            {r.origin?.name || "Comercio sin nombre"}
+          </div>
+          <DriverZoneLine r={r} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// Variante C — Densa, 3 líneas
+// ============================================================================
+
+function PedidoCardDense({ r, isDelayed, isHighlighted, onClick }: CardCommonProps) {
+  const { stateMin, stateTone, stateBadgeClass } = useCardMetrics(r)
+  const timeClass = TIME_TONE_BG[stateTone]
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className={`group cursor-pointer rounded-md border bg-card px-2.5 py-2 transition hover:shadow-md ${
+        isHighlighted ? "ring-2 ring-foreground/30" : ""
+      } ${isDelayed ? "border-l-4 border-l-destructive" : ""}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <CopyableOrderId
+            externalOrderId={r.externalOrderId}
+            requestId={r.requestId}
+          />
+          <span
+            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${stateBadgeClass}`}
+          >
+            {stateLabel(r.state)}
+          </span>
+          {isDelayed && <DemoradoChip />}
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ring-1 ${timeClass}`}
+          >
+            <Timer className="h-2.5 w-2.5" />
+            {formatElapsed(stateMin)}
+          </span>
+        </div>
+        <CardExternalLink requestId={r.requestId} />
+      </div>
+      <div className="mt-1 truncate text-[12px] font-semibold leading-tight">
+        {r.origin?.name || "Comercio sin nombre"}
+      </div>
+      <div className="mt-0.5">
+        <DriverZoneLine r={r} />
+      </div>
     </div>
   )
 }
@@ -496,16 +850,17 @@ function PedidoCard({
       {/* Header: ID + estado + acciones */}
       <div className="flex items-center justify-between gap-2 border-b bg-card/50 px-3 py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <span className="inline-flex h-5 items-center rounded bg-muted px-1.5 font-mono text-[11px] font-bold tabular-nums">
-            #{r.externalOrderId || "?"}
-          </span>
+          <CopyableOrderId
+            externalOrderId={r.externalOrderId}
+            requestId={r.requestId}
+          />
           <span
             className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${stateBadgeClass}`}
           >
             {stateLabel(r.state)}
           </span>
           {isDelayed && (
-            <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
+            <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
               <Timer className="h-2.5 w-2.5" />
               Demorado
             </span>
@@ -666,9 +1021,10 @@ function PedidosTable({
                     />
                   </td>
                   <td className="px-2 py-2 align-middle">
-                    <span className="inline-flex items-center rounded bg-muted px-1.5 font-mono text-[11px] font-bold tabular-nums">
-                      #{r.externalOrderId || "?"}
-                    </span>
+                    <CopyableOrderId
+                      externalOrderId={r.externalOrderId}
+                      requestId={r.requestId}
+                    />
                   </td>
                   <td className="px-2 py-2 align-middle">
                     <div className="flex flex-wrap items-center gap-1">
@@ -678,7 +1034,7 @@ function PedidosTable({
                         {stateLabel(r.state)}
                       </span>
                       {isDelayed && (
-                        <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
+                        <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                           <Timer className="h-2.5 w-2.5" />
                           Demorado
                         </span>
@@ -893,14 +1249,28 @@ export function DriversTab({
   zones,
   highlight,
   onHighlight,
+  allRequests = [],
+  onRequestClick,
 }: {
   drivers: LiveDriver[]
   zones: LiveZone[]
   highlight: Highlight
   onHighlight: (h: Highlight) => void
+  allRequests?: LiveRequest[]
+  onRequestClick?: (id: string) => void
 }) {
   type DriverFilter = "all" | "libres" | "ocupados" | "no_disponibles"
   const [filter, setFilter] = useState<DriverFilter>("all")
+  const [expandedDriverId, setExpandedDriverId] = useState<string | null>(null)
+
+  // Index para resolver el request de cada driver sin tener que filtrar todo
+  // allRequests cada render. `active` gana sobre `pending` para quedarnos con
+  // la versión enriquecida con driver/zona.
+  const requestsById = useMemo(() => {
+    const m = new Map<string, LiveRequest>()
+    for (const r of allRequests) m.set(r.requestId, r)
+    return m
+  }, [allRequests])
 
   const counts = useMemo(() => {
     const out = {
@@ -1027,22 +1397,39 @@ export function DriversTab({
                     )}
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                <div className="grid grid-cols-2 items-start gap-1.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                   {[...busy, ...free, ...off].map((d) => {
                     const isHighlighted =
                       highlight?.kind === "driver" &&
                       highlight.id === d.driverId
+                    const isExpanded = expandedDriverId === d.driverId
+                    const driverRequests = d.activeRequestIds
+                      .map((id) => requestsById.get(id))
+                      .filter((r): r is LiveRequest => Boolean(r))
                     return (
                       <DriverCard
                         key={d.driverId}
                         d={d}
+                        requests={driverRequests}
                         isHighlighted={isHighlighted}
+                        isExpanded={isExpanded}
                         onClick={() =>
                           onHighlight(
                             isHighlighted
                               ? null
                               : { kind: "driver", id: d.driverId },
                           )
+                        }
+                        onToggleExpand={(e) => {
+                          e.stopPropagation()
+                          setExpandedDriverId((prev) =>
+                            prev === d.driverId ? null : d.driverId,
+                          )
+                        }}
+                        onRequestClick={(id) =>
+                          onRequestClick
+                            ? onRequestClick(id)
+                            : onHighlight({ kind: "request", id })
                         }
                       />
                     )
@@ -1063,12 +1450,20 @@ export function DriversTab({
 // al clickear el driver.
 function DriverCard({
   d,
+  requests,
   isHighlighted,
+  isExpanded,
   onClick,
+  onToggleExpand,
+  onRequestClick,
 }: {
   d: LiveDriver
+  requests: LiveRequest[]
   isHighlighted: boolean
+  isExpanded: boolean
   onClick: () => void
+  onToggleExpand: (e: React.MouseEvent) => void
+  onRequestClick: (id: string) => void
 }) {
   const isOff = !d.hasActive && !d.available
   const bikeBgColor = isOff ? "#9ca3af" : d.zoneColor || "#9ca3af"
@@ -1101,10 +1496,11 @@ function DriverCard({
           ? `+${d.pendingRequestIds.length} oferta${d.pendingRequestIds.length === 1 ? "" : "s"} sin aceptar`
           : undefined
       }
-      className={`group flex cursor-pointer items-center gap-2 rounded-lg border bg-card p-2 transition hover:shadow-sm ${
+      className={`group flex cursor-pointer flex-col rounded-lg border bg-card transition hover:shadow-sm ${
         isHighlighted ? "ring-2 ring-foreground/30" : ""
       } ${isOff ? "opacity-55 hover:opacity-90" : ""}`}
     >
+      <div className="flex items-center gap-2 p-2">
       <div className="relative shrink-0">
         <div
           className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-card"
@@ -1152,17 +1548,29 @@ function DriverCard({
         </div>
       </div>
 
-      {d.phone && (
-        <a
-          href={`https://wa.me/${d.phone.replace(/\D/g, "")}`}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="shrink-0 text-muted-foreground opacity-50 transition hover:text-foreground group-hover:opacity-100"
-          title="WhatsApp"
+      {d.hasActive && (
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          className="shrink-0 text-muted-foreground opacity-70 transition hover:text-foreground"
+          title={isExpanded ? "Ocultar pedidos" : "Ver pedidos del driver"}
         >
-          <Phone className="h-3 w-3" />
-        </a>
+          {isExpanded ? (
+            <ChevronUp className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          )}
+        </button>
+      )}
+      </div>
+
+      {/* Lista de pedidos del driver, embebida dentro del ancho de la card. */}
+      {isExpanded && requests.length > 0 && (
+        <DriverOrdersInline
+          driver={d}
+          requests={requests}
+          onRequestClick={onRequestClick}
+        />
       )}
     </div>
   )
@@ -1172,6 +1580,129 @@ function EmptyState({ message }: { message: string }) {
   return (
     <div className="flex h-[200px] items-center justify-center px-6 text-center text-sm text-muted-foreground">
       {message}
+    </div>
+  )
+}
+
+// ============================================================================
+// DriverOrdersInline — panel que ocupa toda la fila del grid de drivers para
+// mostrar los pedidos vigentes del driver expandido (ID, comercio, estado,
+// tiempo). Diseñado para ser compacto.
+// ============================================================================
+
+const ORDER_STATE_BADGE: Record<string, string> = {
+  PENDING: "bg-amber-100 text-amber-900",
+  ACCEPTED: "bg-violet-100 text-violet-900",
+  WAITING_ORDER: "bg-sky-100 text-sky-900",
+  DELIVERY: "bg-blue-100 text-blue-900",
+  OUTSIDE: "bg-cyan-100 text-cyan-900",
+  ASSIGNED: "bg-fuchsia-100 text-fuchsia-900",
+  ASSIGNED_DELIVERY: "bg-fuchsia-100 text-fuchsia-900",
+  ASSIGNED_PICKUP: "bg-fuchsia-100 text-fuchsia-900",
+}
+
+function DriverOrdersInline({
+  driver,
+  requests,
+  onRequestClick,
+}: {
+  driver: LiveDriver
+  requests: LiveRequest[]
+  onRequestClick: (id: string) => void
+}) {
+  // Ordenamos por estado (los más avanzados van primero — DELIVERY/OUTSIDE
+  // arriba, así el admin ve primero los que están en camino) y luego por
+  // antigüedad en el estado.
+  const STATE_PRIORITY: Record<string, number> = {
+    OUTSIDE: 0,
+    DELIVERY: 1,
+    WAITING_ORDER: 2,
+    ACCEPTED: 3,
+    PENDING: 4,
+  }
+  const sorted = [...requests].sort((a, b) => {
+    const pa = STATE_PRIORITY[a.state ?? "PENDING"] ?? 9
+    const pb = STATE_PRIORITY[b.state ?? "PENDING"] ?? 9
+    if (pa !== pb) return pa - pb
+    const at = a.currentStateSince
+      ? new Date(a.currentStateSince).getTime()
+      : 0
+    const bt = b.currentStateSince
+      ? new Date(b.currentStateSince).getTime()
+      : 0
+    return at - bt
+  })
+
+  return (
+    <div className="border-t bg-muted/30 p-2">
+      <div>
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Pedidos
+        </div>
+        <div className="space-y-0.5">
+          {sorted.map((r) => {
+            const min = elapsedMinutesSince(
+              r.currentStateSince || r.createdAt,
+            )
+            const stateClass = r.state
+              ? ORDER_STATE_BADGE[r.state] ?? "bg-muted text-foreground/70"
+              : "bg-muted text-foreground/70"
+            const remaining = remainingDistanceForRequest({
+              state: r.state,
+              driverPosition: driver.position,
+              origin: r.origin,
+              destination: r.destination,
+            })
+            return (
+              <button
+                key={r.requestId}
+                type="button"
+                onClick={() => onRequestClick(r.requestId)}
+                className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-[11px] transition-colors hover:bg-muted/60"
+              >
+                <CopyableOrderId
+                  externalOrderId={r.externalOrderId}
+                  requestId={r.requestId}
+                  size="sm"
+                />
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${stateClass}`}
+                >
+                  {stateLabel(r.state)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                  {r.origin?.name || "—"}
+                </span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                  <Timer className="mr-0.5 inline h-2.5 w-2.5" />
+                  {min === null ? "—" : `${min}m`}
+                </span>
+                {remaining && (
+                  <span
+                    className="inline-flex shrink-0 items-center gap-0.5 rounded bg-muted px-1 py-0.5 tabular-nums text-foreground/75"
+                    title={
+                      remaining.leg === "to-commerce"
+                        ? "Distancia lineal restante del driver al comercio"
+                        : "Distancia lineal restante del driver al cliente"
+                    }
+                  >
+                    <Navigation className="h-2.5 w-2.5" />
+                    {formatDistance(remaining.meters)}
+                  </span>
+                )}
+                {r.isDelayed && (
+                  <span
+                    className="inline-flex shrink-0 items-center justify-center rounded-full bg-destructive/10 p-1 text-destructive"
+                    title="Pedido demorado"
+                  >
+                    <Hourglass className="h-3 w-3" />
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

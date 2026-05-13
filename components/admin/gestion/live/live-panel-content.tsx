@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertTriangle,
   Bike,
+  Map as MapIcon,
+  MapPinOff,
   Pause,
   Play,
   RefreshCw,
@@ -24,7 +26,6 @@ import {
   DriversTab,
   PedidosTab,
 } from "@/components/admin/gestion/live/live-side-panel"
-import { LiveZonesGrid } from "@/components/admin/gestion/live/live-zones-grid"
 import { PedidoDetailSheet } from "@/components/admin/gestion/live/pedido-detail-sheet"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -56,6 +57,7 @@ export function LivePanelContent({ initial }: Props) {
   const [activeRoute, setActiveRoute] = useState<LiveRoute | null>(null)
   const [routeLoading, setRouteLoading] = useState(false)
   const [view, setView] = useState<LiveView>("pedidos")
+  const [showMap, setShowMap] = useState(true)
 
   const commerces = useMemo(
     () =>
@@ -270,6 +272,24 @@ export function LivePanelContent({ initial }: Props) {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setShowMap((s) => !s)}
+              title={showMap ? "Ocultar mapa" : "Mostrar mapa"}
+            >
+              {showMap ? (
+                <>
+                  <MapPinOff className="mr-2 h-4 w-4" />
+                  Ocultar mapa
+                </>
+              ) : (
+                <>
+                  <MapIcon className="mr-2 h-4 w-4" />
+                  Mostrar mapa
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setPaused((p) => !p)}
               title={
                 paused
@@ -319,39 +339,15 @@ export function LivePanelContent({ initial }: Props) {
           </Alert>
         )}
 
-        <Tabs
-          value={view}
-          onValueChange={(v) => setView(v as LiveView)}
-        >
-          <TabsList className="h-9">
-            <TabsTrigger value="pedidos" className="gap-1.5 px-3 text-[13px]">
-              <ShoppingBag className="h-3.5 w-3.5" />
-              Pedidos
-              <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold tabular-nums">
-                {data.pending.length + data.active.length}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="drivers" className="gap-1.5 px-3 text-[13px]">
-              <Bike className="h-3.5 w-3.5" />
-              Drivers
-              <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold tabular-nums">
-                {data.drivers.length}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="comercios" className="gap-1.5 px-3 text-[13px]">
-              <Store className="h-3.5 w-3.5" />
-              Comercios
-              <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold tabular-nums">
-                {commerces.length}
-              </span>
-              {commercesAlertCount > 0 && (
-                <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold tabular-nums text-white">
-                  {commercesAlertCount}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/* Tabs (renderizado arriba; el mismo nodo se repite abajo del mapa). */}
+        <ViewTabs
+          view={view}
+          setView={setView}
+          pendingCount={data.pending.length + data.active.length}
+          driversCount={data.drivers.length}
+          commercesCount={commerces.length}
+          commercesAlertCount={commercesAlertCount}
+        />
 
         {/* Stats row específica de cada vista */}
         {view === "pedidos" && (
@@ -364,56 +360,18 @@ export function LivePanelContent({ initial }: Props) {
           />
         )}
         {view === "drivers" && <LiveDriversLoad drivers={data.drivers} />}
-        {view === "comercios" && (
-          <LiveZonesGrid
-            zones={data.zones}
-            highlight={highlight}
-            onHighlight={setHighlight}
-            layout="list"
-          />
-        )}
+        {/* Comercios: sin stats row (la grilla de zonas hacía ruido y el sort
+            tier-based del grid ya prioriza los comercios con problemas). */}
 
-        {/* Layout principal: lista (izq) + mapa (der), 50/50.
-            min-w-0 en cada celda fuerza que respeten el ancho del grid; sin
-            esto Leaflet expande su celda a su intrinsic size y rompe el split. */}
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <div className="min-w-0">
-            {view === "pedidos" && (
-              <PedidosTab
-                pending={data.pending}
-                delayed={data.delayed}
-                active={data.active}
-                highlight={highlight}
-                onHighlight={setHighlight}
-                filter={pedidosFilter}
-                onFilterChange={setPedidosFilter}
-              />
-            )}
-            {view === "drivers" && (
-              <DriversTab
-                drivers={data.drivers}
-                zones={data.zones}
-                highlight={highlight}
-                onHighlight={setHighlight}
-              />
-            )}
-            {view === "comercios" && (
-              <LiveComerciosGrid
-                commerces={commerces}
-                highlight={highlight}
-                onHighlight={setHighlight}
-                onRequestClick={(id) =>
-                  setHighlight({ kind: "request", id })
-                }
-              />
-            )}
-          </div>
-          {/* relative + z-0 + isolate crea un stacking context que contiene los
-              panes internos de Leaflet (z-index 200-700 por default), evitando
-              que se monten encima del Sheet de detalle (z-50). */}
+        {/* Mapa full width arriba; lista de la vista activa abajo. El mapa
+            es togglable desde el header (showMap).
+            relative + z-0 + isolate crea un stacking context que contiene los
+            panes internos de Leaflet (z-index 200-700 por default), evitando
+            que se monten encima del Sheet de detalle (z-50). */}
+        {showMap && (
           <div
             ref={mapWrapperRef}
-            className="relative z-0 isolate min-w-0 scroll-mt-20"
+            className="relative z-0 isolate scroll-mt-20"
           >
             <LiveMap
               zones={data.zones}
@@ -427,21 +385,79 @@ export function LivePanelContent({ initial }: Props) {
               routeLoading={routeLoading}
             />
           </div>
-        </div>
+        )}
+
+        {/* Tabs replicadas abajo del mapa para no obligar a scrollear arriba. */}
+        {showMap && (
+          <ViewTabs
+            view={view}
+            setView={setView}
+            pendingCount={data.pending.length + data.active.length}
+            driversCount={data.drivers.length}
+            commercesCount={commerces.length}
+            commercesAlertCount={commercesAlertCount}
+          />
+        )}
+
+        {view === "pedidos" && (
+          <PedidosTab
+            pending={data.pending}
+            delayed={data.delayed}
+            active={data.active}
+            highlight={highlight}
+            onHighlight={setHighlight}
+            filter={pedidosFilter}
+            onFilterChange={setPedidosFilter}
+          />
+        )}
+        {view === "drivers" && (
+          <DriversTab
+            drivers={data.drivers}
+            zones={data.zones}
+            highlight={highlight}
+            onHighlight={setHighlight}
+            allRequests={[
+              ...data.pending,
+              ...data.active,
+              ...data.delayed,
+            ]}
+            onRequestClick={(id) => setHighlight({ kind: "request", id })}
+          />
+        )}
+        {view === "comercios" && (
+          <LiveComerciosGrid
+            commerces={commerces}
+            drivers={data.drivers}
+            highlight={highlight}
+            onHighlight={setHighlight}
+            onRequestClick={(id) =>
+              setHighlight({ kind: "request", id })
+            }
+          />
+        )}
       </div>
 
       <PedidoDetailSheet
-        pedido={
-          highlight?.kind === "request"
-            ? [
-                ...data.pending,
-                ...data.active,
-                ...data.delayed,
-              ].find((r) => r.requestId === highlight.id) ?? null
-            : null
-        }
-        route={activeRoute}
-        routeLoading={routeLoading}
+        pedido={(() => {
+          if (highlight?.kind !== "request") return null
+          return (
+            [
+              ...data.pending,
+              ...data.active,
+              ...data.delayed,
+            ].find((r) => r.requestId === highlight.id) ?? null
+          )
+        })()}
+        driver={(() => {
+          if (highlight?.kind !== "request") return null
+          const r = [
+            ...data.pending,
+            ...data.active,
+            ...data.delayed,
+          ].find((r) => r.requestId === highlight.id)
+          if (!r?.driverId) return null
+          return data.drivers.find((d) => d.driverId === r.driverId) ?? null
+        })()}
         delayedSet={new Set(data.delayed.map((r) => r.requestId))}
         onClose={() => setHighlight(null)}
       />
@@ -486,5 +502,54 @@ export function LivePanelContent({ initial }: Props) {
         onRequestClick={(id) => setHighlight({ kind: "request", id })}
       />
     </>
+  )
+}
+
+function ViewTabs({
+  view,
+  setView,
+  pendingCount,
+  driversCount,
+  commercesCount,
+  commercesAlertCount,
+}: {
+  view: LiveView
+  setView: (v: LiveView) => void
+  pendingCount: number
+  driversCount: number
+  commercesCount: number
+  commercesAlertCount: number
+}) {
+  return (
+    <Tabs value={view} onValueChange={(v) => setView(v as LiveView)}>
+      <TabsList className="h-9">
+        <TabsTrigger value="pedidos" className="gap-1.5 px-3 text-[13px]">
+          <ShoppingBag className="h-3.5 w-3.5" />
+          Pedidos
+          <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold tabular-nums">
+            {pendingCount}
+          </span>
+        </TabsTrigger>
+        <TabsTrigger value="drivers" className="gap-1.5 px-3 text-[13px]">
+          <Bike className="h-3.5 w-3.5" />
+          Drivers
+          <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold tabular-nums">
+            {driversCount}
+          </span>
+        </TabsTrigger>
+        <TabsTrigger value="comercios" className="gap-1.5 px-3 text-[13px]">
+          <Store className="h-3.5 w-3.5" />
+          Comercios
+          <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold tabular-nums">
+            {commercesCount}
+          </span>
+          {commercesAlertCount > 0 && (
+            <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold tabular-nums text-white">
+              {commercesAlertCount}
+            </span>
+          )}
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
   )
 }

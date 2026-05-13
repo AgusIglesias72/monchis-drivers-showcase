@@ -113,7 +113,7 @@ function stateLabel(state: string | null): string {
     case "DELIVERY":
       return "En camino"
     case "OUTSIDE":
-      return "Llegando"
+      return "Afuera"
     case "ASSIGNED":
     case "ASSIGNED_DELIVERY":
       return "Asignado"

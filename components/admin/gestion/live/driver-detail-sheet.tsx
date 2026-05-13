@@ -54,7 +54,7 @@ const STATE_LABEL: Record<string, string> = {
   ACCEPTED: "Aceptado",
   WAITING_ORDER: "En el comercio",
   DELIVERY: "En camino",
-  OUTSIDE: "Llegando al cliente",
+  OUTSIDE: "Afuera",
 }
 
 export function DriverDetailSheet({

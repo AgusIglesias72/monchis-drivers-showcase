@@ -81,7 +81,7 @@ const STATE_CHIPS: Record<string, StateChip> = {
     text: "text-blue-800",
   },
   OUTSIDE: {
-    label: "Llegando",
+    label: "Afuera",
     icon: Navigation,
     bg: "bg-cyan-100",
     text: "text-cyan-800",
