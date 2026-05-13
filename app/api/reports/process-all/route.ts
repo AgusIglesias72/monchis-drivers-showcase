@@ -1,6 +1,6 @@
 // app/api/reports/process-all/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { requireAdminOrCron } from '@/lib/auth';
 import { backgroundJobsService } from '@/lib/services/background-jobs.service';
 import { reportsProcessorService } from '@/lib/services/reports-processor.service';
 import { externalDriversProcessor } from '@/lib/services/external-drivers-processor.service';
@@ -24,7 +24,9 @@ interface ProcessAllRequest {
 
 export async function POST(request: NextRequest) {
   try {
-  
+    const guard = await requireAdminOrCron(request);
+    if (guard && !guard.ok) return guard.response;
+
     const body: ProcessAllRequest = await request.json();
     
     // Validaciones

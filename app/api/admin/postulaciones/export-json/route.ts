@@ -17,20 +17,33 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/prisma';
 
 // Configuración de paginación
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 500;
 
+// IMPORTANTE: Esta API key vive en POSTULACIONES_API_KEY (server-only).
+// Hasta 2026-05 era idéntica a NEXT_PUBLIC_GOOGLE_MAPS_API_KEY → expuesta al
+// cliente. ROTAR a un secret aleatorio (openssl rand -hex 32) antes de seguir
+// confiando en este endpoint para datos sensibles. Se llama desde Google Apps
+// Script externo, por eso no puede usar auth de Clerk; pero la API key debe
+// ser un secret real, no una key reutilizada del browser.
+function checkApiKey(provided: string | null, expected: string): boolean {
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 export async function GET(request: NextRequest) {
   try {
     // ============================================================================
-    // 1. AUTENTICACIÓN VÍA API KEY
+    // 1. AUTENTICACIÓN VÍA API KEY (header preferido, query como fallback)
     // ============================================================================
-    const apiKey = request.nextUrl.searchParams.get('apiKey');
     const expectedApiKey = process.env.POSTULACIONES_API_KEY;
-
     if (!expectedApiKey) {
       return NextResponse.json(
         { error: 'API key not configured on server' },
@@ -38,7 +51,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!apiKey || apiKey !== expectedApiKey) {
+    const headerKey = request.headers.get('x-api-key');
+    const queryKey = request.nextUrl.searchParams.get('apiKey');
+    const provided = headerKey || queryKey;
+
+    if (!checkApiKey(provided, expectedApiKey)) {
       return NextResponse.json(
         { error: 'Unauthorized - Invalid or missing API key' },
         { status: 401 }

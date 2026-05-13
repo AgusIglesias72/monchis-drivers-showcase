@@ -91,6 +91,24 @@ export async function requireAdminApi(opts?: { roles?: string[] }): Promise<Admi
 }
 
 /**
+ * Para endpoints que pueden ser llamados desde la UI admin O desde un cron.
+ * Acepta:
+ *   - admin autenticado en Clerk (mismo gate que requireAdminApi)
+ *   - O header `Authorization: Bearer <CRON_SECRET>` válido (timing-safe)
+ */
+export async function requireAdminOrCron(request: Request): Promise<AdminApiGuard | null> {
+  // Si trae header Authorization, intentamos cron primero.
+  const authHeader = request.headers.get('authorization') ?? ''
+  if (authHeader.startsWith('Bearer ')) {
+    const cronError = requireCronAuth(request)
+    if (cronError) return { ok: false, response: cronError }
+    return null
+  }
+  // Sin Bearer → debe ser admin Clerk.
+  return await requireAdminApi()
+}
+
+/**
  * Para crons llamados por Vercel Cron. Verifica `Authorization: Bearer <CRON_SECRET>`
  * con comparación timing-safe. Devuelve null si OK o NextResponse 401/500.
  */

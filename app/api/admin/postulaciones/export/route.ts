@@ -1,10 +1,14 @@
 // app/api/admin/postulaciones/export/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import * as XLSX from "xlsx";
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = await requireAdminApi();
+    if (!guard.ok) return guard.response;
+
     const { status, searchTerm } = await request.json();
 
     // Construir filtros

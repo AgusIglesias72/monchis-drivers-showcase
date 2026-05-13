@@ -1,13 +1,13 @@
 // app/api/reports/upload-only/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { requireAdminOrCron } from '@/lib/auth';
 import { reportsProcessorService } from '@/lib/services/reports-processor.service';
 import { emailService } from '@/lib/services/email.service';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-interface UploadOnlyRequest { 
+interface UploadOnlyRequest {
   startDate: string;
   endDate: string;
   notificationEmails?: string[]; // ✅ NUEVO
@@ -15,6 +15,9 @@ interface UploadOnlyRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = await requireAdminOrCron(request);
+    if (guard && !guard.ok) return guard.response;
+
     const body: UploadOnlyRequest = await request.json();
     
     if (!body.startDate || !body.endDate) {

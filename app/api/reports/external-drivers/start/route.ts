@@ -1,6 +1,6 @@
 // app/api/reports/external-drivers/start/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { requireAdminOrCron } from '@/lib/auth';
 import { backgroundJobsService } from '@/lib/services/background-jobs.service';
 import { externalDriversProcessor } from '@/lib/services/external-drivers-processor.service';
 import { emailService } from '@/lib/services/email.service';
@@ -18,6 +18,9 @@ interface StartJobRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = await requireAdminOrCron(request);
+    if (guard && !guard.ok) return guard.response;
+
     const body: StartJobRequest = await request.json();
     
     if (!body.startDate || !body.endDate) {

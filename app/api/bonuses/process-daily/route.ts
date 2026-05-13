@@ -1,5 +1,6 @@
 // app/api/bonuses/process-daily/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdminOrCron } from '@/lib/auth';
 import { backgroundJobsService } from '@/lib/services/background-jobs.service';
 import { bonusProcessorService } from '@/lib/services/bonus-processor.service';
 import { emailService } from '@/lib/services/email.service';
@@ -19,6 +20,9 @@ interface ProcessDailyRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = await requireAdminOrCron(request);
+    if (guard && !guard.ok) return guard.response;
+
     const body: ProcessDailyRequest = await request.json();
 
     // ========== VALIDACIONES ==========
