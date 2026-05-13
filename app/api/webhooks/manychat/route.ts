@@ -1,6 +1,7 @@
 // app/api/webhooks/manychat/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import {
   WhatsAppMessageSource,
   WhatsAppMessageStatus,
@@ -57,8 +58,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const providedSecret = request.headers.get('x-manychat-secret');
-  if (providedSecret !== expectedSecret) {
+  // timing-safe comparison para evitar leak por timing del secret.
+  const providedSecret = request.headers.get('x-manychat-secret') ?? '';
+  const a = Buffer.from(providedSecret);
+  const b = Buffer.from(expectedSecret);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
     console.warn('[MANYCHAT_WEBHOOK] Secret inválido o ausente');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -74,11 +78,19 @@ export async function POST(request: NextRequest) {
   const subscriberId = payload.subscriberId;
   const phone = payload.phone;
 
-  console.log('[MANYCHAT_WEBHOOK] event', { event, subscriberId, hasText: !!payload.text });
+  // No logueamos phone ni text — son PII; solo metadatos del evento.
+  console.log('[MANYCHAT_WEBHOOK] event', {
+    event,
+    hasSubscriberId: !!subscriberId,
+    hasPhone: !!phone,
+    hasText: !!payload.text,
+    textLen: (payload.text ?? '').length,
+  });
 
   if (!isHandledEvent(event)) {
-    // Evento desconocido: aceptamos con 200 para que ManyChat no reintente, pero logeamos.
-    console.warn('[MANYCHAT_WEBHOOK] evento no manejado', { event, payload });
+    // Evento desconocido: aceptamos con 200 para que ManyChat no reintente.
+    // No volcamos el payload completo en logs (puede traer PII).
+    console.warn('[MANYCHAT_WEBHOOK] evento no manejado', { event });
     return NextResponse.json({ success: true, handled: false });
   }
 

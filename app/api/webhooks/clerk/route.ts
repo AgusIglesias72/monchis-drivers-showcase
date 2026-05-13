@@ -28,6 +28,9 @@ export async function POST(req: Request) {
   let evt: WebhookEvent
 
   try {
+    // svix.verify() ya valida:
+    // - firma HMAC con CLERK_WEBHOOK_SECRET
+    // - timestamp dentro de ±5 min (rechaza replays viejos)
     evt = wh.verify(body, {
       'svix-id': svix_id,
       'svix-timestamp': svix_timestamp,
@@ -40,66 +43,89 @@ export async function POST(req: Request) {
 
   const eventType = evt.type
 
-  if (eventType === 'user.created') {
-    const { id, email_addresses, first_name, last_name, phone_numbers, image_url } = evt.data
+  // Idempotencia: todos los handlers usan upsert/update tolerantes a re-entrega.
+  // Si Svix reintenta un mismo svix-id (red, 5xx transitorio, etc.) no genera
+  // duplicados ni rompe por unique constraint.
+  try {
+    if (eventType === 'user.created') {
+      const { id, email_addresses, first_name, last_name, phone_numbers, image_url } = evt.data
 
-    const primaryEmail = email_addresses.find(e => e.id === evt.data.primary_email_address_id)
-    const userEmail = primaryEmail?.email_address || ''
+      const primaryEmail = email_addresses.find(e => e.id === evt.data.primary_email_address_id)
+      const userEmail = primaryEmail?.email_address || ''
+      const phoneNumber = phone_numbers?.find(p => p.id === evt.data.primary_phone_number_id)?.phone_number
 
-    // Como usamos invitaciones de Clerk, ya no necesitamos validar allowlist
-    // Todos los usuarios que lleguen acá fueron invitados desde el dashboard
-    await prisma.adminUser.create({
-      data: {
-        id: id, // Usar clerkId como PK
-        clerkId: id,
-        email: userEmail,
-        firstName: first_name,
-        lastName: last_name,
-        fullName: `${first_name || ''} ${last_name || ''}`.trim(),
-        phoneNumber: phone_numbers?.find(p => p.id === evt.data.primary_phone_number_id)?.phone_number,
-        profileImageUrl: image_url,
-        role: 'ADMIN', // Por defecto ADMIN, puedes ajustar manualmente después
-        isActive: true,
-      },
+      // upsert hace que el retry de Svix no falle con P2002 unique constraint.
+      await prisma.adminUser.upsert({
+        where: { clerkId: id },
+        create: {
+          id: id,
+          clerkId: id,
+          email: userEmail,
+          firstName: first_name,
+          lastName: last_name,
+          fullName: `${first_name || ''} ${last_name || ''}`.trim(),
+          phoneNumber,
+          profileImageUrl: image_url,
+          role: 'ADMIN',
+          isActive: true,
+        },
+        update: {
+          email: userEmail,
+          firstName: first_name,
+          lastName: last_name,
+          fullName: `${first_name || ''} ${last_name || ''}`.trim(),
+          phoneNumber,
+          profileImageUrl: image_url,
+        },
+      })
+
+      console.log(`[CLERK WEBHOOK] user.created procesado: clerkId=${id}`)
+    }
+
+    if (eventType === 'user.updated') {
+      const { id, email_addresses, first_name, last_name, phone_numbers, image_url } = evt.data
+
+      const primaryEmail = email_addresses.find(e => e.id === evt.data.primary_email_address_id)
+      const primaryPhone = phone_numbers?.find(p => p.id === evt.data.primary_phone_number_id)
+
+      // updateMany (vs update) no falla si el row no existe → idempotente cuando
+      // el created se perdió y solo llega el updated.
+      await prisma.adminUser.updateMany({
+        where: { clerkId: id },
+        data: {
+          email: primaryEmail?.email_address || '',
+          firstName: first_name,
+          lastName: last_name,
+          fullName: `${first_name || ''} ${last_name || ''}`.trim(),
+          phoneNumber: primaryPhone?.phone_number,
+          profileImageUrl: image_url,
+          lastLoginAt: new Date(),
+        },
+      })
+
+      console.log(`[CLERK WEBHOOK] user.updated procesado: clerkId=${id}`)
+    }
+
+    if (eventType === 'user.deleted') {
+      const { id } = evt.data
+      if (!id) return new Response('Missing user id', { status: 400 })
+
+      // Soft delete. updateMany es no-op si no existe → idempotente.
+      await prisma.adminUser.updateMany({
+        where: { clerkId: id },
+        data: { isActive: false },
+      })
+
+      console.log(`[CLERK WEBHOOK] user.deleted procesado: clerkId=${id}`)
+    }
+  } catch (err) {
+    console.error('[CLERK WEBHOOK] error procesando evento', {
+      svixId: svix_id,
+      eventType,
+      error: err instanceof Error ? err.message : String(err),
     })
-
-    console.log(`[CLERK WEBHOOK] Usuario creado en DB: ${userEmail}`)
-  }
-
-  if (eventType === 'user.updated') {
-    const { id, email_addresses, first_name, last_name, phone_numbers, image_url } = evt.data
-
-    const primaryEmail = email_addresses.find(e => e.id === evt.data.primary_email_address_id)
-    const primaryPhone = phone_numbers?.find(p => p.id === evt.data.primary_phone_number_id)
-
-    await prisma.adminUser.update({
-      where: { clerkId: id },
-      data: {
-        email: primaryEmail?.email_address || '',
-        firstName: first_name,
-        lastName: last_name,
-        fullName: `${first_name || ''} ${last_name || ''}`.trim(),
-        phoneNumber: primaryPhone?.phone_number,
-        profileImageUrl: image_url,
-        lastLoginAt: new Date(),
-      },
-    })
-
-    console.log(`[CLERK WEBHOOK] Usuario actualizado: ${primaryEmail?.email_address}`)
-  }
-
-  if (eventType === 'user.deleted') {
-    const { id } = evt.data
-
-    // Soft delete
-    await prisma.adminUser.update({
-      where: { clerkId: id },
-      data: {
-        isActive: false,
-      },
-    })
-
-    console.log(`[CLERK WEBHOOK] Usuario desactivado: ${id}`)
+    // 500 → Svix reintenta automáticamente con backoff.
+    return new Response('Processing error', { status: 500 })
   }
 
   return new Response('Webhook processed', { status: 200 })
