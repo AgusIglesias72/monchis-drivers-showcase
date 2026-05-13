@@ -1,15 +1,18 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   Bike,
   BikeIcon,
   Building2,
   ChefHat,
+  ChevronRight,
   CreditCard,
   ExternalLink,
   Handshake,
+  LayoutGrid,
+  List,
   MapPin,
   Navigation,
   Phone,
@@ -28,7 +31,9 @@ import type {
   LiveZone,
 } from "@/lib/types/live-panel.types"
 
-type Highlight = { kind: "request" | "driver" | "zone"; id: string } | null
+type Highlight =
+  | { kind: "request" | "driver" | "zone" | "commerce"; id: string }
+  | null
 type FilterKey = PedidoFilter
 
 interface FilterDef {
@@ -176,31 +181,29 @@ export function LiveSidePanel({
   return (
     <Card className="overflow-hidden">
       <Tabs defaultValue="pedidos" className="w-full">
-        <div className="border-b bg-muted/30 px-3 py-2">
-          <div className="flex items-center justify-between gap-3">
-            <TabsList className="grid h-10 w-full max-w-md grid-cols-2 bg-background p-1">
-              <TabsTrigger
-                value="pedidos"
-                className="gap-2 text-sm data-[state=active]:shadow-sm"
-              >
-                <ShoppingBag className="h-4 w-4" />
-                Pedidos
-                <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[11px] font-bold tabular-nums">
-                  {pending.length + active.length}
-                </span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="drivers"
-                className="gap-2 text-sm data-[state=active]:shadow-sm"
-              >
-                <BikeIcon className="h-4 w-4" />
-                Drivers
-                <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[11px] font-bold tabular-nums">
-                  {drivers.length}
-                </span>
-              </TabsTrigger>
-            </TabsList>
-          </div>
+        <div className="border-b bg-muted/30 px-3 py-1.5">
+          <TabsList className="inline-flex h-8 bg-background p-0.5">
+            <TabsTrigger
+              value="pedidos"
+              className="gap-1.5 px-3 text-[12px] data-[state=active]:shadow-sm"
+            >
+              <ShoppingBag className="h-3.5 w-3.5" />
+              Pedidos
+              <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold tabular-nums">
+                {pending.length + active.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="drivers"
+              className="gap-1.5 px-3 text-[12px] data-[state=active]:shadow-sm"
+            >
+              <BikeIcon className="h-3.5 w-3.5" />
+              Drivers
+              <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold tabular-nums">
+                {drivers.length}
+              </span>
+            </TabsTrigger>
+          </TabsList>
         </div>
 
         <TabsContent value="pedidos" className="m-0">
@@ -232,7 +235,9 @@ export function LiveSidePanel({
 // Pedidos: chips de filtro + grid de cards
 // ============================================================================
 
-function PedidosTab({
+type PedidosViewMode = "cards" | "table"
+
+export function PedidosTab({
   pending,
   delayed,
   active,
@@ -249,7 +254,17 @@ function PedidosTab({
   filter: FilterKey
   onFilterChange: (f: FilterKey) => void
 }) {
-  const allRequests = useMemo(() => [...pending, ...active], [pending, active])
+  const [viewMode, setViewMode] = useState<PedidosViewMode>("cards")
+
+  // Dedup por requestId — la API legacy a veces devuelve el mismo pedido en
+  // `pending` y en `active` (race entre polls). Preferimos la versión de
+  // `active` que viene enriquecida con driver + zona desde drivers_status.
+  const allRequests = useMemo(() => {
+    const m = new Map<string, LiveRequest>()
+    for (const r of pending) m.set(r.requestId, r)
+    for (const r of active) m.set(r.requestId, r)
+    return [...m.values()]
+  }, [pending, active])
   const delayedSet = useMemo(
     () => new Set(delayed.map((r) => r.requestId)),
     [delayed],
@@ -298,39 +313,42 @@ function PedidosTab({
 
   return (
     <div>
-      {/* Chips de filtro */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/20 p-3">
-        <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Filtrar:
-        </span>
-        {FILTERS.map((f) => {
-          const isActive = filter === f.key
-          const count = counts[f.key]
-          const Icon = f.icon
-          return (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => onFilterChange(f.key)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                isActive ? f.bgActive : f.bg
-              }`}
-              title={f.label}
-            >
-              <Icon className="h-3 w-3" />
-              <span>{f.label}</span>
-              <span
-                className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums ${
-                  isActive
-                    ? "bg-white/25 text-current"
-                    : "bg-foreground/10 text-current"
+      {/* Chips de filtro + toggle de vista */}
+      <div className="flex flex-wrap items-start gap-3 border-b bg-muted/20 p-3">
+        <div className="flex flex-1 flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Filtrar:
+          </span>
+          {FILTERS.map((f) => {
+            const isActive = filter === f.key
+            const count = counts[f.key]
+            const Icon = f.icon
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => onFilterChange(f.key)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                  isActive ? f.bgActive : f.bg
                 }`}
+                title={f.label}
               >
-                {count}
-              </span>
-            </button>
-          )
-        })}
+                <Icon className="h-3 w-3" />
+                <span>{f.label}</span>
+                <span
+                  className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums ${
+                    isActive
+                      ? "bg-white/25 text-current"
+                      : "bg-foreground/10 text-current"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        <ViewToggle viewMode={viewMode} onChange={setViewMode} />
       </div>
 
       {filtered.length === 0 ? (
@@ -341,7 +359,7 @@ function PedidosTab({
               : "No hay pedidos en este estado"
           }
         />
-      ) : (
+      ) : viewMode === "cards" ? (
         <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {filtered.map((r) => (
             <PedidoCard
@@ -362,7 +380,53 @@ function PedidosTab({
             />
           ))}
         </div>
+      ) : (
+        <PedidosTable
+          requests={filtered}
+          delayedSet={delayedSet}
+          highlight={highlight}
+          onHighlight={onHighlight}
+        />
       )}
+    </div>
+  )
+}
+
+function ViewToggle({
+  viewMode,
+  onChange,
+}: {
+  viewMode: PedidosViewMode
+  onChange: (m: PedidosViewMode) => void
+}) {
+  return (
+    <div className="inline-flex shrink-0 items-center gap-0.5 rounded-md border bg-background p-0.5">
+      <button
+        type="button"
+        onClick={() => onChange("cards")}
+        className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition ${
+          viewMode === "cards"
+            ? "bg-foreground text-background"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+        title="Vista en cards"
+      >
+        <LayoutGrid className="h-3 w-3" />
+        Cards
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("table")}
+        className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition ${
+          viewMode === "table"
+            ? "bg-foreground text-background"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+        title="Vista en tabla"
+      >
+        <List className="h-3 w-3" />
+        Tabla
+      </button>
     </div>
   )
 }
@@ -468,21 +532,6 @@ function PedidoCard({
           </span>
         </div>
 
-        {/* Destino */}
-        {(r.destination?.name || r.destination?.address) && (
-          <div className="flex items-start gap-1.5">
-            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-700 dark:text-red-400" />
-            <span className="text-xs leading-tight text-muted-foreground break-words">
-              {r.destination?.name && (
-                <span className="text-foreground/80">{r.destination.name}</span>
-              )}
-              {r.destination?.address && (
-                <span className="ml-1">— {r.destination.address}</span>
-              )}
-            </span>
-          </div>
-        )}
-
         {/* Driver / Zona */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2 text-[11px]">
           {r.driverName ? (
@@ -541,10 +590,305 @@ function PedidoCard({
 }
 
 // ============================================================================
+// Pedidos: tabla con filas expandibles
+// ============================================================================
+
+function PedidosTable({
+  requests,
+  delayedSet,
+  highlight,
+  onHighlight,
+}: {
+  requests: LiveRequest[]
+  delayedSet: Set<string>
+  highlight: Highlight
+  onHighlight: (h: Highlight) => void
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="border-b bg-muted/30">
+          <tr className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <th className="w-8 px-2 py-2"></th>
+            <th className="px-2 py-2 text-left font-semibold">ID</th>
+            <th className="px-2 py-2 text-left font-semibold">Estado</th>
+            <th className="px-2 py-2 text-left font-semibold">En estado</th>
+            <th className="px-2 py-2 text-left font-semibold">Comercio</th>
+            <th className="hidden px-2 py-2 text-left font-semibold lg:table-cell">
+              Driver
+            </th>
+            <th className="hidden px-2 py-2 text-left font-semibold xl:table-cell">
+              Zona
+            </th>
+            <th className="hidden px-2 py-2 text-right font-semibold md:table-cell">
+              Total
+            </th>
+            <th className="w-8 px-2 py-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {requests.map((r) => {
+            const isExpanded = expandedId === r.requestId
+            const isDelayed = r.isDelayed || delayedSet.has(r.requestId)
+            const isHighlighted =
+              highlight?.kind === "request" && highlight.id === r.requestId
+            const stateMin = elapsedMinutesSince(
+              r.currentStateSince || r.createdAt,
+            )
+            const totalMin = elapsedMinutesSince(r.confirmedAt || r.createdAt)
+            const tone = bucketTone(stateMin)
+            const stateBadgeClass = r.state
+              ? STATE_BADGE_TABLE[r.state] ?? "bg-muted text-foreground/70"
+              : "bg-muted text-foreground/70"
+            const timeBadge = TONE_BADGE[tone]
+
+            return (
+              <Fragment key={r.requestId}>
+                <tr
+                  onClick={() =>
+                    setExpandedId(isExpanded ? null : r.requestId)
+                  }
+                  className={`cursor-pointer border-b transition hover:bg-muted/30 ${
+                    isExpanded ? "bg-muted/40" : ""
+                  } ${isHighlighted ? "ring-1 ring-inset ring-foreground/30" : ""} ${
+                    isDelayed
+                      ? "border-l-2 border-l-destructive"
+                      : ""
+                  }`}
+                >
+                  <td className="px-2 py-2 align-middle">
+                    <ChevronRight
+                      className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${
+                        isExpanded ? "rotate-90" : ""
+                      }`}
+                    />
+                  </td>
+                  <td className="px-2 py-2 align-middle">
+                    <span className="inline-flex items-center rounded bg-muted px-1.5 font-mono text-[11px] font-bold tabular-nums">
+                      #{r.externalOrderId || "?"}
+                    </span>
+                  </td>
+                  <td className="px-2 py-2 align-middle">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${stateBadgeClass}`}
+                      >
+                        {stateLabel(r.state)}
+                      </span>
+                      {isDelayed && (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
+                          <Timer className="h-2.5 w-2.5" />
+                          Demorado
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-2 py-2 align-middle">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold tabular-nums ${timeBadge}`}
+                    >
+                      <Timer className="h-3 w-3" />
+                      {formatElapsed(stateMin)}
+                    </span>
+                  </td>
+                  <td className="max-w-[180px] px-2 py-2 align-middle">
+                    <div className="truncate text-[12px] font-medium">
+                      {r.origin?.name || "—"}
+                    </div>
+                  </td>
+                  <td className="hidden max-w-[140px] px-2 py-2 align-middle lg:table-cell">
+                    <div className="truncate text-[12px]">
+                      {r.driverName ? (
+                        r.driverName
+                      ) : (
+                        <span className="italic text-muted-foreground">
+                          Sin driver
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="hidden max-w-[120px] px-2 py-2 align-middle xl:table-cell">
+                    <div className="flex items-center gap-1">
+                      {r.zoneColor ? (
+                        <span
+                          className="inline-block h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: r.zoneColor }}
+                        />
+                      ) : (
+                        <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-muted-foreground/30" />
+                      )}
+                      <span className="truncate text-[11px] text-muted-foreground">
+                        {r.zoneName || "—"}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="hidden px-2 py-2 text-right align-middle font-mono text-[11px] tabular-nums md:table-cell">
+                    {r.totalOrder ? `₲ ${formatGuaranies(r.totalOrder)}` : "—"}
+                  </td>
+                  <td className="px-2 py-2 align-middle">
+                    <Link
+                      href={`/admin/gestion/pedidos/${r.requestId}`}
+                      target="_blank"
+                      className="inline-flex text-muted-foreground hover:text-foreground"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Abrir detalle completo"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
+                  </td>
+                </tr>
+                {isExpanded && (
+                  <tr className="border-b bg-muted/20">
+                    <td colSpan={9} className="px-4 py-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <ExpandedField
+                          icon={<Building2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />}
+                          label="Comercio"
+                        >
+                          <div className="text-[12px] font-medium">
+                            {r.origin?.name || "—"}
+                          </div>
+                          {r.origin?.address && (
+                            <div className="text-[11px] text-muted-foreground">
+                              {r.origin.address}
+                            </div>
+                          )}
+                        </ExpandedField>
+                        <ExpandedField
+                          icon={<MapPin className="h-3 w-3 text-red-700 dark:text-red-400" />}
+                          label="Destino"
+                        >
+                          <div className="text-[12px] font-medium">
+                            {r.destination?.name || "—"}
+                          </div>
+                          {r.destination?.address && (
+                            <div className="text-[11px] text-muted-foreground">
+                              {r.destination.address}
+                            </div>
+                          )}
+                        </ExpandedField>
+                        <ExpandedField label="Tiempos">
+                          <div className="text-[12px]">
+                            En estado:{" "}
+                            <strong className="tabular-nums">
+                              {formatElapsed(stateMin)}
+                            </strong>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            Total: {formatElapsed(totalMin)}
+                          </div>
+                          {r.totalOrder && (
+                            <div className="mt-1 text-[11px]">
+                              <CreditCard className="mr-1 inline h-3 w-3 text-muted-foreground" />
+                              ₲ {formatGuaranies(r.totalOrder)}
+                            </div>
+                          )}
+                        </ExpandedField>
+                        <ExpandedField label="Acciones">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onHighlight({
+                                kind: "request",
+                                id: r.requestId,
+                              })
+                            }}
+                            className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted"
+                          >
+                            <Search className="h-3 w-3" />
+                            Ver detalle
+                          </button>
+                          {r.driverPhone && (
+                            <a
+                              href={`https://wa.me/${r.driverPhone.replace(/\D/g, "")}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="mt-1 inline-flex items-center gap-1 rounded-md border bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400"
+                            >
+                              <Phone className="h-3 w-3" />
+                              WhatsApp driver
+                            </a>
+                          )}
+                          <Link
+                            href={`/admin/gestion/pedidos/${r.requestId}`}
+                            target="_blank"
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-1 inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-[11px] font-medium hover:bg-muted"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Detalle completo
+                          </Link>
+                        </ExpandedField>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function ExpandedField({
+  label,
+  icon,
+  children,
+}: {
+  label: string
+  icon?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {icon}
+        {label}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+const STATE_BADGE_TABLE: Record<string, string> = {
+  PENDING:
+    "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300",
+  ACCEPTED:
+    "bg-violet-100 text-violet-900 dark:bg-violet-900/30 dark:text-violet-300",
+  WAITING_ORDER:
+    "bg-sky-100 text-sky-900 dark:bg-sky-900/30 dark:text-sky-300",
+  DELIVERY:
+    "bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300",
+  OUTSIDE: "bg-cyan-100 text-cyan-900 dark:bg-cyan-900/30 dark:text-cyan-300",
+  ASSIGNED:
+    "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
+  ASSIGNED_DELIVERY:
+    "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
+  ASSIGNED_PICKUP:
+    "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
+}
+
+const TONE_BADGE: Record<
+  ReturnType<typeof bucketTone>,
+  string
+> = {
+  fresh: "bg-emerald-500 text-white",
+  warm: "bg-amber-500 text-white",
+  hot: "bg-orange-500 text-white",
+  critical: "bg-red-500 text-white",
+}
+
+// ============================================================================
 // Drivers: filtros + grid de cards
 // ============================================================================
 
-function DriversTab({
+export function DriversTab({
   drivers,
   zones,
   highlight,
@@ -648,9 +992,16 @@ function DriversTab({
         <div className="space-y-4 p-3">
           {[...grouped.entries()].map(([zoneName, items]) => {
             const z = zoneByName.get(zoneName)
+            const busy = items.filter((d) => d.hasActive)
+            const free = items.filter(
+              (d) => !d.hasActive && d.available,
+            )
+            const off = items.filter(
+              (d) => !d.hasActive && !d.available,
+            )
             return (
               <div key={zoneName}>
-                <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {z && (
                     <span
                       className="inline-block h-2.5 w-2.5 rounded-full"
@@ -658,14 +1009,29 @@ function DriversTab({
                     />
                   )}
                   <span>{zoneName}</span>
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-muted-foreground">
-                    {items.length}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1 normal-case tracking-normal">
+                    {busy.length > 0 && (
+                      <span className="rounded bg-blue-100 px-1 py-px text-[9px] font-bold text-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+                        {busy.length} con pedido{busy.length === 1 ? "" : "s"}
+                      </span>
+                    )}
+                    {free.length > 0 && (
+                      <span className="rounded bg-emerald-100 px-1 py-px text-[9px] font-bold text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
+                        {free.length} libre{free.length === 1 ? "" : "s"}
+                      </span>
+                    )}
+                    {off.length > 0 && (
+                      <span className="rounded bg-muted px-1 py-px text-[9px] font-bold text-muted-foreground">
+                        {off.length} no disp.
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-                  {items.map((d) => {
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  {[...busy, ...free, ...off].map((d) => {
                     const isHighlighted =
-                      highlight?.kind === "driver" && highlight.id === d.driverId
+                      highlight?.kind === "driver" &&
+                      highlight.id === d.driverId
                     return (
                       <DriverCard
                         key={d.driverId}
@@ -691,6 +1057,10 @@ function DriversTab({
   )
 }
 
+// Driver card uniforme: mismo tamaño para todos los estados (busy/libre/off).
+// Para los off se atenúa con opacity. El conteo de pedidos vigentes va como
+// badge sobre el avatar; el detalle de los pedidos se ve en el popup del mapa
+// al clickear el driver.
 function DriverCard({
   d,
   isHighlighted,
@@ -700,20 +1070,12 @@ function DriverCard({
   isHighlighted: boolean
   onClick: () => void
 }) {
-  const initials = d.fullName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() || "")
-    .join("") || "?"
+  const isOff = !d.hasActive && !d.available
+  const bikeBgColor = isOff ? "#9ca3af" : d.zoneColor || "#9ca3af"
+  const showFreeRing = !d.hasActive && d.available
 
-  const statusBg = d.hasActive
-    ? "bg-blue-500"
-    : d.available
-      ? "bg-emerald-500"
-      : "bg-muted-foreground"
   const statusLabel = d.hasActive
-    ? `${d.activeRequestIds.length} pedido${d.activeRequestIds.length === 1 ? "" : "s"}`
+    ? `Con ${d.activeRequestIds.length} pedido${d.activeRequestIds.length === 1 ? "" : "s"}`
     : d.available
       ? "Libre"
       : "No disponible"
@@ -734,55 +1096,74 @@ function DriverCard({
           onClick()
         }
       }}
-      className={`group cursor-pointer overflow-hidden rounded-lg border bg-card p-3 transition hover:shadow-md ${
+      title={
+        d.pendingRequestIds.length > 0
+          ? `+${d.pendingRequestIds.length} oferta${d.pendingRequestIds.length === 1 ? "" : "s"} sin aceptar`
+          : undefined
+      }
+      className={`group flex cursor-pointer items-center gap-2 rounded-lg border bg-card p-2 transition hover:shadow-sm ${
         isHighlighted ? "ring-2 ring-foreground/30" : ""
-      }`}
+      } ${isOff ? "opacity-55 hover:opacity-90" : ""}`}
     >
-      <div className="flex items-start gap-2">
-        {/* Avatar */}
-        <div className="relative">
-          <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
-              d.hasActive
-                ? "bg-blue-500"
-                : d.available
-                  ? "bg-emerald-500"
-                  : "bg-muted-foreground"
-            }`}
-          >
-            {initials}
-          </div>
-          <span
-            className={`absolute -bottom-0.5 -right-0.5 inline-block h-3 w-3 rounded-full border-2 border-card ${statusBg}`}
-          />
+      <div className="relative shrink-0">
+        <div
+          className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-card"
+          style={{
+            backgroundColor: bikeBgColor,
+            boxShadow: showFreeRing
+              ? "0 0 0 2px #10b981, 0 1px 3px rgba(0,0,0,.15)"
+              : "0 1px 3px rgba(0,0,0,.15)",
+          }}
+        >
+          <BikeIcon className="h-4 w-4 text-white" />
         </div>
-        {/* Datos */}
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold leading-tight">
-            {d.fullName}
-          </div>
-          <div className={`text-[11px] ${statusToneClass}`}>{statusLabel}</div>
-          {d.pendingRequestIds.length > 0 && (
-            <div className="text-[10px] text-amber-700 dark:text-amber-400">
-              +{d.pendingRequestIds.length} oferta
-              {d.pendingRequestIds.length === 1 ? "" : "s"}
-            </div>
-          )}
-        </div>
-        {/* Phone */}
-        {d.phone && (
-          <a
-            href={`https://wa.me/${d.phone.replace(/\D/g, "")}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground opacity-60 transition hover:text-foreground group-hover:opacity-100"
-            onClick={(e) => e.stopPropagation()}
-            title="WhatsApp"
-          >
-            <Phone className="h-3.5 w-3.5" />
-          </a>
+        {d.hasActive && (
+          <span className="absolute -bottom-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-card bg-blue-600 px-1 text-[9px] font-bold text-white">
+            {d.activeRequestIds.length}
+          </span>
+        )}
+        {d.pendingRequestIds.length > 0 && (
+          <span className="absolute -top-1 -right-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-card bg-amber-500 px-0.5 text-[8px] font-bold text-white">
+            {d.pendingRequestIds.length}
+          </span>
         )}
       </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[12px] font-semibold leading-tight">
+          {d.fullName}
+        </div>
+        <div
+          className={`flex flex-wrap items-center gap-x-1 gap-y-0 text-[10px] leading-tight ${statusToneClass}`}
+        >
+          <span>{statusLabel}</span>
+          {d.zoneName && (
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <span>·</span>
+              {d.zoneColor && (
+                <span
+                  className="inline-block h-1 w-1 shrink-0 rounded-full"
+                  style={{ backgroundColor: d.zoneColor }}
+                />
+              )}
+              <span className="truncate">{d.zoneName}</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {d.phone && (
+        <a
+          href={`https://wa.me/${d.phone.replace(/\D/g, "")}`}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 text-muted-foreground opacity-50 transition hover:text-foreground group-hover:opacity-100"
+          title="WhatsApp"
+        >
+          <Phone className="h-3 w-3" />
+        </a>
+      )}
     </div>
   )
 }

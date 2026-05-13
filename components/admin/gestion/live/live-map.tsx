@@ -25,9 +25,9 @@ interface Props {
   pending: LiveRequest[]
   delayed: LiveRequest[]
   active: LiveRequest[]
-  highlight: { kind: "request" | "driver" | "zone"; id: string } | null
+  highlight: { kind: "request" | "driver" | "zone" | "commerce"; id: string } | null
   onHighlight: (
-    h: { kind: "request" | "driver" | "zone"; id: string } | null,
+    h: { kind: "request" | "driver" | "zone" | "commerce"; id: string } | null,
   ) => void
   activeRoute: LiveRoute | null
   routeLoading: boolean
