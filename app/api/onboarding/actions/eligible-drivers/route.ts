@@ -1,16 +1,13 @@
 // app/api/onboarding/actions/eligible-drivers/route.ts
 
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { requireAdminApi } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth()
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
+    const guard = await requireAdminApi()
+    if (!guard.ok) return guard.response
 
     const { searchParams } = new URL(request.url)
     const eventId = searchParams.get('eventId')

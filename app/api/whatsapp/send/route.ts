@@ -1,23 +1,19 @@
 // app/api/whatsapp/send/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { requireAdminApi } from '@/lib/auth';
 import { messagesService } from '@/lib/services/messages.service';
 import { WhatsAppMessageType, WhatsAppMessageSource } from '@prisma/client';
 import { type BotId } from '@/lib/config/whatsapp-bots.config';
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const guard = await requireAdminApi();
+    if (!guard.ok) return guard.response;
+    const adminUser = guard.user;
 
     const body = await request.json();
     const { phone, name, type, step, customMessage, botId } = body;
-
-    console.log('📨 Request to send message:', { phone, name, type, botId });
 
     // Validaciones
     if (!phone || !name || !type) {
@@ -63,7 +59,7 @@ export async function POST(request: NextRequest) {
       step,
       customMessage,
       source: WhatsAppMessageSource.MANUAL,
-      sentBy: userId,
+      sentBy: adminUser.clerkId,
       ipAddress,
       userAgent,
       botId: botId as BotId | undefined, // ✅ Pasar botId

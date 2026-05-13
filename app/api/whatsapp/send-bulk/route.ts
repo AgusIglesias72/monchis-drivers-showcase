@@ -1,17 +1,15 @@
 // app/api/whatsapp/send-bulk/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { requireAdminApi } from '@/lib/auth';
 import { messagesService } from '@/lib/services/messages.service';
 import { type BotId } from '@/lib/config/whatsapp-bots.config';
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const guard = await requireAdminApi();
+    if (!guard.ok) return guard.response;
+    const adminUser = guard.user;
 
     const body = await request.json();
     const {
@@ -77,7 +75,7 @@ export async function POST(request: NextRequest) {
       imageUrl,
       botId: botId as BotId | undefined,
       delayMs: delaySeconds * 1000,
-      sentBy: userId,
+      sentBy: adminUser.clerkId,
       ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
       userAgent: request.headers.get('user-agent') || 'unknown',
     });

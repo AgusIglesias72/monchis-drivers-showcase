@@ -5,7 +5,7 @@
 // - Modo REAL: crea AgentActions con status=PROPOSED para que un admin apruebe.
 
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { requireAdminApi } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { runAgentForDriver } from '@/lib/services/agent.service'
 
@@ -18,10 +18,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
+    const guard = await requireAdminApi()
+    if (!guard.ok) return guard.response
+    const adminUser = guard.user
 
     const { id } = await params
     let body: Body = {}
@@ -45,7 +44,7 @@ export async function POST(
     const result = await runAgentForDriver({
       driverId: id,
       mode,
-      triggeredBy: userId,
+      triggeredBy: adminUser.clerkId,
     })
 
     return NextResponse.json({ success: true, result })

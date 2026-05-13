@@ -1,15 +1,12 @@
 // app/api/whatsapp/recent/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { requireAdminApi } from '@/lib/auth';
 import { getRecentMessages } from '@/lib/services/messages-history.service';
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const guard = await requireAdminApi();
+    if (!guard.ok) return guard.response;
 
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get('limit') || '20');

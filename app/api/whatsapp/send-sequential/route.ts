@@ -1,7 +1,7 @@
 // app/api/whatsapp/send-sequential/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { requireAdminApi } from '@/lib/auth';
 import { messagesService } from '@/lib/services/messages.service';
 import { type BotId } from '@/lib/config/whatsapp-bots.config';
 import { sendMessage } from '@/lib/services/whatsapp-multi-bot.service';
@@ -21,11 +21,9 @@ interface SendResult {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const guard = await requireAdminApi();
+    if (!guard.ok) return guard.response;
+    const adminUser = guard.user;
 
     const body = await request.json();
     const {

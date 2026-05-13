@@ -4,7 +4,7 @@
 // Usado para medir accuracy y alimentar el cron de análisis semanal (Fase 2).
 
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { requireAdminApi } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { AgentFeedback } from '@prisma/client'
 
@@ -20,10 +20,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
+    const guard = await requireAdminApi()
+    if (!guard.ok) return guard.response
+    const adminUser = guard.user
 
     const { id } = await params
     const body = (await request.json()) as Body
@@ -57,7 +56,7 @@ export async function POST(
           : {
               humanFeedback: body.feedback,
               humanFeedbackNote: body.note?.trim() || null,
-              humanFeedbackBy: userId,
+              humanFeedbackBy: adminUser.clerkId,
               humanFeedbackAt: new Date(),
             },
       select: {

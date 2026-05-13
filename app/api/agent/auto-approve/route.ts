@@ -26,6 +26,7 @@
 // misma plantilla — la AgentAction queda como auditoría.
 
 import { NextRequest, NextResponse } from 'next/server'
+import { requireCronAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { approveAllDocumentsForDriver } from '@/lib/services/document-approval.service'
 
@@ -34,11 +35,8 @@ const ALLOWED_TEMPLATE_KEYS = new Set(['capacitaciones'])
 const APPROVED_BY_TAG = 'agent:auto'
 
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get('authorization')
-  const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const cronCheck = requireCronAuth(request)
+  if (cronCheck) return cronCheck
 
   let body: { agentRunId?: string }
   try {

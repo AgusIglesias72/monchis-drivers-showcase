@@ -2,15 +2,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { auth } from '@clerk/nextjs/server';
+import { requireAdminApi } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const guard = await requireAdminApi();
+    if (!guard.ok) return guard.response;
+    const adminUser = guard.user;
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -37,7 +35,7 @@ export async function POST(request: NextRequest) {
     const timestamp = Date.now();
     const randomString = Math.random().toString(36).substring(7);
     const extension = file.name.split('.').pop();
-    const filename = `whatsapp-bulk/${userId}/${timestamp}-${randomString}.${extension}`;
+    const filename = `whatsapp-bulk/${adminUser.clerkId}/${timestamp}-${randomString}.${extension}`;
 
     // Subir a Vercel Blob
     const blob = await put(filename, file, {
@@ -66,11 +64,8 @@ export async function POST(request: NextRequest) {
 // Opcional: DELETE para eliminar imágenes
 export async function DELETE(request: NextRequest) {
   try {
-    const { userId } = await auth();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const guard = await requireAdminApi();
+    if (!guard.ok) return guard.response;
 
     const { url } = await request.json();
 

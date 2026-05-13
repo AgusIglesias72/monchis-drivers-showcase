@@ -1,7 +1,7 @@
 // app/api/admin/postulaciones/[id]/waive-ruc-inactive/route.ts
 
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { requireAdminApi } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 interface Body {
@@ -14,10 +14,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
+    const guard = await requireAdminApi()
+    if (!guard.ok) return guard.response
+    const adminUser = guard.user
 
     const { id } = await params
     const body = (await request.json()) as Body
@@ -40,7 +39,7 @@ export async function POST(
       data: body.waived
         ? {
             rucInactiveWaived: true,
-            rucInactiveWaivedBy: userId,
+            rucInactiveWaivedBy: adminUser.clerkId,
             rucInactiveWaivedAt: new Date(),
             rucInactiveWaivedNote: body.note ?? null,
           }

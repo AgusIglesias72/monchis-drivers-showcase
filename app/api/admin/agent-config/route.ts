@@ -3,8 +3,8 @@
 // GET → devuelve el override activo + el contenido del prompt y reglas del código.
 // PUT → actualiza el singleton (auth Clerk requerida).
 
-import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAdminApi } from '@/lib/auth'
 
 import {
   getActiveOverride,
@@ -71,8 +71,8 @@ Todas las acciones se crean con status=PROPOSED y requieren aprobación humana
 | \`escalate_to_admin\` | Casos imposibles de resolver automáticamente (cédula vacía, señal de fraude). |`
 
 export async function GET() {
-  const { userId } = await auth()
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const guard = await requireAdminApi()
+  if (!guard.ok) return guard.response
 
   const override = await getActiveOverride()
 
@@ -93,8 +93,9 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  const { userId } = await auth()
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const guard = await requireAdminApi()
+  if (!guard.ok) return guard.response
+  const adminUser = guard.user
 
   let body: any
   try {
@@ -117,7 +118,7 @@ export async function PUT(req: NextRequest) {
     haikuModelOverride: stringOrNull(body.haikuModelOverride),
   }
 
-  const updated = await updateActiveOverride(cleaned, userId)
+  const updated = await updateActiveOverride(cleaned, adminUser.clerkId)
   return NextResponse.json({ override: updated })
 }
 
