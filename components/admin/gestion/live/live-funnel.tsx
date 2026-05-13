@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Bike,
   ChefHat,
+  ChevronRight,
   Handshake,
   Navigation,
   Search,
@@ -176,7 +177,7 @@ export function LiveFunnel({
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        {STAGES.map((stage) => {
+        {STAGES.map((stage, i) => {
           const items = byStage.get(stage.key) || []
           const count = items.length
           const buckets = bucketize(items)
@@ -185,53 +186,58 @@ export function LiveFunnel({
           const critical = buckets.critical
           const isActive = filter === stage.key
           return (
-            <button
-              key={stage.key}
-              type="button"
-              onClick={() =>
-                onFilterChange(filter === stage.key ? "all" : stage.key)
-              }
-              className={`flex w-full flex-col rounded-lg border ${stage.bg} ${stage.bgHover} p-3 text-left transition ${
-                isActive ? stage.borderActive : stage.border
-              }`}
-            >
-              <div className="flex items-start gap-2">
-                <div
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${stage.iconBg}`}
-                >
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-1.5">
-                    <span
-                      className={`text-2xl font-bold leading-none tabular-nums ${stage.color}`}
-                    >
-                      {count}
-                    </span>
-                    <span className="text-[10px] tabular-nums text-muted-foreground">
-                      · {pct.toFixed(0)}%
-                    </span>
-                  </div>
+            <div key={stage.key} className="relative flex">
+              <button
+                type="button"
+                onClick={() =>
+                  onFilterChange(filter === stage.key ? "all" : stage.key)
+                }
+                className={`flex w-full flex-col rounded-lg border ${stage.bg} ${stage.bgHover} p-3 text-left transition ${
+                  isActive ? stage.borderActive : stage.border
+                }`}
+              >
+                <div className="flex items-start gap-2">
                   <div
-                    className={`mt-1 text-xs font-medium leading-tight ${stage.color}`}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${stage.iconBg}`}
                   >
-                    {stage.label}
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-1.5">
+                      <span
+                        className={`text-2xl font-bold leading-none tabular-nums ${stage.color}`}
+                      >
+                        {count}
+                      </span>
+                      <span className="text-[10px] tabular-nums text-muted-foreground">
+                        · {pct.toFixed(0)}%
+                      </span>
+                    </div>
+                    <div
+                      className={`mt-1 text-xs font-medium leading-tight ${stage.color}`}
+                    >
+                      {stage.label}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="mt-3 space-y-1.5">
-                <StackedBar buckets={buckets} total={count} />
-                <BucketCounts buckets={buckets} />
-              </div>
-
-              {critical > 0 && (
-                <div className="mt-2 flex items-center gap-1.5 rounded-md bg-red-100 px-2 py-1 text-[11px] font-semibold text-red-800 dark:bg-red-950/50 dark:text-red-300">
-                  <AlertCircle className="h-3 w-3" />
-                  {critical} con más de 15 min
+                <div className="mt-3 space-y-1.5">
+                  <StackedBar buckets={buckets} total={count} />
+                  <BucketCounts buckets={buckets} />
                 </div>
+
+                {critical > 0 && (
+                  <div className="mt-2 flex items-center gap-1.5 rounded-md bg-red-100 px-2 py-1 text-[11px] font-semibold text-red-800 dark:bg-red-950/50 dark:text-red-300">
+                    <AlertCircle className="h-3 w-3" />
+                    {critical} con más de 15 min
+                  </div>
+                )}
+              </button>
+
+              {i < STAGES.length - 1 && (
+                <ChevronRight className="absolute -right-3 top-1/2 z-10 hidden h-5 w-5 -translate-y-1/2 text-muted-foreground/50 lg:block" />
               )}
-            </button>
+            </div>
           )
         })}
       </div>
