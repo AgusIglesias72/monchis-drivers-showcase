@@ -25,9 +25,13 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const rawLimit = Number(url.searchParams.get("limit")) || DEFAULT_LIMIT
   const limit = Math.max(1, Math.min(rawLimit, MAX_LIMIT))
+  const priority =
+    url.searchParams.get("priority") === "recent" ? "recent" : "oldest"
 
-  console.log(`🔄 [CRON] Pedidos import queue — limit=${limit}`)
-  const result = await processOrderImportQueueBatch(limit)
+  console.log(
+    `🔄 [CRON] Pedidos import queue — limit=${limit} priority=${priority}`,
+  )
+  const result = await processOrderImportQueueBatch(limit, priority)
 
   console.log(
     `✅ [CRON] picked=${result.picked} done=${result.done} not_found=${result.notFound} failed=${result.failed} (${result.durationMs}ms)`,

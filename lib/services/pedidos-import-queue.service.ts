@@ -1,6 +1,6 @@
 import "server-only"
 
-import { REQUEST_ID_REGEX } from "@/lib/config/pedidos.config"
+import { PEDIDOS_CONFIG, REQUEST_ID_REGEX } from "@/lib/config/pedidos.config"
 import { prisma } from "@/lib/prisma"
 import {
   PedidoLookupError,
@@ -107,12 +107,13 @@ export interface QueueBatchResult {
 
 export async function processOrderImportQueueBatch(
   limit: number,
+  priority: "oldest" | "recent" = "oldest",
 ): Promise<QueueBatchResult> {
   const start = Date.now()
 
   const items = await prisma.monchisOrderImportQueue.findMany({
     where: { status: "pending" },
-    orderBy: { enqueuedAt: "asc" },
+    orderBy: { enqueuedAt: priority === "recent" ? "desc" : "asc" },
     take: limit,
     select: { requestId: true, attempts: true },
   })
@@ -184,6 +185,85 @@ export async function processOrderImportQueueBatch(
     done,
     notFound,
     failed,
+    durationMs: Date.now() - start,
+  }
+}
+
+export interface RefreshNonTerminalResult {
+  scanned: number
+  reset: number
+  inserted: number
+  durationMs: number
+}
+
+// Edad mínima de un pedido para entrar al refresh: < 2h se asume que está en
+// flujo normal y refrescarlo es gasto al pedo. Sólo pedidos viejos que aún no
+// llegaron a estado terminal son candidatos a estar "trabados" en la cache.
+const REFRESH_MIN_AGE_MS = 2 * 60 * 60 * 1000
+
+// Re-encola pedidos cacheados que aún no llegaron a estado terminal
+// (FINALIZED/CANCELLED) para que el processor vuelva a consultar la API
+// y refresque su estado.
+export async function enqueueNonTerminalOrdersForRefresh(): Promise<RefreshNonTerminalResult> {
+  const start = Date.now()
+  const ageCutoff = new Date(Date.now() - REFRESH_MIN_AGE_MS)
+
+  const cacheRows = await prisma.monchisOrderCache.findMany({
+    where: {
+      AND: [
+        {
+          OR: [
+            { status: null },
+            { status: { notIn: [...PEDIDOS_CONFIG.terminalStates] } },
+          ],
+        },
+        {
+          // Pedido con >2h de antigüedad real (confirmedAt) o de captura
+          // si nunca fue confirmado, para no procesar al pedo pedidos en
+          // flujo normal.
+          OR: [
+            { confirmedAt: { lt: ageCutoff } },
+            {
+              AND: [
+                { confirmedAt: null },
+                { capturedAt: { lt: ageCutoff } },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    select: { requestId: true },
+  })
+
+  if (cacheRows.length === 0) {
+    return { scanned: 0, reset: 0, inserted: 0, durationMs: Date.now() - start }
+  }
+
+  const requestIds = cacheRows.map((r) => r.requestId)
+
+  const [resetResult, insertResult] = await Promise.all([
+    prisma.monchisOrderImportQueue.updateMany({
+      where: {
+        requestId: { in: requestIds },
+        status: { in: ["done", "failed", "not_found"] },
+      },
+      data: {
+        status: "pending",
+        processedAt: null,
+        errorMessage: null,
+      },
+    }),
+    prisma.monchisOrderImportQueue.createMany({
+      data: requestIds.map((requestId) => ({ requestId })),
+      skipDuplicates: true,
+    }),
+  ])
+
+  return {
+    scanned: cacheRows.length,
+    reset: resetResult.count,
+    inserted: insertResult.count,
     durationMs: Date.now() - start,
   }
 }
