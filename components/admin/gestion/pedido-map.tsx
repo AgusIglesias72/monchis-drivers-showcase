@@ -18,9 +18,16 @@ const Internal = dynamic(() => import("./pedido-map-internal"), {
 interface Props {
   points: MapPoint[]
   apiKey: string
+  focusedHistoryIdx?: number | null
+  onMarkerClick?: (historyIdx: number) => void
 }
 
-export function PedidoMap({ points, apiKey }: Props) {
+export function PedidoMap({
+  points,
+  apiKey,
+  focusedHistoryIdx,
+  onMarkerClick,
+}: Props) {
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: apiKey,
   })
@@ -52,15 +59,17 @@ export function PedidoMap({ points, apiKey }: Props) {
 
   return (
     <div className="pedido-map-wrapper overflow-hidden rounded-lg border">
-      <Internal points={points} />
+      <Internal
+        points={points}
+        focusedHistoryIdx={focusedHistoryIdx}
+        onMarkerClick={onMarkerClick}
+      />
       <div className="flex flex-wrap gap-3 border-t bg-card px-4 py-2 text-xs text-muted-foreground">
-        <Legend color="#10b981" label="Comercio (origen)" />
-        <Legend color="#ef4444" label="Cliente (destino)" />
-        <Legend color="#3b82f6" label="Driver (eventos)" />
-        <Legend color="#f59e0b" label="Oferta enviada (PENDING)" />
-        <Legend color="#8b5cf6" label="Aceptado" />
+        <Legend color="#10b981" label="Comercio" />
+        <Legend color="#ef4444" label="Cliente" />
+        <Legend color="#94a3b8" label="Oferta enviada" />
+        <Legend color="#f59e0b" label="Aceptado" />
         <Legend color="#c026d3" label="Cambio admin" />
-        <span className="text-muted-foreground/60">— Polyline conecta el recorrido del driver en orden cronológico</span>
       </div>
     </div>
   )

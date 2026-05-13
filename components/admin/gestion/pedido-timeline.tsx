@@ -2,7 +2,7 @@
 
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { MapPin, ShieldCheck, User, UserMinus } from "lucide-react"
+import { ShieldCheck, User, UserMinus } from "lucide-react"
 
 import {
   Card,
@@ -22,6 +22,8 @@ import type { RawHistoryEntry } from "@/lib/types/pedidos.types"
 interface Props {
   histories: RawHistoryEntry[]
   confirmedAt?: string | null
+  focusedIdx?: number | null
+  onSelect?: (historyIdx: number) => void
 }
 
 type Step =
@@ -51,7 +53,12 @@ function diffStr(prev: string, curr: string): string | null {
   return `+${h}h ${m % 60}m`
 }
 
-export function PedidoTimeline({ histories, confirmedAt }: Props) {
+export function PedidoTimeline({
+  histories,
+  confirmedAt,
+  focusedIdx,
+  onSelect,
+}: Props) {
   if (!histories.length) {
     return (
       <Card>
@@ -79,6 +86,16 @@ export function PedidoTimeline({ histories, confirmedAt }: Props) {
     steps[0].kind === "synthetic" ? steps[0].date : steps[0].entry.date,
   )
 
+  // Numeración solo para PENDING: 1, 2, 3... (paralelo al mapa)
+  let offerCount = 0
+  const offerNumberByStep = new Map<number, number>()
+  steps.forEach((step, idx) => {
+    if (step.kind === "history" && step.entry.request_state === "PENDING") {
+      offerCount += 1
+      offerNumberByStep.set(idx, offerCount)
+    }
+  })
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -102,6 +119,8 @@ export function PedidoTimeline({ histories, confirmedAt }: Props) {
                 : null
 
             const drivers = isHistory ? step.entry.drivers_by_name || [] : []
+            const lastDriver =
+              drivers.length > 0 ? drivers[drivers.length - 1] : null
             const noDriver =
               isHistory &&
               step.entry.request_state === "PENDING" &&
@@ -111,9 +130,45 @@ export function PedidoTimeline({ histories, confirmedAt }: Props) {
             const lng = isHistory ? step.entry.longitude : null
             const rawState = isHistory ? step.entry.request_state : step.rawState
             const isLast = idx === steps.length - 1
+            const offerNumber = offerNumberByStep.get(idx)
+
+            // Mapeo de idx-de-step a idx-de-history (descontando el confirmed sintético)
+            const historyIdx = isHistory
+              ? confirmedAt
+                ? idx - 1
+                : idx
+              : null
+            const canFocus =
+              isHistory && historyIdx != null && lat != null && lng != null
+            const isFocused =
+              focusedIdx != null && historyIdx === focusedIdx
 
             return (
-              <li key={idx} className="flex gap-4 min-h-[3.25rem]">
+              <li
+                key={idx}
+                className={cn(
+                  "flex gap-4 min-h-[3.25rem] rounded-md -mx-2 px-2 py-1 transition-colors",
+                  canFocus && "cursor-pointer hover:bg-muted/40",
+                  isFocused && "bg-amber-50 ring-1 ring-amber-200",
+                )}
+                onClick={
+                  canFocus && onSelect && historyIdx != null
+                    ? () => onSelect(historyIdx)
+                    : undefined
+                }
+                role={canFocus ? "button" : undefined}
+                tabIndex={canFocus ? 0 : undefined}
+                onKeyDown={
+                  canFocus && onSelect && historyIdx != null
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          onSelect(historyIdx)
+                        }
+                      }
+                    : undefined
+                }
+              >
                 {/* Columna del icono + línea conectora centrada */}
                 <div className="relative w-10 shrink-0">
                   <span
@@ -128,11 +183,11 @@ export function PedidoTimeline({ histories, confirmedAt }: Props) {
                       <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-background bg-fuchsia-600 text-background">
                         <ShieldCheck className="h-2.5 w-2.5" strokeWidth={3} />
                       </span>
-                    ) : (
+                    ) : offerNumber ? (
                       <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-background bg-foreground text-[9px] font-bold text-background">
-                        {idx + 1}
+                        {offerNumber}
                       </span>
-                    )}
+                    ) : null}
                   </span>
                   {!isLast && (
                     <span
@@ -167,10 +222,10 @@ export function PedidoTimeline({ histories, confirmedAt }: Props) {
                   )}
 
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                    {drivers.length > 0 ? (
+                    {lastDriver ? (
                       <span className="inline-flex items-center gap-1">
                         <User className="h-3 w-3" />
-                        {drivers.join(", ")}
+                        {lastDriver}
                       </span>
                     ) : noDriver ? (
                       <span className="inline-flex items-center gap-1 text-amber-700">
@@ -178,12 +233,6 @@ export function PedidoTimeline({ histories, confirmedAt }: Props) {
                         Sin driver asignado
                       </span>
                     ) : null}
-                    {typeof lat === "number" && typeof lng === "number" && (
-                      <span className="inline-flex items-center gap-1 font-mono text-[10px]">
-                        <MapPin className="h-3 w-3" />
-                        {lat.toFixed(5)}, {lng.toFixed(5)}
-                      </span>
-                    )}
                   </div>
                 </div>
               </li>

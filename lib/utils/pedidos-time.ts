@@ -73,6 +73,36 @@ export function rawTs(s: string | null | undefined): number | null {
 }
 
 /**
+ * Parsea cualquier timestamp que llegue desde la API del pedido como UTC,
+ * sin importar el TZ del runtime. La API mezcla dos formatos:
+ *   - "2026-05-12T20:17:02.368Z"  (histories[].date — ISO con Z)
+ *   - "2026-05-12 20:16:49"       (data_origin.confirmed_at — sin TZ)
+ *
+ * El segundo formato sin TZ, `new Date(s)` lo interpreta según el TZ del
+ * runtime: en Vercel (UTC) sale bien, en dev local (UTC-3) sale corrido +3h.
+ * Forzamos la lectura como UTC en ambos casos para consistencia. La
+ * convención del proyecto es que estos timestamps representan wall-clock
+ * PY local con sufijo Z falso, así que parsear todo como UTC mantiene esa
+ * convención uniformemente.
+ */
+export function parseApiInstant(
+  s: string | null | undefined,
+): number | null {
+  if (!s) return null
+  const trimmed = s.trim()
+  if (!trimmed) return null
+  const hasTZ = /[zZ]|[+-]\d{2}:?\d{2}$/.test(trimmed)
+  const normalized = hasTZ ? trimmed : trimmed.replace(" ", "T") + "Z"
+  const ms = new Date(normalized).getTime()
+  return isNaN(ms) ? null : ms
+}
+
+export function parseApiDate(s: string | null | undefined): Date | null {
+  const ms = parseApiInstant(s)
+  return ms === null ? null : new Date(ms)
+}
+
+/**
  * Convierte un timestamp PY mal etiquetado (sufijo Z pero wall-clock es PY
  * local UTC-3) al instante UTC real. Útil cuando necesitamos comparar con
  * `Date.now()` (p.ej. para calcular cuánto tiempo lleva un pedido en el

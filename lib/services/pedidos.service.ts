@@ -4,6 +4,7 @@ import { PEDIDOS_CONFIG, REQUEST_ID_REGEX } from "@/lib/config/pedidos.config"
 import { prisma } from "@/lib/prisma"
 import { computeKpis } from "@/lib/services/pedidos-kpis"
 import type { OrderFetchResult, RawOrder } from "@/lib/types/pedidos.types"
+import { parseApiDate } from "@/lib/utils/pedidos-time"
 
 export class PedidoLookupError extends Error {
   constructor(
@@ -36,16 +37,10 @@ function finalizedAt(order: RawOrder): Date | null {
   const histories = order.histories || []
   for (let i = histories.length - 1; i >= 0; i--) {
     if (histories[i].request_state === "FINALIZED") {
-      return new Date(histories[i].date)
+      return parseApiDate(histories[i].date)
     }
   }
   return null
-}
-
-function safeDate(s: string | undefined | null): Date | null {
-  if (!s) return null
-  const d = new Date(s)
-  return isNaN(d.getTime()) ? null : d
 }
 
 function computeOrderFlags(order: RawOrder): {
@@ -78,7 +73,7 @@ async function saveToCache(order: RawOrder) {
     branchName: order.data_origin?.name ?? null,
     status: order.driver_request_state ?? null,
     totalOrder: order.total_order ?? null,
-    confirmedAt: safeDate(order.data_origin?.confirmed_at),
+    confirmedAt: parseApiDate(order.data_origin?.confirmed_at),
     finalizedAt: finalizedAt(order),
     rawData: order as unknown as object,
     ...flags,

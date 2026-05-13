@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { format, formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
@@ -61,9 +61,19 @@ export function PedidoDetailContent({
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [focusedHistoryIdx, setFocusedHistoryIdx] = useState<number | null>(null)
 
   const kpis = useMemo(() => (order ? computeKpis(order) : null), [order])
   const mapPoints = useMemo(() => (order ? buildMapPoints(order) : []), [order])
+  const offersCount = useMemo(
+    () =>
+      (order?.histories || []).filter(
+        (h) =>
+          h.request_state === "PENDING" &&
+          (h.drivers_by_id || []).length > 0,
+      ).length,
+    [order],
+  )
 
   const handleRefresh = () => {
     startTransition(async () => {
@@ -188,11 +198,16 @@ export function PedidoDetailContent({
           </div>
         </div>
 
-        {kpis && <PedidoKpis kpis={kpis} />}
+        {kpis && <PedidoKpis kpis={kpis} offersCount={offersCount} />}
 
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
-            <PedidoMap points={mapPoints} apiKey={googleMapsApiKey || ""} />
+            <PedidoMap
+              points={mapPoints}
+              apiKey={googleMapsApiKey || ""}
+              focusedHistoryIdx={focusedHistoryIdx}
+              onMarkerClick={setFocusedHistoryIdx}
+            />
             <PedidoDetalle order={order} />
             <PedidoDriverDay
               attendance={attendance ?? null}
@@ -204,6 +219,8 @@ export function PedidoDetailContent({
             <PedidoTimeline
               histories={order.histories || []}
               confirmedAt={order.data_origin?.confirmed_at ?? null}
+              focusedIdx={focusedHistoryIdx}
+              onSelect={setFocusedHistoryIdx}
             />
           </div>
         </div>

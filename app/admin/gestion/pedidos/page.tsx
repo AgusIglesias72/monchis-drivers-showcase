@@ -1,9 +1,7 @@
 // app/admin/gestion/pedidos/page.tsx
 
 import { PedidosHomeContent } from "@/components/admin/gestion/pedidos-home-content"
-import { getOrderImportQueueStats } from "@/lib/services/pedidos-import-queue.service"
 import {
-  getOrdersGlobalStats,
   searchOrders,
   type OrderSignalFilter,
   type OrderSortKey,
@@ -68,21 +66,17 @@ export default async function PedidosHomePage({ searchParams }: PageProps) {
   const from = parseDateOrNull(sp.from)
   const to = parseDateOrNull(sp.to, true)
 
-  const [{ rows, total }, queueStats, globalStats] = await Promise.all([
-    searchOrders({
-      q: q || undefined,
-      status,
-      signal,
-      from,
-      to,
-      page,
-      pageSize: PAGE_SIZE,
-      sortBy,
-      sortOrder,
-    }),
-    getOrderImportQueueStats(),
-    getOrdersGlobalStats(),
-  ])
+  const { rows, total } = await searchOrders({
+    q: q || undefined,
+    status,
+    signal,
+    from,
+    to,
+    page,
+    pageSize: PAGE_SIZE,
+    sortBy,
+    sortOrder,
+  })
 
   return (
     <PedidosHomeContent
@@ -112,10 +106,6 @@ export default async function PedidosHomePage({ searchParams }: PageProps) {
         sortBy,
         sortOrder,
       }}
-      queuePending={queueStats.pending}
-      queueDone={queueStats.done}
-      queueTotal={queueStats.total}
-      globalStats={globalStats}
     />
   )
 }

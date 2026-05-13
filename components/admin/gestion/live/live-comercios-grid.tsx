@@ -49,6 +49,7 @@ interface Props {
 
 type SortMode = "prioridad" | "demora" | "volume" | "name"
 type ViewMode = "cards" | "table"
+type TableOrderFilter = "all" | "waiting"
 
 interface StateChip {
   label: string
@@ -151,6 +152,7 @@ export function LiveComerciosGrid({
 }: Props) {
   const [sortMode, setSortMode] = useState<SortMode>("prioridad")
   const [viewMode, setViewMode] = useState<ViewMode>("cards")
+  const [tableFilter, setTableFilter] = useState<TableOrderFilter>("all")
   const driversById = useMemo(() => {
     const m = new Map<string, LiveDriver>()
     for (const d of drivers) m.set(d.driverId, d)
@@ -244,6 +246,8 @@ export function LiveComerciosGrid({
         ) : (
           <CommercesTable
             commerces={sorted}
+            filter={tableFilter}
+            onFilterChange={setTableFilter}
             highlight={highlight}
             onCardClick={(branchId) =>
               onHighlight({ kind: "commerce", id: String(branchId) })
@@ -597,27 +601,105 @@ function ViewModeToggle({
 
 function CommercesTable({
   commerces,
+  filter,
+  onFilterChange,
   highlight,
   onCardClick,
 }: {
   commerces: LiveCommerce[]
+  filter: TableOrderFilter
+  onFilterChange: (f: TableOrderFilter) => void
   highlight: Highlight
   onCardClick: (branchId: number) => void
 }) {
+  // Aplicamos el filtro a la lista de comercios. Cuando filter === "waiting"
+  // solo mostramos comercios con al menos un pedido en WAITING_ORDER, y las
+  // columnas "Pedidos" / "Distribución" reflejan solo ese estado.
+  const filteredCommerces =
+    filter === "waiting"
+      ? commerces.filter(
+          (c) => (c.countByState["WAITING_ORDER"] ?? 0) > 0,
+        )
+      : commerces
+
+  // Conteo para el badge del radio "En el comercio".
+  const waitingCount = commerces.reduce(
+    (acc, c) => acc + (c.countByState["WAITING_ORDER"] ?? 0),
+    0,
+  )
+
   return (
-    <div className="overflow-x-auto">
+    <div>
+      <div className="flex items-center justify-between gap-2 border-b bg-muted/10 px-3 py-2">
+        <div className="flex items-center gap-2 text-[11px]">
+          <span className="font-semibold uppercase tracking-wide text-muted-foreground">
+            Filtro:
+          </span>
+          <div className="inline-flex items-center gap-0.5 rounded-md border bg-background p-0.5">
+            <button
+              type="button"
+              onClick={() => onFilterChange("all")}
+              className={`rounded px-2 py-1 text-[11px] font-medium transition ${
+                filter === "all"
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Todas
+            </button>
+            <button
+              type="button"
+              onClick={() => onFilterChange("waiting")}
+              className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition ${
+                filter === "waiting"
+                  ? "bg-sky-500 text-white"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="Solo comercios con pedidos esperando ser retirados"
+            >
+              <ChefHat className="h-3 w-3" />
+              En el comercio
+              <span
+                className={`ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums ${
+                  filter === "waiting"
+                    ? "bg-white/25"
+                    : "bg-muted text-foreground/70"
+                }`}
+              >
+                {waitingCount}
+              </span>
+            </button>
+          </div>
+        </div>
+        <span className="text-[11px] text-muted-foreground">
+          {filteredCommerces.length}/{commerces.length} comercios
+        </span>
+      </div>
+      <div className="overflow-x-auto">
       <table className="w-full text-[11px]">
         <thead>
           <tr className="border-b bg-muted/30 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
             <th className="px-3 py-2 font-semibold">Comercio</th>
-            <th className="px-2 py-2 text-right font-semibold">Pedidos</th>
+            <th className="px-2 py-2 text-right font-semibold">
+              {filter === "waiting" ? "En comercio" : "Pedidos"}
+            </th>
             <th className="px-2 py-2 font-semibold">Distribución</th>
             <th className="px-2 py-2 text-right font-semibold">Demora máx</th>
             <th className="px-2 py-2 text-center font-semibold">Drivers</th>
           </tr>
         </thead>
         <tbody>
-          {commerces.map((c) => {
+          {filteredCommerces.length === 0 ? (
+            <tr>
+              <td
+                colSpan={5}
+                className="px-3 py-8 text-center text-xs text-muted-foreground"
+              >
+                Ningún comercio con pedidos esperando ser retirados ahora mismo.
+              </td>
+            </tr>
+          ) : null}
+          {filteredCommerces.map((c) => {
             const focused =
               highlight?.kind === "commerce" &&
               highlight.id === String(c.branchId)
@@ -626,6 +708,10 @@ function CommercesTable({
                 ? Math.floor(c.maxStateAgeSeconds / 60)
                 : null,
             )
+            const waitingOrders = c.countByState["WAITING_ORDER"] ?? 0
+            // Cuenta a mostrar en la columna "Pedidos"
+            const countShown =
+              filter === "waiting" ? waitingOrders : c.totalActive
             return (
               <tr
                 key={c.branchId}
@@ -679,11 +765,14 @@ function CommercesTable({
                   </div>
                 </td>
                 <td className="px-2 py-2 text-right font-bold tabular-nums">
-                  {c.totalActive}
+                  {countShown}
                 </td>
                 <td className="px-2 py-2">
                   <div className="flex flex-wrap gap-0.5">
-                    {STATE_ORDER.map((state) => {
+                    {STATE_ORDER.filter(
+                      (state) =>
+                        filter !== "waiting" || state === "WAITING_ORDER",
+                    ).map((state) => {
                       const count = c.countByState[state] ?? 0
                       if (count === 0) return null
                       const chip = STATE_CHIPS[state]
@@ -724,6 +813,7 @@ function CommercesTable({
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }

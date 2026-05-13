@@ -29,8 +29,8 @@ export interface StateStyle {
 export const PENDING_NO_DRIVER_STYLE: StateStyle = {
   label: "Buscando driver",
   icon: Search,
-  bgClass: "bg-amber-500",
-  hex: "#f59e0b",
+  bgClass: "bg-slate-400",
+  hex: "#94a3b8",
 }
 
 export const CONFIRMED_STYLE: StateStyle = {
@@ -44,14 +44,14 @@ const STATE_STYLES: Record<string, StateStyle> = {
   PENDING: {
     label: "Oferta enviada",
     icon: Bell,
-    bgClass: "bg-amber-500",
-    hex: "#f59e0b",
+    bgClass: "bg-slate-400",
+    hex: "#94a3b8",
   },
   ACCEPTED: {
     label: "Aceptado",
     icon: Handshake,
-    bgClass: "bg-violet-500",
-    hex: "#8b5cf6",
+    bgClass: "bg-amber-500",
+    hex: "#f59e0b",
   },
   WAITING_ORDER: {
     label: "En el comercio",
@@ -66,7 +66,7 @@ const STATE_STYLES: Record<string, StateStyle> = {
     hex: "#2563eb",
   },
   OUTSIDE: {
-    label: "Llegando al cliente",
+    label: "Afuera",
     icon: Navigation,
     bgClass: "bg-cyan-600",
     hex: "#0891b2",

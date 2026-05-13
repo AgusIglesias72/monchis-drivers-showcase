@@ -4,18 +4,19 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group"
-import { format, formatDistanceToNow, parseISO } from "date-fns"
+import { format, subDays } from "date-fns"
 import { es } from "date-fns/locale"
+import type { DateRange } from "react-day-picker"
 import {
   AlertTriangle,
   ArrowDown,
   ArrowRight,
   ArrowUp,
   Bike,
+  CalendarDays,
   CheckCircle2,
   ChefHat,
   Clock,
-  Filter,
   Handshake,
   Repeat,
   Search,
@@ -30,8 +31,14 @@ import {
 import { AdminHeader } from "@/components/admin/admin-header"
 import { PedidoSearchForm } from "@/components/admin/gestion/pedido-search-form"
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -79,15 +86,6 @@ interface Props {
   page: number
   pageSize: number
   filters: FilterState
-  queuePending: number
-  queueDone: number
-  queueTotal: number
-  globalStats: {
-    total: number
-    finalized: number
-    cancelled: number
-    withAdminChange: number
-  }
 }
 
 const STATUS_OPTIONS = [
@@ -115,7 +113,7 @@ const STATUS_MAP: Record<string, StatusGlyph> = {
   FINALIZED: { icon: CheckCircle2, hex: "#059669", label: "Entregado" },
   CANCELLED: { icon: XCircle, hex: "#ef4444", label: "Cancelado" },
   DELIVERY: { icon: Bike, hex: "#2563eb", label: "En camino" },
-  OUTSIDE: { icon: Bike, hex: "#0891b2", label: "Llegando al cliente" },
+  OUTSIDE: { icon: Bike, hex: "#0891b2", label: "Afuera" },
   WAITING_ORDER: { icon: ChefHat, hex: "#0ea5e9", label: "En el comercio" },
   ACCEPTED: { icon: Handshake, hex: "#8b5cf6", label: "Aceptado" },
   PENDING: { icon: Search, hex: "#f59e0b", label: "Buscando driver" },
@@ -138,6 +136,9 @@ function formatDuration(seconds: number | null): string {
 
 function formatOrderDate(iso: string | null): { strong: string; weak: string } {
   if (!iso) return { strong: "—", weak: "" }
+  // Los timestamps del pedido vienen en wall-clock PY local (con sufijo Z falso),
+  // así que parseOrderInstant extrae los componentes UTC y los planta en TZ del
+  // browser. Eso muestra el wall-clock PY tal cual, sin shift.
   const d = parseOrderInstant(iso)
   if (!d) return { strong: iso, weak: "" }
   return {
@@ -146,29 +147,51 @@ function formatOrderDate(iso: string | null): { strong: string; weak: string } {
   }
 }
 
+function parseYmd(s: string): Date | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  if (!m) return undefined
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+}
+
+function toYmd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
+function formatRangeLabel(from?: Date, to?: Date): string {
+  if (!from && !to) return "Todas las fechas"
+  if (from && !to) return `Desde ${format(from, "dd MMM", { locale: es })}`
+  if (!from && to) return `Hasta ${format(to, "dd MMM", { locale: es })}`
+  if (from && to) {
+    const sameYear = from.getFullYear() === to.getFullYear()
+    const sameDay =
+      sameYear &&
+      from.getMonth() === to.getMonth() &&
+      from.getDate() === to.getDate()
+    if (sameDay) return format(from, "dd MMM yyyy", { locale: es })
+    return `${format(from, "dd MMM", { locale: es })} → ${format(to, "dd MMM yyyy", { locale: es })}`
+  }
+  return ""
+}
+
 export function PedidosHomeContent({
   rows,
   total,
   page,
   pageSize,
   filters,
-  queuePending,
-  queueDone,
-  queueTotal,
-  globalStats,
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
   const [searchInput, setSearchInput] = useState(filters.q)
-  const [fromInput, setFromInput] = useState(filters.from)
-  const [toInput, setToInput] = useState(filters.to)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    const from = parseYmd(filters.from)
+    const to = parseYmd(filters.to)
+    return from || to ? { from, to } : undefined
+  })
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  const queuePct =
-    queueTotal > 0
-      ? Math.round(((queueTotal - queuePending) / queueTotal) * 100)
-      : 0
   const hasFilters =
     !!(filters.q || filters.from || filters.to) ||
     filters.status !== "all" ||
@@ -190,18 +213,65 @@ export function PedidosHomeContent({
     e.preventDefault()
     updateParams({
       q: searchInput.trim() || null,
-      from: fromInput || null,
-      to: toInput || null,
     })
   }
 
   const handleClearAll = () => {
     setSearchInput("")
-    setFromInput("")
-    setToInput("")
+    setDateRange(undefined)
     startTransition(() => {
       router.push(`/admin/gestion/pedidos`)
     })
+  }
+
+  // Aplica un rango completo (from+to) a la URL y cierra el popover.
+  // Para selección parcial (sólo from), no navegamos — solo pintamos en el state local.
+  const commitDateRange = (range: DateRange | undefined) => {
+    setDateRange(range)
+    updateParams({
+      from: range?.from ? toYmd(range.from) : null,
+      to: range?.to ? toYmd(range.to) : null,
+    })
+    setDatePopoverOpen(false)
+  }
+
+  const handleCalendarSelect = (
+    range: DateRange | undefined,
+    triggerDate: Date | undefined,
+  ) => {
+    // Si ya había un rango completo y el usuario clickeó otro día, no extendemos
+    // el rango (default de react-day-picker) — reseteamos como nueva selección.
+    if (dateRange?.from && dateRange?.to && triggerDate) {
+      setDateRange({ from: triggerDate, to: undefined })
+      return
+    }
+    setDateRange(range)
+    if (range?.from && range?.to) {
+      commitDateRange(range)
+    }
+  }
+
+  const handleDatePopoverOpenChange = (open: boolean) => {
+    setDatePopoverOpen(open)
+    if (!open) {
+      // Si cierra sin completar (sólo from), descartamos la selección parcial
+      // y volvemos al state representado por la URL.
+      if (dateRange?.from && !dateRange?.to) {
+        const urlFrom = parseYmd(filters.from)
+        const urlTo = parseYmd(filters.to)
+        setDateRange(
+          urlFrom || urlTo ? { from: urlFrom, to: urlTo } : undefined,
+        )
+      }
+    }
+  }
+
+  const applyPreset = (days: number | "today") => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const from =
+      days === "today" ? today : subDays(today, days === 0 ? 0 : days - 1)
+    commitDateRange({ from, to: today })
   }
 
   const handleSort = (key: "confirmedAt" | "refreshedAt") => {
@@ -237,50 +307,6 @@ export function PedidosHomeContent({
           </Link>
         </div>
 
-        {queuePending > 0 && (
-          <Link
-            href="/admin/gestion/pedidos/import"
-            className="block rounded-lg border border-blue-200 bg-blue-50/60 p-3 hover:bg-blue-50 transition-colors"
-          >
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <div>
-                <div className="font-medium text-blue-900">
-                  Cola de importación: {queuePending.toLocaleString("es-AR")} pendientes
-                </div>
-                <div className="text-xs text-blue-700/80">
-                  {queueDone.toLocaleString("es-AR")} ya procesados ({queuePct}%)
-                </div>
-              </div>
-              <div className="h-2 w-32 rounded-full bg-blue-200 overflow-hidden">
-                <div
-                  className="h-full bg-blue-600 transition-all"
-                  style={{ width: `${queuePct}%` }}
-                />
-              </div>
-            </div>
-          </Link>
-        )}
-
-        {/* KPIs globales */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiPill label="Total cacheados" value={globalStats.total} />
-          <KpiPill
-            label="Entregados"
-            value={globalStats.finalized}
-            variant="emerald"
-          />
-          <KpiPill
-            label="Cancelados"
-            value={globalStats.cancelled}
-            variant="rose"
-          />
-          <KpiPill
-            label="Con cambio admin"
-            value={globalStats.withAdminChange}
-            variant="fuchsia"
-          />
-        </div>
-
         {/* Búsqueda directa por request_id (atajo a detalle) */}
         <Card>
           <CardContent className="p-4">
@@ -296,121 +322,185 @@ export function PedidosHomeContent({
 
         {/* Filtros */}
         <Card>
-          <CardContent className="p-4 space-y-3">
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="lg:col-span-2">
-                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
-                    Buscar
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={searchInput}
-                      onChange={(e) => setSearchInput(e.target.value)}
-                      placeholder="request_id, external_order_id, driver, comercio"
-                      className="pl-8"
-                    />
-                    {searchInput && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchInput("")}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
-                    Desde
-                  </label>
-                  <Input
-                    type="date"
-                    value={fromInput}
-                    onChange={(e) => setFromInput(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
-                    Hasta
-                  </label>
-                  <Input
-                    type="date"
-                    value={toInput}
-                    onChange={(e) => setToInput(e.target.value)}
-                  />
-                </div>
+          <CardContent className="p-3 sm:p-4">
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center"
+            >
+              {/* Search: full width on mobile, grow on desktop */}
+              <div className="relative flex-1 min-w-[260px]">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Buscar por request_id, external_order_id, driver o comercio…"
+                  className="h-9 pl-8 pr-8"
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchInput("")}
+                    aria-label="Limpiar búsqueda"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
 
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground block">
-                    Estado
-                  </label>
-                  <RadioGroupPrimitive.Root
-                    value={filters.status}
-                    onValueChange={(v) => updateParams({ status: v === "all" ? null : v })}
-                    className="flex flex-wrap gap-1.5"
+              {/* Date range picker */}
+              <Popover
+                open={datePopoverOpen}
+                onOpenChange={handleDatePopoverOpenChange}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "h-9 gap-2 font-normal min-w-[200px] justify-start",
+                      !dateRange?.from &&
+                        !dateRange?.to &&
+                        "text-muted-foreground",
+                    )}
                   >
-                    {STATUS_OPTIONS.map((opt) => {
-                      const isSelected = filters.status === opt.value
-                      return (
-                        <RadioGroupPrimitive.Item
-                          key={opt.value}
-                          value={opt.value}
-                          className={cn(
-                            "rounded-md border px-3 py-1.5 text-xs transition-colors outline-none",
-                            "hover:bg-accent hover:text-accent-foreground",
-                            "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                            isSelected
-                              ? "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background"
-                              : "border-border bg-background text-foreground",
-                          )}
-                        >
-                          {opt.label}
-                        </RadioGroupPrimitive.Item>
-                      )
-                    })}
-                  </RadioGroupPrimitive.Root>
-                </div>
+                    <CalendarDays className="h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      {formatRangeLabel(dateRange?.from, dateRange?.to)}
+                    </span>
+                    {(dateRange?.from || dateRange?.to) && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          commitDateRange(undefined)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            commitDateRange(undefined)
+                          }
+                        }}
+                        aria-label="Limpiar rango"
+                        className="ml-auto text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-auto p-0 flex flex-col sm:flex-row"
+                >
+                  <div className="flex flex-row sm:flex-col gap-1 border-b sm:border-b-0 sm:border-r p-2 min-w-[140px] flex-wrap">
+                    {[
+                      { label: "Hoy", days: "today" as const },
+                      { label: "Últimos 7", days: 7 },
+                      { label: "Últimos 14", days: 14 },
+                      { label: "Últimos 30", days: 30 },
+                      { label: "Últimos 90", days: 90 },
+                    ].map((p) => (
+                      <Button
+                        key={p.label}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start h-8 text-xs sm:w-full"
+                        onClick={() => applyPreset(p.days)}
+                      >
+                        {p.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <Calendar
+                    mode="range"
+                    min={1}
+                    selected={dateRange}
+                    onSelect={handleCalendarSelect}
+                    numberOfMonths={2}
+                    defaultMonth={dateRange?.from}
+                    locale={es}
+                    showOutsideDays={false}
+                  />
+                </PopoverContent>
+              </Popover>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground block">
-                    Señal
-                  </label>
-                  <Select
-                    value={filters.signal}
-                    onValueChange={(v) => updateParams({ signal: v === "all" ? null : v })}
-                  >
-                    <SelectTrigger className="h-8 w-[220px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SIGNAL_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Status chips */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Estado
+                </span>
+                <RadioGroupPrimitive.Root
+                  value={filters.status}
+                  onValueChange={(v) =>
+                    updateParams({ status: v === "all" ? null : v })
+                  }
+                  className="flex flex-wrap gap-1"
+                >
+                  {STATUS_OPTIONS.map((opt) => {
+                    const isSelected = filters.status === opt.value
+                    return (
+                      <RadioGroupPrimitive.Item
+                        key={opt.value}
+                        value={opt.value}
+                        className={cn(
+                          "rounded-md border px-2.5 py-1 text-xs transition-colors outline-none",
+                          "hover:bg-accent hover:text-accent-foreground",
+                          "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                          isSelected
+                            ? "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background"
+                            : "border-border bg-background text-foreground",
+                        )}
+                      >
+                        {opt.label}
+                      </RadioGroupPrimitive.Item>
+                    )
+                  })}
+                </RadioGroupPrimitive.Root>
+              </div>
 
-                <Button type="submit" disabled={isPending}>
+              {/* Signal select */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Señal
+                </span>
+                <Select
+                  value={filters.signal}
+                  onValueChange={(v) =>
+                    updateParams({ signal: v === "all" ? null : v })
+                  }
+                >
+                  <SelectTrigger className="h-9 w-[200px]">
+                    <SelectValue placeholder="Cualquiera" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SIGNAL_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-1.5 lg:ml-auto">
+                <Button type="submit" size="sm" disabled={isPending}>
                   Aplicar
                 </Button>
                 {hasFilters && (
                   <Button
                     type="button"
+                    size="sm"
                     variant="ghost"
                     onClick={handleClearAll}
                     disabled={isPending}
-                    className="gap-1"
                   >
-                    <Filter className="h-3.5 w-3.5" />
-                    Limpiar todo
+                    Limpiar
                   </Button>
                 )}
               </div>
@@ -459,13 +549,7 @@ export function PedidosHomeContent({
                         <th className="px-4 py-2 font-medium">Comercio</th>
                         <th className="px-4 py-2 font-medium">Driver</th>
                         <th className="px-4 py-2 font-medium">Señales</th>
-                        <SortHeader
-                          label="Consultado"
-                          sortKey="refreshedAt"
-                          activeSortBy={filters.sortBy}
-                          activeSortOrder={filters.sortOrder}
-                          onSort={handleSort}
-                        />
+                        <th className="px-4 py-2 font-medium">Tiempo</th>
                         <th className="px-4 py-2"></th>
                       </tr>
                     </thead>
@@ -578,12 +662,19 @@ function OrderRowItem({ row }: { row: OrderRow }) {
       </td>
 
       <td className="px-4 py-2.5">
-        <div className="font-medium">
+        <div className="font-medium leading-tight">
           {row.externalOrderId ? `#${row.externalOrderId}` : "—"}
         </div>
-        <div className="text-[10px] text-muted-foreground font-mono">
-          {row.requestId.slice(0, 8)}…
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-[10px] text-muted-foreground/70 font-mono cursor-default">
+              …{row.requestId.slice(-6)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <span className="font-mono text-[11px]">{row.requestId}</span>
+          </TooltipContent>
+        </Tooltip>
       </td>
 
       <td className="px-4 py-2.5">
@@ -605,14 +696,27 @@ function OrderRowItem({ row }: { row: OrderRow }) {
         <SignalIcons row={row} />
       </td>
 
-      <td className="px-4 py-2.5 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <Clock className="h-3 w-3" />
-          {formatDistanceToNow(parseISO(row.refreshedAt), {
-            addSuffix: true,
-            locale: es,
-          })}
-        </span>
+      <td className="px-4 py-2.5">
+        {row.endToEndSeconds !== null ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center gap-1 text-xs tabular-nums cursor-default">
+                <Timer className="h-3 w-3 text-muted-foreground" />
+                {formatDuration(row.endToEndSeconds)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className="text-xs">
+                <div className="font-medium">Tiempo total</div>
+                <div className="text-muted-foreground">
+                  Desde que el comercio confirmó hasta entregar al cliente
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <span className="text-[10px] text-muted-foreground/60">—</span>
+        )}
       </td>
 
       <td className="px-4 py-2.5">
@@ -701,31 +805,3 @@ function SignalIcons({ row }: { row: OrderRow }) {
   )
 }
 
-function KpiPill({
-  label,
-  value,
-  variant,
-}: {
-  label: string
-  value: number
-  variant?: "emerald" | "rose" | "fuchsia"
-}) {
-  const colors =
-    variant === "emerald"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-      : variant === "rose"
-        ? "border-rose-200 bg-rose-50 text-rose-900"
-        : variant === "fuchsia"
-          ? "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900"
-          : "border-border bg-card"
-  return (
-    <div className={`rounded-lg border p-3 ${colors}`}>
-      <div className="text-[10px] uppercase tracking-wide font-medium opacity-70">
-        {label}
-      </div>
-      <div className="text-2xl font-bold tabular-nums mt-0.5">
-        {value.toLocaleString("es-AR")}
-      </div>
-    </div>
-  )
-}

@@ -1,78 +1,145 @@
 "use client"
 
 import {
-  CheckCircle2,
   ChefHat,
   Handshake,
+  Navigation,
   PackageCheck,
-  Search,
   Timer,
   Truck,
+  Users,
   type LucideIcon,
 } from "lucide-react"
 
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { formatDuration } from "@/lib/services/pedidos-kpis"
 import type { OrderKpis } from "@/lib/types/pedidos.types"
 
 interface Props {
   kpis: OrderKpis
+  offersCount?: number
 }
 
 const ICONS: Record<keyof OrderKpis, LucideIcon> = {
   endToEnd: Timer,
   prep: ChefHat,
-  matching: Search,
   accepting: Handshake,
   toBranch: Truck,
   atBranch: PackageCheck,
-  delivery: CheckCircle2,
+  delivery: Truck,
+  outside: Navigation,
 }
 
+// Orden cronológico real del pedido. endToEnd va al final como total acumulado.
 const ORDER: (keyof OrderKpis)[] = [
-  "endToEnd",
   "prep",
-  "matching",
   "accepting",
   "toBranch",
   "atBranch",
   "delivery",
+  "outside",
+  "endToEnd",
 ]
 
-export function PedidoKpis({ kpis }: Props) {
+export function PedidoKpis({ kpis, offersCount }: Props) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-      {ORDER.map((k) => {
-        const v = kpis[k]
-        const Icon = ICONS[k]
-        const isHero = k === "endToEnd"
-        return (
-          <Card key={k} className={isHero ? "bg-foreground/[0.02] border-foreground/15" : ""}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5">
-              <CardTitle className="text-xs font-medium text-muted-foreground">
-                {v.label}
-              </CardTitle>
-              <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="pb-3">
-              <div className={isHero ? "text-2xl font-bold tabular-nums" : "text-xl font-bold tabular-nums"}>
-                {formatDuration(v.seconds)}
-              </div>
-              {v.description && (
-                <CardDescription className="mt-0.5 text-[11px] leading-tight">
-                  {v.description}
-                </CardDescription>
+    <TooltipProvider delayDuration={150}>
+      <div className="flex flex-wrap items-stretch gap-2 rounded-lg border bg-card p-2">
+        {ORDER.map((k, i) => {
+          const v = kpis[k]
+          const Icon = ICONS[k]
+          const isHero = k === "endToEnd"
+          return (
+            <div key={k} className="flex items-stretch">
+              {i > 0 && (
+                <span
+                  aria-hidden
+                  className={
+                    isHero
+                      ? "mx-1 self-stretch border-l border-border"
+                      : "mx-0.5 self-center text-muted-foreground/40 text-xs"
+                  }
+                >
+                  {isHero ? "" : "›"}
+                </span>
               )}
-            </CardContent>
-          </Card>
-        )
-      })}
-    </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={
+                      isHero
+                        ? "flex flex-col gap-0.5 rounded-md bg-foreground/[0.04] px-3 py-1.5 cursor-default"
+                        : "flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 hover:bg-muted/50 cursor-default"
+                    }
+                  >
+                    <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <Icon className="h-3 w-3" />
+                      <span>{v.label}</span>
+                    </div>
+                    <div
+                      className={
+                        isHero
+                          ? "text-base font-bold tabular-nums leading-none"
+                          : "text-sm font-semibold tabular-nums leading-none"
+                      }
+                    >
+                      {formatDuration(v.seconds)}
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                {v.description && (
+                  <TooltipContent side="bottom" className="max-w-[240px]">
+                    <div className="text-xs space-y-1">
+                      <div className="font-medium">{v.label}</div>
+                      <div className="text-muted-foreground">
+                        {v.description}
+                      </div>
+                    </div>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </div>
+          )
+        })}
+
+        {/* Pill aparte para "Drivers ofertados" — métrica de cantidad, no de tiempo. */}
+        {typeof offersCount === "number" && (
+          <>
+            <span
+              aria-hidden
+              className="mx-1 self-stretch border-l border-border"
+            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex flex-col gap-0.5 rounded-md bg-amber-50 px-3 py-1.5 cursor-default ring-1 ring-amber-200">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-amber-800">
+                    <Users className="h-3 w-3" />
+                    <span>Drivers ofertados</span>
+                  </div>
+                  <div className="text-base font-bold tabular-nums leading-none text-amber-900">
+                    {offersCount}
+                  </div>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[240px]">
+                <div className="text-xs space-y-1">
+                  <div className="font-medium">Drivers ofertados</div>
+                  <div className="text-muted-foreground">
+                    Cantidad de drivers que vieron la oferta antes de que uno
+                    aceptara
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </>
+        )}
+
+      </div>
+    </TooltipProvider>
   )
 }

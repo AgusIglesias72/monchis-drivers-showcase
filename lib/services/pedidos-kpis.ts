@@ -4,12 +4,9 @@ import type {
   RawHistoryEntry,
   RawOrder,
 } from "@/lib/types/pedidos.types"
+import { parseApiInstant } from "@/lib/utils/pedidos-time"
 
-function ts(s: string | undefined | null): number | null {
-  if (!s) return null
-  const d = new Date(s).getTime()
-  return isNaN(d) ? null : d
-}
+const ts = parseApiInstant
 
 function diffSec(a: number | null, b: number | null): number | null {
   if (a === null || b === null) return null
@@ -36,18 +33,13 @@ function findLastHistory(
 export function computeKpis(order: RawOrder): OrderKpis {
   const histories = order.histories || []
 
-  const firstEvent = histories[0]
+  const firstPending = findFirstHistory(
+    histories,
+    (h) => h.request_state === "PENDING",
+  )
   const firstPendingNoDriver = findFirstHistory(
     histories,
     (h) => h.request_state === "PENDING" && (h.drivers_by_id || []).length === 0,
-  )
-  const firstPendingWithDriver = findFirstHistory(
-    histories,
-    (h) => h.request_state === "PENDING" && (h.drivers_by_id || []).length > 0,
-  )
-  const lastPendingWithDriver = findLastHistory(
-    histories,
-    (h) => h.request_state === "PENDING" && (h.drivers_by_id || []).length > 0,
   )
   const accepted = findFirstHistory(histories, (h) => h.request_state === "ACCEPTED")
   const waitingOrder = findFirstHistory(
@@ -55,53 +47,61 @@ export function computeKpis(order: RawOrder): OrderKpis {
     (h) => h.request_state === "WAITING_ORDER",
   )
   const delivery = findFirstHistory(histories, (h) => h.request_state === "DELIVERY")
+  const outside = findFirstHistory(
+    histories,
+    (h) => h.request_state === "OUTSIDE",
+  )
   const finalized = findLastHistory(histories, (h) => h.request_state === "FINALIZED")
 
   const tConfirmed = ts(order.data_origin?.confirmed_at)
-  const tFirstEvent = ts(firstEvent?.date) ?? ts(firstPendingNoDriver?.date)
-  const tFirstPendingNoDriver = ts(firstPendingNoDriver?.date) ?? tFirstEvent
-  const tFirstPendingWithDriver = ts(firstPendingWithDriver?.date)
-  const tLastPendingWithDriver = ts(lastPendingWithDriver?.date)
+  const tFirstPending = ts(firstPending?.date)
+  // El "primer evento que cuenta" para preparación es el primer PENDING sin
+  // driver, o si no existió, el primer PENDING en general.
+  const tFirstPendingNoDriver =
+    ts(firstPendingNoDriver?.date) ?? tFirstPending
   const tAccepted = ts(accepted?.date)
   const tWaiting = ts(waitingOrder?.date)
   const tDelivery = ts(delivery?.date)
+  const tOutside = ts(outside?.date)
   const tFinalized = ts(finalized?.date)
 
   return {
     endToEnd: {
       label: "Tiempo total",
       seconds: diffSec(tConfirmed, tFinalized),
-      description: "Desde que el comercio confirmó hasta entregar al cliente",
+      description:
+        "Tiempo desde que el comercio confirmó el pedido hasta la entrega al cliente",
     },
     prep: {
       label: "Preparación",
       seconds: diffSec(tConfirmed, tFirstPendingNoDriver),
       description: "Pedido en cocina antes de buscar driver",
     },
-    matching: {
-      label: "Búsqueda de driver",
-      seconds: diffSec(tFirstPendingNoDriver, tFirstPendingWithDriver),
-      description: "Hasta encontrar un driver dispuesto",
-    },
     accepting: {
       label: "Aceptación",
-      seconds: diffSec(tLastPendingWithDriver, tAccepted),
-      description: "De la oferta enviada hasta aceptar",
+      seconds: diffSec(tFirstPending, tAccepted),
+      description:
+        "Desde la primera oferta enviada hasta que un driver acepta el pedido",
     },
     toBranch: {
       label: "Camino al comercio",
       seconds: diffSec(tAccepted, tWaiting),
-      description: "El driver aceptó y fue al local",
+      description: "El driver aceptó y va camino al local",
     },
     atBranch: {
-      label: "En el comercio",
+      label: "Esperando orden",
       seconds: diffSec(tWaiting, tDelivery),
-      description: "El driver esperando para retirar",
+      description: "El driver esperando en el comercio para retirar",
     },
     delivery: {
-      label: "Entrega",
-      seconds: diffSec(tDelivery, tFinalized),
-      description: "Camino del comercio al cliente",
+      label: "Camino al cliente",
+      seconds: diffSec(tDelivery, tOutside ?? tFinalized),
+      description: "El driver salió del comercio rumbo al cliente",
+    },
+    outside: {
+      label: "Afuera",
+      seconds: diffSec(tOutside, tFinalized),
+      description: "Driver en zona del cliente hasta completar la entrega",
     },
   }
 }

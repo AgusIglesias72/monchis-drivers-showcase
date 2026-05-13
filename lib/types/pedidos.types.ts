@@ -62,11 +62,11 @@ export interface KpiValue {
 export interface OrderKpis {
   endToEnd: KpiValue
   prep: KpiValue
-  matching: KpiValue
   accepting: KpiValue
   toBranch: KpiValue
   atBranch: KpiValue
   delivery: KpiValue
+  outside: KpiValue
 }
 
 export interface MapPoint {
