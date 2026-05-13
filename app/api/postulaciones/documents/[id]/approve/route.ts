@@ -96,13 +96,14 @@ export async function PATCH(
                 driverId: driverForFlow.id,
                 result,
               })
-              // Si el envío falló, soltar el lock para reintentar en el próximo approve.
-              if (result.status === 'failed') {
-                await prisma.formDriver.update({
-                  where: { id: driverForFlow.id },
-                  data: { manychatApprovalSentAt: null },
-                })
-              }
+              // Soltar el lock en CUALQUIER caso que no haya enviado: failed (excepción
+              // de ManyChat) o skipped (template mal cableado: no existe, inactivo o
+              // sin manychatFlowId). Sin esto, si el template estaba mal configurado el
+              // driver queda atascado sin recibir nunca el mensaje aunque se arregle.
+              await prisma.formDriver.update({
+                where: { id: driverForFlow.id },
+                data: { manychatApprovalSentAt: null },
+              })
             }
           } catch (err) {
             console.error('[DOC_APPROVE] Error inesperado enviando ManyChat', {

@@ -84,7 +84,10 @@ export async function POST(
       userAgent
     )
 
-    // TODO: migrar a WhatsApp multi-bot — notificar CAPACITACION_SELECTED con date/time/location/meetingLink
+    // Decisión de producto: NO mandamos confirmación de reserva por WhatsApp.
+    // El cliente ya está en el portal cuando reserva (acción user-initiated) y
+    // ve el ActiveBookingCard con fecha/horario/dirección. Para Google Calendar
+    // o .ics tiene el link "Ver detalles" → /capacitaciones/reserva/<token>.
 
     return NextResponse.json({
       success: true,

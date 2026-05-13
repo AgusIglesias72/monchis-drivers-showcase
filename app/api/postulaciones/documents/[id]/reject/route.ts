@@ -72,7 +72,11 @@ export async function PATCH(
       data: { documentsStatus: newDocumentsStatus }
     });
 
-    // TODO: migrar a WhatsApp multi-bot — notificar DOCUMENT_REJECTED con documentType + reason
+    // Decisión de producto: NO notificamos al cliente por WhatsApp cuando se
+    // rechaza un documento. El cliente ve el estado y el motivo en el portal
+    // (/postulacion → sección Documentos) cuando vuelve a entrar. Minimizamos
+    // outbound del bot (que cuesta template) y confiamos en el portal como
+    // fuente única post-aprobación inicial.
 
     return NextResponse.json({
       success: true,

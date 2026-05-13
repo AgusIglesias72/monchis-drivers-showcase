@@ -103,7 +103,9 @@ export async function PUT(
       userAgent
     )
 
-    // TODO: migrar a WhatsApp multi-bot — notificar CAPACITACION_CHANGED con old/new date/time/location
+    // Decisión de producto: NO mandamos confirmación de cambio por WhatsApp.
+    // Mismo razonamiento que /select: la acción es user-initiated desde el
+    // portal y el ActiveBookingCard refleja el nuevo slot inmediatamente.
 
     return NextResponse.json({
       success: true,

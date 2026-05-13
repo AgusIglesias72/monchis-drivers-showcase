@@ -140,7 +140,10 @@ export async function POST(request: NextRequest) {
         where: { sessionId }
       });
 
-      // TODO: migrar a WhatsApp multi-bot — mensaje de bienvenida PORTAL_ACCESS (solo primera vez con accessToken)
+      // Decisión de producto: NO mandamos bienvenida por WhatsApp. El cliente
+      // acaba de completar la postulación y ya vio la confirmación inline en el
+      // form. El único toque outbound del bot es "capacitaciones" cuando se
+      // aprueban los documentos.
     }
 
     // Registrar el step completion

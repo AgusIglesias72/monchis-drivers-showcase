@@ -114,12 +114,17 @@ export async function approveAllDocumentsForDriver(
     result.manychatStatus = flowResult.status
     result.manychatReason = flowResult.reason
 
-    if (flowResult.status === 'failed') {
-      // Soltar el lock para que un próximo approve (manual o auto) reintente.
+    // Liberar el lock en CUALQUIER caso que no haya enviado: failed (excepción de
+    // ManyChat) o skipped (template mal cableado: no existe en DB, inactivo o sin
+    // manychatFlowId). Sin esta liberación, si el template estaba mal configurado
+    // el driver queda con el lock seteado permanentemente y nunca recibe el mensaje
+    // aunque se arregle el template después.
+    if (flowResult.status !== 'sent') {
       await prisma.formDriver.update({
         where: { id: driverId },
         data: { manychatApprovalSentAt: null },
       })
+      result.manychatTriggered = false
     }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
