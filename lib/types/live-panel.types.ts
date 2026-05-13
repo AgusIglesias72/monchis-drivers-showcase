@@ -168,6 +168,27 @@ export interface LiveSummary {
   zonesAlertCount: number // zonas con warning_kpi != default
 }
 
+// Comercios — agregación derivada de pending+active+delayed por branchId. No
+// se persiste; se reconstruye en el cliente cada poll a partir de LivePanelPayload.
+export interface LiveCommerce {
+  branchId: number
+  name: string
+  location: { lat: number; lng: number } | null
+  zoneName: string | null
+  zoneColor: string | null
+  totalActive: number
+  // Conteo por estado de pedidos en curso (PENDING/ACCEPTED/WAITING_ORDER/DELIVERY/OUTSIDE)
+  countByState: Record<string, number>
+  // Demora máxima (en seg) entre todos los pedidos activos — currentStateSince → now
+  maxStateAgeSeconds: number | null
+  // RequestIds incluidos, ordenados por demora desc (los más viejos primero)
+  requestIds: string[]
+  drivers: { driverId: string; driverName: string }[]
+  pendingNoDriverCount: number
+  delayedCount: number
+  hasAlert: boolean
+}
+
 export interface LivePanelPayload {
   fetchedAt: string
   pending: LiveRequest[]

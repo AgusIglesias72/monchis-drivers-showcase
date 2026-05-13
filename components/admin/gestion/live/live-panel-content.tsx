@@ -1,20 +1,34 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { AlertTriangle, Pause, Play, RefreshCw } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  AlertTriangle,
+  Bike,
+  Pause,
+  Play,
+  RefreshCw,
+  ShoppingBag,
+  Store,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { AdminHeader } from "@/components/admin/admin-header"
 import type { PedidoFilter } from "@/components/admin/gestion/live/live-filters"
+import { LiveComerciosGrid } from "@/components/admin/gestion/live/live-comercios-grid"
+import { LiveDriversLoad } from "@/components/admin/gestion/live/live-drivers-load"
 import { LiveFunnel } from "@/components/admin/gestion/live/live-funnel"
-import { LiveKpis } from "@/components/admin/gestion/live/live-kpis"
 import { LiveMap } from "@/components/admin/gestion/live/live-map"
-import { LiveSidePanel } from "@/components/admin/gestion/live/live-side-panel"
+import {
+  DriversTab,
+  PedidosTab,
+} from "@/components/admin/gestion/live/live-side-panel"
 import { LiveZonesGrid } from "@/components/admin/gestion/live/live-zones-grid"
 import { PedidoDetailSheet } from "@/components/admin/gestion/live/pedido-detail-sheet"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LIVE_PANEL_CONFIG } from "@/lib/config/live-panel.config"
+import { aggregateCommerces } from "@/lib/services/live-commerces"
 import type {
   LivePanelPayload,
   LiveRoute,
@@ -25,8 +39,10 @@ interface Props {
 }
 
 type Highlight =
-  | { kind: "request" | "driver" | "zone"; id: string }
+  | { kind: "request" | "driver" | "zone" | "commerce"; id: string }
   | null
+
+type LiveView = "pedidos" | "drivers" | "comercios"
 
 export function LivePanelContent({ initial }: Props) {
   const [data, setData] = useState<LivePanelPayload>(initial)
@@ -36,8 +52,24 @@ export function LivePanelContent({ initial }: Props) {
   const [pedidosFilter, setPedidosFilter] = useState<PedidoFilter>("all")
   const [activeRoute, setActiveRoute] = useState<LiveRoute | null>(null)
   const [routeLoading, setRouteLoading] = useState(false)
-  // Cache local de rutas para no re-fetch al alternar.
-  const routeCacheRef = useRef(new Map<string, LiveRoute>())
+  const [view, setView] = useState<LiveView>("pedidos")
+
+  const commerces = useMemo(
+    () =>
+      aggregateCommerces({
+        pending: data.pending,
+        delayed: data.delayed,
+        active: data.active,
+      }),
+    [data.pending, data.delayed, data.active],
+  )
+  const commercesAlertCount = useMemo(
+    () => commerces.filter((c) => c.hasAlert).length,
+    [commerces],
+  )
+  // Cache local de rutas. Guardamos `null` para fetches fallidos así no
+  // reintentamos en bucle si el backend legacy está caído / devuelve 500.
+  const routeCacheRef = useRef(new Map<string, LiveRoute | null>())
   const mapWrapperRef = useRef<HTMLDivElement | null>(null)
 
   // Para highlights de driver/zona traemos el mapa a la vista si quedó fuera
@@ -84,18 +116,52 @@ export function LivePanelContent({ initial }: Props) {
     }
   }, [])
 
-  // Cuando highlight cambia a un pedido, fetch (o lee del cache) su ruta.
+  // Si el highlight es un driver con pedidos vigentes, mostramos el trayecto
+  // del más representativo (priorizamos DELIVERY/OUTSIDE → WAITING_ORDER →
+  // ACCEPTED → resto, desempata por antigüedad en estado).
+  const driverActiveRequestId = useMemo<string | null>(() => {
+    if (highlight?.kind !== "driver") return null
+    const orders = data.active.filter((r) => r.driverId === highlight.id)
+    if (orders.length === 0) return null
+    const priority = (s: string | null) => {
+      if (s === "DELIVERY" || s === "OUTSIDE") return 0
+      if (s === "WAITING_ORDER") return 1
+      if (s === "ACCEPTED") return 2
+      return 3
+    }
+    const sorted = [...orders].sort((a, b) => {
+      const pa = priority(a.state)
+      const pb = priority(b.state)
+      if (pa !== pb) return pa - pb
+      const at = a.currentStateSince
+        ? new Date(a.currentStateSince).getTime()
+        : Number.POSITIVE_INFINITY
+      const bt = b.currentStateSince
+        ? new Date(b.currentStateSince).getTime()
+        : Number.POSITIVE_INFINITY
+      return at - bt
+    })
+    return sorted[0]?.requestId ?? null
+  }, [highlight, data.active])
+
+  // Cuando highlight cambia a un pedido (o a un driver con pedido vigente),
+  // fetch (o lee del cache) la ruta correspondiente.
   useEffect(() => {
-    if (!highlight || highlight.kind !== "request") {
+    let requestId: string | null = null
+    if (highlight?.kind === "request") requestId = highlight.id
+    else if (highlight?.kind === "driver") requestId = driverActiveRequestId
+
+    if (!requestId) {
       setActiveRoute(null)
       return
     }
-    const requestId = highlight.id
-    const cached = routeCacheRef.current.get(requestId)
-    if (cached) {
-      setActiveRoute(cached)
+
+    // Si ya tenemos un fetch (exitoso o fallido) cacheado, usamos eso.
+    if (routeCacheRef.current.has(requestId)) {
+      setActiveRoute(routeCacheRef.current.get(requestId) ?? null)
       return
     }
+
     let cancelled = false
     setRouteLoading(true)
     fetch(`/api/admin/gestion/live/route-detail?requestId=${requestId}`, {
@@ -107,13 +173,18 @@ export function LivePanelContent({ initial }: Props) {
       })
       .then((route) => {
         if (cancelled) return
-        routeCacheRef.current.set(requestId, route)
+        routeCacheRef.current.set(requestId!, route)
         setActiveRoute(route)
       })
       .catch((err) => {
         if (cancelled) return
+        // El backend legacy a veces tira 500/timeouts en route-detail (caché
+        // miss + upstream lento). Cacheamos el fallo para evitar refetch en
+        // loop y dejamos al panel funcionando sin ruta — el resto del mapa
+        // sigue siendo útil.
         console.error("[live-panel] route fetch error:", err)
-        toast.error("No se pudo cargar la ruta del pedido")
+        routeCacheRef.current.set(requestId!, null)
+        setActiveRoute(null)
       })
       .finally(() => {
         if (!cancelled) setRouteLoading(false)
@@ -121,7 +192,7 @@ export function LivePanelContent({ initial }: Props) {
     return () => {
       cancelled = true
     }
-  }, [highlight])
+  }, [highlight, driverActiveRequestId])
 
   // Polling con visibility-awareness: si el tab está oculto, pausamos para
   // no quemar requests ni cuota de la API legacy.
@@ -245,50 +316,113 @@ export function LivePanelContent({ initial }: Props) {
           </Alert>
         )}
 
-        <LiveKpis summary={data.summary} />
+        <Tabs
+          value={view}
+          onValueChange={(v) => setView(v as LiveView)}
+        >
+          <TabsList className="h-9">
+            <TabsTrigger value="pedidos" className="gap-1.5 px-3 text-[13px]">
+              <ShoppingBag className="h-3.5 w-3.5" />
+              Pedidos
+              <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold tabular-nums">
+                {data.pending.length + data.active.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="drivers" className="gap-1.5 px-3 text-[13px]">
+              <Bike className="h-3.5 w-3.5" />
+              Drivers
+              <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold tabular-nums">
+                {data.drivers.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="comercios" className="gap-1.5 px-3 text-[13px]">
+              <Store className="h-3.5 w-3.5" />
+              Comercios
+              <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold tabular-nums">
+                {commerces.length}
+              </span>
+              {commercesAlertCount > 0 && (
+                <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold tabular-nums text-white">
+                  {commercesAlertCount}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
-        <LiveFunnel
-          pending={data.pending}
-          active={data.active}
-          delayed={data.delayed}
-          filter={pedidosFilter}
-          onFilterChange={setPedidosFilter}
-        />
-
-        <LiveZonesGrid
-          zones={data.zones}
-          highlight={highlight}
-          onHighlight={setHighlight}
-        />
-
-        {/* relative + z-0 + isolate crea un stacking context que contiene los
-            panes internos de Leaflet (z-index 200-700 por default), evitando
-            que se monten encima del Sheet de detalle (z-50). */}
-        <div ref={mapWrapperRef} className="relative z-0 isolate scroll-mt-20">
-          <LiveMap
-            zones={data.zones}
-            drivers={data.drivers}
+        {/* Stats row específica de cada vista */}
+        {view === "pedidos" && (
+          <LiveFunnel
             pending={data.pending}
-            delayed={data.delayed}
             active={data.active}
+            delayed={data.delayed}
+            filter={pedidosFilter}
+            onFilterChange={setPedidosFilter}
+          />
+        )}
+        {view === "drivers" && <LiveDriversLoad drivers={data.drivers} />}
+        {view === "comercios" && (
+          <LiveZonesGrid
+            zones={data.zones}
             highlight={highlight}
             onHighlight={setHighlight}
-            activeRoute={activeRoute}
-            routeLoading={routeLoading}
+            layout="list"
           />
-        </div>
+        )}
 
-        <LiveSidePanel
-          pending={data.pending}
-          delayed={data.delayed}
-          active={data.active}
-          drivers={data.drivers}
-          zones={data.zones}
-          highlight={highlight}
-          onHighlight={setHighlight}
-          filter={pedidosFilter}
-          onFilterChange={setPedidosFilter}
-        />
+        {/* Layout principal: lista (izq) + mapa (der), 50/50 */}
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div>
+            {view === "pedidos" && (
+              <PedidosTab
+                pending={data.pending}
+                delayed={data.delayed}
+                active={data.active}
+                highlight={highlight}
+                onHighlight={setHighlight}
+                filter={pedidosFilter}
+                onFilterChange={setPedidosFilter}
+              />
+            )}
+            {view === "drivers" && (
+              <DriversTab
+                drivers={data.drivers}
+                zones={data.zones}
+                highlight={highlight}
+                onHighlight={setHighlight}
+              />
+            )}
+            {view === "comercios" && (
+              <LiveComerciosGrid
+                commerces={commerces}
+                highlight={highlight}
+                onHighlight={setHighlight}
+                onRequestClick={(id) =>
+                  setHighlight({ kind: "request", id })
+                }
+              />
+            )}
+          </div>
+          {/* relative + z-0 + isolate crea un stacking context que contiene los
+              panes internos de Leaflet (z-index 200-700 por default), evitando
+              que se monten encima del Sheet de detalle (z-50). */}
+          <div
+            ref={mapWrapperRef}
+            className="relative z-0 isolate scroll-mt-20"
+          >
+            <LiveMap
+              zones={data.zones}
+              drivers={data.drivers}
+              pending={data.pending}
+              delayed={data.delayed}
+              active={data.active}
+              highlight={highlight}
+              onHighlight={setHighlight}
+              activeRoute={activeRoute}
+              routeLoading={routeLoading}
+            />
+          </div>
+        </div>
       </div>
 
       <PedidoDetailSheet
