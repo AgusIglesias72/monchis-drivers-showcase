@@ -60,7 +60,8 @@ export default function WhatsAppQRScanner({ botUrl }: WhatsAppQRScannerProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const apiUrl = botUrl || process.env.NEXT_PUBLIC_WHATSAPP_BOT_URL || '';
-  const apiKey = process.env.WHATSAPP_BOT_API_KEY || '';
+  // NOTA: la API key del bot NO es accesible en el cliente. Las operaciones
+  // que la requieren (ej. /logout) van por /api/whatsapp/bot-proxy.
 
   useEffect(() => {
     if (!apiUrl) {
@@ -124,12 +125,16 @@ export default function WhatsAppQRScanner({ botUrl }: WhatsAppQRScannerProps) {
     setIsLoggingOut(true);
     
     try {
-      const response = await fetch(`${apiUrl}/logout`, {
+      const response = await fetch('/api/whatsapp/bot-proxy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': apiKey,
         },
+        body: JSON.stringify({
+          path: '/logout',
+          method: 'POST',
+          botUrl: apiUrl || undefined,
+        }),
       });
 
       const data = await response.json();

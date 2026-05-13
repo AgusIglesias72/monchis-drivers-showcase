@@ -93,10 +93,14 @@ export function getBotUrl(botId: string): string {
   }
 }
 
-// ✅ Helper para obtener API Key pública (CLIENT SAFE)
+/**
+ * API Key del bot. SERVER-ONLY: la variable ya no es NEXT_PUBLIC_*, así que
+ * en el cliente este helper devuelve string vacío. Cualquier llamada que la
+ * necesite debe pasar por un route handler server-side
+ * (ej. `/api/whatsapp/bot-proxy`).
+ */
 export function getBotApiKey(): string {
-  // Usar una API key compartida para todos los bots (solo lectura)
-  return process.env.NEXT_PUBLIC_WHATSAPP_BOT_API_KEY || '';
+  return process.env.WHATSAPP_BOT_API_KEY || '';
 }
 
 export function getAllBotConfigs(): Array<{
