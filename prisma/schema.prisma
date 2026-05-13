@@ -1400,3 +1400,34 @@ enum AgentActionStatus {
   REJECTED // admin rechazó la propuesta
   FAILED // falló al ejecutar
 }
+
+// Configuración runtime del agente. Singleton: una sola fila con isActive=true.
+// Permite iterar sobre el prompt y constantes operativas sin necesidad de deploy.
+// - systemPromptAddendum se concatena al SYSTEM_PROMPT de código.
+// - pipelineNotes / toolsNotes son texto libre (NO se ejecutan) — sirven como
+//   canal de feedback estructurado para que el dev las aplique después en código.
+// - Las constantes operativas (max imágenes, target size, etc.) se leen runtime
+//   con fallback a los valores del código.
+model AgentPromptOverride {
+  id String @id @default(cuid())
+
+  isActive Boolean @default(true) @map("is_active")
+
+  // Si está presente, reemplaza el SYSTEM_PROMPT del código. Si es null, se usa
+  // el del código. En ambos casos, systemPromptAddendum se concatena al final.
+  systemPromptOverride String? @map("system_prompt_override") @db.Text
+  systemPromptAddendum String? @map("system_prompt_addendum") @db.Text
+  pipelineNotes        String? @map("pipeline_notes") @db.Text
+  toolsNotes           String? @map("tools_notes") @db.Text
+
+  maxCedulaImages      Int?    @map("max_cedula_images")
+  targetImageBytes     Int?    @map("target_image_bytes")
+  rucRefreshMaxAgeDays Int?    @map("ruc_refresh_max_age_days")
+  haikuModelOverride   String? @map("haiku_model_override")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") // clerkId
+
+  @@index([isActive])
+  @@map("agent_prompt_overrides")
+}

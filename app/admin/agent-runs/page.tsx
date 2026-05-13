@@ -1,9 +1,10 @@
 // app/admin/agent-runs/page.tsx
 
 import Link from 'next/link'
-import { Sparkles, CheckCircle2, AlertTriangle, XCircle, Loader2 } from 'lucide-react'
+import { Sparkles, CheckCircle2, AlertTriangle, XCircle, Loader2, Settings2 } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { AdminHeader } from '@/components/admin/admin-header'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AgentRunDetailSheet } from '@/components/admin/agent-runs/agent-run-detail-sheet'
@@ -64,14 +65,22 @@ export default async function AgentRunsPage({ searchParams }: PageProps) {
       />
 
       <div className="w-full p-4 sm:p-6 lg:p-8 space-y-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-purple-600" />
-            Agente IA
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Historial de ejecuciones del agente IA sobre postulaciones.
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+              <Sparkles className="h-6 w-6 text-purple-600" />
+              Agente IA
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Historial de ejecuciones del agente IA sobre postulaciones.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/configuracion">
+              <Settings2 className="mr-2 h-4 w-4" />
+              Configurar agente
+            </Link>
+          </Button>
         </div>
 
         {/* KPIs de accuracy (feedback humano) */}

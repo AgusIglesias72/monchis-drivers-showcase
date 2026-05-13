@@ -20,6 +20,7 @@ import {
   HAIKU_MODEL,
   type ImageValidationResult,
 } from '@/lib/services/agent-vision.service'
+import { getActiveOverride } from '@/lib/services/agent-config.service'
 
 export type ProposedToolCall =
   | { tool: 'propose_approve_document'; input: { documentId: string }; reasoning?: string }
@@ -197,7 +198,12 @@ type DriverWithRelations = Prisma.FormDriverGetPayload<{
   include: { documents: true; financialService: true; equipmentPayments: true }
 }>
 
-const RUC_REFRESH_MAX_AGE_DAYS = 7
+// Defaults overridables runtime desde AgentPromptOverride (tab Configuración).
+export const DEFAULT_RUC_REFRESH_MAX_AGE_DAYS = 7
+// Si el postulante subió más de N cédulas, mandamos al modelo solo las más
+// recientes. Con 6+ imágenes de 4MB el payload supera el límite global de
+// Anthropic (~32MB) y devuelve 413 request_too_large.
+export const DEFAULT_MAX_CEDULA_IMAGES = 4
 
 async function runDeterministicPipeline(
   driver: DriverWithRelations,
@@ -205,6 +211,12 @@ async function runDeterministicPipeline(
   const steps: string[] = []
   const actions: ProposedToolCall[] = []
   const metrics = emptyMetrics()
+
+  // Override runtime (con fallback a defaults del código).
+  const override = await getActiveOverride().catch(() => null)
+  const rucRefreshMaxAgeDays =
+    override?.rucRefreshMaxAgeDays ?? DEFAULT_RUC_REFRESH_MAX_AGE_DAYS
+  const maxCedulaImages = override?.maxCedulaImages ?? DEFAULT_MAX_CEDULA_IMAGES
 
   const driverName = cleanName(
     driver.fullName || [driver.firstName, driver.lastName].filter(Boolean).join(' '),
@@ -254,7 +266,7 @@ async function runDeterministicPipeline(
     !rucStatus ||
     rucStatus === 'NOT_CHECKED' ||
     rucStatus === 'ERROR' ||
-    rucAgeDays > RUC_REFRESH_MAX_AGE_DAYS
+    rucAgeDays > rucRefreshMaxAgeDays
   ) {
     // Reintentar también cuando el último estado es ERROR (transitorio, ej.
     // turuc.com.py respondió 5xx). Si seguimos con ERROR persistente, el
@@ -277,12 +289,25 @@ async function runDeterministicPipeline(
   // --- 2. Imágenes ---
   // CEDULA es un único tipo: el postulante puede subir una o más imágenes
   // (frente, dorso, ambas). El agente las trata como un set sin diferenciar lado.
-  const cedulas = pickAllDocs(driver.documents, 'CEDULA')
+  // Limitamos a las 4 más recientes para evitar 413 (request_too_large) cuando
+  // un postulante re-sube varias veces. Con 4 cédulas comprimidas (~3.5MB c/u
+  // raw → ~4.7MB base64) más antecedentes seguimos bajo el límite global de
+  // payload de Anthropic.
+  const allCedulas = pickAllDocs(driver.documents, 'CEDULA')
+  const cedulas = allCedulas.slice(-maxCedulaImages)
+  const cedulasOmitidas = allCedulas.length - cedulas.length
   const criminal = pickLatestDoc(driver.documents, 'CRIMINAL_RECORD')
 
   const missingDocs: string[] = []
   if (cedulas.length === 0) missingDocs.push('cédula')
   if (!criminal) missingDocs.push('certificado de antecedentes')
+
+  if (cedulasOmitidas > 0) {
+    steps.push('')
+    steps.push(
+      `ℹ️ El postulante subió ${allCedulas.length} imágenes de cédula. Para evitar superar el límite de payload de Haiku, solo analizo las ${maxCedulaImages} más recientes (omito ${cedulasOmitidas} más viejas — habitualmente intentos previos).`,
+    )
+  }
 
   // Validación unificada: una sola llamada a Haiku con todas las imágenes disponibles
   // + system prompt con prompt caching (cache hits en corridas dentro de 5 min).

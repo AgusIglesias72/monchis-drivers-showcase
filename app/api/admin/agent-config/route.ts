@@ -1,22 +1,25 @@
-// app/admin/configuracion/page.tsx
+// app/api/admin/agent-config/route.ts
+//
+// GET → devuelve el override activo + el contenido del prompt y reglas del código.
+// PUT → actualiza el singleton (auth Clerk requerida).
 
 import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
+import { NextRequest, NextResponse } from 'next/server'
 
-import { getActiveOverride } from '@/lib/services/agent-config.service'
 import {
-  SYSTEM_PROMPT,
-  HAIKU_MODEL,
-  DEFAULT_TARGET_RAW_BYTES,
-} from '@/lib/services/agent-vision.service'
+  getActiveOverride,
+  updateActiveOverride,
+} from '@/lib/services/agent-config.service'
+import { SYSTEM_PROMPT, HAIKU_MODEL, DEFAULT_TARGET_RAW_BYTES } from '@/lib/services/agent-vision.service'
 import {
   DEFAULT_MAX_CEDULA_IMAGES,
   DEFAULT_RUC_REFRESH_MAX_AGE_DAYS,
 } from '@/lib/services/agent.service'
-import { AgentConfigContent } from '@/components/admin/configuracion/agent-config-content'
 
 export const dynamic = 'force-dynamic'
 
+// Documentación del pipeline determinístico (refleja agent.service.ts:runDeterministicPipeline)
+// Read-only en la UI: si cambia el código, hay que actualizar este texto.
 const PIPELINE_DESCRIPTION = `## Pipeline determinístico (Sprint 2)
 
 El agente sigue estos pasos en orden, sin loop ni decisiones del LLM. El LLM solo
@@ -31,7 +34,8 @@ Si la cédula del postulante está vacía → escala a admin (no se puede valida
 - Estados: ACTIVO / NO_ENCONTRADO / SUSPENSION TEMPORAL / INACTIVO / CANCELADO / BLOQUEADO / NOT_APPLICABLE / ERROR.
 
 ### 3. Análisis visual (Haiku Vision)
-Una sola llamada con todas las imágenes (cédulas + antecedentes). El modelo devuelve por cada imagen: documentTypeDetected, matchesExpectedType, qualityScore, extractedDocNumber, suggestion.
+Una sola llamada con todas las imágenes (cédulas + antecedentes). El modelo devuelve
+por cada imagen: documentTypeDetected, matchesExpectedType, qualityScore, extractedDocNumber, suggestion.
 
 ### 4. Overrides post-modelo
 - **Cédula coincide**: si REJECT por nombre pero la cédula del doc coincide con la del form → APPROVE.
@@ -50,6 +54,7 @@ Si la decisión es APPROVED y todas las acciones propuestas son únicamente
 se aprueba automáticamente y se dispara ManyChat. Caso contrario, queda en PROPOSED
 para revisión humana.`
 
+// Catálogo de tools que el agente puede proponer (refleja ProposedToolCall en agent.service.ts).
 const TOOLS_CATALOG = `## Tools que el agente puede proponer
 
 Todas las acciones se crean con status=PROPOSED y requieren aprobación humana
@@ -65,26 +70,69 @@ Todas las acciones se crean con status=PROPOSED y requieren aprobación humana
 | \`propose_update_driver_cedula\` | Corregir cédula del form cuando hay typo confirmado por los documentos. |
 | \`escalate_to_admin\` | Casos imposibles de resolver automáticamente (cédula vacía, señal de fraude). |`
 
-export default async function ConfiguracionPage() {
+export async function GET() {
   const { userId } = await auth()
-  if (!userId) redirect('/sign-in')
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const override = await getActiveOverride()
 
-  return (
-    <AgentConfigContent
-      initialOverride={override}
-      code={{
-        systemPrompt: SYSTEM_PROMPT,
-        pipelineDescription: PIPELINE_DESCRIPTION,
-        toolsCatalog: TOOLS_CATALOG,
-      }}
-      defaults={{
-        haikuModel: HAIKU_MODEL,
-        maxCedulaImages: DEFAULT_MAX_CEDULA_IMAGES,
-        targetImageBytes: DEFAULT_TARGET_RAW_BYTES,
-        rucRefreshMaxAgeDays: DEFAULT_RUC_REFRESH_MAX_AGE_DAYS,
-      }}
-    />
-  )
+  return NextResponse.json({
+    override,
+    code: {
+      systemPrompt: SYSTEM_PROMPT,
+      pipelineDescription: PIPELINE_DESCRIPTION,
+      toolsCatalog: TOOLS_CATALOG,
+    },
+    defaults: {
+      haikuModel: HAIKU_MODEL,
+      maxCedulaImages: DEFAULT_MAX_CEDULA_IMAGES,
+      targetImageBytes: DEFAULT_TARGET_RAW_BYTES,
+      rucRefreshMaxAgeDays: DEFAULT_RUC_REFRESH_MAX_AGE_DAYS,
+    },
+  })
+}
+
+export async function PUT(req: NextRequest) {
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  let body: any
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
+  }
+
+  const cleaned = {
+    systemPromptOverride: stringOrNull(body.systemPromptOverride),
+    systemPromptAddendum: stringOrNull(body.systemPromptAddendum),
+    pipelineNotes: stringOrNull(body.pipelineNotes),
+    toolsNotes: stringOrNull(body.toolsNotes),
+    maxCedulaImages: positiveIntOrNull(body.maxCedulaImages, { min: 1, max: 10 }),
+    targetImageBytes: positiveIntOrNull(body.targetImageBytes, {
+      min: 512 * 1024,
+      max: 5 * 1024 * 1024,
+    }),
+    rucRefreshMaxAgeDays: positiveIntOrNull(body.rucRefreshMaxAgeDays, { min: 0, max: 90 }),
+    haikuModelOverride: stringOrNull(body.haikuModelOverride),
+  }
+
+  const updated = await updateActiveOverride(cleaned, userId)
+  return NextResponse.json({ override: updated })
+}
+
+function stringOrNull(v: unknown): string | null {
+  if (typeof v !== 'string') return null
+  const t = v.trim()
+  return t === '' ? null : t
+}
+
+function positiveIntOrNull(
+  v: unknown,
+  { min, max }: { min: number; max: number },
+): number | null {
+  if (v == null || v === '') return null
+  const n = typeof v === 'number' ? v : parseInt(String(v), 10)
+  if (!Number.isFinite(n) || n < min || n > max) return null
+  return Math.floor(n)
 }

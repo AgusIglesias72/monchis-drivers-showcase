@@ -9,16 +9,19 @@
 //    Haiku 4.5 solo cachea prefixes ≥ 4096 tokens, y nuestro system está
 //    en ~1600 tokens. Se deja el cache_control puesto para que se active
 //    automáticamente si el system crece en el futuro.
-//  - Imágenes pasadas tal cual a Haiku (sin sharp). Si pesan más de 5MB
-//    se rechaza con error claro. Las fotos de celular en Vercel Blob casi
-//    siempre vienen <5MB, así que el caso de error es raro. Renunciamos a
-//    sharp porque su binario nativo rompe con turbopack en Vercel.
+//  - Imágenes comprimidas con sharp cuando superan ~3.5MB raw (base64 expande
+//    33%, así que un JPEG de 4MB se convierte en ~5.3MB base64 y Anthropic
+//    rechaza con 400 image exceeds 5MB). Pipeline igual al de
+//    ai-document-validator.service.ts: quality dinámico → resize si todavía
+//    no entra.
 //
 // Por qué no reutilizar AIDocumentValidator:
 //  - ese usa Sonnet (más caro) y devuelve un análisis exhaustivo (50+ campos)
 //  - el agente solo necesita decisiones claras + campos extraídos para audit
 
 import Anthropic from '@anthropic-ai/sdk'
+import sharp from 'sharp'
+import { getActiveOverride } from '@/lib/services/agent-config.service'
 
 // Pricing Haiku 4.5 (USD por 1M tokens). Fuente: Anthropic (oct 2025).
 const HAIKU_INPUT_PER_MTOK_USD = 1.0
@@ -26,7 +29,14 @@ const HAIKU_OUTPUT_PER_MTOK_USD = 5.0
 const HAIKU_CACHE_READ_PER_MTOK_USD = 0.1
 const HAIKU_CACHE_WRITE_PER_MTOK_USD = 1.25 // 5-min TTL (default)
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+// Anthropic rechaza si la cadena base64 de una imagen supera 5MB. Como base64
+// expande ~33%, un JPEG de raw > ~3.75MB ya queda fuera. DEFAULT_TARGET_RAW_BYTES
+// deja un margen extra (3.5MB raw → ~4.66MB base64) para evitar 400 por bordes.
+// Overridable runtime vía AgentPromptOverride.targetImageBytes.
+export const DEFAULT_TARGET_RAW_BYTES = 3.5 * 1024 * 1024
+// Cap absoluto después de comprimir: si ni con resize + quality bajo entra,
+// fallamos con error claro para que el agente proponga reenvío manual.
+const MAX_RAW_BYTES = 5 * 1024 * 1024
 const MAX_PDF_BYTES = 32 * 1024 * 1024 // Haiku acepta PDFs hasta 32MB
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001'
 
@@ -140,7 +150,10 @@ function detectMediaType(buf: Buffer): SupportedMediaType {
   return 'image/jpeg'
 }
 
-async function downloadAndCompress(imageUrl: string): Promise<ProcessedFile> {
+async function downloadAndCompress(
+  imageUrl: string,
+  targetRawBytes: number,
+): Promise<ProcessedFile> {
   const res = await fetch(imageUrl)
   if (!res.ok) throw new Error(`Error descargando archivo (${res.status}): ${imageUrl}`)
   const buf = Buffer.from(await res.arrayBuffer())
@@ -148,7 +161,6 @@ async function downloadAndCompress(imageUrl: string): Promise<ProcessedFile> {
   const mediaType = detectMediaType(buf)
   const isPdf = mediaType === 'application/pdf'
 
-  // PDF: Haiku los acepta nativamente, hasta 32MB
   if (isPdf) {
     if (buf.length > MAX_PDF_BYTES) {
       throw new Error(
@@ -158,15 +170,45 @@ async function downloadAndCompress(imageUrl: string): Promise<ProcessedFile> {
     return { base64: buf.toString('base64'), mediaType: 'application/pdf', isPdf: true }
   }
 
-  // Imagen: Haiku acepta hasta 5MB. Sin sharp no comprimimos — si la imagen
-  // viene grande, fallamos rápido para que el agente proponga pedirla más liviana.
-  if (buf.length > MAX_IMAGE_BYTES) {
+  if (buf.length <= targetRawBytes) {
+    return { base64: buf.toString('base64'), mediaType, isPdf: false }
+  }
+
+  const compressed = await compressImageToTarget(buf, targetRawBytes)
+  return { base64: compressed.toString('base64'), mediaType: 'image/jpeg', isPdf: false }
+}
+
+/**
+ * Comprime una imagen para que su base64 quede bajo el límite de Anthropic (5MB).
+ * Estrategia idéntica a ai-document-validator.service.ts:
+ *  1) Re-encode JPEG con quality dinámico según cuánto excede.
+ *  2) Si todavía no entra, resize por área (sqrt para mantener aspect).
+ *  3) Si después de eso sigue grande, tira error claro.
+ */
+async function compressImageToTarget(input: Buffer, targetRawBytes: number): Promise<Buffer> {
+  const metadata = await sharp(input).metadata()
+  const ratio = targetRawBytes / input.length
+  const initialQuality = Math.max(60, Math.min(90, Math.floor(ratio * 100)))
+
+  let out = await sharp(input).jpeg({ quality: initialQuality, progressive: true }).toBuffer()
+
+  if (out.length > targetRawBytes) {
+    const scaleFactor = Math.sqrt(targetRawBytes / out.length)
+    const baseWidth = metadata.width || 1920
+    const newWidth = Math.max(800, Math.floor(baseWidth * scaleFactor))
+    out = await sharp(input)
+      .resize(newWidth, null, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85, progressive: true })
+      .toBuffer()
+  }
+
+  if (out.length > MAX_RAW_BYTES) {
     throw new Error(
-      `Imagen demasiado grande: ${(buf.length / 1024 / 1024).toFixed(2)}MB (máx 5MB para Haiku Vision). El postulante debería subir una versión más liviana.`,
+      `No se pudo comprimir la imagen bajo 5MB (final: ${(out.length / 1024 / 1024).toFixed(2)}MB). Pedir al postulante una versión más liviana.`,
     )
   }
 
-  return { base64: buf.toString('base64'), mediaType, isPdf: false }
+  return out
 }
 
 // ============================================================================
@@ -197,7 +239,7 @@ function computeCostMicroUsd(usage: {
 // System prompt (cacheable) + esquema de respuesta
 // ============================================================================
 
-const SYSTEM_PROMPT = `Sos un validador pragmático de documentos de postulantes paraguayos para Monchis (app de delivery). Te voy a mandar entre 1 y N imágenes de una postulación, y tu tarea es validar cada una. Trabajás como filtro: dejás pasar casos legítimos y detectás los que claramente no cumplen.
+export const SYSTEM_PROMPT = `Sos un validador pragmático de documentos de postulantes paraguayos para Monchis (app de delivery). Te voy a mandar entre 1 y N imágenes de una postulación, y tu tarea es validar cada una. Trabajás como filtro: dejás pasar casos legítimos y detectás los que claramente no cumplen.
 
 ## Documentos que podés recibir
 
@@ -361,15 +403,22 @@ export async function validateDriverDocuments(
   }
 
   try {
+    // Override runtime: target size puede haber sido bajado/subido desde la
+    // tab de configuración para experimentar con calidad vs tamaño.
+    const override = await getActiveOverride().catch(() => null)
+    const targetRawBytes = override?.targetImageBytes ?? DEFAULT_TARGET_RAW_BYTES
+
     // Descargar todas las cédulas + antecedentes en paralelo. Cada cédula puede
     // fallar individualmente (URL rota) sin tirar la corrida entera.
     const cedulaDownloads = await Promise.all(
       input.cedulaUrls.map((url) =>
-        downloadAndCompress(url).catch((e) => ({ error: e?.message ?? 'fallo descarga' })),
+        downloadAndCompress(url, targetRawBytes).catch((e) => ({
+          error: e?.message ?? 'fallo descarga',
+        })),
       ),
     )
     const criminal = input.criminalRecordUrl
-      ? await downloadAndCompress(input.criminalRecordUrl).catch((e) => ({
+      ? await downloadAndCompress(input.criminalRecordUrl, targetRawBytes).catch((e) => ({
           error: e?.message ?? 'fallo descarga',
         }))
       : null
@@ -444,15 +493,24 @@ export async function validateDriverDocuments(
       }
     }
 
-    // Llamada a Haiku con system prompt cacheable.
+    // Override runtime (reutilizamos el override ya leído arriba para targetRawBytes):
+    //  - systemPromptOverride reemplaza completamente al SYSTEM_PROMPT del código.
+    //  - systemPromptAddendum se concatena al final (sea sobre el de código o el override).
+    //  - haikuModelOverride permite probar otros modelos (ej. Sonnet) sin deploy.
+    const basePrompt = override?.systemPromptOverride || SYSTEM_PROMPT
+    const systemText = override?.systemPromptAddendum
+      ? `${basePrompt}\n\n## Instrucciones adicionales (override admin)\n\n${override.systemPromptAddendum}`
+      : basePrompt
+    const modelToUse = override?.haikuModelOverride || HAIKU_MODEL
+
     const response = await anthropic.messages.create({
-      model: HAIKU_MODEL,
+      model: modelToUse,
       max_tokens: 2000,
       temperature: 0,
       system: [
         {
           type: 'text',
-          text: SYSTEM_PROMPT,
+          text: systemText,
           cache_control: { type: 'ephemeral' },
         },
       ],
