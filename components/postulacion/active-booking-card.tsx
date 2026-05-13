@@ -70,16 +70,22 @@ export function ActiveBookingCard({ booking, onUpdate }: Props) {
   const Icon = booking.modality ? MODALITY_ICON[booking.modality] : Calendar
   const modalityLabel = booking.modality ? MODALITY_LABEL[booking.modality] : null
 
-  // Reschedule solo es viable cuando tenemos slug — la landing no lee el
-  // query reschedule, así que el fallback genérico crearía una reserva nueva
-  // en lugar de reagendar. Para legacy sin rule mostramos solo cancelar +
-  // WhatsApp como camino para cambiar fecha.
+  // Reschedule via UI solo es viable cuando tenemos slug — la landing no lee
+  // el query reschedule, así que el fallback genérico crearía una reserva
+  // nueva en lugar de reagendar. Para legacy sin rule, exponemos un botón
+  // explícito que abre WhatsApp con texto pre-llenado, en vez de ocultar
+  // silenciosamente la acción y dejar al postulante sin path para cambiar.
   const canReschedule = Boolean(booking.ruleSlug)
   const reschedHref = canReschedule
     ? `/capacitaciones/${booking.ruleSlug}?reschedule=${booking.confirmationToken}`
     : null
 
   const detailHref = `/capacitaciones/reserva/${booking.confirmationToken}`
+
+  // WhatsApp pre-llenado para cambios fuera de la UI (legacy o post-deadline)
+  const whatsappChangeHref = `https://wa.me/15754194027?text=${encodeURIComponent(
+    `Hola, quiero cambiar mi capacitación del ${formatDate(booking.scheduledDate)} a las ${booking.startTime}.`,
+  )}`
 
   async function handleCancel() {
     setCancelling(true)
@@ -171,12 +177,10 @@ export function ActiveBookingCard({ booking, onUpdate }: Props) {
         )}
       </div>
 
-      {/* Acciones */}
-      <div
-        className={`grid grid-cols-1 ${
-          canReschedule ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
-        } gap-2`}
-      >
+      {/* Acciones — siempre exponemos 3 paths: ver detalles, cambiar, cancelar.
+          Si canReschedule=false (legacy sin slug), el "Cambiar" abre WhatsApp en
+          vez de ocultarse — así el postulante siempre tiene un camino. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <Button
           asChild
           variant="outline"
@@ -188,7 +192,8 @@ export function ActiveBookingCard({ booking, onUpdate }: Props) {
             Ver detalles
           </Link>
         </Button>
-        {canReschedule && reschedHref && (
+
+        {canReschedule && reschedHref ? (
           <Button
             asChild
             variant="outline"
@@ -200,7 +205,18 @@ export function ActiveBookingCard({ booking, onUpdate }: Props) {
               Cambiar fecha
             </Link>
           </Button>
+        ) : (
+          <a
+            href={whatsappChangeHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-green-300 bg-white text-xs font-medium text-green-800 hover:bg-green-50 h-9 px-3"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Cambiar por WhatsApp
+          </a>
         )}
+
         {canCancel ? (
           <Button
             variant="outline"
@@ -224,11 +240,14 @@ export function ActiveBookingCard({ booking, onUpdate }: Props) {
         )}
       </div>
 
-      {/* Footer info */}
+      {/* Footer info — copy honesto sobre qué se puede hacer self-service vs por
+          WhatsApp, para no prometer "cambio gratis" cuando en realidad va por chat. */}
       <div className="mt-3 pt-3 border-t border-green-100 flex items-center gap-1.5 text-[11px] text-gray-500">
         <Clock className="h-3 w-3" />
         {canCancel
-          ? `${canReschedule ? 'Cambio o c' : 'C'}ancelación gratis hasta ${booking.cancelDeadlineHours}h antes.`
+          ? canReschedule
+            ? `Cambio o cancelación online hasta ${booking.cancelDeadlineHours}h antes. Después, escribinos por WhatsApp.`
+            : `Cancelación online hasta ${booking.cancelDeadlineHours}h antes. Para cambiar fecha, escribinos por WhatsApp.`
           : 'Ya pasó el plazo online — escribinos por WhatsApp.'}
       </div>
 

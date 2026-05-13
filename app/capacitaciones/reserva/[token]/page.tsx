@@ -26,11 +26,14 @@ async function getBooking(token: string): Promise<BookingDetail | null> {
 
 function gcalLink(b: BookingDetail): string {
   const start = new Date(b.scheduledDateUTC)
-  const endTime = b.endTime
-  const [eh, em] = endTime.split(':').map(Number)
-  const end = new Date(start)
-  end.setUTCHours(end.getUTCHours() + (eh - parseInt(b.startTime.split(':')[0])))
-  end.setUTCMinutes(end.getUTCMinutes() + (em - parseInt(b.startTime.split(':')[1])))
+  // Wraparound: si endTime < startTime numéricamente (capacitación cruza
+  // medianoche), sumamos 24h. Mismo tratamiento que el endpoint .ics.
+  const [endH, endM] = b.endTime.split(':').map(Number)
+  const [startH, startM] = b.startTime.split(':').map(Number)
+  let minutesAdded = endH * 60 + endM - (startH * 60 + startM)
+  if (minutesAdded < 0) minutesAdded += 24 * 60
+  const duration = minutesAdded > 0 ? minutesAdded : 120
+  const end = new Date(start.getTime() + duration * 60 * 1000)
   const fmt = (d: Date) => formatInTimeZone(d, 'UTC', "yyyyMMdd'T'HHmmss'Z'")
   const params = new URLSearchParams({
     action: 'TEMPLATE',
@@ -51,15 +54,48 @@ export default async function ReservaPage({ params }: { params: Promise<{ token:
   const isCancelled = booking.status === 'CANCELLED' || booking.status === 'NO_SHOW'
   const reschedTarget = booking.ruleSlug || ''
 
+  // Distinguimos 3 casos de "no activa" para que el copy sea claro y el driver
+  // entienda qué hacer ahora. Sin esta distinción todos terminan en "ya no está
+  // activa" — engañoso para alguien que viene de WhatsApp viejo post-reschedule.
+  const inactiveCase: 'reschedule' | 'noshow' | 'cancelled' | null = isCancelled
+    ? booking.status === 'NO_SHOW'
+      ? 'noshow'
+      : booking.cancelledReason === 'reschedule'
+        ? 'reschedule'
+        : 'cancelled'
+    : null
+
+  const inactiveCopy =
+    inactiveCase === 'reschedule'
+      ? {
+          title: 'Cambiaste a otra fecha',
+          body: 'Esta reserva ya no está activa porque elegiste otro día. Volvé al portal para ver tu reserva actualizada.',
+          cta: 'Ver mi reserva actual',
+          href: '/postulacion',
+        }
+      : inactiveCase === 'noshow'
+        ? {
+            title: 'No asististe a esta capacitación',
+            body: 'Quedó marcada como ausente. Podés reagendar eligiendo otra fecha cuando quieras.',
+            cta: 'Reagendar capacitación',
+            href: '/capacitaciones',
+          }
+        : {
+            title: 'Reserva cancelada',
+            body: 'Esta reserva ya no está activa. Podés volver a reservar otro día cuando quieras.',
+            cta: 'Ver capacitaciones disponibles',
+            href: '/capacitaciones',
+          }
+
   return (
     <div className="max-w-2xl mx-auto px-4 lg:px-6 py-8 lg:py-12">
       {isCancelled ? (
         <Card>
           <CardContent className="pt-8 pb-8 text-center space-y-4">
-            <div className="text-2xl font-semibold">Reserva cancelada</div>
-            <p className="text-muted-foreground">Esta reserva ya no está activa.</p>
+            <div className="text-2xl font-semibold">{inactiveCopy.title}</div>
+            <p className="text-muted-foreground">{inactiveCopy.body}</p>
             <Button asChild className="bg-brand text-brand-foreground hover:bg-brand-hover">
-              <Link href="/capacitaciones">Ver capacitaciones disponibles</Link>
+              <Link href={inactiveCopy.href}>{inactiveCopy.cta}</Link>
             </Button>
           </CardContent>
         </Card>

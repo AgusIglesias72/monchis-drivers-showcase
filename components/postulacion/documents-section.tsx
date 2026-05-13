@@ -211,7 +211,19 @@ export function DocumentsSection({
         Si te rechazan un documento, podés subir otro nuevamente para que lo revisemos.
       </p>
 
-      <Accordion type="single" collapsible className="w-full space-y-2">
+      {(() => {
+        // Si alguna sección tiene rechazos, abrimos esa por default para que el
+        // postulante vea el motivo sin tener que hacer un click extra (sino podría
+        // re-subir el mismo doc malo y caer en loop de rechazos).
+        const firstRejectedKey =
+          DOC_SECTIONS.find((s) => getSectionStatus(documents, s.types) === 'rejected')?.key
+        return (
+      <Accordion
+        type="single"
+        collapsible
+        className="w-full space-y-2"
+        defaultValue={firstRejectedKey}
+      >
         {DOC_SECTIONS.map((section) => {
           const sectionDocs = documents.filter((d) => section.types.includes(d.documentType))
           const status = getSectionStatus(documents, section.types)
@@ -311,6 +323,8 @@ export function DocumentsSection({
           )
         })}
       </Accordion>
+        )
+      })()}
 
       {/* General upload button (opens dialog with type selector) */}
       <div className="pt-2">

@@ -15,9 +15,12 @@ export async function GET(
     const detail = await getBookingByConfirmationToken(token)
     const startUTC = new Date(detail.scheduledDateUTC)
     // Si no tenemos endTime explícito, usar duration default para no romper el ICS.
+    // Wraparound: si el evento cruza medianoche (ej. 22:00 → 01:00), endTime queda
+    // menor que startTime en HHMM; sumamos 24h al wraparound para mantener duración real.
     const [endH, endM] = detail.endTime.split(':').map((s) => parseInt(s, 10))
     const [startH, startM] = detail.startTime.split(':').map((s) => parseInt(s, 10))
-    const minutesAdded = (endH * 60 + endM) - (startH * 60 + startM)
+    let minutesAdded = (endH * 60 + endM) - (startH * 60 + startM)
+    if (minutesAdded < 0) minutesAdded += 24 * 60
     const duration = minutesAdded > 0 ? minutesAdded : 120
     const endUTC = new Date(startUTC.getTime() + duration * 60 * 1000)
 

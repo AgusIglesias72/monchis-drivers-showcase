@@ -29,6 +29,13 @@ export interface PortalData {
   documents: DocumentWithStatus[]
   nextSteps: NextStepsInfo
   assignedCapacitacion: AssignedCapacitacionInfo | null
+  /** Última capacitación a la que el driver fue NO_SHOW (si la última inactiva
+   *  es no-show y no tiene reserva activa). Sirve para mostrar un banner que
+   *  explique por qué quedó sin reserva y lo invite a reagendar. */
+  recentNoShow: {
+    scheduledDateUTC: string
+    ruleTitle: string
+  } | null
   payment: PaymentInfo | null
 }
 

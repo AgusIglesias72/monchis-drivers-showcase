@@ -73,6 +73,7 @@ interface CapacitacionSelectorProps {
   status: FormDriverStatus
   documentsStatus: FormDocumentsStatus
   assignedCapacitacion: AssignedCapacitacionInfo | null
+  recentNoShow: { scheduledDateUTC: string; ruleTitle: string } | null
   payment: PaymentInfo | null
   onUpdate: () => void
 }
@@ -101,6 +102,7 @@ export function CapacitacionSelector({
   status,
   documentsStatus,
   assignedCapacitacion,
+  recentNoShow,
   payment,
   onUpdate,
 }: CapacitacionSelectorProps) {
@@ -262,6 +264,29 @@ export function CapacitacionSelector({
         />
       </div>
 
+      {/* No-show reciente: si el driver faltó a una capacitación previa y no
+          tiene reserva activa, mostramos un banner explicativo. Sin esto el
+          driver ve el selector vacío y no entiende por qué — pensaría que
+          nunca reservó. */}
+      {recentNoShow && !assignedCapacitacion && !isRejected && (
+        <div className="bg-orange-50 rounded-2xl p-4 border border-orange-200">
+          <div className="flex items-center gap-2 text-orange-800 mb-1">
+            <AlertCircle className="w-5 h-5" />
+            <p className="font-semibold text-sm">No asististe a tu capacitación</p>
+          </div>
+          <p className="text-xs text-orange-800/90 leading-relaxed">
+            Quedó marcado que no asististe a la capacitación del{' '}
+            <strong>
+              {new Date(recentNoShow.scheduledDateUTC).toLocaleDateString('es-PY', {
+                day: 'numeric',
+                month: 'long',
+              })}
+            </strong>
+            . Reagendá eligiendo una nueva fecha más abajo.
+          </p>
+        </div>
+      )}
+
       {/* Rejected status */}
       {isRejected && (
         <div className="bg-red-50 rounded-2xl p-4 border border-red-200">
@@ -275,8 +300,35 @@ export function CapacitacionSelector({
         </div>
       )}
 
-      {/* Requirements checklist when not eligible (but not rejected) */}
-      {!canSelect && !isRejected && (
+      {/* Estado intermedio: postulación APPROVED por admin pero los documentos
+          todavía no terminan revisión. Comunicar explícitamente que ya pasó la
+          parte difícil y solo falta la validación de docs (24-48h) — sin esto el
+          driver ve el bloque amarillo genérico y no entiende por qué no puede
+          agendar si "fue aprobado". */}
+      {!canSelect && !isRejected && status === 'APPROVED' && (
+        <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-200">
+          <div className="flex items-center gap-2 text-emerald-800 mb-1">
+            <CheckCircle className="w-5 h-5" />
+            <p className="font-semibold text-sm">Tu postulación fue aprobada</p>
+          </div>
+          <p className="text-xs text-emerald-800/90 leading-relaxed">
+            Estamos terminando de validar tus documentos. Suele tardar entre 24 y 48 horas.
+            Cuando los aprobemos te vamos a habilitar para agendar tu capacitación acá mismo.
+          </p>
+          <div className="mt-3 space-y-1.5 text-xs">
+            <RequirementRow label="Datos personales completos" done={dataComplete} />
+            <RequirementRow label="Cédula de identidad aprobada" done={
+              documents.some((d) => d.documentType === 'CEDULA' && d.status === 'APPROVED')
+            } />
+            <RequirementRow label="Cert. antecedentes policiales aprobado" done={
+              documents.some((d) => d.documentType === 'CRIMINAL_RECORD' && d.status === 'APPROVED')
+            } />
+          </div>
+        </div>
+      )}
+
+      {/* Requirements checklist when not eligible (and not approved, not rejected) */}
+      {!canSelect && !isRejected && status !== 'APPROVED' && (
         <div className="bg-yellow-50/50 rounded-2xl p-4 border border-yellow-200">
           <div className="flex items-center gap-2 text-yellow-800 mb-2">
             <Lock className="w-4 h-4" />

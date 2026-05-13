@@ -78,6 +78,11 @@ export async function getPostulacionByToken(token: string): Promise<PortalData> 
   // Obtener capacitación asignada si existe
   const assignedCapacitacion = getAssignedCapacitacion(formDriver)
 
+  // Detectar no-show reciente: si no hay reserva activa pero la última attendance
+  // (por scheduledDate) terminó en NO_SHOW, exponer info para que el portal muestre
+  // un banner explicativo y un CTA a reagendar.
+  const recentNoShow = !assignedCapacitacion ? getRecentNoShow(formDriver) : null
+
   // Obtener información de pago
   const payment = getPaymentInfo(formDriver)
 
@@ -94,6 +99,7 @@ export async function getPostulacionByToken(token: string): Promise<PortalData> 
     documents,
     nextSteps,
     assignedCapacitacion,
+    recentNoShow,
     payment,
   }
 }
@@ -629,6 +635,41 @@ function getAssignedCapacitacion(formDriver: any): AssignedCapacitacionInfo | nu
   }
 
   return buildAssignedCapacitacionInfo(activeAssignment)
+}
+
+/**
+ * Devuelve la attendance NO_SHOW más reciente (por scheduledDate) si existe
+ * dentro de la ventana de relevancia, con info mínima para mostrar un banner
+ * en el portal. Sin esto el driver que faltó a una capacitación ve el selector
+ * vacío sin entender por qué.
+ *
+ * Filtramos a los últimos NO_SHOW_RELEVANT_DAYS para no mostrar un banner
+ * eterno: si el driver faltó hace 6 meses, ya no le sirve la info — preferimos
+ * mostrarle el selector limpio.
+ */
+const NO_SHOW_RELEVANT_DAYS = 90
+
+function getRecentNoShow(
+  formDriver: any,
+): { scheduledDateUTC: string; ruleTitle: string } | null {
+  const cutoff = Date.now() - NO_SHOW_RELEVANT_DAYS * 24 * 60 * 60 * 1000
+  const noShows = (formDriver.onboardingAttendances || []).filter(
+    (a: any) =>
+      a.status === 'NO_SHOW' &&
+      a.event?.scheduledDate &&
+      new Date(a.event.scheduledDate).getTime() >= cutoff,
+  )
+  if (noShows.length === 0) return null
+  // Más reciente primero
+  noShows.sort(
+    (a: any, b: any) =>
+      new Date(b.event.scheduledDate).getTime() - new Date(a.event.scheduledDate).getTime(),
+  )
+  const latest = noShows[0]
+  return {
+    scheduledDateUTC: new Date(latest.event.scheduledDate).toISOString(),
+    ruleTitle: latest.event.title || latest.event.scheduleRule?.title || 'tu capacitación',
+  }
 }
 
 /**

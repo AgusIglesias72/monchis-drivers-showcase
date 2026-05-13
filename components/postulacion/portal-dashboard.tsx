@@ -2,8 +2,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, FileText, User, Calendar, AlertCircle, X, ArrowLeftRight } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Loader2, FileText, User, Calendar, AlertCircle, X, ArrowLeftRight, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 import type { PortalData } from '@/lib/types/portal.types'
 import { DocumentsSection } from './documents-section'
 import { PersonalDataSection } from './personal-data-section'
@@ -14,14 +16,17 @@ const MONCHIS_RED = '#e7243f'
 
 type TabType = 'datos' | 'documentos' | 'capacitacion'
 
+type ErrorKind = 'session_expired' | 'not_found' | 'generic'
+
 interface PortalDashboardProps {
   token: string
 }
 
 export function PortalDashboard({ token }: PortalDashboardProps) {
+  const router = useRouter()
   const [data, setData] = useState<PortalData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ kind: ErrorKind; message?: string } | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('datos')
   const [showGuide, setShowGuide] = useState(false)
 
@@ -50,21 +55,44 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
     try {
       setLoading(true)
       const response = await fetch(`/api/postulacion/${token}`)
-      const result = await response.json()
 
+      // 401/403 → cookie/token inválido. 404 → token no apunta a ningún driver.
+      // En ambos casos el camino correcto es re-identificarse, no reintentar.
+      if (response.status === 401 || response.status === 403) {
+        setError({ kind: 'session_expired' })
+        return
+      }
+      if (response.status === 404) {
+        setError({ kind: 'not_found' })
+        return
+      }
+
+      const result = await response.json().catch(() => null)
       if (!response.ok) {
-        throw new Error(result.error || 'Error al cargar datos')
+        setError({ kind: 'generic', message: result?.error || 'Error al cargar datos' })
+        toast.error('Error al cargar tu información')
+        return
       }
 
       setData(result.data)
       setError(null)
     } catch (err: any) {
       console.error('Error fetching portal data:', err)
-      setError(err.message || 'No se pudo cargar tu información')
+      setError({ kind: 'generic', message: err.message || 'No se pudo cargar tu información' })
       toast.error('Error al cargar tu información')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleReIdentify = () => {
+    // Limpieza: borrar cookie + localStorage para forzar el IdentifyForm
+    try {
+      document.cookie = 'monchis_portal_token=; Max-Age=0; path=/; samesite=lax'
+      localStorage.removeItem('monchis.driver.portalToken')
+      localStorage.removeItem('monchis.bookingShareToken')
+    } catch {}
+    router.refresh()
   }
 
   const refreshData = () => {
@@ -81,16 +109,55 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
   }
 
   if (error || !data) {
+    const kind = error?.kind ?? 'generic'
+
+    const titleByKind: Record<ErrorKind, string> = {
+      session_expired: 'Tu sesión expiró',
+      not_found: 'No encontramos tu postulación',
+      generic: 'No pudimos cargar tu información',
+    }
+    const copyByKind: Record<ErrorKind, string> = {
+      session_expired: 'Necesitamos que vuelvas a identificarte para mostrarte tu portal.',
+      not_found:
+        'Este link ya no apunta a una postulación válida. Volvé a identificarte con tu cédula y los últimos 4 dígitos del teléfono.',
+      generic:
+        error?.message || 'Puede ser una falla momentánea. Probá recargar — si sigue, escribinos por WhatsApp.',
+    }
+
     return (
-      <div className="max-w-2xl mx-auto px-4 mt-12">
-        <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8">
+      <div className="max-w-md mx-auto px-4 pt-8 sm:pt-12 pb-8">
+        <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8">
           <div className="flex items-center gap-3 text-red-600 mb-3">
             <AlertCircle className="h-6 w-6" />
-            <h2 className="text-lg font-bold">Error de acceso</h2>
+            <h2 className="text-lg font-bold text-gray-900">{titleByKind[kind]}</h2>
           </div>
-          <p className="text-gray-600">
-            {error || 'No se pudo acceder a tu información. Verifica que el link sea correcto.'}
-          </p>
+          <p className="text-sm text-gray-600 mb-5 leading-relaxed">{copyByKind[kind]}</p>
+
+          {(kind === 'session_expired' || kind === 'not_found') ? (
+            <Button
+              onClick={handleReIdentify}
+              className="w-full bg-brand text-brand-foreground hover:bg-brand-hover"
+            >
+              <LogIn className="mr-2 h-4 w-4" />
+              Volver a identificarme
+            </Button>
+          ) : (
+            <Button
+              onClick={fetchPortalData}
+              className="w-full bg-brand text-brand-foreground hover:bg-brand-hover"
+            >
+              Reintentar
+            </Button>
+          )}
+
+          <a
+            href="https://wa.me/15754194027?text=Hola%2C%20no%20puedo%20acceder%20a%20mi%20portal"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block mt-3 text-xs text-center text-gray-500 hover:text-gray-900"
+          >
+            ¿Sigue sin funcionar? Escribinos por WhatsApp
+          </a>
         </div>
       </div>
     )
@@ -129,24 +196,28 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
         </div>
       </div>
 
-      {/* First-visit guide */}
-      {showGuide && (
-        <div className="relative max-w-2xl mx-auto px-4 mt-2">
-          <div className="bg-white/20 backdrop-blur-sm rounded-2xl px-4 py-3 flex items-start gap-3">
-            <ArrowLeftRight className="w-5 h-5 text-white shrink-0 mt-0.5" />
-            <p className="text-sm text-white leading-snug flex-1">
-              <strong>¡Bienvenido a tu portal!</strong> Desde acá podés gestionar toda tu postulación.
-              Usá las pestañas de arriba para moverte entre <strong>Mis Datos</strong>, <strong>Mis Documentos</strong> y <strong>Mi Capacitación</strong>.
-            </p>
-            <button
-              onClick={() => setShowGuide(false)}
-              className="text-white/70 hover:text-white shrink-0 mt-0.5"
-            >
-              <X className="w-4 h-4" />
-            </button>
+      {/* First-visit guide — copy adaptado al estado del driver para dirigirlo al
+          próximo paso concreto en lugar de un texto genérico. */}
+      {showGuide && (() => {
+        const nextStep = computeNextStep(data)
+        return (
+          <div className="relative max-w-2xl mx-auto px-4 mt-2">
+            <div className="bg-white/20 backdrop-blur-sm rounded-2xl px-4 py-3 flex items-start gap-3">
+              <ArrowLeftRight className="w-5 h-5 text-white shrink-0 mt-0.5" />
+              <p className="text-sm text-white leading-snug flex-1">
+                <strong>{nextStep.title}</strong> {nextStep.body}
+              </p>
+              <button
+                onClick={() => setShowGuide(false)}
+                className="text-white/70 hover:text-white shrink-0 mt-0.5"
+                aria-label="Cerrar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Content in white card */}
       <div className="relative max-w-2xl mx-auto px-4 pb-6 mt-2">
@@ -220,6 +291,7 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
                 status={data.status}
                 documentsStatus={data.documentsStatus}
                 assignedCapacitacion={data.assignedCapacitacion}
+                recentNoShow={data.recentNoShow}
                 payment={data.payment}
                 onUpdate={refreshData}
               />
@@ -229,4 +301,58 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
       </div>
     </div>
   )
+}
+
+/**
+ * Devuelve el copy de la guía de bienvenida adaptado al estado actual del driver.
+ * Apunta al próximo paso concreto en lugar de mostrar una descripción genérica.
+ */
+function computeNextStep(data: PortalData): { title: string; body: string } {
+  if (data.status === 'REJECTED') {
+    return {
+      title: 'Tu postulación fue rechazada.',
+      body: 'Revisá tus datos y documentos para entender qué pasó. Si tenés dudas, escribinos por WhatsApp.',
+    }
+  }
+
+  const cedulaApproved = data.documents?.some(
+    (d) => d.documentType === 'CEDULA' && d.status === 'APPROVED',
+  )
+  const antecedentesApproved = data.documents?.some(
+    (d) => d.documentType === 'CRIMINAL_RECORD' && d.status === 'APPROVED',
+  )
+  const anyRejected = data.documents?.some((d) => d.status === 'REJECTED')
+
+  if (anyRejected) {
+    return {
+      title: 'Tenés documentos para corregir.',
+      body: 'Entrá a Mis Documentos para ver el motivo y subir una versión nueva.',
+    }
+  }
+
+  if (data.assignedCapacitacion) {
+    return {
+      title: 'Ya estás listo.',
+      body: 'En Mi Capacitación revisá los detalles, sumá el evento a tu calendario o cambiá la fecha si lo necesitás.',
+    }
+  }
+
+  if (cedulaApproved && antecedentesApproved) {
+    return {
+      title: '¡Tus documentos están aprobados!',
+      body: 'Ahora reservá tu capacitación en Mi Capacitación — ese es el último paso.',
+    }
+  }
+
+  if (data.status === 'APPROVED') {
+    return {
+      title: 'Tu postulación fue aprobada.',
+      body: 'Estamos terminando de validar tus documentos (24–48hs). Cuando los aprobemos, vas a poder agendar tu capacitación.',
+    }
+  }
+
+  return {
+    title: 'Bienvenido a tu portal.',
+    body: 'Completá tus datos y subí los documentos pedidos. Cuando estén aprobados, vas a poder reservar tu capacitación.',
+  }
 }

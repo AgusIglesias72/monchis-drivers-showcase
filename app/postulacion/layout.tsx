@@ -1,5 +1,7 @@
-// app/postulacion/[token]/layout.tsx
-// Layout del portal de autogestión - Estilo Monchis (fondo rojo)
+// app/postulacion/layout.tsx
+// Layout del portal de autogestión — fondo rojo Monchis con blur circles.
+// Aplica a /postulacion y a cualquier subpath (incluyendo el deep-link
+// /postulacion/[token] cuando ese sea un page; el route handler ignora layouts).
 
 import type { Metadata } from 'next'
 import Image from 'next/image'
@@ -19,7 +21,7 @@ export default function PortalLayout({
 }) {
   return (
     <div className="min-h-screen relative overflow-hidden pb-20" style={{ backgroundColor: MONCHIS_RED }}>
-      {/* Blur gradient circles (same as FormularioMonchis) */}
+      {/* Blur gradient circles (mismo tratamiento que FormularioMonchis) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
         <div className="absolute top-1/4 -right-40 w-[500px] h-[500px] bg-white/15 rounded-full blur-3xl"></div>
