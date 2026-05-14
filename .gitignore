@@ -50,3 +50,17 @@ next-env.d.ts
 
 # scripts locales (no commitear)
 /scripts/admin2-test.ts
+
+# tokens / credenciales que NUNCA deben ir al repo
+*token*.json
+*credentials*.json
+*service-account*.json
+*.p12
+*.pfx
+*.key
+
+# datos sensibles ad-hoc (xlsx con PII de postulantes, dumps, etc.)
+*.xlsx
+*.xls
+*.csv
+!public/**/*.csv
