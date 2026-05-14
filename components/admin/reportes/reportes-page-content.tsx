@@ -1,7 +1,7 @@
 // components/admin/reportes/reportes-page-content.tsx
 "use client"
 
-import { motion } from "framer-motion"
+import { motion } from "motion/react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { ProcessAllReportCard } from "./process-all-report-card"
 import { UploadOnlyReportCard } from "./upload-only-report-card"

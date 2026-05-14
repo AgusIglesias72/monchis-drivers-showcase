@@ -34,7 +34,7 @@ import {
   PieChart,
   Legend,
 } from "recharts"
-import { motion } from "framer-motion"
+import { motion } from "motion/react"
 
 interface DashboardContentProps {
   mainStats: any

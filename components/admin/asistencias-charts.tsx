@@ -18,7 +18,7 @@ import {
   LineChart,
 } from "recharts"
 import { UserCheck, UserX, Calendar, TrendingUp, CheckCircle } from "lucide-react"
-import { motion } from "framer-motion"
+import { motion } from "motion/react"
 
 interface AsistenciasChartsProps {
   asistenciasPorPeriodo: Array<{

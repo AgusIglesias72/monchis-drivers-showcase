@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { motion } from "motion/react"
 import { TrendingDown, ArrowDown, Activity } from "lucide-react"
 import { cn } from "@/lib/utils"
 

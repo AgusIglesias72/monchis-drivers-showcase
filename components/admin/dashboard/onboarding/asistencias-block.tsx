@@ -10,7 +10,7 @@ import {
   LineChart,
   Tooltip,
 } from "recharts"
-import { motion } from "framer-motion"
+import { motion } from "motion/react"
 import {
   CalendarCheck,
   UserCheck,
