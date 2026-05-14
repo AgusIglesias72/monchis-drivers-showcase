@@ -320,19 +320,19 @@ export async function selectCapacitacion(
   }
 
   // Verificar que el evento existe y tiene capacidad
-  let event = await prisma.onboardingEvent.findUnique({
+  const initialEvent = await prisma.onboardingEvent.findUnique({
     where: { id: eventId },
   })
 
-  if (!event) {
+  if (!initialEvent) {
     throw new Error('Evento no encontrado')
   }
 
-  if (event.status !== 'SCHEDULED') {
+  if (initialEvent.status !== 'SCHEDULED') {
     throw new Error('El evento no está disponible para selección')
   }
 
-  if (event.maxCapacity && event.currentCapacity >= event.maxCapacity) {
+  if (initialEvent.maxCapacity && initialEvent.currentCapacity >= initialEvent.maxCapacity) {
     throw new Error('El evento no tiene cupos disponibles')
   }
 
@@ -353,6 +353,7 @@ export async function selectCapacitacion(
   // OCC: increment de currentCapacity con conditional version + capacidad lt max.
   // Sin esto, dos postulantes pidiendo el último cupo a la vez pasaban ambos el
   // check y terminaban con currentCapacity > maxCapacity.
+  let event: NonNullable<typeof initialEvent> = initialEvent
   const MAX_RETRIES = 3
   let acquired = false
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
