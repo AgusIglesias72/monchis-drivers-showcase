@@ -66,10 +66,26 @@ export async function POST(request: NextRequest) {
       updateData.verifiedBy = adminUser.id;
     }
 
-    // Actualizar el pago
-    const pagoActualizado = await prisma.equipmentPayment.update({
-      where: { id: pagoId },
+    // Race-safe: solo transicionamos desde estados no-terminales (PENDING o
+    // PARTIAL). VERIFIED y REJECTED son terminales — si dos admins concurrentes
+    // intentan procesar, solo uno gana.
+    const lock = await prisma.equipmentPayment.updateMany({
+      where: {
+        id: pagoId,
+        status: { in: ["PENDING", "PARTIAL"] },
+      },
       data: updateData,
+    });
+
+    if (lock.count === 0) {
+      return NextResponse.json(
+        { error: "El pago ya fue procesado por otro admin" },
+        { status: 409 }
+      );
+    }
+
+    const pagoActualizado = await prisma.equipmentPayment.findUnique({
+      where: { id: pagoId },
       include: {
         formDriver: {
           select: {
@@ -81,6 +97,14 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    if (!pagoActualizado) {
+      // Defensivo: updateMany pasó, pero el row desapareció (delete concurrente).
+      return NextResponse.json(
+        { error: "Pago no encontrado tras actualización" },
+        { status: 404 }
+      );
+    }
 
     // Crear registro de auditoría
     try {
