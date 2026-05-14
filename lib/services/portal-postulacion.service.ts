@@ -320,7 +320,7 @@ export async function selectCapacitacion(
   }
 
   // Verificar que el evento existe y tiene capacidad
-  const event = await prisma.onboardingEvent.findUnique({
+  let event = await prisma.onboardingEvent.findUnique({
     where: { id: eventId },
   })
 
@@ -350,7 +350,43 @@ export async function selectCapacitacion(
     throw new Error('Ya tienes una capacitación asignada')
   }
 
-  // Crear o reactivar asignación (puede existir una cancelada por unique constraint)
+  // OCC: increment de currentCapacity con conditional version + capacidad lt max.
+  // Sin esto, dos postulantes pidiendo el último cupo a la vez pasaban ambos el
+  // check y terminaban con currentCapacity > maxCapacity.
+  const MAX_RETRIES = 3
+  let acquired = false
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const result = await prisma.onboardingEvent.updateMany({
+      where: {
+        id: event.id,
+        version: event.version,
+        ...(event.maxCapacity != null
+          ? { currentCapacity: { lt: event.maxCapacity } }
+          : {}),
+      },
+      data: {
+        currentCapacity: { increment: 1 },
+        version: { increment: 1 },
+      },
+    })
+    if (result.count === 1) {
+      acquired = true
+      break
+    }
+    const reread = await prisma.onboardingEvent.findUnique({
+      where: { id: event.id },
+    })
+    if (!reread) throw new Error('Evento no encontrado')
+    if (reread.maxCapacity != null && reread.currentCapacity >= reread.maxCapacity) {
+      throw new Error('El evento no tiene cupos disponibles')
+    }
+    event = reread
+  }
+  if (!acquired) {
+    throw new Error('El evento no tiene cupos disponibles')
+  }
+
+  // Crear o reactivar asignación (capacidad ya está reservada arriba)
   const attendee = await prisma.onboardingAttendee.upsert({
     where: {
       eventId_formDriverId: { eventId: event.id, formDriverId: formDriver.id },
@@ -370,16 +406,6 @@ export async function selectCapacitacion(
     },
     include: {
       event: { include: { scheduleRule: true } },
-    },
-  })
-
-  // Actualizar capacidad del evento
-  await prisma.onboardingEvent.update({
-    where: { id: event.id },
-    data: {
-      currentCapacity: {
-        increment: 1,
-      },
     },
   })
 
@@ -452,28 +478,55 @@ export async function changeCapacitacion(
     scheduledDate: currentAssignment.event.scheduledDate,
   }
 
-  // Cancelar asignación anterior
+  // OCC: reservar cupo en el nuevo evento ANTES de liberar el viejo, para que
+  // si el nuevo se llenó entre el check y el commit no nos quedemos sin nada.
+  let evNew = newEvent
+  const MAX_RETRIES = 3
+  let acquired = false
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const result = await prisma.onboardingEvent.updateMany({
+      where: {
+        id: evNew.id,
+        version: evNew.version,
+        ...(evNew.maxCapacity != null
+          ? { currentCapacity: { lt: evNew.maxCapacity } }
+          : {}),
+      },
+      data: {
+        currentCapacity: { increment: 1 },
+        version: { increment: 1 },
+      },
+    })
+    if (result.count === 1) {
+      acquired = true
+      break
+    }
+    const reread = await prisma.onboardingEvent.findUnique({ where: { id: evNew.id } })
+    if (!reread) throw new Error('Evento no encontrado')
+    if (reread.maxCapacity != null && reread.currentCapacity >= reread.maxCapacity) {
+      throw new Error('El evento no tiene cupos disponibles')
+    }
+    evNew = reread
+  }
+  if (!acquired) {
+    throw new Error('El evento no tiene cupos disponibles')
+  }
+
+  // Recién ahora cancelamos la asignación anterior y liberamos su cupo.
   await prisma.onboardingAttendee.update({
     where: { id: currentAssignment.id },
-    data: {
-      status: 'CANCELLED',
-    },
+    data: { status: 'CANCELLED' },
   })
 
-  // Liberar capacidad del evento anterior
   await prisma.onboardingEvent.update({
     where: { id: currentAssignment.eventId },
-    data: {
-      currentCapacity: {
-        decrement: 1,
-      },
-    },
+    data: { currentCapacity: { decrement: 1 } },
   })
 
-  // Crear o reactivar asignación en nuevo evento (puede existir una cancelada)
+  // Crear o reactivar asignación en nuevo evento (capacidad ya reservada).
   const newAttendee = await prisma.onboardingAttendee.upsert({
     where: {
-      eventId_formDriverId: { eventId: newEvent.id, formDriverId: formDriver.id },
+      eventId_formDriverId: { eventId: evNew.id, formDriverId: formDriver.id },
     },
     update: {
       status: 'SCHEDULED',
@@ -485,23 +538,13 @@ export async function changeCapacitacion(
     },
     create: {
       formDriverId: formDriver.id,
-      eventId: newEvent.id,
+      eventId: evNew.id,
       status: 'SCHEDULED',
       invitedAt: new Date(),
       invitedBy: currentAssignment.invitedBy,
     },
     include: {
       event: { include: { scheduleRule: true } },
-    },
-  })
-
-  // Incrementar capacidad del nuevo evento
-  await prisma.onboardingEvent.update({
-    where: { id: newEvent.id },
-    data: {
-      currentCapacity: {
-        increment: 1,
-      },
     },
   })
 
