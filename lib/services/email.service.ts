@@ -78,7 +78,7 @@ export const emailService = {
         console.error('❌ Error enviando email (proceso completado):', error)
         return
       }
-      console.log(`✅ Email "proceso completado" enviado [${result?.id}] a: ${to.join(', ')}`)
+      console.log(`✅ Email "proceso completado" enviado [${result?.id}] a ${to.length} destinatario(s)`)
     } catch (err: any) {
       console.error('❌ Excepción enviando email:', err.message)
     }
@@ -112,7 +112,7 @@ export const emailService = {
         console.error('❌ Error enviando email (proceso fallido):', error)
         return
       }
-      console.log(`✅ Email "proceso fallido" enviado [${result?.id}] a: ${to.join(', ')}`)
+      console.log(`✅ Email "proceso fallido" enviado [${result?.id}] a ${to.length} destinatario(s)`)
     } catch (err: any) {
       console.error('❌ Excepción enviando email de error:', err.message)
     }
@@ -156,7 +156,7 @@ export const emailService = {
         console.error('❌ Error enviando email (bonos):', error)
         return
       }
-      console.log(`✅ Email "bonos" enviado [${result?.id}] a: ${to.join(', ')}`)
+      console.log(`✅ Email "bonos" enviado [${result?.id}] a ${to.length} destinatario(s)`)
     } catch (err: any) {
       console.error('❌ Excepción enviando email de bonos:', err.message)
     }
@@ -193,7 +193,7 @@ export const emailService = {
         console.error('❌ Error enviando reporte diario:', error)
         return { error: String(error) }
       }
-      console.log(`✅ Reporte diario enviado [${data?.id}] a: ${to.join(', ')}`)
+      console.log(`✅ Reporte diario enviado [${data?.id}] a ${to.length} destinatario(s)`)
       return { id: data?.id }
     } catch (err: any) {
       console.error('❌ Excepción enviando reporte diario:', err.message)

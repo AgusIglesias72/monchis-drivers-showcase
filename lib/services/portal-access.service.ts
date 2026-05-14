@@ -84,16 +84,31 @@ export async function regenerateAccessToken(formDriverId: string): Promise<strin
   return accessToken
 }
 
+// Antigüedad máxima del accessToken. Si pasa este tiempo, el postulante tiene
+// que regenerarlo (el admin lo regenera desde la UI o se autogenera al cumplirse
+// alguna condición de re-engagement).
+export const ACCESS_TOKEN_MAX_AGE_DAYS = 90
+const ACCESS_TOKEN_MAX_AGE_MS = ACCESS_TOKEN_MAX_AGE_DAYS * 24 * 60 * 60 * 1000
+
+export class AccessTokenError extends Error {
+  constructor(message: string, public readonly code: 'INVALID' | 'NOT_FOUND' | 'EXPIRED') {
+    super(message)
+    this.name = 'AccessTokenError'
+  }
+}
+
 /**
- * Valida un accessToken y retorna el FormDriver si es válido
- * Además actualiza lastPortalAccessAt para tracking
- * @param token - Token a validar
- * @returns FormDriver con relaciones incluidas, o null si no es válido
- * @throws Error si el token es inválido o no existe
+ * Valida un accessToken y retorna el FormDriver si es válido y no expiró.
+ * Actualiza lastPortalAccessAt para tracking.
+ *
+ * Reglas de expiración: si accessTokenGeneratedAt es más viejo que
+ * ACCESS_TOKEN_MAX_AGE_DAYS, se rechaza. Si no hay accessTokenGeneratedAt
+ * (legacy data), se permite por compatibilidad — los nuevos tokens siempre
+ * lo setean.
  */
 export async function validateAccessToken(token: string): Promise<FormDriverWithPortalIncludes> {
   if (!token || typeof token !== 'string') {
-    throw new Error('Token inválido')
+    throw new AccessTokenError('Token inválido', 'INVALID')
   }
 
   const formDriver = await prisma.formDriver.findUnique({
@@ -102,7 +117,16 @@ export async function validateAccessToken(token: string): Promise<FormDriverWith
   })
 
   if (!formDriver) {
-    throw new Error('Token no encontrado')
+    throw new AccessTokenError('Token no encontrado', 'NOT_FOUND')
+  }
+
+  // Si tenemos accessTokenGeneratedAt, validamos antigüedad. Para tokens
+  // legacy sin la fecha seteada, dejamos pasar (no podemos saber cuándo se generó).
+  if (formDriver.accessTokenGeneratedAt) {
+    const age = Date.now() - formDriver.accessTokenGeneratedAt.getTime()
+    if (age > ACCESS_TOKEN_MAX_AGE_MS) {
+      throw new AccessTokenError('Token expirado', 'EXPIRED')
+    }
   }
 
   // Actualizar último acceso al portal (no await para no bloquear)

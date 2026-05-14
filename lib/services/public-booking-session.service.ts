@@ -14,7 +14,10 @@ export interface PublicBookingSessionEmission {
   reused: boolean
 }
 
-const DEFAULT_TTL_DAYS = 30
+// Reducido de 30 → 7 días. Si un shareToken se intercepta (WhatsApp forward,
+// foto del celular, etc.) la ventana de abuso queda en ~1 semana en lugar de
+// un mes. El postulante puede regenerarlo desde el portal con su accessToken.
+const DEFAULT_TTL_DAYS = 7
 
 export async function emitShareTokenForFormDriver(
   formDriverId: string,

@@ -578,7 +578,7 @@ export class DriverFormProcessor {
         });
       }
       
-      console.log(`✅ Driver ${driver.cedula} guardado/actualizado`);
+      console.log(`✅ Driver ${driver.id} guardado/actualizado`);
       
       // Procesar todos los documentos usando el DocumentProcessor
       const { documentProcessor } = await import('./document-processor.service');

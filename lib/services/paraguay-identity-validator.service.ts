@@ -176,9 +176,9 @@ export class ParaguayIdentityValidator {
     let cedulaData: CedulaData | null = null;
     try {
       const cedulaDoc = cedulaDocs[0];
-      console.log(`     📄 Procesando cédula: ${cedulaDoc.fileName} (${cedulaDoc.documentType})`);
+      console.log(`     📄 Procesando cédula: docId=${cedulaDoc.id} type=${cedulaDoc.documentType}`);
       cedulaData = await this.extractCedulaData(cedulaDoc.blobUrl);
-      console.log(`     ✓ Cédula extraída: ${cedulaData.nombreCompleto} - CI ${cedulaData.numeroCI}`);
+      console.log(`     ✓ Cédula extraída OK (docId=${cedulaDoc.id})`);
     } catch (error) {
       console.error(`     ✗ Error extrayendo cédula:`, error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -189,7 +189,7 @@ export class ParaguayIdentityValidator {
         console.log(`     🔄 Intentando con la siguiente cédula...`);
         try {
           cedulaData = await this.extractCedulaData(cedulaDocs[1].blobUrl);
-          console.log(`     ✓ Cédula extraída (intento 2): ${cedulaData.nombreCompleto} - CI ${cedulaData.numeroCI}`);
+          console.log(`     ✓ Cédula extraída OK en intento 2 (docId=${cedulaDocs[1].id})`);
         } catch (error2) {
           console.error(`     ✗ Error en segundo intento:`, error2);
         }
@@ -200,9 +200,9 @@ export class ParaguayIdentityValidator {
     let antecedentesData: AntecedentesData | null = null;
     try {
       const antecedentesDoc = antecedentesDocs[0];
-      console.log(`     📄 Procesando antecedentes: ${antecedentesDoc.fileName}`);
+      console.log(`     📄 Procesando antecedentes: docId=${antecedentesDoc.id}`);
       antecedentesData = await this.extractAntecedentesData(antecedentesDoc.blobUrl);
-      console.log(`     ✓ Antecedentes extraídos: ${antecedentesData.nombreCompleto} - CI ${antecedentesData.numeroCI}`);
+      console.log(`     ✓ Antecedentes extraídos OK (docId=${antecedentesDoc.id})`);
     } catch (error) {
       console.error(`     ✗ Error extrayendo antecedentes:`, error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
