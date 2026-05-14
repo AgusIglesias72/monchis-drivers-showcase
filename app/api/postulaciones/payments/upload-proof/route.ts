@@ -11,6 +11,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth';
 import { put } from '@vercel/blob';
 import { prisma } from '@/lib/prisma';
+import { safeExtensionFromMime, safePathSegment } from '@/lib/utils/blob-paths';
+import { nanoid } from 'nanoid';
 
 export async function POST(request: NextRequest) {
   try {
@@ -71,15 +73,15 @@ export async function POST(request: NextRequest) {
     //   }
     // }
 
-    // Subir nuevo archivo a Vercel Blob
-    const blob = await put(
-      `payment-proofs/${payment.formDriverId}/${paymentId}-${Date.now()}.${file.name.split('.').pop()}`,
-      file,
-      {
-        access: 'public',
-        addRandomSuffix: false
-      }
-    );
+    // Path opaco con extensión derivada del mime validado.
+    const ext = safeExtensionFromMime(file.type);
+    const driverSeg = safePathSegment(payment.formDriverId);
+    const paySeg = safePathSegment(paymentId);
+    const blobPath = `payment-proofs/${driverSeg}/${paySeg}-${Date.now()}-${nanoid(12)}.${ext}`;
+    const blob = await put(blobPath, file, {
+      access: 'public',
+      addRandomSuffix: false,
+    });
 
     // Actualizar EquipmentPayment con la nueva URL
     const updatedPayment = await prisma.equipmentPayment.update({

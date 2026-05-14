@@ -15,6 +15,7 @@ import type {
 } from '@/lib/types/portal.types'
 import { getDocumentTypeName } from '@/lib/types/portal.types'
 import { validateAccessToken, type FormDriverWithPortalIncludes } from './portal-access.service'
+import { buildDriverDocumentPath } from '@/lib/utils/blob-paths'
 import type { FormDriver, DocumentType, OnboardingEvent } from '@prisma/client'
 
 /**
@@ -144,15 +145,18 @@ export async function uploadDocument(
 ) {
   const formDriver = await validateAccessToken(token)
 
-  // Upload a Vercel Blob
-  const blob = await put(
-    `drivers/${formDriver.cedula}/${documentType}-${Date.now()}-${file.name}`,
-    file,
-    {
-      access: 'public',
-      addRandomSuffix: true,
-    }
-  )
+  // Path opaco con formDriver.id (no cédula) y nombre random.
+  // Evita enumeración por cédula y path traversal vía file.name.
+  const blobPath = buildDriverDocumentPath({
+    formDriverId: formDriver.id,
+    documentType,
+    mime: file.type,
+  })
+
+  const blob = await put(blobPath, file, {
+    access: 'public',
+    addRandomSuffix: true,
+  })
 
   // Crear registro en BD
   const document = await prisma.formDocument.create({

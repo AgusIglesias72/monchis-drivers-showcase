@@ -2,9 +2,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { prisma } from '@/lib/prisma';
+import { requireAdminApi } from '@/lib/auth';
+import { buildDriverDocumentPath } from '@/lib/utils/blob-paths';
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = await requireAdminApi();
+    if (!guard.ok) return guard.response;
+    const adminUser = guard.user;
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const formDriverId = formData.get('formDriverId') as string;
@@ -34,15 +40,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Subir a Vercel Blob
-    const blob = await put(
-      `admin-uploads/${formDriverId}/${documentType}-${Date.now()}.${file.name.split('.').pop()}`,
-      file,
-      {
-        access: 'public',
-        addRandomSuffix: false
-      }
-    );
+    // Path opaco con mime-derived extension (no file.name del cliente).
+    const blobPath = buildDriverDocumentPath({
+      formDriverId,
+      documentType,
+      mime: file.type,
+    });
+
+    const blob = await put(blobPath, file, {
+      access: 'public',
+      addRandomSuffix: false,
+    });
 
     // Crear registro en FormDocument
     const formDocument = await prisma.formDocument.create({
@@ -56,7 +64,7 @@ export async function POST(request: NextRequest) {
         status: 'PENDING',
         metadata: {
           uploadedFrom: 'admin_panel',
-          uploadedBy: 'Admin User' // TODO: Obtener del usuario actual
+          uploadedBy: adminUser.clerkId,
         }
       }
     });

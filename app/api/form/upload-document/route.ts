@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { DocumentType } from "@prisma/client";
+import { buildFormDocumentPath } from "@/lib/utils/blob-paths";
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,20 +55,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 🆕 Usar nombre original si está disponible, si no usar el del file
+    // Nombre "amigable" del archivo (solo lo guardamos en metadata; nunca lo
+    // usamos para construir paths, evita path traversal y extensión maliciosa).
     const fileName = originalFileName || file.name;
 
-    // Subir a Vercel Blob con el nombre original preservado
-    const blob = await put(
-      `form-documents/${sessionId}/${documentType}-${Date.now()}.${fileName
-        .split(".")
-        .pop()}`,
-      file,
-      {
-        access: "public",
-        addRandomSuffix: false,
-      }
-    );
+    // Path opaco derivado del mime-type validado. No incluye filename del
+    // cliente ni se puede enumerar por nombre.
+    const blobPath = buildFormDocumentPath({
+      sessionId,
+      documentType,
+      mime: file.type,
+    });
+
+    const blob = await put(blobPath, file, {
+      access: "public",
+      addRandomSuffix: false,
+    });
 
     // Mapear documentType del frontend a DocumentType enum de Prisma
     const docTypeMap: Record<string, DocumentType> = {

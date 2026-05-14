@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { requireAdminApi } from '@/lib/auth';
+import { safeExtensionFromMime, safePathSegment } from '@/lib/utils/blob-paths';
+import { nanoid } from 'nanoid';
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,13 +33,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generar nombre único
-    const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substring(7);
-    const extension = file.name.split('.').pop();
-    const filename = `whatsapp-bulk/${adminUser.clerkId}/${timestamp}-${randomString}.${extension}`;
+    // Path opaco: extensión derivada del mime validado, no del filename del cliente.
+    const ext = safeExtensionFromMime(file.type);
+    const userSeg = safePathSegment(adminUser.clerkId);
+    const filename = `whatsapp-bulk/${userSeg}/${Date.now()}-${nanoid(12)}.${ext}`;
 
-    // Subir a Vercel Blob
     const blob = await put(filename, file, {
       access: 'public',
       addRandomSuffix: false,
