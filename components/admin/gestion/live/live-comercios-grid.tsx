@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner"
 
 import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import {
   Tooltip,
   TooltipContent,
@@ -49,7 +50,82 @@ interface Props {
 
 type SortMode = "prioridad" | "demora" | "volume" | "name"
 type ViewMode = "cards" | "table"
-type TableOrderFilter = "all" | "waiting"
+// "preDelivery" = todo lo que pasa antes de salir a entregar: PENDING + ACCEPTED/ASSIGNED + WAITING_ORDER.
+// ASSIGNED es un estado adicional de la API legacy que vive en paralelo a
+// ACCEPTED (a efectos operativos los tratamos juntos, pero el badge muestra
+// "Asignado" para diferenciarlos visualmente).
+type OrderStateFilter = "all" | "preDelivery"
+
+const PRE_DELIVERY_STATES = new Set([
+  "PENDING",
+  "ACCEPTED",
+  "ASSIGNED",
+  "ASSIGNED_DELIVERY",
+  "ASSIGNED_PICKUP",
+  "WAITING_ORDER",
+])
+
+// Quita tildes/diacríticos y baja a minúsculas para que "Ramon" matchee "Ramón".
+// El rango ̀-ͯ cubre los combining diacritical marks que aparecen tras
+// `normalize("NFD")`.
+function normalizeForSearch(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+}
+
+// Reconstruye un LiveCommerce restringido a las requests cuyo estado entra en
+// `allowed`. Devuelve null si después de filtrar no queda ninguna request — el
+// caller se encarga de descartar esos comercios de la lista.
+function filterCommerceByStates(
+  c: LiveCommerce,
+  allowed: Set<string> | null,
+  nowMs: number,
+): LiveCommerce | null {
+  if (!allowed) return c
+  const requests = c.requests.filter((r) => r.state != null && allowed.has(r.state))
+  if (requests.length === 0) return null
+  const countByState: Record<string, number> = {}
+  let maxStateAgeSeconds: number | null = null
+  let pendingNoDriverCount = 0
+  let delayedCount = 0
+  const driversMap = new Map<string, string>()
+  for (const r of requests) {
+    const state = r.state ?? "UNKNOWN"
+    countByState[state] = (countByState[state] ?? 0) + 1
+    if (r.driverId && r.driverName && !driversMap.has(r.driverId)) {
+      driversMap.set(r.driverId, r.driverName)
+    }
+    if (r.state === "PENDING" && !r.driverId) pendingNoDriverCount += 1
+    if (r.isDelayed) delayedCount += 1
+    if (r.currentStateSince) {
+      const ageMs = nowMs - new Date(r.currentStateSince).getTime()
+      if (!isNaN(ageMs) && ageMs >= 0) {
+        const ageSec = Math.floor(ageMs / 1000)
+        if (maxStateAgeSeconds === null || ageSec > maxStateAgeSeconds) {
+          maxStateAgeSeconds = ageSec
+        }
+      }
+    }
+  }
+  return {
+    ...c,
+    requests,
+    requestIds: requests.map((r) => r.requestId),
+    totalActive: requests.length,
+    countByState,
+    maxStateAgeSeconds,
+    pendingNoDriverCount,
+    delayedCount,
+    hasAlert: pendingNoDriverCount > 0 || delayedCount > 0,
+    drivers: [...driversMap.entries()].map(([driverId, driverName]) => ({
+      driverId,
+      driverName,
+    })),
+  }
+}
 
 interface StateChip {
   label: string
@@ -70,6 +146,24 @@ const STATE_CHIPS: Record<string, StateChip> = {
     icon: Handshake,
     bg: "bg-amber-100",
     text: "text-amber-800",
+  },
+  ASSIGNED: {
+    label: "Asignado",
+    icon: Handshake,
+    bg: "bg-fuchsia-100",
+    text: "text-fuchsia-800",
+  },
+  ASSIGNED_DELIVERY: {
+    label: "Asignado x admin",
+    icon: Handshake,
+    bg: "bg-fuchsia-100",
+    text: "text-fuchsia-800",
+  },
+  ASSIGNED_PICKUP: {
+    label: "Pickup asignado",
+    icon: Handshake,
+    bg: "bg-fuchsia-100",
+    text: "text-fuchsia-800",
   },
   WAITING_ORDER: {
     label: "En comercio",
@@ -152,14 +246,35 @@ export function LiveComerciosGrid({
 }: Props) {
   const [sortMode, setSortMode] = useState<SortMode>("prioridad")
   const [viewMode, setViewMode] = useState<ViewMode>("cards")
-  const [tableFilter, setTableFilter] = useState<TableOrderFilter>("all")
+  const [orderStateFilter, setOrderStateFilter] = useState<OrderStateFilter>(
+    "all",
+  )
+  const [searchQuery, setSearchQuery] = useState("")
   const driversById = useMemo(() => {
     const m = new Map<string, LiveDriver>()
     for (const d of drivers) m.set(d.driverId, d)
     return m
   }, [drivers])
-  const sorted = useMemo(() => sortCommerces(commerces, sortMode), [
-    commerces,
+
+  // Filtramos primero por estado (reconstruye contadores) y luego por búsqueda
+  // de nombre. El sort se aplica al final sobre el resultado filtrado.
+  // El match de búsqueda es insensible a tildes: "Ramon" ↔ "Ramón".
+  const filtered = useMemo(() => {
+    const allowed = orderStateFilter === "preDelivery" ? PRE_DELIVERY_STATES : null
+    const q = normalizeForSearch(searchQuery)
+    const nowMs = Date.now()
+    const out: LiveCommerce[] = []
+    for (const c of commerces) {
+      const stateFiltered = filterCommerceByStates(c, allowed, nowMs)
+      if (!stateFiltered) continue
+      if (q && !normalizeForSearch(stateFiltered.name).includes(q)) continue
+      out.push(stateFiltered)
+    }
+    return out
+  }, [commerces, orderStateFilter, searchQuery])
+
+  const sorted = useMemo(() => sortCommerces(filtered, sortMode), [
+    filtered,
     sortMode,
   ])
 
@@ -175,54 +290,119 @@ export function LiveComerciosGrid({
     )
   }
 
+  // Conteos para etiquetar los radios (usamos la lista cruda — sin filtros — para
+  // que el badge muestre el universo completo de pedidos del estado).
+  const preDeliveryCount = useMemo(() => {
+    let n = 0
+    for (const c of commerces) {
+      for (const state of PRE_DELIVERY_STATES) {
+        n += c.countByState[state] ?? 0
+      }
+    }
+    return n
+  }, [commerces])
+  const allOrdersCount = useMemo(
+    () => commerces.reduce((acc, c) => acc + c.totalActive, 0),
+    [commerces],
+  )
+
   return (
     <TooltipProvider delayDuration={200}>
-      <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Store className="h-4 w-4" />
-            Comercios activos
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
-              {commerces.length}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <div className="flex items-center gap-1.5">
-              <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
-              <SortButton
-                active={sortMode === "prioridad"}
-                onClick={() => setSortMode("prioridad")}
-                tooltip="Comercios con pedidos críticos (>15min) o demorados primero; dentro de cada grupo, por cantidad de pedidos desc"
-              >
-                Prioridad
-              </SortButton>
-              <SortButton
-                active={sortMode === "demora"}
-                onClick={() => setSortMode("demora")}
-                tooltip="Ordena por la demora máxima entre los pedidos del comercio"
-              >
-                Demora
-              </SortButton>
-              <SortButton
-                active={sortMode === "volume"}
-                onClick={() => setSortMode("volume")}
-                tooltip="Ordena por cantidad de pedidos activos"
-              >
-                Volumen
-              </SortButton>
-              <SortButton
-                active={sortMode === "name"}
-                onClick={() => setSortMode("name")}
-                tooltip="Orden alfabético por nombre del comercio"
-              >
-                A–Z
-              </SortButton>
+      <Card className="gap-0 overflow-hidden py-0">
+        <div className="grid grid-cols-1 gap-2 border-b bg-muted/30 px-3 py-2 sm:grid-cols-2 sm:items-start">
+          {/* Columna izquierda: título arriba, buscador abajo */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Store className="h-4 w-4" />
+              Comercios activos
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
+                {sorted.length === commerces.length
+                  ? commerces.length
+                  : `${sorted.length}/${commerces.length}`}
+              </span>
             </div>
-            <ViewModeToggle value={viewMode} onChange={setViewMode} />
+            <div className="relative w-full max-w-xs">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar sucursal…"
+                className="h-8 pl-7 text-xs"
+              />
+            </div>
+          </div>
+
+          {/* Columna derecha: sort/view arriba, radio group abajo */}
+          <div className="flex flex-col items-stretch gap-2 sm:items-end">
+            <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+              <div className="flex items-center gap-1.5">
+                <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
+                <SortButton
+                  active={sortMode === "prioridad"}
+                  onClick={() => setSortMode("prioridad")}
+                  tooltip="Comercios con pedidos críticos (>15min) o demorados primero; dentro de cada grupo, por cantidad de pedidos desc"
+                >
+                  Prioridad
+                </SortButton>
+                <SortButton
+                  active={sortMode === "demora"}
+                  onClick={() => setSortMode("demora")}
+                  tooltip="Ordena por la demora máxima entre los pedidos del comercio"
+                >
+                  Demora
+                </SortButton>
+                <SortButton
+                  active={sortMode === "volume"}
+                  onClick={() => setSortMode("volume")}
+                  tooltip="Ordena por cantidad de pedidos activos"
+                >
+                  Volumen
+                </SortButton>
+                <SortButton
+                  active={sortMode === "name"}
+                  onClick={() => setSortMode("name")}
+                  tooltip="Orden alfabético por nombre del comercio"
+                >
+                  A–Z
+                </SortButton>
+              </div>
+              <ViewModeToggle value={viewMode} onChange={setViewMode} />
+            </div>
+
+            <div className="inline-flex items-center gap-0.5 self-stretch rounded-md border bg-background p-0.5 sm:self-end">
+              <FilterRadio
+                active={orderStateFilter === "preDelivery"}
+                onClick={() => setOrderStateFilter("preDelivery")}
+                title="Sólo pedidos en PENDING / ACCEPTED / ASSIGNED / WAITING_ORDER (todavía no salieron del comercio)"
+                count={preDeliveryCount}
+                activeColor="bg-sky-500 text-white"
+              >
+                <ChefHat className="h-3 w-3" />
+                En Comercio y Pendientes
+              </FilterRadio>
+              <FilterRadio
+                active={orderStateFilter === "all"}
+                onClick={() => setOrderStateFilter("all")}
+                title="Todos los pedidos activos (incluye DELIVERY / OUTSIDE)"
+                count={allOrdersCount}
+              >
+                Todas
+              </FilterRadio>
+            </div>
           </div>
         </div>
 
-        {viewMode === "cards" ? (
+        {sorted.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <div className="text-sm font-medium">Sin resultados</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {searchQuery
+                ? `No hay comercios que coincidan con "${searchQuery}"`
+                : "No hay comercios con pedidos en este filtro"}
+            </div>
+          </div>
+        ) : viewMode === "cards" ? (
           <div className="grid grid-cols-1 gap-3 p-3 xl:grid-cols-2 2xl:grid-cols-3">
             {sorted.map((c) => (
               <CommerceCard
@@ -246,8 +426,6 @@ export function LiveComerciosGrid({
         ) : (
           <CommercesTable
             commerces={sorted}
-            filter={tableFilter}
-            onFilterChange={setTableFilter}
             highlight={highlight}
             onCardClick={(branchId) =>
               onHighlight({ kind: "commerce", id: String(branchId) })
@@ -256,6 +434,42 @@ export function LiveComerciosGrid({
         )}
       </Card>
     </TooltipProvider>
+  )
+}
+
+function FilterRadio({
+  active,
+  onClick,
+  title,
+  count,
+  activeColor = "bg-foreground text-background",
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  title: string
+  count: number
+  activeColor?: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition ${
+        active ? activeColor : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+      <span
+        className={`ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums ${
+          active ? "bg-white/25" : "bg-muted text-foreground/70"
+        }`}
+      >
+        {count}
+      </span>
+    </button>
   )
 }
 
@@ -601,105 +815,27 @@ function ViewModeToggle({
 
 function CommercesTable({
   commerces,
-  filter,
-  onFilterChange,
   highlight,
   onCardClick,
 }: {
   commerces: LiveCommerce[]
-  filter: TableOrderFilter
-  onFilterChange: (f: TableOrderFilter) => void
   highlight: Highlight
   onCardClick: (branchId: number) => void
 }) {
-  // Aplicamos el filtro a la lista de comercios. Cuando filter === "waiting"
-  // solo mostramos comercios con al menos un pedido en WAITING_ORDER, y las
-  // columnas "Pedidos" / "Distribución" reflejan solo ese estado.
-  const filteredCommerces =
-    filter === "waiting"
-      ? commerces.filter(
-          (c) => (c.countByState["WAITING_ORDER"] ?? 0) > 0,
-        )
-      : commerces
-
-  // Conteo para el badge del radio "En el comercio".
-  const waitingCount = commerces.reduce(
-    (acc, c) => acc + (c.countByState["WAITING_ORDER"] ?? 0),
-    0,
-  )
-
   return (
-    <div>
-      <div className="flex items-center justify-between gap-2 border-b bg-muted/10 px-3 py-2">
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className="font-semibold uppercase tracking-wide text-muted-foreground">
-            Filtro:
-          </span>
-          <div className="inline-flex items-center gap-0.5 rounded-md border bg-background p-0.5">
-            <button
-              type="button"
-              onClick={() => onFilterChange("all")}
-              className={`rounded px-2 py-1 text-[11px] font-medium transition ${
-                filter === "all"
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Todas
-            </button>
-            <button
-              type="button"
-              onClick={() => onFilterChange("waiting")}
-              className={`inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition ${
-                filter === "waiting"
-                  ? "bg-sky-500 text-white"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-              title="Solo comercios con pedidos esperando ser retirados"
-            >
-              <ChefHat className="h-3 w-3" />
-              En el comercio
-              <span
-                className={`ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums ${
-                  filter === "waiting"
-                    ? "bg-white/25"
-                    : "bg-muted text-foreground/70"
-                }`}
-              >
-                {waitingCount}
-              </span>
-            </button>
-          </div>
-        </div>
-        <span className="text-[11px] text-muted-foreground">
-          {filteredCommerces.length}/{commerces.length} comercios
-        </span>
-      </div>
-      <div className="overflow-x-auto">
+    <div className="overflow-x-auto">
       <table className="w-full text-[11px]">
         <thead>
           <tr className="border-b bg-muted/30 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
             <th className="px-3 py-2 font-semibold">Comercio</th>
-            <th className="px-2 py-2 text-right font-semibold">
-              {filter === "waiting" ? "En comercio" : "Pedidos"}
-            </th>
+            <th className="px-2 py-2 text-right font-semibold">Pedidos</th>
             <th className="px-2 py-2 font-semibold">Distribución</th>
             <th className="px-2 py-2 text-right font-semibold">Demora máx</th>
             <th className="px-2 py-2 text-center font-semibold">Drivers</th>
           </tr>
         </thead>
         <tbody>
-          {filteredCommerces.length === 0 ? (
-            <tr>
-              <td
-                colSpan={5}
-                className="px-3 py-8 text-center text-xs text-muted-foreground"
-              >
-                Ningún comercio con pedidos esperando ser retirados ahora mismo.
-              </td>
-            </tr>
-          ) : null}
-          {filteredCommerces.map((c) => {
+          {commerces.map((c) => {
             const focused =
               highlight?.kind === "commerce" &&
               highlight.id === String(c.branchId)
@@ -708,10 +844,6 @@ function CommercesTable({
                 ? Math.floor(c.maxStateAgeSeconds / 60)
                 : null,
             )
-            const waitingOrders = c.countByState["WAITING_ORDER"] ?? 0
-            // Cuenta a mostrar en la columna "Pedidos"
-            const countShown =
-              filter === "waiting" ? waitingOrders : c.totalActive
             return (
               <tr
                 key={c.branchId}
@@ -765,14 +897,11 @@ function CommercesTable({
                   </div>
                 </td>
                 <td className="px-2 py-2 text-right font-bold tabular-nums">
-                  {countShown}
+                  {c.totalActive}
                 </td>
                 <td className="px-2 py-2">
                   <div className="flex flex-wrap gap-0.5">
-                    {STATE_ORDER.filter(
-                      (state) =>
-                        filter !== "waiting" || state === "WAITING_ORDER",
-                    ).map((state) => {
+                    {STATE_ORDER.map((state) => {
                       const count = c.countByState[state] ?? 0
                       if (count === 0) return null
                       const chip = STATE_CHIPS[state]
@@ -813,13 +942,21 @@ function CommercesTable({
           })}
         </tbody>
       </table>
-      </div>
     </div>
   )
 }
 
 // Mismo orden cronológico que usamos en la card.
-const STATE_ORDER = ["PENDING", "ACCEPTED", "WAITING_ORDER", "DELIVERY", "OUTSIDE"]
+const STATE_ORDER = [
+  "PENDING",
+  "ACCEPTED",
+  "ASSIGNED",
+  "ASSIGNED_DELIVERY",
+  "ASSIGNED_PICKUP",
+  "WAITING_ORDER",
+  "DELIVERY",
+  "OUTSIDE",
+]
 
 // CopyableOrderId fue extraído a su propio archivo (re-uso entre grid de
 // comercios + cards de pedido del side panel). Ver copyable-order-id.tsx.

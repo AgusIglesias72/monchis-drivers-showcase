@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group"
 import { format, subDays } from "date-fns"
@@ -24,6 +24,9 @@ interface Props {
   currentStartDate?: string
   currentEndDate?: string
   currentFilterType?: FilterType
+  /** Notifica al parent cuando una navegación de filtro está pendiente, para
+   *  que pinte skeletons sobre los charts mientras se reapunta el SSR. */
+  onPendingChange?: (pending: boolean) => void
 }
 
 const FILTER_TYPE_OPTIONS: { value: FilterType; label: string }[] = [
@@ -68,10 +71,15 @@ export function OnboardingDateFilter({
   currentStartDate,
   currentEndDate,
   currentFilterType = "created",
+  onPendingChange,
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    onPendingChange?.(isPending)
+  }, [isPending, onPendingChange])
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const from = parseYmd(currentStartDate)

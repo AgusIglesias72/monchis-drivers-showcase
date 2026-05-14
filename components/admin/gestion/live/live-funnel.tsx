@@ -139,12 +139,22 @@ export function LiveFunnel({
   filter,
   onFilterChange,
 }: Props) {
+  // ASSIGNED / ASSIGNED_DELIVERY / ASSIGNED_PICKUP son estados adicionales que
+  // la API legacy expone en paralelo a ACCEPTED. Operativamente significan lo
+  // mismo (driver designado, todavía no fue al comercio) → los sumamos al
+  // mismo bucket del embudo.
   const byStage = new Map<string, LiveRequest[]>()
   byStage.set("PENDING", pending)
   for (const r of active) {
     if (!r.state) continue
-    if (!byStage.has(r.state)) byStage.set(r.state, [])
-    byStage.get(r.state)!.push(r)
+    const stageKey =
+      r.state === "ASSIGNED" ||
+      r.state === "ASSIGNED_DELIVERY" ||
+      r.state === "ASSIGNED_PICKUP"
+        ? "ACCEPTED"
+        : r.state
+    if (!byStage.has(stageKey)) byStage.set(stageKey, [])
+    byStage.get(stageKey)!.push(r)
   }
 
   const total = pending.length + active.length

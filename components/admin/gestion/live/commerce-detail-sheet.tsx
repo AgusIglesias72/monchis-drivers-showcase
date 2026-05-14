@@ -68,6 +68,24 @@ const STATE_CHIPS: Record<string, StateChip> = {
     bg: "bg-amber-100",
     text: "text-amber-800",
   },
+  ASSIGNED: {
+    label: "Asignado",
+    icon: Handshake,
+    bg: "bg-fuchsia-100",
+    text: "text-fuchsia-800",
+  },
+  ASSIGNED_DELIVERY: {
+    label: "Asignado x admin",
+    icon: Handshake,
+    bg: "bg-fuchsia-100",
+    text: "text-fuchsia-800",
+  },
+  ASSIGNED_PICKUP: {
+    label: "Pickup asignado",
+    icon: Handshake,
+    bg: "bg-fuchsia-100",
+    text: "text-fuchsia-800",
+  },
   WAITING_ORDER: {
     label: "En comercio",
     icon: ChefHat,
@@ -88,7 +106,16 @@ const STATE_CHIPS: Record<string, StateChip> = {
   },
 }
 
-const STATE_ORDER = ["PENDING", "ACCEPTED", "WAITING_ORDER", "DELIVERY", "OUTSIDE"]
+const STATE_ORDER = [
+  "PENDING",
+  "ACCEPTED",
+  "ASSIGNED",
+  "ASSIGNED_DELIVERY",
+  "ASSIGNED_PICKUP",
+  "WAITING_ORDER",
+  "DELIVERY",
+  "OUTSIDE",
+]
 
 export function CommerceDetailSheet({
   commerce,

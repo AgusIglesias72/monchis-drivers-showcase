@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertTriangle,
   Bike,
+  EyeOff,
+  Layers,
   Map as MapIcon,
   MapPinOff,
   Pause,
@@ -22,6 +24,7 @@ import { LiveComerciosGrid } from "@/components/admin/gestion/live/live-comercio
 import { LiveDriversLoad } from "@/components/admin/gestion/live/live-drivers-load"
 import { LiveFunnel } from "@/components/admin/gestion/live/live-funnel"
 import { LiveMap } from "@/components/admin/gestion/live/live-map"
+import { LiveZonesGrid } from "@/components/admin/gestion/live/live-zones-grid"
 import {
   DriversTab,
   PedidosTab,
@@ -58,6 +61,7 @@ export function LivePanelContent({ initial }: Props) {
   const [routeLoading, setRouteLoading] = useState(false)
   const [view, setView] = useState<LiveView>("pedidos")
   const [showMap, setShowMap] = useState(true)
+  const [showZones, setShowZones] = useState(true)
 
   const commerces = useMemo(
     () =>
@@ -131,7 +135,13 @@ export function LivePanelContent({ initial }: Props) {
     const priority = (s: string | null) => {
       if (s === "DELIVERY" || s === "OUTSIDE") return 0
       if (s === "WAITING_ORDER") return 1
-      if (s === "ACCEPTED") return 2
+      if (
+        s === "ACCEPTED" ||
+        s === "ASSIGNED" ||
+        s === "ASSIGNED_DELIVERY" ||
+        s === "ASSIGNED_PICKUP"
+      )
+        return 2
       return 3
     }
     const sorted = [...orders].sort((a, b) => {
@@ -269,6 +279,26 @@ export function LivePanelContent({ initial }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
+            {view === "pedidos" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowZones((s) => !s)}
+                title={showZones ? "Ocultar zonas" : "Mostrar zonas"}
+              >
+                {showZones ? (
+                  <>
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Ocultar zonas
+                  </>
+                ) : (
+                  <>
+                    <Layers className="mr-2 h-4 w-4" />
+                    Mostrar zonas
+                  </>
+                )}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -357,6 +387,13 @@ export function LivePanelContent({ initial }: Props) {
             delayed={data.delayed}
             filter={pedidosFilter}
             onFilterChange={setPedidosFilter}
+          />
+        )}
+        {view === "pedidos" && showZones && data.zones.length > 0 && (
+          <LiveZonesGrid
+            zones={data.zones}
+            highlight={highlight}
+            onHighlight={setHighlight}
           />
         )}
         {view === "drivers" && <LiveDriversLoad drivers={data.drivers} />}
@@ -462,14 +499,17 @@ export function LivePanelContent({ initial }: Props) {
         onClose={() => setHighlight(null)}
       />
 
+      {/* Si el mapa está visible, el highlight de un driver dibuja su ruta
+          punteada y NO abrimos el sheet — la info ya queda visible sobre el
+          mapa. Sólo desplegamos el sheet cuando el mapa está oculto. */}
       <DriverDetailSheet
         driver={
-          highlight?.kind === "driver"
+          !showMap && highlight?.kind === "driver"
             ? data.drivers.find((d) => d.driverId === highlight.id) ?? null
             : null
         }
         driverRequests={
-          highlight?.kind === "driver"
+          !showMap && highlight?.kind === "driver"
             ? data.active.filter((r) => r.driverId === highlight.id)
             : []
         }

@@ -87,8 +87,10 @@ export function LiveZonesGrid({
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Zonas</h2>
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Zonas
+        </h2>
         <span className="text-[10px] text-muted-foreground">
           Por criticidad
         </span>
@@ -98,7 +100,7 @@ export function LiveZonesGrid({
         className={
           layout === "list"
             ? "flex max-h-[520px] flex-col gap-1.5 overflow-y-auto pr-1"
-            : "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+            : "grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
         }
       >
         {sortedZones.map((z) => {
@@ -156,66 +158,102 @@ function ZoneCard({
           : ""
       }`}
     >
-      <div className="h-1" style={{ backgroundColor: z.zoneColor }} />
-      <div className="space-y-2.5 p-3">
-        <div className="flex items-center justify-between gap-1.5">
-          <h3 className="truncate text-[13px] font-semibold leading-tight">
-            {z.zoneName}
-          </h3>
-          <span
-            className={`inline-flex shrink-0 items-center gap-1 text-[10px] font-medium ${statusToneClass(z.warningKpi)}`}
-          >
+      {/* Barra vertical de color de zona (izquierda) + contenido apretado.
+          Sacamos la barra superior horizontal y unificamos drivers + KPIs
+          en una sola fila para bajar bastante la altura. */}
+      <div className="flex items-stretch gap-2">
+        <span
+          className="w-1 shrink-0"
+          style={{ backgroundColor: z.zoneColor }}
+          aria-hidden
+        />
+        <div className="min-w-0 flex-1 space-y-1 px-2 py-1.5">
+          <div className="flex items-center justify-between gap-1.5">
+            <h3 className="truncate text-[12px] font-semibold leading-tight">
+              {z.zoneName}
+            </h3>
             <span
-              className={`inline-block h-1.5 w-1.5 rounded-full ${WARN_DOT[z.warningKpi]}`}
-            />
-            {WARN_LABEL[z.warningKpi]}
-          </span>
-        </div>
-
-        <div title="Drivers libres vs total conectados a la zona">
-          <div className="mb-1 flex items-baseline justify-between gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Drivers disponibles
+              className={`inline-flex shrink-0 items-center gap-1 text-[9px] font-medium ${statusToneClass(z.warningKpi)}`}
+              title={`Estado: ${WARN_LABEL[z.warningKpi]}`}
+            >
+              <span
+                className={`inline-block h-1.5 w-1.5 rounded-full ${WARN_DOT[z.warningKpi]}`}
+              />
+              {WARN_LABEL[z.warningKpi]}
             </span>
-            <span className="font-mono text-[12px] font-bold leading-none tabular-nums text-foreground">
+          </div>
+
+          <div
+            className="flex items-center gap-1.5"
+            title={`Drivers libres / total — ${available}/${total} (${pct}%)`}
+          >
+            <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-full ${barFillClass(z.warningDriversConnections)}`}
+                style={{ width: total === 0 ? "0%" : `${pct}%` }}
+              />
+            </div>
+            <span className="shrink-0 font-mono text-[10px] font-bold leading-none tabular-nums">
               {available}/{total}
             </span>
           </div>
-          <div className="relative h-2 overflow-hidden rounded-full bg-muted">
-            <div
-              className={`h-full rounded-full transition-all ${barFillClass(z.warningDriversConnections)}`}
-              style={{ width: total === 0 ? "0%" : `${pct}%` }}
+
+          <div className="flex items-center gap-2 text-[10px] tabular-nums">
+            <CompactStat
+              label="S/D"
+              value={z.orderWithoutDriver}
+              tone={z.orderWithoutDriver > 0 ? "warning" : "neutral"}
+              title="Pedidos sin driver asignado"
+            />
+            <CompactStat
+              label="DEM"
+              value={z.requestsDelayed}
+              tone={z.requestsDelayed > 0 ? "danger" : "neutral"}
+              title="Pedidos demorados"
+            />
+            <CompactStat
+              label="CRS"
+              value={z.activeRequests}
+              tone="neutral"
+              title="Pedidos en curso (con driver)"
+              className="ml-auto"
             />
           </div>
-          <div className="mt-0.5 text-right">
-            <span className="text-[9px] tabular-nums text-muted-foreground">
-              {total === 0 ? "sin drivers" : `${pct}% libres`}
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-1 border-t pt-2">
-          <Stat
-            label="S/D"
-            value={String(z.orderWithoutDriver)}
-            tone={z.orderWithoutDriver > 0 ? "warning" : "neutral"}
-            title="Pedidos sin driver asignado"
-          />
-          <Stat
-            label="DEM"
-            value={String(z.requestsDelayed)}
-            tone={z.requestsDelayed > 0 ? "danger" : "neutral"}
-            title="Pedidos demorados"
-          />
-          <Stat
-            label="CRS"
-            value={String(z.activeRequests)}
-            tone="neutral"
-            title="Pedidos en curso (con driver)"
-          />
         </div>
       </div>
     </button>
+  )
+}
+
+function CompactStat({
+  label,
+  value,
+  tone,
+  title,
+  className,
+}: {
+  label: string
+  value: number
+  tone: "neutral" | "warning" | "danger"
+  title?: string
+  className?: string
+}) {
+  const valueClass =
+    tone === "danger"
+      ? "text-destructive"
+      : tone === "warning"
+        ? "text-amber-700 dark:text-amber-400"
+        : "text-foreground"
+  return (
+    <span
+      className={`inline-flex items-baseline gap-1 ${className ?? ""}`}
+      title={title}
+    >
+      <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      <span className={`font-bold ${valueClass}`}>{value}</span>
+    </span>
   )
 }
 
@@ -318,36 +356,3 @@ function ZoneListRow({
   )
 }
 
-function Stat({
-  label,
-  value,
-  tone,
-  title,
-}: {
-  label: string
-  value: string
-  tone: "neutral" | "warning" | "danger"
-  title?: string
-}) {
-  const valueClass =
-    tone === "danger"
-      ? "text-destructive"
-      : tone === "warning"
-        ? "text-amber-700 dark:text-amber-400"
-        : "text-foreground"
-  return (
-    <div
-      className="flex flex-col items-center justify-center text-center"
-      title={title}
-    >
-      <span
-        className={`text-base font-bold leading-none tabular-nums ${valueClass}`}
-      >
-        {value}
-      </span>
-      <span className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-    </div>
-  )
-}

@@ -150,6 +150,15 @@ function formatGuaranies(raw: string | null): string {
   return n.toLocaleString("es-PY")
 }
 
+// Estados que operativamente comparten bucket con ACCEPTED ("driver designado,
+// todavía no fue al comercio"). Los badges siguen mostrando su etiqueta propia
+// vía `stateLabel`, pero a efectos de filtros/conteos los tratamos juntos.
+const ASSIGNED_LIKE = new Set([
+  "ASSIGNED",
+  "ASSIGNED_DELIVERY",
+  "ASSIGNED_PICKUP",
+])
+
 function stateLabel(state: string | null): string {
   switch (state) {
     case "PENDING":
@@ -163,6 +172,7 @@ function stateLabel(state: string | null): string {
     case "OUTSIDE":
       return "Afuera"
     case "ASSIGNED":
+      return "Asignado"
     case "ASSIGNED_DELIVERY":
       return "Asignado por admin"
     case "ASSIGNED_PICKUP":
@@ -299,7 +309,12 @@ export function PedidosTab({
       OUTSIDE: 0,
     }
     for (const r of allRequests) {
-      const s = r.state as FilterKey | null
+      // ASSIGNED, ASSIGNED_DELIVERY y ASSIGNED_PICKUP se cuentan dentro del
+      // filtro ACCEPTED (mismo bucket operativo: driver designado, todavía
+      // no fue al comercio). El badge sigue mostrando su etiqueta propia.
+      const s = ASSIGNED_LIKE.has(r.state ?? "")
+        ? "ACCEPTED"
+        : (r.state as FilterKey | null)
       if (s && s in out) out[s] += 1
     }
     return out
@@ -311,6 +326,11 @@ export function PedidosTab({
     else if (filter === "delayed") {
       result = allRequests.filter(
         (r) => r.isDelayed || delayedSet.has(r.requestId),
+      )
+    } else if (filter === "ACCEPTED") {
+      // El filtro ACCEPTED también captura ASSIGNED* (ver comentario en counts).
+      result = allRequests.filter(
+        (r) => r.state === "ACCEPTED" || ASSIGNED_LIKE.has(r.state ?? ""),
       )
     } else {
       result = allRequests.filter((r) => r.state === filter)
@@ -332,7 +352,7 @@ export function PedidosTab({
   return (
     <div>
       {/* Chips de filtro + toggle de vista */}
-      <div className="flex flex-wrap items-start gap-3 border-b bg-muted/20 p-3">
+      <div className="flex flex-wrap items-start gap-3 border-b bg-muted/20 px-3 py-2">
         <div className="flex flex-1 flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Filtrar:
@@ -1327,7 +1347,7 @@ export function DriversTab({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/20 p-3">
+      <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/20 px-3 py-2">
         <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           Filtrar:
         </span>

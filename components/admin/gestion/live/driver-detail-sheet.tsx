@@ -44,6 +44,9 @@ function formatElapsed(minutes: number | null): string {
 const STATE_BADGE: Record<string, string> = {
   PENDING: "bg-slate-100 text-slate-800",
   ACCEPTED: "bg-amber-100 text-amber-800",
+  ASSIGNED: "bg-fuchsia-100 text-fuchsia-800",
+  ASSIGNED_DELIVERY: "bg-fuchsia-100 text-fuchsia-800",
+  ASSIGNED_PICKUP: "bg-fuchsia-100 text-fuchsia-800",
   WAITING_ORDER: "bg-sky-100 text-sky-800",
   DELIVERY: "bg-blue-100 text-blue-800",
   OUTSIDE: "bg-cyan-100 text-cyan-800",
@@ -52,6 +55,9 @@ const STATE_BADGE: Record<string, string> = {
 const STATE_LABEL: Record<string, string> = {
   PENDING: "Buscando driver",
   ACCEPTED: "Aceptado",
+  ASSIGNED: "Asignado",
+  ASSIGNED_DELIVERY: "Asignado por admin",
+  ASSIGNED_PICKUP: "Pickup asignado",
   WAITING_ORDER: "En el comercio",
   DELIVERY: "En camino",
   OUTSIDE: "Afuera",

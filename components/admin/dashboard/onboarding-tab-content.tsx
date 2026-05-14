@@ -18,12 +18,12 @@
 
 import { KpiStrip } from "./onboarding/kpi-strip"
 import { FunnelVertical } from "./onboarding/funnel-vertical"
-import { AbandonosRanked } from "./onboarding/abandonos-ranked"
 import { StagesTrendChart } from "./onboarding/stages-trend-chart"
 import { DocsStatusCompact } from "./onboarding/docs-status-compact"
 import { PostulacionesTrend } from "./onboarding/postulaciones-trend"
 import { AsistenciasBlock } from "./onboarding/asistencias-block"
 import { DemografiaHorizontal } from "./onboarding/demografia-horizontal"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface OnboardingTabContentProps {
   mainStats: {
@@ -93,6 +93,9 @@ interface OnboardingTabContentProps {
     Completadas?: number
   }>
   currentGroupBy?: "day" | "week" | "month"
+  /** Cuando true, reemplaza los charts/KPIs por skeletons mientras se está
+   *  re-cargando con un nuevo rango de fechas. */
+  isLoading?: boolean
 }
 
 export function OnboardingTabContent({
@@ -100,7 +103,6 @@ export function OnboardingTabContent({
   postulacionesStats,
   funnelData,
   visitasPorSemana,
-  abandonoPorStep,
   edadesPorRango,
   onboardingStats,
   asistenciasPorPeriodo,
@@ -108,7 +110,12 @@ export function OnboardingTabContent({
   asistenciasProgramadasVsRealizadas,
   evolucionPorEtapa,
   currentGroupBy = "week",
+  isLoading = false,
 }: OnboardingTabContentProps) {
+  if (isLoading) {
+    return <OnboardingTabSkeleton />
+  }
+
   // El funnel espera { step, count }; el service entrega también `label` pero
   // funnel-vertical solo usa count por índice. Normalizamos para tipar.
   const funnel = funnelData.map((f) => ({
@@ -125,18 +132,11 @@ export function OnboardingTabContent({
         asistenciasProgramadasVsRealizadas={asistenciasProgramadasVsRealizadas}
       />
 
-      <div className="grid grid-cols-12 gap-6">
-        <FunnelVertical
-          funnelData={funnel}
-          postulacionesStats={postulacionesStats}
-          onboardingStats={onboardingStats}
-          className="col-span-12 lg:col-span-7"
-        />
-        <AbandonosRanked
-          abandonoPorStep={abandonoPorStep}
-          className="col-span-12 lg:col-span-5"
-        />
-      </div>
+      <FunnelVertical
+        funnelData={funnel}
+        postulacionesStats={postulacionesStats}
+        onboardingStats={onboardingStats}
+      />
 
       <div className="grid grid-cols-12 gap-6">
         <StagesTrendChart
@@ -161,6 +161,55 @@ export function OnboardingTabContent({
       />
 
       <DemografiaHorizontal edadesPorRango={edadesPorRango} />
+    </div>
+  )
+}
+
+function ChartSkeleton({
+  className,
+  height = "h-[280px]",
+}: {
+  className?: string
+  height?: string
+}) {
+  return (
+    <div className={`rounded-lg border bg-card p-4 ${className ?? ""}`}>
+      <Skeleton className="h-4 w-40 mb-2" />
+      <Skeleton className="h-3 w-56 mb-4" />
+      <Skeleton className={`w-full ${height}`} />
+    </div>
+  )
+}
+
+function OnboardingTabSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="rounded-lg border bg-card p-3">
+            <div className="flex items-start justify-between gap-1">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-5 w-5 rounded-md" />
+            </div>
+            <Skeleton className="mt-2 h-7 w-20" />
+            <Skeleton className="mt-2 h-3 w-24" />
+          </div>
+        ))}
+      </div>
+
+      <ChartSkeleton height="h-[320px]" />
+
+      <div className="grid grid-cols-12 gap-6">
+        <ChartSkeleton className="col-span-12 lg:col-span-8" height="h-[300px]" />
+        <ChartSkeleton className="col-span-12 lg:col-span-4" height="h-[300px]" />
+      </div>
+
+      <ChartSkeleton height="h-[260px]" />
+
+      <ChartSkeleton height="h-[340px]" />
+
+      <ChartSkeleton height="h-[120px]" />
     </div>
   )
 }
