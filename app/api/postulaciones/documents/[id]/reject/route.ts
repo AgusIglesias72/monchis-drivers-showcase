@@ -1,40 +1,25 @@
 // app/api/postulaciones/documents/[id]/reject/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@clerk/nextjs/server';
+import { requireAdminApi } from '@/lib/auth';
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    // ⚠️ Antes este handler hacía "upsert" del AdminUser si no existía:
+    // cualquier usuario Clerk autenticado que llamara PATCH /api/postulaciones/
+    // documents/[id]/reject se auto-promocionaba a AdminUser role=ADMIN. Lo
+    // reemplazamos por requireAdminApi que NO crea filas: si no existe en la
+    // tabla AdminUser, responde 403.
+    const guard = await requireAdminApi();
+    if (!guard.ok) return guard.response;
+    const adminUser = guard.user;
 
     const { id } = await params;
     const body = await request.json();
     const { reason } = body;
-
-    // Verificar que el usuario admin existe en la base de datos
-    let adminUser = await prisma.adminUser.findUnique({
-      where: { clerkId: userId }
-    });
-
-    // Si no existe, crearlo
-    if (!adminUser) {
-      console.log(`Creando AdminUser para clerkId: ${userId}`);
-      adminUser = await prisma.adminUser.create({
-        data: {
-          id: userId,
-          clerkId: userId,
-          email: 'admin@temp.com', // TODO: obtener del contexto de Clerk
-          role: 'ADMIN',
-          isActive: true,
-        }
-      });
-    }
 
     const updatedDoc = await prisma.formDocument.update({
       where: { id },

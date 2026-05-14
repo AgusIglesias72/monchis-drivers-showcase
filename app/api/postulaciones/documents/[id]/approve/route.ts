@@ -5,6 +5,7 @@ import { FormDocumentsStatus, WhatsAppMessageSource, WhatsAppMessageType } from 
 import { NextResponse } from 'next/server'
 import { after } from 'next/server'
 import { sendFlowByKey } from '@/lib/services/manychat-messaging.service'
+import { requireAdminApi } from '@/lib/auth'
 
 const POSTULACION_APROBADA_TEMPLATE_KEY = 'capacitaciones'
 
@@ -13,6 +14,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const guard = await requireAdminApi()
+    if (!guard.ok) return guard.response
+    const adminUser = guard.user
+
     const { id } = await params
 
     // 1. Aprobar el documento específico
@@ -21,6 +26,7 @@ export async function PATCH(
       data: {
         status: 'APPROVED',
         reviewedAt: new Date(),
+        reviewedBy: adminUser.id,
         rejectionReason: null, // Limpiar razón de rechazo si existía
       },
       include: {

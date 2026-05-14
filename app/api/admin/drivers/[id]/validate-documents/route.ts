@@ -6,12 +6,16 @@ import { paraguayIdentityValidator } from '@/lib/services/paraguay-identity-vali
 import { aiDocumentValidator } from '@/lib/services/ai-document-validator.service';
 import { cleanupDuplicateDocuments } from '@/lib/services/document-cleanup.service';
 import { prisma } from '@/lib/prisma';
+import { requireAdminApi } from '@/lib/auth';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const guard = await requireAdminApi();
+    if (!guard.ok) return guard.response;
+
     const resolvedParams = await params;
     const driverId = resolvedParams.id;
 
