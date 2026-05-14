@@ -97,21 +97,34 @@ export async function createBooking(input: BookingCreateInput): Promise<BookingR
   // de la verificación de eligibility (un nombre vacío puede bloquear y el
   // driver puede haberlo completado en el dialog).
   if (input.confirmedProfile) {
+    // IMPORTANTE: `cedula` y `phoneNumber` se consideran identidad inmutable
+    // desde el portal público. Si alguien con shareToken las cambia, puede
+    // suplantar a otro postulante en la BD o colisionar con uno existente.
+    // Solo permitimos corregir nombre y email desde acá; cédula/teléfono
+    // requieren acción admin explícita.
     const updates: Record<string, string> = {}
     const trim = (v?: string) => (v ?? '').trim()
     const nf = trim(input.confirmedProfile.firstName)
     const nl = trim(input.confirmedProfile.lastName)
-    const nc = trim(input.confirmedProfile.cedula)
-    const np = trim(input.confirmedProfile.phoneNumber)
     const ne = trim(input.confirmedProfile.email)
     if (nf && nf !== (fd.firstName ?? '')) updates.firstName = nf
     if (nl && nl !== (fd.lastName ?? '')) updates.lastName = nl
     if (nf || nl) {
       updates.fullName = `${nf || fd.firstName || ''} ${nl || fd.lastName || ''}`.trim()
     }
-    if (nc && nc !== fd.cedula) updates.cedula = nc
-    if (np && np !== fd.phoneNumber) updates.phoneNumber = np
     if (ne && ne !== (fd.email ?? '')) updates.email = ne
+
+    // Loguear (sin valores) si el cliente intentó cambiar campos inmutables.
+    const triedCedula = trim(input.confirmedProfile.cedula)
+    const triedPhone = trim(input.confirmedProfile.phoneNumber)
+    if ((triedCedula && triedCedula !== fd.cedula) || (triedPhone && triedPhone !== fd.phoneNumber)) {
+      console.warn('[BOOKING] Intento de cambiar cedula/phoneNumber desde portal público — ignorado', {
+        formDriverId: fd.id,
+        cedulaChanged: !!(triedCedula && triedCedula !== fd.cedula),
+        phoneChanged: !!(triedPhone && triedPhone !== fd.phoneNumber),
+      })
+    }
+
     if (Object.keys(updates).length > 0) {
       await prisma.formDriver.update({ where: { id: fd.id }, data: updates })
       // Refrescamos los campos en memoria para los checks siguientes
