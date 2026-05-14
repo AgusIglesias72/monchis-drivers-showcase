@@ -2,7 +2,7 @@
 // Servicio para gestión de tokens de acceso al portal de postulantes
 
 import { prisma } from '@/lib/prisma'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 import type { Prisma } from '@prisma/client'
 
 // Type for FormDriver with all portal-related includes
@@ -52,7 +52,7 @@ export type FormDriverWithPortalIncludes = Prisma.FormDriverGetPayload<{
  * @returns accessToken generado
  */
 export async function generateAccessToken(formDriverId: string): Promise<string> {
-  const accessToken = uuidv4()
+  const accessToken = randomUUID()
 
   await prisma.formDriver.update({
     where: { id: formDriverId },
@@ -71,7 +71,7 @@ export async function generateAccessToken(formDriverId: string): Promise<string>
  * @returns nuevo accessToken generado
  */
 export async function regenerateAccessToken(formDriverId: string): Promise<string> {
-  const accessToken = uuidv4()
+  const accessToken = randomUUID()
 
   await prisma.formDriver.update({
     where: { id: formDriverId },

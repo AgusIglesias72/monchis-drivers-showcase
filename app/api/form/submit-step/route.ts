@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { WhatsAppMessageType } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 
 // Schemas Zod por paso. .strict() rechaza campos extra para cerrar
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
             currentStep: 1,
             completedSteps: [1],
             status: 'IN_PROGRESS',
-            accessToken: uuidv4(), // ← Generar token automáticamente
+            accessToken: randomUUID(), // ← Generar token automáticamente
             accessTokenGeneratedAt: new Date()
           }
         });
@@ -223,7 +223,7 @@ export async function POST(request: NextRequest) {
 
         // Generar token si no tiene
         if (!formDriver.accessToken) {
-          updateData.accessToken = uuidv4();
+          updateData.accessToken = randomUUID();
           updateData.accessTokenGeneratedAt = new Date();
         }
 
