@@ -6,15 +6,31 @@
 //
 // Llamadas autenticadas requireen AdminUser activo.
 //
-// Permite endpoints específicos del bot (logout, etc) en su path interno.
+// Allowlists (defensivo contra SSRF):
+//  - paths del bot (logout, qr-status, etc)
+//  - hosts base permitidos: construidos desde env vars de bots configurados.
+//    El cliente puede pedir uno de esos hosts, pero NO un host arbitrario.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/auth'
 
-const DEFAULT_BOT_URL = process.env.WHATSAPP_BOT_URL || process.env.NEXT_PUBLIC_WHATSAPP_BOT_URL || ''
-
-// Allowlist de paths que el proxy puede invocar. Cualquier otro se rechaza.
 const ALLOWED_PATHS = new Set<string>(['/logout', '/qr-status', '/connection-info'])
+
+// URLs de bots reconocidas. Cualquier botUrl que llegue del cliente debe
+// matchear EXACTAMENTE alguna de estas (después de normalizar trailing slash).
+function buildBotUrlAllowlist(): Set<string> {
+  const candidates = [
+    process.env.WHATSAPP_BOT_URL,
+    process.env.NEXT_PUBLIC_WHATSAPP_BOT_URL,
+    process.env.NEXT_PUBLIC_WHATSAPP_BOT_ADQUISICION_URL,
+    process.env.NEXT_PUBLIC_WHATSAPP_BOT_REACTIVACION_URL,
+  ]
+  return new Set(
+    candidates
+      .filter((u): u is string => typeof u === 'string' && u.length > 0)
+      .map(u => u.replace(/\/$/, '')),
+  )
+}
 
 interface ProxyBody {
   path: string
@@ -40,12 +56,26 @@ export async function POST(req: NextRequest) {
   if (!ALLOWED_PATHS.has(payload.path)) {
     return NextResponse.json({ error: 'path no permitido' }, { status: 400 })
   }
+  // Bloqueá traversals en el path aunque empiece con "/" (ej "/logout/../admin").
+  if (payload.path.includes('..') || payload.path.includes('//')) {
+    return NextResponse.json({ error: 'path inválido' }, { status: 400 })
+  }
 
   const method = payload.method === 'POST' ? 'POST' : 'GET'
-  const targetBase = (payload.botUrl || DEFAULT_BOT_URL).replace(/\/$/, '')
-  if (!targetBase) {
+
+  const allowedBotUrls = buildBotUrlAllowlist()
+  const defaultBotUrl = process.env.WHATSAPP_BOT_URL || process.env.NEXT_PUBLIC_WHATSAPP_BOT_URL || ''
+  const requestedBase = (payload.botUrl ?? defaultBotUrl).replace(/\/$/, '')
+
+  if (!requestedBase) {
     return NextResponse.json({ error: 'WHATSAPP_BOT_URL no configurado' }, { status: 500 })
   }
+  if (!allowedBotUrls.has(requestedBase)) {
+    // Defensa contra SSRF: el cliente NO puede mandar a un host arbitrario.
+    console.warn('[BOT_PROXY] botUrl rechazada (no está en allowlist)', { requestedBase })
+    return NextResponse.json({ error: 'botUrl no permitida' }, { status: 400 })
+  }
+  const targetBase = requestedBase
 
   const apiKey = process.env.WHATSAPP_BOT_API_KEY || ''
   if (!apiKey) {
