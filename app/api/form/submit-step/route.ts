@@ -3,27 +3,119 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { WhatsAppMessageType } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
+import { z } from 'zod';
 
-// Función para parsear fecha de formato dd/MM/yyyy a Date
-function parseBirthDate(dateStr: string | null): Date | null {
+// Schemas Zod por paso. .strict() rechaza campos extra para cerrar
+// mass-assignment hacia FormDriver (un cliente no debe poder pasar role,
+// status, isActive, accessToken, etc).
+const Step1Schema = z.object({
+  cedula: z.string().min(1).max(20),
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
+  phoneNumber: z.string().min(1).max(30),
+  email: z.string().email().max(150).optional().nullable(),
+  birthDate: z.string().max(30).optional().nullable(),
+}).strict();
+
+const Step2Schema = z.object({
+  department: z.string().max(100).optional().nullable(),
+  city: z.string().max(100).optional().nullable(),
+  neighborhood: z.string().max(100).optional().nullable(),
+  address: z.string().max(300).optional().nullable(),
+  addressLat: z.union([z.string(), z.number()]).optional().nullable(),
+  addressLng: z.union([z.string(), z.number()]).optional().nullable(),
+  emergencyName: z.string().max(150).optional().nullable(),
+  emergencyRelationship: z.string().max(80).optional().nullable(),
+  emergencyPhone: z.string().max(30).optional().nullable(),
+}).strict();
+
+const Step3Schema = z.object({
+  workZone: z.string().max(150).optional().nullable(),
+  howHeardAboutUs: z.string().max(200).optional().nullable(),
+  referredBy: z.string().max(150).optional().nullable(),
+  hasVehicle: z.enum(['si', 'no']).optional(),
+  vehicleBrand: z.string().max(80).optional().nullable(),
+  vehicleModel: z.string().max(80).optional().nullable(),
+  vehicleYear: z.union([z.string(), z.number()]).optional().nullable(),
+  vehiclePlate: z.string().max(20).optional().nullable(),
+}).strict();
+
+// Step 4 no actualiza FormDriver — los uploads van por otro endpoint —
+// pero validamos el shape igual.
+const Step4Schema = z.object({}).strict().passthrough();
+
+const Step5Schema = z.object({
+  experience: z.string().max(2000).optional().nullable(),
+  availability: z.array(z.string().max(50)).max(20).optional(),
+  whenCanStart: z.string().max(100).optional().nullable(),
+  hasUenoAccount: z.enum(['si', 'no']).optional(),
+  uenoAccountNumber: z.string().max(50).optional().nullable(),
+  canInvoice: z.enum(['si', 'no']).optional(),
+}).strict();
+
+const STEP_SCHEMAS: Record<number, z.ZodType> = {
+  1: Step1Schema,
+  2: Step2Schema,
+  3: Step3Schema,
+  4: Step4Schema,
+  5: Step5Schema,
+};
+
+function validateStepData(step: number, stepData: unknown):
+  | { ok: true; data: any }
+  | { ok: false; error: string } {
+  const schema = STEP_SCHEMAS[step];
+  if (!schema) return { ok: false, error: `step ${step} no soportado` };
+  const result = schema.safeParse(stepData);
+  if (!result.success) {
+    return {
+      ok: false,
+      error: result.error.issues.map((i: any) => `${i.path.join('.')}: ${i.message}`).join('; '),
+    };
+  }
+  return { ok: true, data: result.data };
+}
+
+// parseInt seguro: devuelve null si NaN o fuera de rango.
+function safeInt(v: unknown, opts: { min: number; max: number }): number | null {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : parseInt(String(v), 10);
+  if (!Number.isFinite(n) || n < opts.min || n > opts.max) return null;
+  return Math.floor(n);
+}
+
+function safeFloat(v: unknown, opts: { min: number; max: number }): number | null {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : parseFloat(String(v));
+  if (!Number.isFinite(n) || n < opts.min || n > opts.max) return null;
+  return n;
+}
+
+// Función para parsear fecha de formato dd/MM/yyyy a Date, validando NaN y rangos.
+function parseBirthDate(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
-  
+
   try {
-    // Si ya es una fecha válida ISO
     if (dateStr.includes('-')) {
-      return new Date(dateStr);
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return null;
+      return d;
     }
-    
-    // Si es formato dd/MM/yyyy
+
     const parts = dateStr.split('/');
-    if (parts.length === 3) {
-      const day = parseInt(parts[0]);
-      const month = parseInt(parts[1]) - 1; // Los meses en JS son 0-indexed
-      const year = parseInt(parts[2]);
-      return new Date(year, month, day);
+    if (parts.length !== 3) return null;
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    if (
+      !Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year) ||
+      day < 1 || day > 31 || month < 0 || month > 11 || year < 1900 || year > 2100
+    ) {
+      return null;
     }
-    
-    return null;
+    const d = new Date(year, month, day);
+    if (isNaN(d.getTime())) return null;
+    return d;
   } catch {
     return null;
   }
@@ -32,14 +124,25 @@ function parseBirthDate(dateStr: string | null): Date | null {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sessionId, step, stepData } = body;
+    const { sessionId, step, stepData: rawStepData } = body;
 
-    if (!sessionId || !step || !stepData) {
-      return NextResponse.json(
-        { error: 'Faltan parámetros requeridos' },
-        { status: 400 }
-      );
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 100) {
+      return NextResponse.json({ error: 'sessionId inválido' }, { status: 400 });
     }
+    if (typeof step !== 'number' || !Number.isInteger(step) || step < 1 || step > 5) {
+      return NextResponse.json({ error: 'step inválido' }, { status: 400 });
+    }
+    if (!rawStepData || typeof rawStepData !== 'object') {
+      return NextResponse.json({ error: 'stepData inválido' }, { status: 400 });
+    }
+
+    // Zod (.strict) descarta campos extra: bloquea mass-assignment hacia
+    // FormDriver desde el cliente (role, status, isActive, accessToken, etc).
+    const validation = validateStepData(step, rawStepData);
+    if (!validation.ok) {
+      return NextResponse.json({ error: `stepData: ${validation.error}` }, { status: 400 });
+    }
+    const stepData = validation.data;
 
     // Buscar o crear FormSubmission
     let submission = await prisma.formSubmission.findUnique({
@@ -203,7 +306,23 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sessionId, step, stepData } = body;
+    const { sessionId, step, stepData: rawStepData } = body;
+
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 100) {
+      return NextResponse.json({ error: 'sessionId inválido' }, { status: 400 });
+    }
+    if (typeof step !== 'number' || !Number.isInteger(step) || step < 1 || step > 5) {
+      return NextResponse.json({ error: 'step inválido' }, { status: 400 });
+    }
+    if (!rawStepData || typeof rawStepData !== 'object') {
+      return NextResponse.json({ error: 'stepData inválido' }, { status: 400 });
+    }
+
+    const validation = validateStepData(step, rawStepData);
+    if (!validation.ok) {
+      return NextResponse.json({ error: `stepData: ${validation.error}` }, { status: 400 });
+    }
+    const stepData = validation.data;
 
     // Buscar submission
     const submission = await prisma.formSubmission.findUnique({
@@ -215,6 +334,23 @@ export async function PATCH(request: NextRequest) {
         { error: 'Sesión no encontrada' },
         { status: 404 }
       );
+    }
+
+    // Anti-salto de pasos: permitir editar pasos ya completados (step <= current)
+    // o avanzar exactamente al siguiente (step == current + 1). Saltar más
+    // adelante deja el form en estado inconsistente y se rechaza.
+    if (submission.formDriverId) {
+      const fd = await prisma.formDriver.findUnique({
+        where: { id: submission.formDriverId },
+        select: { currentStep: true },
+      });
+      const maxAllowed = (fd?.currentStep ?? 0) + 1;
+      if (step > maxAllowed) {
+        return NextResponse.json(
+          { error: `No podés saltar al step ${step} estando en step ${fd?.currentStep ?? 0}` },
+          { status: 400 }
+        );
+      }
     }
 
     // Actualizar datos del step
@@ -245,8 +381,8 @@ export async function PATCH(request: NextRequest) {
         updateData.city = stepData.city;
         updateData.neighborhood = stepData.neighborhood;
         updateData.address = stepData.address;
-        updateData.addressLat = stepData.addressLat ? parseFloat(stepData.addressLat) : null;
-        updateData.addressLng = stepData.addressLng ? parseFloat(stepData.addressLng) : null;
+        updateData.addressLat = safeFloat(stepData.addressLat, { min: -90, max: 90 });
+        updateData.addressLng = safeFloat(stepData.addressLng, { min: -180, max: 180 });
         updateData.emergencyName = stepData.emergencyName;
         updateData.emergencyRelationship = stepData.emergencyRelationship;
         updateData.emergencyPhone = stepData.emergencyPhone;
@@ -261,7 +397,7 @@ export async function PATCH(request: NextRequest) {
         if (stepData.hasVehicle === 'si') {
           updateData.vehicleBrand = stepData.vehicleBrand;
           updateData.vehicleModel = stepData.vehicleModel;
-          updateData.vehicleYear = stepData.vehicleYear ? parseInt(stepData.vehicleYear) : null;
+          updateData.vehicleYear = safeInt(stepData.vehicleYear, { min: 1900, max: 2100 });
           updateData.vehiclePlate = stepData.vehiclePlate;
         }
       }
