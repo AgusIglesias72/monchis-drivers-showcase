@@ -48,6 +48,9 @@ next-env.d.ts
 # clerk configuration (can include secrets)
 /.clerk/
 
+# claude code: settings.local.json puede tener comandos con credenciales inline
+.claude/settings.local.json
+
 # scripts locales (no commitear)
 /scripts/admin2-test.ts
 

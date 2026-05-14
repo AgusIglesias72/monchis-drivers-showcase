@@ -40,6 +40,7 @@ echo "⚠️  Esto va a reescribir TODA la historia de git."
 echo "   Archivos a purgar:"
 echo "     - google-drive-token.json"
 echo "     - postulacion.xlsx"
+echo "     - .claude/settings.local.json  (DATABASE_URL Railway leaked)"
 echo ""
 echo "   ¿Hiciste backup del repo en otro remote? (git push --mirror ...)"
 read -p "   Continuar? (yes/N): " confirm
@@ -50,7 +51,8 @@ fi
 
 git filter-repo --invert-paths \
   --path google-drive-token.json \
-  --path postulacion.xlsx
+  --path postulacion.xlsx \
+  --path .claude/settings.local.json
 
 echo ""
 echo "✅ Historia reescrita."
