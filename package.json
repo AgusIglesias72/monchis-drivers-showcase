@@ -64,6 +64,7 @@
     "dotenv": "^17.2.3",
     "google-auth-library": "^10.3.0",
     "googleapis": "^160.0.0",
+    "isomorphic-dompurify": "^3.12.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.544.0",
     "motion": "^12.23.24",

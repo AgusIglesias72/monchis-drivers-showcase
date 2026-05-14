@@ -2,6 +2,7 @@
 
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import DOMPurify from 'isomorphic-dompurify'
 import {
   Bold,
   Italic,
@@ -173,9 +174,26 @@ export function RichTextEditor({
   )
 }
 
+// Allowlist alineada con los nodes/marks del Tiptap StarterKit que usamos.
+// Defense-in-depth: Tiptap ya sanitiza al editar, pero si un admin compromise
+// o un endpoint sin Tiptap inserta HTML directo en DB, esto bloquea el XSS.
+const DOMPURIFY_CONFIG = {
+  ALLOWED_TAGS: [
+    'p', 'br', 'strong', 'em', 'u', 's', 'code', 'pre',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'ul', 'ol', 'li',
+    'blockquote', 'hr',
+    'a', 'span',
+  ],
+  ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+  ALLOW_DATA_ATTR: false,
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+}
+
 /**
- * Para renderizar HTML guardado en server components.
- * El HTML viene de Tiptap StarterKit (sanitizado por defecto: no permite scripts).
+ * Para renderizar HTML guardado en server/client components.
+ * Tiptap StarterKit sanitiza al editar, pero acá sanitizamos de nuevo
+ * (defense-in-depth) por si el HTML llegó a la DB por otro camino.
  */
 export function RichTextDisplay({
   html,
@@ -185,6 +203,10 @@ export function RichTextDisplay({
   className?: string
 }) {
   if (!html || html === '<p></p>') return null
+
+  // isomorphic-dompurify funciona en server y client.
+  const sanitized = DOMPurify.sanitize(html, DOMPURIFY_CONFIG)
+
   return (
     <div
       className={cn(
@@ -197,7 +219,7 @@ export function RichTextDisplay({
         'prose-li:my-0.5',
         className,
       )}
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={{ __html: sanitized }}
     />
   )
 }
