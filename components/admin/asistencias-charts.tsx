@@ -285,7 +285,10 @@ export function AsistenciasCharts({
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ porcentaje }) => `${porcentaje}%`}
+                label={(props) => {
+                  const p = props as unknown as { porcentaje?: number }
+                  return p?.porcentaje != null ? `${p.porcentaje}%` : ''
+                }}
                 outerRadius={100}
                 fill="#8884d8"
                 dataKey="cantidad"
@@ -372,7 +375,7 @@ export function AsistenciasCharts({
                 tickFormatter={(value) => `${value}%`}
               />
               <Tooltip
-                formatter={(value: number) => [`${value}%`, 'Presentismo']}
+                formatter={(value) => [`${value}%`, 'Presentismo'] as [string, string]}
                 contentStyle={{
                   backgroundColor: 'white',
                   border: '1px solid #e5e7eb',
