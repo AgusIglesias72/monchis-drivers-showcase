@@ -51,6 +51,17 @@ const Step5Schema = z.object({
   hasUenoAccount: z.enum(['si', 'no']).optional(),
   uenoAccountNumber: z.string().max(50).optional().nullable(),
   canInvoice: z.enum(['si', 'no']).optional(),
+  // taxCompliancePhotoUrl / interestedInConto se guardan solo en formData JSON
+  // y los lee /api/form/complete para crear FinancialService al cerrar.
+  taxCompliancePhotoUrl: z.string().max(2000).optional().nullable(),
+  interestedInConto: z.enum(['si', 'no']).optional(),
+}).strict();
+
+// Step 6: método de pago del equipo. Se persiste en formData JSON; complete()
+// crea el EquipmentPayment al finalizar el formulario.
+const Step6Schema = z.object({
+  paymentMethod: z.enum(['TRANSFERENCIA', 'POS', 'OTROS']).optional(),
+  paymentProofUrl: z.string().max(2000).optional().nullable(),
 }).strict();
 
 const STEP_SCHEMAS: Record<number, z.ZodType> = {
@@ -59,6 +70,7 @@ const STEP_SCHEMAS: Record<number, z.ZodType> = {
   3: Step3Schema,
   4: Step4Schema,
   5: Step5Schema,
+  6: Step6Schema,
 };
 
 function validateStepData(step: number, stepData: unknown):
@@ -129,7 +141,7 @@ export async function POST(request: NextRequest) {
     if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 100) {
       return NextResponse.json({ error: 'sessionId inválido' }, { status: 400 });
     }
-    if (typeof step !== 'number' || !Number.isInteger(step) || step < 1 || step > 5) {
+    if (typeof step !== 'number' || !Number.isInteger(step) || step < 1 || step > 6) {
       return NextResponse.json({ error: 'step inválido' }, { status: 400 });
     }
     if (!rawStepData || typeof rawStepData !== 'object') {
@@ -311,7 +323,7 @@ export async function PATCH(request: NextRequest) {
     if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 100) {
       return NextResponse.json({ error: 'sessionId inválido' }, { status: 400 });
     }
-    if (typeof step !== 'number' || !Number.isInteger(step) || step < 1 || step > 5) {
+    if (typeof step !== 'number' || !Number.isInteger(step) || step < 1 || step > 6) {
       return NextResponse.json({ error: 'step inválido' }, { status: 400 });
     }
     if (!rawStepData || typeof rawStepData !== 'object') {
@@ -486,7 +498,8 @@ function getStepName(step: number): string {
     2: 'personal_data',
     3: 'work_vehicle',
     4: 'documents',
-    5: 'additional_info'
+    5: 'additional_info',
+    6: 'equipment_payment'
   };
   return stepNames[step] || 'unknown';
 }

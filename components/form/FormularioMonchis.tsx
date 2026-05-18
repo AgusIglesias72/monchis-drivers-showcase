@@ -467,12 +467,14 @@ const validateCurrentStep = (): boolean => {
       });
       
       const data = await response.json();
-      
+
       if (data.success) {
         // ✅ Trackear completación del step
         trackFormStepCompleted(stepNumber, getStepName(stepNumber));
+      } else {
+        toast.error(data.error || 'No se pudo guardar el paso. Intentá nuevamente.');
       }
-      
+
       return data.success;
     } catch (error) {
       console.error('Error guardando step:', error);
