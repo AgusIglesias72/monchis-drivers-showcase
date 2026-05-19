@@ -30,13 +30,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
   CheckCircle,
   XCircle,
   Ban,
@@ -53,11 +46,60 @@ import {
   DollarSign,
   UserCog,
   Filter,
+  UserCheck,
+  ShieldCheck,
+  GraduationCap,
 } from 'lucide-react'
 import { checkInAttendee, markAttendeeNoShow } from '@/lib/actions/onboarding.actions'
 import { toast } from 'sonner'
 import { CancelAttendeeDialog } from './cancel-attendee-dialog'
 import { DriverManagementSheet } from './driver-management-sheet'
+
+/** Segmented control / radio-group estilo pills.
+ *  Reemplaza Select cuando hay pocas opciones y querés que estén visibles. */
+function FilterPills({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  options: { value: string; label: string }[]
+}) {
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <Label className="text-xs text-muted-foreground whitespace-nowrap w-12 flex-shrink-0">
+        {label}
+      </Label>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        className="inline-flex h-8 items-center justify-start rounded-md bg-muted p-[3px] text-muted-foreground overflow-x-auto"
+      >
+        {options.map((opt) => {
+          const active = value === opt.value
+          return (
+            <button
+              key={opt.value}
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(opt.value)}
+              className={`inline-flex h-[calc(100%-2px)] items-center justify-center px-2.5 rounded text-xs font-medium whitespace-nowrap transition-all cursor-pointer flex-shrink-0 ${
+                active
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'hover:text-foreground'
+              }`}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 interface AttendeesManagementSectionProps {
   eventId: string
@@ -171,6 +213,68 @@ export function AttendeesManagementSection({
       default:
         return <CircleDashed className="h-5 w-5 text-gray-400" />
     }
+  }
+
+  const formatInvitedAt = (dateStr: string | Date) => {
+    const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
+    return date.toLocaleDateString('es-PY', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
+  }
+
+  // Devuelve el primer nombre capitalizado de quien asignó (admin) — o "Usuario" si fue self-served.
+  const capitalize = (s: string) =>
+    s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : ''
+  const getAssignerFirstName = (user: { fullName?: string | null; email?: string | null } | null | undefined): string => {
+    if (!user) return 'Admin'
+    if (user.fullName) {
+      const first = user.fullName.trim().split(/\s+/)[0] || ''
+      if (first) return capitalize(first)
+    }
+    if (user.email) {
+      const local = user.email.split('@')[0] || ''
+      const part = local.split('.')[0] || local
+      if (part) return capitalize(part)
+    }
+    return 'Admin'
+  }
+
+  const getDocumentsBadge = (status: string | null | undefined) => {
+    if (!status) return null
+    const config: Record<string, { label: string; className: string }> = {
+      PENDING: { label: 'Docs pend.', className: 'bg-gray-100 text-gray-700' },
+      IN_REVIEW: { label: 'Docs en revisión', className: 'bg-amber-100 text-amber-700' },
+      APPROVED: { label: 'Docs OK', className: 'bg-green-100 text-green-700' },
+      REJECTED: { label: 'Docs rech.', className: 'bg-red-100 text-red-700' },
+    }
+    const { label, className } = config[status] || config.PENDING
+    return (
+      <Badge variant="secondary" className={`text-[10px] font-normal px-1.5 py-0 ${className}`}>
+        {label}
+      </Badge>
+    )
+  }
+
+  const getOnboardingStatusBadge = (status: string | null | undefined) => {
+    if (!status) return null
+    const config: Record<string, { label: string; className: string }> = {
+      NOT_READY: { label: 'No listo', className: 'bg-gray-100 text-gray-700' },
+      READY: { label: 'Listo', className: 'bg-blue-100 text-blue-700' },
+      SCHEDULED: { label: 'Agendado', className: 'bg-indigo-100 text-indigo-700' },
+      IN_PROGRESS: { label: 'En curso', className: 'bg-amber-100 text-amber-700' },
+      COMPLETED: { label: 'Capacitado', className: 'bg-green-100 text-green-700' },
+      NO_SHOW: { label: 'No asistió', className: 'bg-red-100 text-red-700' },
+    }
+    const cfg = config[status]
+    if (!cfg) return null
+    return (
+      <Badge variant="secondary" className={`text-[10px] font-normal px-1.5 py-0 ${cfg.className}`}>
+        <GraduationCap className="h-2.5 w-2.5 mr-0.5" />
+        {cfg.label}
+      </Badge>
+    )
   }
 
   const getPaymentBadge = (driver: any) => {
@@ -303,58 +407,50 @@ export function AttendeesManagementSection({
               />
             </div>
 
-            {/* Filtros en una línea */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Filtro de Estado */}
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground whitespace-nowrap">Estado:</Label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-9 w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="INVITED">Invitados</SelectItem>
-                    <SelectItem value="CONFIRMED">Confirmados</SelectItem>
-                    <SelectItem value="ATTENDED">Asistieron</SelectItem>
-                    <SelectItem value="NO_SHOW">No Show</SelectItem>
-                    <SelectItem value="CANCELLED">Cancelados</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Filtros como segmented controls (radio-group visual) */}
+            <div className="flex flex-col gap-2.5">
+              <FilterPills
+                label="Estado"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={[
+                  { value: 'all', label: 'Todos' },
+                  { value: 'INVITED', label: 'Invitados' },
+                  { value: 'CONFIRMED', label: 'Confirmados' },
+                  { value: 'ATTENDED', label: 'Asistieron' },
+                  { value: 'NO_SHOW', label: 'No Show' },
+                  { value: 'CANCELLED', label: 'Cancelados' },
+                ]}
+              />
+              <FilterPills
+                label="Pago"
+                value={paymentFilter}
+                onChange={setPaymentFilter}
+                options={[
+                  { value: 'all', label: 'Todos' },
+                  { value: 'VERIFIED', label: 'Verificados' },
+                  { value: 'PENDING', label: 'Pendientes' },
+                  { value: 'NONE', label: 'Sin pago' },
+                ]}
+              />
 
-              {/* Filtro de Pago */}
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground whitespace-nowrap">Pago:</Label>
-                <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                  <SelectTrigger className="h-9 w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="VERIFIED">Verificados</SelectItem>
-                    <SelectItem value="PENDING">Pendientes</SelectItem>
-                    <SelectItem value="NONE">Sin pago</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Botón para limpiar filtros */}
               {(searchQuery || statusFilter !== 'all' || paymentFilter !== 'all' || docsFilter !== 'all') && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSearchQuery('')
-                    setStatusFilter('all')
-                    setPaymentFilter('all')
-                    setDocsFilter('all')
-                  }}
-                  className="h-9 ml-auto"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Limpiar
-                </Button>
+                <div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearchQuery('')
+                      setStatusFilter('all')
+                      setPaymentFilter('all')
+                      setDocsFilter('all')
+                    }}
+                    className="h-7 text-xs cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5 mr-1" />
+                    Limpiar filtros
+                  </Button>
+                </div>
               )}
             </div>
           </div>
@@ -364,8 +460,9 @@ export function AttendeesManagementSection({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12 text-center">Asistencia</TableHead>
+                  <TableHead className="w-12 text-center">Asist.</TableHead>
                   <TableHead>Driver</TableHead>
+                  <TableHead className="whitespace-nowrap">Agendado</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Pago</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -374,12 +471,16 @@ export function AttendeesManagementSection({
               <TableBody>
                 {filteredAttendees.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No se encontraron resultados
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredAttendees.map((attendee) => (
+                  filteredAttendees.map((attendee) => {
+                    const isSelfServed = !attendee.invitedBy
+                    const docsBadge = getDocumentsBadge(attendee.formDriver.documentsStatus)
+                    const onboardBadge = getOnboardingStatusBadge(attendee.formDriver.onboardingStatus)
+                    return (
                     <TableRow key={attendee.id}>
                       {/* Columna de asistencia con ícono visual */}
                       <TableCell className="text-center">
@@ -389,14 +490,44 @@ export function AttendeesManagementSection({
                       </TableCell>
 
                       <TableCell>
-                        <div>
-                          <div className="font-medium">
+                        <div className="min-w-0">
+                          <div className="font-medium capitalize">
                             {attendee.formDriver.fullName || 'Sin nombre'}
                           </div>
                           <div className="text-sm text-muted-foreground">
                             {attendee.formDriver.phoneNumber}
                           </div>
+                          {/* Estados generales del driver */}
+                          {(docsBadge || onboardBadge) && (
+                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                              {onboardBadge}
+                              {docsBadge}
+                            </div>
+                          )}
                         </div>
+                      </TableCell>
+
+                      {/* Agendado: cuándo + por quién */}
+                      <TableCell className="whitespace-nowrap">
+                        <div className="text-sm tabular-nums">
+                          {formatInvitedAt(attendee.invitedAt)}
+                        </div>
+                        {isSelfServed ? (
+                          <div
+                            title="El driver se agendó por sí mismo desde el flow público"
+                            className="inline-flex items-center gap-0.5 text-[11px] text-info font-medium mt-0.5"
+                          >
+                            <UserCheck className="h-3 w-3" /> Usuario
+                          </div>
+                        ) : (
+                          <div
+                            title={`Asignado por ${attendee.invitedByUser?.fullName || attendee.invitedByUser?.email || 'admin'}`}
+                            className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground mt-0.5 capitalize"
+                          >
+                            <ShieldCheck className="h-3 w-3" />
+                            {getAssignerFirstName(attendee.invitedByUser)}
+                          </div>
+                        )}
                       </TableCell>
 
                       <TableCell>{getStatusBadge(attendee.status)}</TableCell>
@@ -492,7 +623,8 @@ export function AttendeesManagementSection({
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
+                    )
+                  })
                 )}
               </TableBody>
             </Table>

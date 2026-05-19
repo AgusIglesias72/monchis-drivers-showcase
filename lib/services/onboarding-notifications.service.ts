@@ -1,8 +1,9 @@
 // lib/services/onboarding-notifications.service.ts
 //
 // Wrapper de notificaciones para el flujo público de capacitaciones.
-// MVP: email vía Resend. Hook ready para WhatsApp ManyChat (queda en TODO hasta
-// que los templates estén lanzados — ver project memory).
+// MVP: email vía Resend. Hook ready para WhatsApp (queda en TODO hasta que los
+// templates `booking_confirmation` estén cargados en DB — usar
+// `sendTemplateByKey` de whatsapp-messenger.service).
 
 import { Resend } from 'resend'
 import { render } from '@react-email/render'
@@ -68,6 +69,6 @@ export async function sendBookingConfirmation(data: BookingConfirmationData): Pr
   }
 }
 
-// TODO V2: cuando se lancen los templates de ManyChat, agregar aquí
-// `sendBookingConfirmationWhatsApp({ phoneNumber, ... })` siguiendo el patrón
-// de `lib/services/messages.service.ts`.
+// TODO V2: cuando exista el template `booking_confirmation` en DB, agregar aquí
+// `sendBookingConfirmationWhatsApp({ phoneNumber, ... })` llamando a
+// `sendTemplateByKey` de `lib/services/whatsapp-messenger.service.ts`.

@@ -1,120 +1,74 @@
 // lib/config/whatsapp-bots.config.ts
-
-/**
- * Configuración centralizada de bots de WhatsApp
- * Cada bot puede tener diferentes URLs, API keys y tipos de mensajes
- */
+//
+// Shim de compatibilidad para UI admin que aún referencia el modelo multi-bot.
+// Tras la consolidación al bot único en apps/whatsapp-bot/ este archivo expone
+// un solo bot ("whatsapp-bot") para no romper componentes legacy mientras se
+// terminan de simplificar. Las API/Services del backend usan
+// `lib/services/whatsapp-bot.service.ts` directamente — NO importar este config
+// desde código nuevo.
 
 export interface BotConfig {
-  id: string;
-  name: string;
-  description: string;
-  urlKey: string; // Variable de entorno para URL (NEXT_PUBLIC)
-  apiKeyKey: string; // Variable de entorno para API key (server-side)
-  color: string; // Color para UI
-  icon: string; // Emoji o símbolo
-  messageTypes: string[]; // Tipos de mensaje que maneja
-  status?: 'active' | 'inactive' | 'maintenance';
+  id: string
+  name: string
+  description: string
+  urlKey: string
+  apiKeyKey: string
+  color: string
+  icon: string
+  messageTypes: string[]
+  status?: 'active' | 'inactive' | 'maintenance'
 }
 
 export const WHATSAPP_BOTS_CONFIG: Record<string, BotConfig> = {
-  'bot-adquisicion-prod': {
-    id: 'bot-adquisicion-prod',
-    name: 'Bot de Adquisición',
-    description: 'Maneja postulaciones y formularios de nuevos drivers',
-    urlKey: 'NEXT_PUBLIC_WHATSAPP_BOT_ADQUISICION_URL',
-    apiKeyKey: 'WHATSAPP_BOT_ADQUISICION_API_KEY',
-    color: 'blue',
-    icon: '👥',
+  'whatsapp-bot': {
+    id: 'whatsapp-bot',
+    name: 'Bot WhatsApp',
+    description: 'Bot único corriendo en apps/whatsapp-bot/ (Railway)',
+    urlKey: 'WHATSAPP_BOT_URL',
+    apiKeyKey: 'WHATSAPP_BOT_API_KEY',
+    color: 'green',
+    icon: '💬',
     messageTypes: [
       'APPLICATION_RECEIVED',
       'FORM_INCOMPLETE',
-      'CUSTOM',
-    ],
-    status: 'active',
-  },
-  'bot-reactivacion-prod': {
-    id: 'bot-reactivacion-prod',
-    name: 'Bot de Reactivación',
-    description: 'Maneja recordatorios y seguimiento de drivers inactivos',
-    urlKey: 'NEXT_PUBLIC_WHATSAPP_BOT_REACTIVACION_URL',
-    apiKeyKey: 'WHATSAPP_BOT_REACTIVACION_API_KEY',
-    color: 'green',
-    icon: '🔄',
-    messageTypes: [
+      'CAPACITATION_NO_SHOW',
       'REACTIVATION_REMINDER',
       'INCENTIVE_NOTIFICATION',
       'CUSTOM',
     ],
     status: 'active',
   },
-} as const;
-
-// Helper para obtener la configuración de un bot
-export function getBotConfig(botId: string): BotConfig | undefined {
-  return WHATSAPP_BOTS_CONFIG[botId];
 }
 
-// Helper para obtener todos los bots activos
+export function getBotConfig(_botId?: string): BotConfig | undefined {
+  return WHATSAPP_BOTS_CONFIG['whatsapp-bot']
+}
+
 export function getActiveBots(): BotConfig[] {
-  return Object.values(WHATSAPP_BOTS_CONFIG).filter(
-    (bot) => bot.status === 'active'
-  );
+  return [WHATSAPP_BOTS_CONFIG['whatsapp-bot']]
 }
 
-// Helper para obtener URL y API key de un bot (SERVER SIDE ONLY)
-export function getBotCredentials(botId: string) {
-  const config = getBotConfig(botId);
-  if (!config) {
-    return { url: '', apiKey: '' };
-  }
-
-  // En servidor, acceder directamente a las variables
-  const url = process.env[config.urlKey] || '';
-  const apiKey = process.env[config.apiKeyKey] || '';
-
-  return { url, apiKey };
+export function getBotUrl(_botId?: string): string {
+  return (
+    process.env.WHATSAPP_BOT_URL ||
+    process.env.NEXT_PUBLIC_WHATSAPP_BOT_URL ||
+    ''
+  )
 }
 
-// ✅ Helper para obtener URL de un bot (CLIENT + SERVER SAFE)
-export function getBotUrl(botId: string): string {
-  const config = getBotConfig(botId);
-  if (!config) return '';
-  
-  // ✅ CRÍTICO: Acceder directamente a la variable específica
-  // Next.js solo expone variables NEXT_PUBLIC_* al cliente
-  switch (botId) {
-    case 'bot-adquisicion-prod':
-      return process.env.NEXT_PUBLIC_WHATSAPP_BOT_ADQUISICION_URL || '';
-    case 'bot-reactivacion-prod':
-      return process.env.NEXT_PUBLIC_WHATSAPP_BOT_REACTIVACION_URL || '';
-    default:
-      return '';
-  }
-}
-
-/**
- * API Key del bot. SERVER-ONLY: la variable ya no es NEXT_PUBLIC_*, así que
- * en el cliente este helper devuelve string vacío. Cualquier llamada que la
- * necesite debe pasar por un route handler server-side
- * (ej. `/api/whatsapp/bot-proxy`).
- */
 export function getBotApiKey(): string {
-  return process.env.WHATSAPP_BOT_API_KEY || '';
+  return process.env.WHATSAPP_BOT_API_KEY || ''
 }
 
-export function getAllBotConfigs(): Array<{
-  id: BotId;
-  name: string;
-  icon: string;
-  description: string;
-  urlKey: string;
-  apiKeyKey: string;
-}> {
-  return Object.values(WHATSAPP_BOTS_CONFIG);
+export function getBotCredentials(_botId?: string) {
+  return { url: getBotUrl(), apiKey: getBotApiKey() }
 }
 
-// Tipos para TypeScript
-export type BotId = keyof typeof WHATSAPP_BOTS_CONFIG;
-export type MessageType = string;
+export function getAllBotConfigs() {
+  return Object.values(WHATSAPP_BOTS_CONFIG)
+}
 
+// BotId queda como string para que componentes existentes sigan compilando sin
+// cambios. El valor canónico es 'whatsapp-bot'.
+export type BotId = string
+export type MessageType = string

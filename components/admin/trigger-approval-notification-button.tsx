@@ -1,11 +1,11 @@
-// components/admin/trigger-manychat-flow-button.tsx
+// components/admin/trigger-approval-notification-button.tsx
 'use client'
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { MessageSquare, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { triggerManychatApprovalFlow } from '@/lib/actions/manychat-trigger.actions'
+import { triggerApprovalNotification } from '@/lib/actions/whatsapp-approval-trigger.actions'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,65 +18,63 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 
-interface TriggerManychatFlowButtonProps {
+interface TriggerApprovalNotificationButtonProps {
   driverId: string
   driverName: string
   /** Timestamp ISO del último envío automático/manual, si existe. */
-  manychatApprovalSentAt?: string | Date | null
+  approvalNotifiedAt?: string | Date | null
   inDropdown?: boolean
   onSuccess?: () => void
 }
 
 /**
- * Dispara manualmente el flow ManyChat de aprobación ("capacitaciones") al
- * postulante. Si ya se envió antes (lock manychatApprovalSentAt seteado), pide
+ * Dispara manualmente el mensaje WhatsApp de aprobación ("capacitaciones") al
+ * postulante. Si ya se envió antes (lock approvalNotifiedAt seteado), pide
  * confirmación extra para reenviar.
  */
-export function TriggerManychatFlowButton({
+export function TriggerApprovalNotificationButton({
   driverId,
   driverName,
-  manychatApprovalSentAt,
+  approvalNotifiedAt,
   inDropdown = false,
   onSuccess,
-}: TriggerManychatFlowButtonProps) {
+}: TriggerApprovalNotificationButtonProps) {
   const [isSending, setIsSending] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
 
-  const alreadySent = !!manychatApprovalSentAt
-  const sentAtLabel = manychatApprovalSentAt
-    ? new Date(manychatApprovalSentAt).toLocaleString('es-PY')
+  const alreadySent = !!approvalNotifiedAt
+  const sentAtLabel = approvalNotifiedAt
+    ? new Date(approvalNotifiedAt).toLocaleString('es-PY')
     : null
 
   const handleSend = async () => {
     setIsSending(true)
     try {
-      const result = await triggerManychatApprovalFlow({
+      const result = await triggerApprovalNotification({
         driverId,
         force: alreadySent,
       })
 
       if (result.success) {
-        toast.success('Flow ManyChat enviado correctamente')
+        toast.success('Mensaje de aprobación enviado correctamente')
         setIsOpen(false)
         onSuccess?.()
       } else if ('alreadySent' in result && result.alreadySent) {
-        // Caso teórico — el botón debería haber pasado force=true, pero por las
-        // dudas mostramos el mensaje correcto.
         toast.warning(
           `Ya se envió el ${new Date(result.sentAt).toLocaleString('es-PY')}. Confirmá nuevamente para reenviar.`,
         )
       } else {
-        toast.error(result.error || 'No se pudo enviar el flow')
+        toast.error(result.error || 'No se pudo enviar el mensaje')
       }
     } catch (err) {
       console.error(err)
-      toast.error('Error inesperado al disparar el flow')
+      toast.error('Error inesperado al disparar el mensaje')
     } finally {
       setIsSending(false)
     }
   }
 
-  const triggerLabel = alreadySent ? 'Reenviar flow ManyChat' : 'Enviar flow ManyChat'
+  const triggerLabel = alreadySent ? 'Reenviar mensaje de aprobación' : 'Enviar mensaje de aprobación'
 
   return (
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
@@ -116,18 +114,18 @@ export function TriggerManychatFlowButton({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {alreadySent ? 'Reenviar flow de aprobación' : 'Enviar flow de aprobación'}
+            {alreadySent ? 'Reenviar mensaje de aprobación' : 'Enviar mensaje de aprobación'}
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-2">
               <p>
-                Se va a disparar el flow <strong>capacitaciones</strong> de ManyChat al
+                Se va a enviar el mensaje <strong>capacitaciones</strong> por WhatsApp al
                 postulante <strong>{driverName}</strong>. Es el mismo mensaje que se envía
                 automáticamente al aprobar todos los documentos.
               </p>
               {alreadySent && sentAtLabel && (
                 <p className="text-warning font-medium">
-                  ⚠️ Este flow ya se envió el <strong>{sentAtLabel}</strong>. Si confirmás,
+                  ⚠️ Este mensaje ya se envió el <strong>{sentAtLabel}</strong>. Si confirmás,
                   se va a reenviar y se actualiza el registro de envío.
                 </p>
               )}

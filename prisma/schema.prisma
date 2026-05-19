@@ -208,12 +208,10 @@ model FormDriver {
   accessTokenGeneratedAt DateTime? @map("access_token_generated_at")
   lastPortalAccessAt     DateTime? @map("last_portal_access_at")
 
-  // Integración ManyChat (bot de adquisición, número +15754194027).
-  // Sin @unique: si un candidato re-postula, puede existir el mismo subscriber_id en múltiples FormDrivers.
-  manychatSubscriberId   String?   @map("manychat_subscriber_id")
-  // Timestamp del envío del flow "postulación aprobada" — candado de idempotencia
-  // para que el approve no remande si se llama N veces o si admin rechaza y reaprueba.
-  manychatApprovalSentAt DateTime? @map("manychat_approval_sent_at")
+  // Timestamp del envío del mensaje "postulación aprobada" — candado de
+  // idempotencia para que el approve no remande si se llama N veces o si admin
+  // rechaza y reaprueba.
+  approvalNotifiedAt DateTime? @map("approval_notified_at")
 
   // Validación RUC (turuc.com.py)
   rucStatus         String?   @default("NOT_CHECKED") @map("ruc_status") // NOT_CHECKED | ACTIVO | INACTIVO | CLAUSURADO | NO_ENCONTRADO | ERROR | etc (string libre, valor crudo del SET)
@@ -259,7 +257,6 @@ model FormDriver {
   @@index([onboardingStatus])
   @@index([accessToken])
   @@index([rucStatus])
-  @@index([manychatSubscriberId])
   @@map("form_drivers")
 }
 
@@ -550,10 +547,6 @@ model WhatsAppTemplate {
 
   // Categoría opcional
   category String? // general, documentos, capacitacion, pago, etc
-
-  // Integración ManyChat: flow_ns del Flow que envuelve el template Meta aprobado.
-  // Si es null, el template se manda por el canal legacy (multi-bot) o no se envía.
-  manychatFlowId String? @map("manychat_flow_id")
 
   // Estadísticas de uso
   usageCount Int       @default(0) @map("usage_count")
@@ -952,6 +945,15 @@ model MonchisDriverCache {
   primaryZone30d            String?   @map("primary_zone_30d")
   primaryTurn30d            String?   @map("primary_turn_30d")
 
+  // ===== Mapeo con Intercom =====
+  // intercomContactId: id devuelto por POST /contacts/search. Único: un contact
+  // mapea a un driver. intercomExternalId: el "external_id" legacy que Intercom
+  // tiene cargado (no es nuestro driverId Mongo). intercomSyncedAt: último
+  // resolve exitoso; NULL = nunca se intentó.
+  intercomContactId  String?   @unique @map("intercom_contact_id")
+  intercomExternalId String?   @map("intercom_external_id")
+  intercomSyncedAt   DateTime? @map("intercom_synced_at")
+
   @@index([documentNumber])
   @@index([phone])
   @@index([enabled])
@@ -959,6 +961,43 @@ model MonchisDriverCache {
   @@index([attendanceLastProcessedAt])
   @@index([enabled, attendanceLastProcessedAt])
   @@map("monchis_driver_cache")
+}
+
+// ==================== INTERCOM: AUDITORÍA DE ENVÍOS ====================
+
+// Cada mensaje 1-1 que mandamos via Intercom desde el panel se registra acá
+// (sandbox manual o triggers automáticos). Sirve para auditoría, debug y
+// métricas. Ver migration 2026-05-19-intercom-message-log.sql para detalle.
+model IntercomMessageLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Admin de Monchis que disparó el envío.
+  clerkUserId String @map("clerk_user_id")
+
+  // FK lógico a MonchisDriverCache.driverId (nullable porque podemos mandar
+  // a un contact que no esté en nuestra cache).
+  driverId String? @map("driver_id")
+
+  intercomContactId       String  @map("intercom_contact_id")
+  intercomSenderAdminId   String  @map("intercom_sender_admin_id")
+  intercomAssigneeAdminId String? @map("intercom_assignee_admin_id")
+  intercomConversationId  String? @map("intercom_conversation_id")
+
+  body String
+
+  // 'sent' | 'failed'
+  status          String
+  errorMessage    String? @map("error_message")
+  errorStatusCode Int?    @map("error_status_code")
+
+  metadata Json?
+
+  @@index([driverId])
+  @@index([clerkUserId])
+  @@index([createdAt])
+  @@index([status])
+  @@map("intercom_message_log")
 }
 
 // ==================== GESTIÓN ADMIN: ATTENDANCE DEL DRIVER ====================

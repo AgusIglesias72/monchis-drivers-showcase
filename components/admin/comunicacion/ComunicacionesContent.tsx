@@ -1,34 +1,58 @@
 // components/admin/comunicacion/ComunicacionesContent.tsx
 'use client';
 
-import { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Info, TestTube2, ArrowRight, Send, Users, Zap, History, BarChart3 } from 'lucide-react';
+import { Info, TestTube2, ArrowRight, Send, Users, Zap, History, BarChart3, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { BotManager } from './BotManager';
-import { getActiveBots } from '@/lib/config/whatsapp-bots.config';
+
+const WHATSAPP_BOT_ID = 'whatsapp-bot';
 
 export function ComunicacionesContent() {
-  const activeBots = getActiveBots();
-  const [activeTab, setActiveTab] = useState(activeBots[0]?.id || '');
-
-  const currentBot = activeBots.find((bot) => bot.id === activeTab);
-
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">WhatsApp</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Comunicaciones</h1>
         <p className="text-muted-foreground mt-1">
-          Gestión de múltiples bots para diferentes casos de uso
+          Bot WhatsApp único corriendo en Railway. Acá gestionás plantillas, envíos y monitoreo.
         </p>
       </div>
 
       {/* Acciones destacadas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border-2 hover:border-emerald-500/50 transition-all cursor-pointer group">
+          <Link href="/admin/plantillas-whatsapp" className="block">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-lg bg-emerald-500/10 group-hover:bg-emerald-500/20 transition-colors">
+                    <FileText className="h-6 w-6 text-emerald-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Plantillas</CardTitle>
+                    <CardDescription>
+                      Editá el contenido de los mensajes automáticos
+                    </CardDescription>
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-emerald-600 transition-colors" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="border-emerald-200">
+                  Variables dinámicas
+                </Badge>
+                <Badge variant="outline" className="border-emerald-200">
+                  Por key
+                </Badge>
+              </div>
+            </CardContent>
+          </Link>
+        </Card>
+
         <Card className="border-2 hover:border-primary/50 transition-all cursor-pointer group">
           <Link href="/admin/comunicaciones/masivo" className="block">
             <CardHeader>
@@ -40,7 +64,7 @@ export function ComunicacionesContent() {
                   <div>
                     <CardTitle className="text-lg">Envío Masivo</CardTitle>
                     <CardDescription>
-                      Envía mensajes personalizados a múltiples contactos
+                      Mensajes personalizados a múltiples contactos
                     </CardDescription>
                   </div>
                 </div>
@@ -55,7 +79,7 @@ export function ComunicacionesContent() {
                 </Badge>
                 <Badge variant="secondary" className="gap-1">
                   <Zap className="h-3 w-3" />
-                  Variables dinámicas
+                  Variables
                 </Badge>
               </div>
             </CardContent>
@@ -63,7 +87,7 @@ export function ComunicacionesContent() {
         </Card>
 
         <Card className="border-2 hover:border-blue-500/50 transition-all cursor-pointer group">
-          <Link href={`/admin/comunicaciones/pruebas?bot=${activeTab}`} className="block">
+          <Link href={`/admin/comunicaciones/pruebas?bot=${WHATSAPP_BOT_ID}`} className="block">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -71,9 +95,9 @@ export function ComunicacionesContent() {
                     <TestTube2 className="h-6 w-6 text-blue-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg">Panel de Pruebas</CardTitle>
+                    <CardTitle className="text-lg">Pruebas</CardTitle>
                     <CardDescription>
-                      Prueba mensajes individuales y valida bots
+                      Probá mensajes individuales antes de mandarlos
                     </CardDescription>
                   </div>
                 </div>
@@ -84,9 +108,6 @@ export function ComunicacionesContent() {
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline" className="border-blue-200">
                   Testing rápido
-                </Badge>
-                <Badge variant="outline" className="border-blue-200">
-                  Todos los tipos
                 </Badge>
               </div>
             </CardContent>
@@ -104,7 +125,7 @@ export function ComunicacionesContent() {
                   <div>
                     <CardTitle className="text-lg">Historial</CardTitle>
                     <CardDescription>
-                      Analiza mensajes enviados y estadísticas
+                      Mensajes enviados y estadísticas
                     </CardDescription>
                   </div>
                 </div>
@@ -115,10 +136,7 @@ export function ComunicacionesContent() {
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline" className="border-purple-200 gap-1">
                   <BarChart3 className="h-3 w-3" />
-                  KPIs detallados
-                </Badge>
-                <Badge variant="outline" className="border-purple-200">
-                  Filtros avanzados
+                  KPIs
                 </Badge>
               </div>
             </CardContent>
@@ -126,35 +144,11 @@ export function ComunicacionesContent() {
         </Card>
       </div>
 
-      {/* Tabs de bots */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="inline-flex h-auto p-1 bg-muted/50 rounded-lg">
-          {activeBots.map((bot) => (
-            <TabsTrigger
-              key={bot.id}
-              value={bot.id}
-              className="data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-md px-6 py-3 transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{bot.icon}</span>
-                <div className="text-left">
-                  <div className="font-semibold text-sm">{bot.name}</div>
-                  <div className="text-xs text-muted-foreground hidden sm:block">
-                    {bot.messageTypes.length} tipos de mensaje
-                  </div>
-                </div>
-              </div>
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {/* Contenido de cada bot */}
-        {activeBots.map((bot) => (
-          <TabsContent key={bot.id} value={bot.id} className="space-y-6 mt-6">
-            <BotManager botId={bot.id} />
-          </TabsContent>
-        ))}
-      </Tabs>
+      {/* Estado del bot (único) */}
+      <div>
+        <h2 className="text-xl font-semibold mb-3">Estado del bot</h2>
+        <BotManager botId={WHATSAPP_BOT_ID} />
+      </div>
 
       {/* Footer */}
       <Card>
@@ -162,11 +156,11 @@ export function ComunicacionesContent() {
           <div className="flex items-start gap-3">
             <Info className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
             <div className="space-y-1">
-              <p className="text-sm font-medium">Sistema multi-bot</p>
+              <p className="text-sm font-medium">Cómo funciona</p>
               <p className="text-sm text-muted-foreground">
-                Cada bot está especializado en diferentes tipos de comunicación. Puedes gestionar todos
-                los bots desde esta interfaz y utilizar las herramientas de envío masivo y pruebas para
-                optimizar tus comunicaciones.
+                El contenido de cada mensaje se define en <strong>Plantillas</strong> y se referencia por su <code>key</code>.
+                Los triggers automáticos (form completado, documentos aprobados, recordatorios del cron) levantan el template,
+                interpolan variables como <code>{`{nombre}`}</code> y envían por el bot.
               </p>
             </div>
           </div>

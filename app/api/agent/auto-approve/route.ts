@@ -9,7 +9,7 @@
 //
 // Idempotente: si las AgentActions del run ya no están todas en PROPOSED, se asume
 // que ya fue ejecutado (manual o automáticamente) y devuelve `alreadyExecuted=true`
-// sin tocar nada. El lock real de ManyChat sigue siendo `manychatApprovalSentAt`.
+// sin tocar nada. El lock real del envío de aprobación sigue siendo `approvalNotifiedAt`.
 //
 // Criterios de auto-aprobación validados aquí (defensivo — el caller también filtra):
 //  - mode = REAL
@@ -22,8 +22,8 @@
 //  - Todas las AgentActions están en estado PROPOSED.
 //
 // Nota: las acciones `propose_send_whatsapp_template('capacitaciones')` se marcan
-// como EXECUTED porque approveAllDocumentsForDriver ya dispara ManyChat con esa
-// misma plantilla — la AgentAction queda como auditoría.
+// como EXECUTED porque approveAllDocumentsForDriver ya dispara el bot WhatsApp
+// con esa misma plantilla — la AgentAction queda como auditoría.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCronAuth } from '@/lib/auth'
@@ -154,8 +154,8 @@ export async function POST(request: NextRequest) {
         autoApproved: true,
         documentsApproved: approvalResult.documentsApproved,
         documentsTotal: approvalResult.documentsTotal,
-        manychatTriggered: approvalResult.manychatTriggered,
-        manychatStatus: approvalResult.manychatStatus,
+        notificationTriggered: approvalResult.notificationTriggered,
+        notificationStatus: approvalResult.notificationStatus,
       },
     },
   })
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
     agentRunId,
     driverId: run.formDriverId,
     actions: run.actions.length,
-    manychat: approvalResult.manychatStatus ?? 'not-triggered',
+    notification: approvalResult.notificationStatus ?? 'not-triggered',
   })
 
   return NextResponse.json({

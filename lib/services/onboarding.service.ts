@@ -57,7 +57,35 @@ class OnboardingService {
             fullName: true
           }
         },
-        attendees: true
+        scheduleRule: {
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            modality: true
+          }
+        },
+        attendees: {
+          include: {
+            formDriver: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                fullName: true,
+                phoneNumber: true,
+                email: true
+              }
+            },
+            invitedByUser: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true
+              }
+            }
+          }
+        }
       },
       orderBy: {
         scheduledDate: 'asc' // Ordenar de más próximo a más lejano (ascendente)
@@ -80,6 +108,14 @@ class OnboardingService {
             fullName: true
           }
         },
+        scheduleRule: {
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            modality: true
+          }
+        },
         attendees: {
           include: {
             formDriver: {
@@ -93,6 +129,7 @@ class OnboardingService {
                 cedula: true,
                 status: true,
                 documentsStatus: true,
+                onboardingStatus: true,
                 // ✅ AGREGADO: Include de equipmentPayments
                 equipmentPayments: {
                   select: {
@@ -107,6 +144,13 @@ class OnboardingService {
                   },
                   take: 1
                 }
+              }
+            },
+            invitedByUser: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true
               }
             }
           },
@@ -139,7 +183,7 @@ class OnboardingService {
         reminderHoursBefore: data.reminderHoursBefore || 24,
         status: data.status || 'DRAFT',
         notes: data.notes,
-        organizer: organizerId  
+        organizer: organizerId
       },
       include: {
         organizerUser: {
@@ -149,7 +193,35 @@ class OnboardingService {
             fullName: true
           }
         },
-        attendees: true
+        scheduleRule: {
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            modality: true
+          }
+        },
+        attendees: {
+          include: {
+            formDriver: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                fullName: true,
+                phoneNumber: true,
+                email: true
+              }
+            },
+            invitedByUser: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true
+              }
+            }
+          }
+        }
       }
     })
   }
@@ -184,13 +256,30 @@ class OnboardingService {
             fullName: true
           }
         },
+        scheduleRule: {
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            modality: true
+          }
+        },
         attendees: {
           include: {
             formDriver: {
               select: {
                 id: true,
+                firstName: true,
+                lastName: true,
                 fullName: true,
                 phoneNumber: true,
+                email: true
+              }
+            },
+            invitedByUser: {
+              select: {
+                id: true,
+                fullName: true,
                 email: true
               }
             }

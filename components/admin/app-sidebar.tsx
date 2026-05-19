@@ -25,6 +25,7 @@ import {
   ShoppingBag,
   Radio,
 } from "lucide-react"
+import { IntercomIcon } from "@/components/admin/icons/intercom-icon"
 
 import {
   Sidebar,
@@ -116,13 +117,20 @@ const menuItems = [
   {
     title: "Comunicaciones",
     items: [
-      // /admin/comunicaciones (panel multi-bot) escondido — multi-bot caído
-      // tras la baja de Braze. Página sigue accesible por URL si hace falta
-      // ver histórico, pero no se promociona en el sidebar.
       {
-        title: "Plantillas WhatsApp",
+        title: "WhatsApp",
+        url: "/admin/comunicaciones",
+        icon: MessageSquare,
+      },
+      {
+        title: "Plantillas",
         url: "/admin/plantillas-whatsapp",
         icon: MessageSquare,
+      },
+      {
+        title: "Intercom",
+        url: "/admin/comunicaciones/intercom",
+        icon: IntercomIcon,
       },
     ],
   },

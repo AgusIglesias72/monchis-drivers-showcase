@@ -3,8 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth';
 import { messagesService } from '@/lib/services/messages.service';
-import { type BotId } from '@/lib/config/whatsapp-bots.config';
-import { sendMessage } from '@/lib/services/whatsapp-multi-bot.service';
+import { whatsappBotService, WHATSAPP_BOT_ID } from '@/lib/services/whatsapp-bot.service';
 import { prisma } from '@/lib/prisma';
 import { WhatsAppMessageType, WhatsAppMessageSource, WhatsAppMessageStatus } from '@prisma/client';
 
@@ -30,7 +29,7 @@ export async function POST(request: NextRequest) {
       recipients: recipientsInput,
       message: messageTemplate,
       imageUrl,
-      botId = 'bot-reactivacion-prod',
+      // botId queda como param legacy — ignorado (single-tenant).
       delaySeconds = 5,
       testMode = false,
     } = body;
@@ -92,7 +91,6 @@ export async function POST(request: NextRequest) {
 
     console.log(`📤 [SEQUENTIAL SEND] Iniciando envío secuencial a ${parsed.recipients.length} destinatarios`);
     console.log(`⏱️  [SEQUENTIAL SEND] Delay: ${delaySeconds}s entre mensajes`);
-    console.log(`🤖 [SEQUENTIAL SEND] Bot: ${botId}`);
     console.log(`📷 [SEQUENTIAL SEND] Con imagen: ${!!imageUrl}`);
 
     // Enviar mensajes secuencialmente
@@ -108,8 +106,7 @@ export async function POST(request: NextRequest) {
       console.log(`   → [${i + 1}/${parsed.recipients.length}] Enviando a ${recipient.name || formattedPhone}...`);
 
       try {
-        // Enviar mensaje individual
-        const botResponse = await sendMessage(botId as BotId, {
+        const botResponse = await whatsappBotService.sendMessage({
           phone: formattedPhone,
           message: personalizedMessage,
           type: 'custom',
@@ -138,7 +135,7 @@ export async function POST(request: NextRequest) {
                 status: WhatsAppMessageStatus.SENT,
                 sentAt: new Date(),
                 source: WhatsAppMessageSource.MANUAL,
-                botId: botId,
+                botId: WHATSAPP_BOT_ID,
                 // No incluimos formDriverId ni sentBy para números externos
                 ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
                 userAgent: request.headers.get('user-agent') || 'unknown',

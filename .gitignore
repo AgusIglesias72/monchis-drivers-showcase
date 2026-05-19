@@ -4,6 +4,11 @@
 /node_modules
 /.pnp
 .pnp.*
+
+# WhatsApp bot (workspace separado en apps/whatsapp-bot/)
+/apps/whatsapp-bot/node_modules
+/apps/whatsapp-bot/.wwebjs_auth
+/apps/whatsapp-bot/.wwebjs_cache
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
@@ -38,6 +43,9 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# playwright-mcp: artefactos locales de sesiones (logs, snapshots)
+/.playwright-mcp/
 
 # typescript
 *.tsbuildinfo

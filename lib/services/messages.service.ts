@@ -7,8 +7,12 @@ import {
   WhatsAppMessageSource,
   Prisma,
 } from '@prisma/client';
-import { whatsappMultiBotService } from './whatsapp-multi-bot.service';
-import { getBotConfig, getBotUrl, getBotApiKey, type BotId } from '@/lib/config/whatsapp-bots.config';
+import { whatsappBotService, WHATSAPP_BOT_ID } from './whatsapp-bot.service';
+
+// Compat: el param `botId` ya no selecciona bot (single-tenant). Se acepta
+// para no romper call sites legacy pero se ignora — el bot único es el de
+// apps/whatsapp-bot/ corriendo en Railway.
+type BotId = string;
 
 // ==================== TYPES ====================
 
@@ -127,19 +131,6 @@ function formatPhoneForDisplay(phone: string): string {
   return `+${clean}`;
 }
 
-function selectBotForMessageType(messageType: WhatsAppMessageType): BotId {
-  const messageTypeToBotMap: Record<string, BotId> = {
-    APPLICATION_RECEIVED: 'bot-adquisicion-prod',
-    FORM_INCOMPLETE: 'bot-adquisicion-prod',
-    CAPACITATION_NO_SHOW: 'bot-adquisicion-prod',
-    CUSTOM: 'bot-adquisicion-prod',
-    REACTIVATION_REMINDER: 'bot-reactivacion-prod',
-    INCENTIVE_NOTIFICATION: 'bot-reactivacion-prod',
-  };
-
-  return messageTypeToBotMap[messageType] || 'bot-adquisicion-prod';
-}
-
 // ==================== SERVICE FUNCTIONS ====================
 
 export async function sendWhatsAppMessage(
@@ -161,30 +152,25 @@ export async function sendWhatsAppMessage(
       formatted: formattedPhone,
     });
 
-    console.log('🔍 botId received:', params.botId);
-    const botId = params.botId || selectBotForMessageType(params.type);
-    const botConfig = getBotConfig(botId);
+    // Single-tenant: siempre el mismo bot. botId legacy se ignora.
+    const botId = WHATSAPP_BOT_ID;
 
-    console.log(`🤖 Using bot: ${botConfig?.name} (${botId}) - Manual: ${!!params.botId}`);
-
-    let botResponse: WhatsAppBotResponse & { botUsed?: string };
+    let botResponse;
 
     if (params.type === WhatsAppMessageType.CUSTOM && params.customMessage) {
-      botResponse = await whatsappMultiBotService.sendMessage(botId, {
+      botResponse = await whatsappBotService.sendMessage({
         phone: formattedPhone,
         message: params.customMessage,
         type: 'custom',
       });
-      botResponse.botUsed = botId;
     } else {
-      botResponse = await whatsappMultiBotService.sendContextualMessage(botId, {
+      botResponse = await whatsappBotService.sendContextualMessage({
         phone: formattedPhone,
         name: params.name,
         type: params.type.toLowerCase(),
         step: params.step,
         metadata: params.metadata,
       });
-      botResponse.botUsed = botId;
     }
 
     const endTime = Date.now();
@@ -888,79 +874,53 @@ export async function sendBulkMessages(
   console.log(`📤 Iniciando envío masivo a ${recipients.length} destinatarios`);
   console.log(`📷 Con imagen: ${!!imageUrl}`);
 
-  const selectedBotId: BotId = botId || 'bot-adquisicion-prod';
+  // Single-tenant: ya no se selecciona bot; conservamos el ID para persistirlo.
+  const selectedBotId = WHATSAPP_BOT_ID;
 
   try {
-    // Preparar mensajes con personalización
-    const messages = recipients.map((recipient) => {
+    // Preparar mensajes con personalización. imageUrl global aplica a todos.
+    const messages = recipients.map(recipient => {
       const formattedPhone = formatPhoneNumber(recipient.phone);
       const personalizedMessage = replaceMessageVariables(messageTemplate, recipient.variables);
-
       return {
         phone: formattedPhone,
         message: personalizedMessage,
-        name: recipient.name,
-        botId: botId || undefined,
+        ...(imageUrl ? { imageUrl } : {}),
       };
     });
 
-    const botUrl = getBotUrl(selectedBotId);
-    const apiKey = getBotApiKey();
+    const bulkResp = await whatsappBotService.sendBulk(messages, { delayMs });
 
-    if (!botUrl) {
+    if (!bulkResp.success || !bulkResp.data) {
       return {
         success: false,
-        summary: { total: recipients.length, successful: 0, failed: recipients.length, successRate: '0' },
+        summary: {
+          total: recipients.length,
+          successful: 0,
+          failed: recipients.length,
+          successRate: '0',
+        },
         results: [],
         completedAt: new Date().toISOString(),
-        error: 'URL del bot no configurada',
+        error: bulkResp.error || 'Error del bot',
       };
     }
 
-    const endpoint = imageUrl ? '/send-bulk-media' : '/send-bulk';
-    
-    const requestBody = imageUrl 
-      ? { messages, imageUrl, distributeAcrossBots: !botId, delayMs }
-      : { messages, distributeAcrossBots: !botId, delayMs };
+    const bulkResult = bulkResp.data;
 
-    console.log(`📡 Llamando a ${endpoint}...`);
-
-    const response = await fetch(`${botUrl}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey && { 'x-api-key': apiKey }),
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Error en ${endpoint}:`, errorText);
-      return {
-        success: false,
-        summary: { total: recipients.length, successful: 0, failed: recipients.length, successRate: '0' },
-        results: [],
-        completedAt: new Date().toISOString(),
-        error: `Error del bot: ${errorText}`,
-      };
-    }
-
-    const bulkResult = await response.json();
-
-    // Guardar en BD
     const results: BulkSendResult[] = [];
-    
+
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i];
       const result = bulkResult.results?.[i];
+      const formattedPhone = formatPhoneNumber(recipient.phone);
 
       if (result && result.success) {
         try {
           const messageData: Prisma.WhatsAppMessageCreateInput = {
-            recipientPhone: formatPhoneNumber(recipient.phone),
+            recipientPhone: formattedPhone,
             recipientName: recipient.name || 'Usuario',
-            chatId: result.chatId || `${formatPhoneNumber(recipient.phone)}@c.us`,
+            chatId: `${formattedPhone}@c.us`,
             messageType: WhatsAppMessageType.CUSTOM,
             message: messages[i].message,
             messageLength: messages[i].message.length,
@@ -968,15 +928,14 @@ export async function sendBulkMessages(
               bulkSend: true,
               bulkIndex: i + 1,
               bulkTotal: recipients.length,
-              hasImage: result.hasImage ?? !!imageUrl,
+              hasImage: !!imageUrl,
               variables: recipient.variables,
-              ...(imageUrl && { imageUrl }),
-              ...(result.warning && { warning: result.warning }),
+              ...(imageUrl ? { imageUrl } : {}),
             },
             status: WhatsAppMessageStatus.SENT,
             sentAt: result.sentAt ? new Date(result.sentAt) : new Date(),
             source: WhatsAppMessageSource.MANUAL,
-            botId: result.botId || selectedBotId,
+            botId: selectedBotId,
             sentByUser: sentBy ? { connect: { id: sentBy } } : undefined,
             ipAddress,
             userAgent,
@@ -989,10 +948,9 @@ export async function sendBulkMessages(
             name: recipient.name,
             success: true,
             messageId: savedMessage.id,
-            botUsed: result.botId || selectedBotId,
+            botUsed: selectedBotId,
             sentAt: result.sentAt || new Date().toISOString(),
-            hasImage: result.hasImage,
-            warning: result.warning,
+            hasImage: !!imageUrl,
           });
         } catch (dbError) {
           console.error('⚠️ Mensaje enviado pero no guardado en BD:', dbError);
@@ -1000,10 +958,10 @@ export async function sendBulkMessages(
             phone: recipient.phone,
             name: recipient.name,
             success: true,
-            botUsed: result.botId || selectedBotId,
+            botUsed: selectedBotId,
             sentAt: result.sentAt || new Date().toISOString(),
-            hasImage: result.hasImage,
-            warning: result.warning,
+            hasImage: !!imageUrl,
+            warning: 'Enviado pero no registrado en BD',
           });
         }
       } else {
@@ -1016,15 +974,18 @@ export async function sendBulkMessages(
       }
     }
 
+    const successful = bulkResult.summary?.successful ?? results.filter(r => r.success).length;
     const summary = {
-      total: bulkResult.summary?.total || recipients.length,
-      successful: bulkResult.summary?.successful || results.filter(r => r.success).length,
-      failed: bulkResult.summary?.failed || results.filter(r => !r.success).length,
-      successRate: (((bulkResult.summary?.successful || results.filter(r => r.success).length) / recipients.length) * 100).toFixed(2),
-      ...(imageUrl && {
-        withImage: bulkResult.summary?.withImage || results.filter(r => r.success && r.hasImage).length,
-        textOnly: bulkResult.summary?.textOnly || results.filter(r => r.success && !r.hasImage).length,
-      }),
+      total: bulkResult.summary?.total ?? recipients.length,
+      successful,
+      failed: bulkResult.summary?.failed ?? results.filter(r => !r.success).length,
+      successRate: ((successful / recipients.length) * 100).toFixed(2),
+      ...(imageUrl
+        ? {
+            withImage: results.filter(r => r.success && r.hasImage).length,
+            textOnly: 0,
+          }
+        : {}),
     };
 
     console.log(`📊 Envío masivo completado: ${summary.successful}/${summary.total} exitosos`);

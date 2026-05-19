@@ -3,7 +3,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth';
 import { messagesService } from '@/lib/services/messages.service';
-import { type BotId } from '@/lib/config/whatsapp-bots.config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +15,7 @@ export async function POST(request: NextRequest) {
       recipients: recipientsInput,
       message: messageTemplate,
       imageUrl,
-      botId,
+      // botId legacy — ignorado (single-tenant).
       delaySeconds = 2,
       testMode = false,
     } = body;
@@ -68,12 +67,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Enviar mensajes
     const result = await messagesService.sendBulkMessages({
       recipients: parsed.recipients,
       message: messageTemplate,
       imageUrl,
-      botId: botId as BotId | undefined,
       delayMs: delaySeconds * 1000,
       sentBy: adminUser.clerkId,
       ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',

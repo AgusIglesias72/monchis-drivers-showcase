@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth';
 import { messagesService } from '@/lib/services/messages.service';
 import { WhatsAppMessageType, WhatsAppMessageSource } from '@prisma/client';
-import { type BotId } from '@/lib/config/whatsapp-bots.config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +12,8 @@ export async function POST(request: NextRequest) {
     const adminUser = guard.user;
 
     const body = await request.json();
-    const { phone, name, type, step, customMessage, botId } = body;
+    // botId queda como param legacy — ignorado (single-tenant).
+    const { phone, name, type, step, customMessage } = body;
 
     // Validaciones
     if (!phone || !name || !type) {
@@ -51,7 +51,6 @@ export async function POST(request: NextRequest) {
       'unknown';
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
-    // ✅ Enviar mensaje con botId opcional
     const result = await messagesService.sendWhatsAppMessage({
       phone,
       name,
@@ -62,7 +61,6 @@ export async function POST(request: NextRequest) {
       sentBy: adminUser.clerkId,
       ipAddress,
       userAgent,
-      botId: botId as BotId | undefined, // ✅ Pasar botId
       metadata: {
         sentFrom: 'test-panel',
         timestamp: new Date().toISOString(),
@@ -73,7 +71,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         messageId: result.messageId,
-        botUsed: result.botUsed, // ✅ Devolver bot usado
         warning: result.warning,
       });
     } else {

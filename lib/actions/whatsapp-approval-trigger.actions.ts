@@ -1,10 +1,10 @@
-// lib/actions/manychat-trigger.actions.ts
+// lib/actions/whatsapp-approval-trigger.actions.ts
 //
-// Trigger manual del flow ManyChat de aprobación ("capacitaciones") desde el
-// admin. Equivalente al disparo automático que hace approveAllDocumentsForDriver
+// Trigger manual del envío de aprobación ("capacitaciones") desde el admin.
+// Equivalente al disparo automático que hace approveAllDocumentsForDriver
 // pero sin tocar el status de los documentos — útil cuando:
-//  - El lock manychatApprovalSentAt quedó tomado pero el envío real falló.
-//  - El admin quiere disparar el flow antes de aprobar formalmente.
+//  - El lock approvalNotifiedAt quedó tomado pero el envío real falló.
+//  - El admin quiere disparar el mensaje antes de aprobar formalmente.
 //  - Hay que reintentar porque el postulante perdió el chat.
 //
 // Auditoría: cada disparo queda registrado en WhatsAppMessage con
@@ -14,28 +14,28 @@
 
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { sendFlowByKey } from '@/lib/services/manychat-messaging.service'
+import { sendTemplateByKey } from '@/lib/services/whatsapp-messenger.service'
 import { WhatsAppMessageSource, WhatsAppMessageType } from '@prisma/client'
 
 const APPROVAL_TEMPLATE_KEY = 'capacitaciones'
 
-export interface TriggerManychatApprovalParams {
+export interface TriggerApprovalNotificationParams {
   driverId: string
-  /** Si true, reenvía aunque ya se haya marcado manychatApprovalSentAt. */
+  /** Si true, reenvía aunque ya se haya marcado approvalNotifiedAt. */
   force?: boolean
 }
 
-export type TriggerManychatApprovalResult =
+export type TriggerApprovalNotificationResult =
   | { success: true; status: 'sent'; sentAt: string }
   | { success: false; alreadySent: true; sentAt: string }
   | { success: false; alreadySent?: false; error: string }
 
-export async function triggerManychatApprovalFlow(
-  params: TriggerManychatApprovalParams,
-): Promise<TriggerManychatApprovalResult> {
+export async function triggerApprovalNotification(
+  params: TriggerApprovalNotificationParams,
+): Promise<TriggerApprovalNotificationResult> {
   // Wrap completo: cualquier excepción no capturada (Clerk, Prisma, runtime)
   // se convierte en { success: false, error } para que el cliente nunca caiga
-  // al catch genérico ('Error inesperado al disparar el flow').
+  // al catch genérico.
   try {
     const { userId } = await auth()
     if (!userId) return { success: false, error: 'No autorizado' }
@@ -48,17 +48,16 @@ export async function triggerManychatApprovalFlow(
         firstName: true,
         lastName: true,
         fullName: true,
-        manychatSubscriberId: true,
-        manychatApprovalSentAt: true,
+        approvalNotifiedAt: true,
       },
     })
     if (!driver) return { success: false, error: 'Postulante no encontrado' }
 
-    if (driver.manychatApprovalSentAt && !params.force) {
+    if (driver.approvalNotifiedAt && !params.force) {
       return {
         success: false,
         alreadySent: true,
-        sentAt: driver.manychatApprovalSentAt.toISOString(),
+        sentAt: driver.approvalNotifiedAt.toISOString(),
       }
     }
 
@@ -68,11 +67,11 @@ export async function triggerManychatApprovalFlow(
     const now = new Date()
     await prisma.formDriver.update({
       where: { id: driver.id },
-      data: { manychatApprovalSentAt: now },
+      data: { approvalNotifiedAt: now },
     })
 
     try {
-      const result = await sendFlowByKey(driver, APPROVAL_TEMPLATE_KEY, {
+      const result = await sendTemplateByKey(driver, APPROVAL_TEMPLATE_KEY, {
         source: WhatsAppMessageSource.MANUAL,
         sentBy: userId,
         messageType: WhatsAppMessageType.APPLICATION_RECEIVED,
@@ -85,31 +84,30 @@ export async function triggerManychatApprovalFlow(
         return { success: true, status: 'sent', sentAt: now.toISOString() }
       }
 
-      // skipped o failed → soltar el lock para no bloquear futuros intentos.
+      // skipped o failed → soltar el lock al valor previo para no bloquear
+      // futuros intentos.
       await prisma.formDriver
         .update({
           where: { id: driver.id },
-          data: { manychatApprovalSentAt: driver.manychatApprovalSentAt },
+          data: { approvalNotifiedAt: driver.approvalNotifiedAt },
         })
         .catch(() => undefined)
 
       if (result.status === 'skipped') {
         return {
           success: false,
-          error: result.reason || 'Mensaje no enviado (plantilla inactiva o sin flow ID configurado)',
+          error: result.reason || 'Mensaje no enviado (plantilla inactiva o sin contenido)',
         }
       }
-      // En `failed`, priorizamos `reason` (que ya incorpora los `details` del API
-      // ManyChat) por encima de `error` para que el admin vea qué validación falló.
       return {
         success: false,
-        error: result.reason || result.error || 'Falló el envío del flow ManyChat',
+        error: result.reason || result.error || 'Falló el envío del mensaje',
       }
     } catch (err) {
       await prisma.formDriver
         .update({
           where: { id: driver.id },
-          data: { manychatApprovalSentAt: driver.manychatApprovalSentAt },
+          data: { approvalNotifiedAt: driver.approvalNotifiedAt },
         })
         .catch(() => undefined)
       return {
@@ -118,8 +116,7 @@ export async function triggerManychatApprovalFlow(
       }
     }
   } catch (err) {
-    // Captura todo lo que pueda fallar antes del lock (auth, findUnique, update).
-    console.error('[MANYCHAT_TRIGGER] excepción no esperada', {
+    console.error('[APPROVAL_TRIGGER] excepción no esperada', {
       driverId: params.driverId,
       error: err instanceof Error ? { message: err.message, stack: err.stack } : err,
     })

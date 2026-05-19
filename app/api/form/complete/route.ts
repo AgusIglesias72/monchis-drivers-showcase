@@ -4,7 +4,7 @@ import { after } from 'next/server';
 import { WhatsAppMessageSource, WhatsAppMessageType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { refreshRucForDriverAsync } from '@/lib/services/turuc.service';
-import { sendFlowByKey } from '@/lib/services/manychat-messaging.service';
+import { sendTemplateByKey } from '@/lib/services/whatsapp-messenger.service';
 
 const FORM_COMPLETED_TEMPLATE_KEY = 'form_completed';
 
@@ -85,26 +85,26 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Enviar confirmación post-form por ManyChat (template Meta envuelto en Flow).
-    // Diferido con after() para no bloquear la respuesta al postulante con la latencia
-    // de la API de ManyChat. Si falla solo queda log — el form ya se completó.
+    // Enviar confirmación post-form por el bot WhatsApp (apps/whatsapp-bot/).
+    // Diferido con after() para no bloquear la respuesta al postulante con la
+    // latencia del bot. Si falla solo queda log — el form ya se completó.
     const driverForMessaging = submission.formDriver;
     if (driverForMessaging) {
       after(async () => {
         try {
-          const result = await sendFlowByKey(driverForMessaging, FORM_COMPLETED_TEMPLATE_KEY, {
+          const result = await sendTemplateByKey(driverForMessaging, FORM_COMPLETED_TEMPLATE_KEY, {
             source: WhatsAppMessageSource.TRIGGER,
             messageType: WhatsAppMessageType.APPLICATION_RECEIVED,
             step: 'form_completed',
           });
           if (result.status !== 'sent') {
-            console.warn('[FORM_COMPLETE] ManyChat no envió', {
+            console.warn('[FORM_COMPLETE] bot no envió', {
               driverId: driverForMessaging.id,
               result,
             });
           }
         } catch (err) {
-          console.error('[FORM_COMPLETE] Error inesperado enviando ManyChat', {
+          console.error('[FORM_COMPLETE] Error inesperado enviando WhatsApp', {
             driverId: driverForMessaging.id,
             error: err instanceof Error ? err.message : err,
           });

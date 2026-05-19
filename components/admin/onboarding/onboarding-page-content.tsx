@@ -2,9 +2,10 @@
 
 "use client"
 
-import { useState, useEffect, useTransition } from "react"
+import { Fragment, useState, useEffect, useTransition } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { motion, AnimatePresence } from "motion/react"
+import { motion } from "motion/react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -48,17 +49,113 @@ import {
   ArrowUpDown,
   CalendarIcon,
   History,
+  MoreHorizontal,
+  Video,
+  Zap,
+  Settings2,
+  ChevronLeft,
+  ChevronRight,
+  StickyNote,
+  Bell,
+  Link as LinkIcon,
+  Mail,
+  User,
+  UserCheck,
+  ShieldCheck,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { EventFormDialog } from "@/components/admin/onboarding/event-form-dialog"
-import { 
-  createOnboardingEvent, 
-  updateOnboardingEvent, 
-  deleteOnboardingEvent 
+import {
+  createOnboardingEvent,
+  updateOnboardingEvent,
+  deleteOnboardingEvent
 } from "@/lib/actions/onboarding.actions"
 import { getEventStatusLabel } from "@/types/onboarding"
+import { MODALITY_LABEL } from "@/lib/types/onboarding-rules.types"
 import { toast } from "sonner"
 import type { OnboardingEventStatus, OnboardingEventWithRelations } from "@/types/onboarding"
+import type { OnboardingModality } from "@prisma/client"
+
+const MODALITY_ICON = {
+  IN_PERSON: MapPin,
+  VIRTUAL: Video,
+  HYBRID: Zap,
+} as const
+
+const MODALITY_BADGE_CLASS: Record<OnboardingModality, string> = {
+  IN_PERSON: 'bg-muted text-foreground',
+  VIRTUAL: 'bg-info-soft text-info',
+  HYBRID: 'bg-violet-100 text-violet-700',
+}
+
+const ATTENDEE_STATUS_LABEL: Record<string, string> = {
+  INVITED: 'Invitado',
+  CONFIRMED: 'Confirmado',
+  ATTENDED: 'Asistió',
+  SCHEDULED: 'Agendado',
+  NO_SHOW: 'No se presentó',
+  CANCELLED: 'Cancelado',
+  RESCHEDULED: 'Reagendado',
+}
+
+const ATTENDEE_STATUS_BADGE: Record<string, string> = {
+  INVITED: 'bg-muted text-muted-foreground',
+  CONFIRMED: 'bg-info-soft text-info',
+  ATTENDED: 'bg-green-100 text-green-700',
+  SCHEDULED: 'bg-blue-100 text-blue-700',
+  NO_SHOW: 'bg-amber-100 text-amber-700',
+  CANCELLED: 'bg-red-100 text-red-700',
+  RESCHEDULED: 'bg-purple-100 text-purple-700',
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '–'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+function capitalize(s: string): string {
+  if (!s) return ''
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
+}
+
+// Devuelve solo el primer nombre, capitalizado.
+// Fallback: parte local del email (antes del primer "." o "@").
+function getFirstName(user: { fullName?: string | null; email?: string | null } | null | undefined): string {
+  if (!user) return 'Admin'
+  if (user.fullName) {
+    const first = user.fullName.trim().split(/\s+/)[0] || ''
+    if (first) return capitalize(first)
+  }
+  if (user.email) {
+    const local = user.email.split('@')[0] || ''
+    const part = local.split('.')[0] || local
+    if (part) return capitalize(part)
+  }
+  return 'Admin'
+}
+
+// Cuándo termina (o empieza, si no hay endTime) un evento.
+// Lo usamos para decidir si un evento sigue siendo "próximo" comparando con NOW.
+function getEventCutoff(event: { scheduledDate: Date | string; startTime: string | null; endTime: string | null }): Date {
+  const cutoff = new Date(event.scheduledDate)
+  const timeStr = event.endTime || event.startTime
+  if (timeStr) {
+    const [h, m] = timeStr.split(':').map(Number)
+    cutoff.setHours(h, m || 0, 0, 0)
+  } else {
+    cutoff.setHours(23, 59, 59, 999)
+  }
+  return cutoff
+}
 
 type SortField = 'date' | 'location' | 'capacity' | 'status'
 type SortDirection = 'asc' | 'desc'
@@ -84,6 +181,30 @@ export function OnboardingPageContent({
   const [sortField, setSortField] = useState<SortField>('date')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const [activeQuickFilter, setActiveQuickFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming')
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 10
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds(prev => {
+      // Comportamiento accordion: solo una fila abierta a la vez.
+      if (prev.has(id)) return new Set()
+      return new Set([id])
+    })
+  }
+
+  // Counts para los filtros (Próximos / Pasados / Todos) — usa la misma lógica
+  // tiempo-aware que el filtro de la tabla.
+  const filterCounts = (() => {
+    const now = new Date()
+    let upcoming = 0
+    let past = 0
+    for (const e of events) {
+      if (getEventCutoff(e) >= now) upcoming++
+      else past++
+    }
+    return { upcoming, past, all: events.length }
+  })()
   
   // Modals
   const [showEventForm, setShowEventForm] = useState(false)
@@ -113,27 +234,20 @@ export function OnboardingPageContent({
   // Filtering and Sorting
   const filteredAndSortedEvents = events
     .filter(event => {
-      // Date filtering basado en activeQuickFilter
-      let matchesDate = true
-      const eventDate = new Date(event.scheduledDate)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      
+      // "Próximos" = eventos que aún no terminaron (comparación con hora real).
+      // "Pasados"  = el resto.
+      const now = new Date()
+      const cutoff = getEventCutoff(event)
+
       switch (activeQuickFilter) {
         case "upcoming":
-          // Eventos desde hoy en adelante
-          matchesDate = eventDate >= today
-          break
+          return cutoff >= now
         case "past":
-          // Eventos anteriores a hoy
-          matchesDate = eventDate < today
-          break
+          return cutoff < now
         case "all":
-          matchesDate = true
-          break
+        default:
+          return true
       }
-      
-      return matchesDate
     })
     .sort((a, b) => {
       let comparison = 0
@@ -185,6 +299,25 @@ export function OnboardingPageContent({
       
       return sortDirection === 'asc' ? comparison : -comparison
     })
+
+  // Paginación client-side: el dataset ya está en memoria, solo cortamos.
+  const totalPages = Math.max(1, Math.ceil(filteredAndSortedEvents.length / PAGE_SIZE))
+
+  // Reset de página cuando cambian filtro/orden o cuando se reduce el total.
+  useEffect(() => {
+    setPage(1)
+  }, [activeQuickFilter, sortField, sortDirection])
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [totalPages, page])
+
+  const paginatedEvents = filteredAndSortedEvents.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE
+  )
+  const from = filteredAndSortedEvents.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const to = Math.min(page * PAGE_SIZE, filteredAndSortedEvents.length)
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -288,6 +421,22 @@ export function OnboardingPageContent({
     })
   }
 
+  const formatDayNum = (dateStr: string | Date) => {
+    const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
+    return date.toLocaleDateString('es-PY', { day: '2-digit' })
+  }
+
+  const formatMonthShort = (dateStr: string | Date) => {
+    const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
+    return date.toLocaleDateString('es-PY', { month: 'short' }).replace('.', '').toUpperCase()
+  }
+
+  const formatWeekdayLong = (dateStr: string | Date) => {
+    const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
+    const wd = date.toLocaleDateString('es-PY', { weekday: 'long' })
+    return wd.charAt(0).toUpperCase() + wd.slice(1)
+  }
+
   const getStatusBadge = (event: OnboardingEventWithRelations) => {
     const now = new Date()
     const eventDate = new Date(event.scheduledDate)
@@ -354,33 +503,27 @@ export function OnboardingPageContent({
     )
   }
 
-  const Outer = hideOuterChrome
-    ? ({ children }: { children: React.ReactNode }) => <>{children}</>
-    : ({ children }: { children: React.ReactNode }) => (
-        <div className="flex flex-1 flex-col container mx-auto">{children}</div>
-      )
+  const innerClass = hideOuterChrome ? 'space-y-6' : 'flex-1 p-8 space-y-8'
 
-  const Inner = hideOuterChrome
-    ? ({ children }: { children: React.ReactNode }) => (
-        <div className="space-y-6">{children}</div>
-      )
-    : ({ children }: { children: React.ReactNode }) => (
-        <div className="flex-1 p-8 space-y-8">{children}</div>
-      )
-
-  return (
-    <Outer>
+  const content = (
+    <>
       {!hideOuterChrome && (
         <AdminHeader breadcrumbs={[{ label: 'On Boarding' }]} />
       )}
 
-      <Inner>
-        {/* Header — dentro de tabs solo dejamos la acción a la derecha */}
+      <div className={innerClass}>
+        {/* Header — dentro de tabs alineamos con el patrón de Capacitaciones */}
         {hideOuterChrome ? (
-          <div className="flex justify-end">
-            <Button className="gap-2 cursor-pointer" onClick={handleCreateEvent}>
-              <Plus className="h-4 w-4" />
-              Nueva Sesión
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Sesiones generadas a partir de las capacitaciones o creadas manualmente.
+            </p>
+            <Button
+              onClick={handleCreateEvent}
+              className="bg-brand text-brand-foreground hover:bg-brand-hover cursor-pointer"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nueva sesión
             </Button>
           </div>
         ) : (
@@ -396,9 +539,12 @@ export function OnboardingPageContent({
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.2 }}
             >
-              <Button className="gap-2 md:mt-0 cursor-pointer" onClick={handleCreateEvent}>
-                <Plus className="h-4 w-4" />
-                Nueva Sesión
+              <Button
+                onClick={handleCreateEvent}
+                className="bg-brand text-brand-foreground hover:bg-brand-hover md:mt-0 cursor-pointer"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Nueva sesión
               </Button>
             </motion.div>
           </div>
@@ -481,101 +627,83 @@ export function OnboardingPageContent({
           </motion.div>
         )}
 
-        {/* Filters */}
+        {/* Events Card — header + filtros + tabla en un solo bloque */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
-          <Card>
-          <CardHeader>
-            <CardTitle>Eventos de On Boarding</CardTitle>
-            <CardDescription>
-              Visualiza y gestiona todos los eventos programados
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-4">
-              {/* Quick Filters Tabs */}
-              <div className="relative">
-                <div className="flex flex-wrap items-end gap-1 pb-0">
-                  <button
-                    onClick={() => setActiveQuickFilter('upcoming')}
-                    disabled={isPending}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
-                      cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed
-                      ${activeQuickFilter === 'upcoming'
-                        ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
-                        : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
-                      }`}
-                  >
-                    <CalendarIcon className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Próximos</span>
-                    <span className="sm:hidden">Próx.</span>
-                  </button>
-                  <button
-                    onClick={() => setActiveQuickFilter('past')}
-                    disabled={isPending}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
-                      whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
-                      ${activeQuickFilter === 'past'
-                        ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
-                        : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
-                      }`}
-                  >
-                    <History className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Pasados</span>
-                    <span className="sm:hidden">Pas.</span>
-                  </button>
-                  <button
-                    onClick={() => setActiveQuickFilter('all')}
-                    disabled={isPending}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
-                      whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
-                      ${activeQuickFilter === 'all'
-                        ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
-                        : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
-                      }`}
-                  >
-                    <Calendar className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Todos</span>
-                    <span className="sm:hidden">Todos</span>
-                  </button>
-                </div>
+          <Card className="overflow-hidden">
+            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Eventos de On Boarding</CardTitle>
+                <CardDescription>
+                  Visualiza y gestiona todos los eventos programados
+                </CardDescription>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-        </motion.div>
 
-        {/* Events Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-        >
-          <Card className={`p-0 ${activeQuickFilter !== 'all' ? 'rounded-t-none' : ''}`}>
-          <CardContent className="p-0">
+              {/* Segmented control: Próximos / Pasados / Todos */}
+              <div
+                role="tablist"
+                aria-label="Filtrar eventos"
+                className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-[3px] text-muted-foreground"
+              >
+                {([
+                  { key: 'upcoming', label: 'Próximos', short: 'Próx.', icon: CalendarIcon, count: filterCounts.upcoming },
+                  { key: 'past', label: 'Pasados', short: 'Pas.', icon: History, count: filterCounts.past },
+                  { key: 'all', label: 'Todos', short: 'Todos', icon: Calendar, count: filterCounts.all },
+                ] as const).map(({ key, label, short, icon: Icon, count }) => {
+                  const active = activeQuickFilter === key
+                  return (
+                    <button
+                      key={key}
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setActiveQuickFilter(key)}
+                      disabled={isPending}
+                      className={`inline-flex h-[calc(100%-1px)] items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium whitespace-nowrap transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                        active
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'hover:text-foreground'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">{label}</span>
+                      <span className="sm:hidden">{short}</span>
+                      <span
+                        className={`tabular-nums text-[10px] rounded px-1.5 py-0.5 ${
+                          active ? 'bg-muted text-muted-foreground' : 'bg-background/60'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
             {isPending ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : (
               <Table>
-                <TableHeader >
-                  <TableRow className="bg-muted/90">
+                <TableHeader>
+                  <TableRow className="bg-muted/90 hover:bg-muted/90">
+                    <TableHead className="w-10"></TableHead>
                     <SortableHeader field="date">Fecha y Hora</SortableHeader>
+                    <TableHead>Modalidad</TableHead>
                     <SortableHeader field="location">Ubicación</SortableHeader>
-                    <SortableHeader field="capacity">Capacidad</SortableHeader>
+                    <SortableHeader field="capacity">Cupo</SortableHeader>
                     <SortableHeader field="status">Estado</SortableHeader>
-                    <TableHead className="text-right pr-6">Acciones</TableHead>
+                    <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <AnimatePresence mode="popLayout">
                     {filteredAndSortedEvents.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                           {activeQuickFilter !== 'all'
                             ? 'No se encontraron eventos con los filtros aplicados'
                             : 'No hay eventos creados. Crea tu primer evento de on boarding.'
@@ -583,160 +711,407 @@ export function OnboardingPageContent({
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredAndSortedEvents.map((event, index) => (
-                        <motion.tr
-                          key={event.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, x: -20 }}
-                          transition={{ 
-                            duration: 0.2, 
-                            delay: index * 0.03,
-                            ease: "easeOut" 
-                          }}
-                          className="cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => handleViewEvent(event)}
-                        >
-                        {/* Fecha y Hora */}
-                        <TableCell 
-                          onClick={() => handleViewEvent(event)}
-                          className="font-medium"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <div>
-                              <div>{formatDate(event.scheduledDate)}</div>
-                              <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {event.startTime}
-                                {event.endTime && ` - ${event.endTime}`}
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
+                      paginatedEvents.map((event) => {
+                        const modality = event.modality || event.scheduleRule?.modality || null
+                        const ModalityIcon = modality ? MODALITY_ICON[modality] : null
+                        const rule = event.scheduleRule
+                        const isFull =
+                          event.maxCapacity !== null &&
+                          event.maxCapacity !== undefined &&
+                          event.currentCapacity >= event.maxCapacity
+                        const expanded = expandedIds.has(event.id)
 
-                        {/* Ubicación */}
-                        <TableCell 
-                          onClick={() => handleViewEvent(event)}
-                          className="cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <span className="line-clamp-1">
-                              {event.location || '-'}
-                            </span>
-                          </div>
-                        </TableCell>
+                        // Desglose de asistentes
+                        const attendees = event.attendees || []
+                        const attendeesByStatus = attendees.reduce<Record<string, number>>((acc, a) => {
+                          acc[a.status] = (acc[a.status] || 0) + 1
+                          return acc
+                        }, {})
 
-                        {/* Capacidad */}
-                        <TableCell 
-                          onClick={() => handleViewEvent(event)}
-                          className="cursor-pointer"
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                              <span className="font-medium">
-                                {event.currentCapacity || 0}
-                                {event.maxCapacity && `/${event.maxCapacity}`}
-                              </span>
-                              {event.currentCapacity === event.maxCapacity && (
-                                <Badge variant="destructive" className="text-xs">
-                                  Lleno
-                                </Badge>
+                        return (
+                          <Fragment key={event.id}>
+                            <tr
+                              className={`cursor-pointer border-b transition-colors hover:bg-muted/50 ${expanded ? 'bg-muted/30' : ''}`}
+                              onClick={() => toggleExpanded(event.id)}
+                              aria-expanded={expanded}
+                            >
+                              {/* Chevron */}
+                              <TableCell className="pr-0 align-middle">
+                                <span
+                                  className={`inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-transform duration-150 ${expanded ? 'rotate-90 text-foreground' : ''}`}
+                                  aria-hidden
+                                >
+                                  <ChevronRight className="h-4 w-4" />
+                                </span>
+                              </TableCell>
+
+                              {/* Fecha y Hora — tile + detalle + capacitación */}
+                              <TableCell className="font-medium align-middle">
+                                <div className="flex items-center gap-3">
+                                  {/* Tile calendario */}
+                                  <div className="flex h-12 w-12 flex-shrink-0 flex-col rounded-md border bg-background overflow-hidden">
+                                    <div className="bg-muted text-[9px] font-semibold uppercase tracking-wide text-muted-foreground text-center leading-[14px]">
+                                      {formatMonthShort(event.scheduledDate)}
+                                    </div>
+                                    <div className="flex-1 flex items-center justify-center text-base font-bold leading-none">
+                                      {formatDayNum(event.scheduledDate)}
+                                    </div>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-semibold text-foreground">
+                                      {formatWeekdayLong(event.scheduledDate)}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                      <span>{formatDate(event.scheduledDate)}</span>
+                                      <span className="text-muted-foreground/50">·</span>
+                                      <Clock className="h-3 w-3" />
+                                      <span className="tabular-nums">
+                                        {event.startTime}
+                                        {event.endTime && ` – ${event.endTime}`}
+                                      </span>
+                                    </div>
+                                    {rule ? (
+                                      <Link
+                                        href={`/admin/onboarding/reglas/${rule.slug}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="inline-block mt-1.5"
+                                      >
+                                        <Badge
+                                          variant="secondary"
+                                          className="bg-info-soft text-info hover:opacity-90 gap-1 max-w-[220px]"
+                                        >
+                                          <Settings2 className="h-3 w-3 flex-shrink-0" />
+                                          <span className="truncate">{rule.title}</span>
+                                        </Badge>
+                                      </Link>
+                                    ) : (
+                                      <Badge
+                                        variant="outline"
+                                        className="mt-1.5 text-[10px] text-muted-foreground"
+                                      >
+                                        Manual
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+
+                              {/* Modalidad */}
+                              <TableCell>
+                                {modality && ModalityIcon ? (
+                                  <Badge className={MODALITY_BADGE_CLASS[modality]} variant="secondary">
+                                    <ModalityIcon className="mr-1 h-3 w-3" />
+                                    {MODALITY_LABEL[modality]}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+
+                              {/* Ubicación */}
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                  <span className="line-clamp-1">
+                                    {event.location || '-'}
+                                  </span>
+                                </div>
+                              </TableCell>
+
+                              {/* Cupo */}
+                              <TableCell>
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                                  <span className="font-medium tabular-nums">
+                                    {event.currentCapacity || 0}
+                                    {event.maxCapacity ? `/${event.maxCapacity}` : ''}
+                                  </span>
+                                  {isFull && (
+                                    <Badge variant="destructive" className="text-[10px]">
+                                      Lleno
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+
+                              {/* Estado */}
+                              <TableCell>{getStatusBadge(event)}</TableCell>
+
+                              {/* Acciones */}
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="cursor-pointer">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => handleViewEvent(event)}
+                                      className="cursor-pointer"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                      Ver detalles
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => router.push(`/admin/onboarding/${event.id}`)}
+                                      className="cursor-pointer"
+                                    >
+                                      <UserPlus className="h-4 w-4" />
+                                      Agregar drivers
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => handleEditEvent(event)}
+                                      className="cursor-pointer"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                      Editar
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => setEventToDelete(event)}
+                                      className="cursor-pointer text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Eliminar
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </tr>
+
+                            {/* Fila expandida con detalle */}
+                            {expanded && (
+                              <tr className="bg-muted/20 border-b">
+                                <td colSpan={7} className="p-0">
+                                  <div className="px-6 py-4 border-t border-border/60">
+                                    {/* Título + descripción (si existen) */}
+                                    {(event.title || event.description) && (
+                                      <div className="mb-3 pb-3 border-b border-border/40">
+                                        {event.title && (
+                                          <div className="text-sm font-semibold text-foreground">{event.title}</div>
+                                        )}
+                                        {event.description && (
+                                          <p className="text-xs text-muted-foreground whitespace-pre-wrap mt-0.5">
+                                            {event.description}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Layout: 1/3 datos del evento, 2/3 invitados */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
+                                      {/* Col 1: definition list compacta */}
+                                      <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-xs self-start">
+                                        {event.locationAddress && (
+                                          <>
+                                            <dt className="text-muted-foreground inline-flex items-center gap-1.5">
+                                              <MapPin className="h-3 w-3" /> Dirección
+                                            </dt>
+                                            <dd className="text-foreground">{event.locationAddress}</dd>
+                                          </>
+                                        )}
+
+                                        {event.meetingLink && (
+                                          <>
+                                            <dt className="text-muted-foreground inline-flex items-center gap-1.5">
+                                              <LinkIcon className="h-3 w-3" /> Enlace
+                                            </dt>
+                                            <dd className="min-w-0">
+                                              <a
+                                                href={event.meetingLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="text-info hover:underline break-all"
+                                              >
+                                                {event.meetingLink}
+                                              </a>
+                                            </dd>
+                                          </>
+                                        )}
+
+                                        {event.organizerUser && (
+                                          <>
+                                            <dt className="text-muted-foreground inline-flex items-center gap-1.5">
+                                              <User className="h-3 w-3" /> Organizador
+                                            </dt>
+                                            <dd className="text-foreground">
+                                              {event.organizerUser.fullName || event.organizerUser.email}
+                                              {event.organizerUser.fullName && event.organizerUser.email && (
+                                                <span className="text-muted-foreground"> · {event.organizerUser.email}</span>
+                                              )}
+                                            </dd>
+                                          </>
+                                        )}
+
+                                        <dt className="text-muted-foreground inline-flex items-center gap-1.5">
+                                          <Bell className="h-3 w-3" /> Recordatorio
+                                        </dt>
+                                        <dd className="text-foreground">
+                                          {event.reminderHoursBefore}h antes
+                                          <span className="text-muted-foreground"> · </span>
+                                          {event.reminderSent ? (
+                                            <span className="text-success inline-flex items-center gap-1">
+                                              <CheckCircle className="h-3 w-3" /> Enviado
+                                            </span>
+                                          ) : (
+                                            <span className="text-muted-foreground">Pendiente</span>
+                                          )}
+                                        </dd>
+
+                                        {event.notes && (
+                                          <>
+                                            <dt className="text-muted-foreground inline-flex items-start gap-1.5 pt-0.5">
+                                              <StickyNote className="h-3 w-3 mt-0.5" /> Notas
+                                            </dt>
+                                            <dd className="text-foreground whitespace-pre-wrap">{event.notes}</dd>
+                                          </>
+                                        )}
+                                      </dl>
+
+                                      {/* Col 2 (span 2 = 2/3 ancho): invitados con resumen + preview */}
+                                      {attendees.length > 0 && (
+                                        <div className="text-xs self-start min-w-0 md:col-span-2">
+                                          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                                            <span className="text-muted-foreground inline-flex items-center gap-1.5 mr-1">
+                                              <Users className="h-3 w-3" /> Invitados
+                                              <span className="tabular-nums">({attendees.length})</span>
+                                            </span>
+                                            {Object.entries(attendeesByStatus).map(([status, count]) => (
+                                              <Badge
+                                                key={status}
+                                                variant="secondary"
+                                                className={`text-[10px] font-normal px-1.5 py-0 ${ATTENDEE_STATUS_BADGE[status] || ''}`}
+                                              >
+                                                {ATTENDEE_STATUS_LABEL[status] || status}
+                                                <span className="ml-1 tabular-nums font-semibold">{count}</span>
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                          {(() => {
+                                            const limit = 10
+                                            const visible = attendees.slice(0, limit)
+                                            const extra = attendees.length - visible.length
+                                            return (
+                                              <>
+                                                <ul className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                                                  {visible.map((a) => {
+                                                    const fd = a.formDriver
+                                                    const displayName =
+                                                      fd?.fullName ||
+                                                      [fd?.firstName, fd?.lastName].filter(Boolean).join(' ') ||
+                                                      fd?.email ||
+                                                      fd?.phoneNumber ||
+                                                      '—'
+                                                    const initials = getInitials(displayName)
+                                                    const isSelfServed = !a.invitedBy
+                                                    const assignerFirstName = getFirstName(a.invitedByUser)
+                                                    return (
+                                                      <li
+                                                        key={a.id}
+                                                        className="flex items-center gap-2 px-2 py-1.5 border border-border/40 rounded-md bg-background/60 min-w-0"
+                                                      >
+                                                        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold uppercase text-muted-foreground">
+                                                          {initials}
+                                                        </span>
+                                                        <div className="min-w-0 flex-1">
+                                                          <div className="flex items-center gap-1.5 min-w-0">
+                                                            <span className="truncate text-xs text-foreground capitalize">{displayName}</span>
+                                                            {isSelfServed ? (
+                                                              <span
+                                                                title="El driver se agendó por sí mismo desde el flow público"
+                                                                className="inline-flex items-center gap-0.5 flex-shrink-0 text-[10px] font-medium text-info"
+                                                              >
+                                                                <UserCheck className="h-2.5 w-2.5" /> Usuario
+                                                              </span>
+                                                            ) : (
+                                                              <span
+                                                                title={`Asignado por ${a.invitedByUser?.fullName || a.invitedByUser?.email || 'admin'}`}
+                                                                className="inline-flex items-center gap-0.5 flex-shrink-0 text-[10px] font-medium text-muted-foreground capitalize"
+                                                              >
+                                                                <ShieldCheck className="h-2.5 w-2.5 flex-shrink-0" />
+                                                                {assignerFirstName}
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                          {fd?.phoneNumber && (
+                                                            <div className="truncate text-[10px] text-muted-foreground">
+                                                              {fd.phoneNumber}
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                        <Badge
+                                                          variant="secondary"
+                                                          className={`text-[9px] font-normal px-1.5 py-0 flex-shrink-0 ${ATTENDEE_STATUS_BADGE[a.status] || ''}`}
+                                                        >
+                                                          {ATTENDEE_STATUS_LABEL[a.status] || a.status}
+                                                        </Badge>
+                                                      </li>
+                                                    )
+                                                  })}
+                                                </ul>
+                                                {extra > 0 && (
+                                                  <div className="mt-1.5 px-2 py-1 text-[10px] text-muted-foreground text-center bg-muted/30 rounded">
+                                                    + {extra} más
+                                                  </div>
+                                                )}
+                                              </>
+                                            )
+                                          })()}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
                               )}
-                            </div>
-                            {event.maxCapacity && (
-                              <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
-                                <div 
-                                  className={`h-full transition-all ${
-                                    event.currentCapacity / event.maxCapacity >= 1
-                                      ? 'bg-red-500'
-                                      : event.currentCapacity / event.maxCapacity > 0.8
-                                      ? 'bg-amber-500'
-                                      : 'bg-green-500'
-                                  }`}
-                                  style={{ 
-                                    width: `${Math.min((event.currentCapacity / event.maxCapacity) * 100, 100)}%` 
-                                  }}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-
-                        {/* Estado */}
-                        <TableCell 
-                          onClick={() => handleViewEvent(event)}
-                          className="cursor-pointer"
-                        >
-                          {getStatusBadge(event)}
-                        </TableCell>
-
-                        {/* Acciones */}
-                        <TableCell className="text-right pr-4">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleViewEvent(event)
-                              }}
-                              title="Ver detalles"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                router.push(`/admin/onboarding/${event.id}`)
-                              }}
-                              title="Agregar drivers"
-                            >
-                              <UserPlus className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleEditEvent(event)
-                              }}
-                              title="Editar"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setEventToDelete(event)
-                              }}
-                              title="Eliminar"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </motion.tr>
-                    ))
-                  )}
-                  </AnimatePresence>
+                          </Fragment>
+                        )
+                      })
+                    )}
                 </TableBody>
               </Table>
+            )}
+
+            {/* Paginación */}
+            {filteredAndSortedEvents.length > 0 && (
+              <div className="flex items-center justify-between border-t px-4 py-2.5 text-xs">
+                <span className="text-muted-foreground tabular-nums">
+                  Mostrando <span className="font-medium text-foreground">{from}–{to}</span> de{' '}
+                  <span className="font-medium text-foreground">{filteredAndSortedEvents.length}</span>
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0 cursor-pointer"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    aria-label="Página anterior"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <span className="px-2 tabular-nums text-muted-foreground">
+                    {page} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0 cursor-pointer"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    aria-label="Página siguiente"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
         </motion.div>
-      </Inner>
+      </div>
 
       {/* Event Form Dialog */}
       <EventFormDialog
@@ -771,6 +1146,12 @@ export function OnboardingPageContent({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Outer>
+    </>
+  )
+
+  return hideOuterChrome ? (
+    content
+  ) : (
+    <div className="flex flex-1 flex-col container mx-auto">{content}</div>
   )
 }

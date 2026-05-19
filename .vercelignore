@@ -1,0 +1,3 @@
+# apps/whatsapp-bot/ es un workspace separado que se buildea en Railway,
+# no en Vercel. Esto evita inflar el build de Next con puppeteer/Chromium.
+apps/

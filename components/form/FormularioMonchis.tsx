@@ -610,8 +610,11 @@ const validateCurrentStep = (): boolean => {
                 `Quisiera consultar sobre mi postulación.\n\n` +
                 `Nombre: ${formData.firstName} ${formData.lastName}`
               );
-              // Número dedicado ManyChat. Que el postulante escriba primero abre
-              // la ventana de 24h y deja el loop con la IA sin costo de templates.
+              // Número público del bot WhatsApp. Que el postulante escriba primero
+              // ayuda a alimentar la base de contactos y evita banear el bot por
+              // iniciar conversaciones con números desconocidos.
+              // TODO: mover a env var NEXT_PUBLIC_PUBLIC_WHATSAPP_NUMBER cuando
+              // se decida el número definitivo del bot.
               window.open(`https://wa.me/15754194027?text=${message}`, '_blank');
             }}
             variant="outline"

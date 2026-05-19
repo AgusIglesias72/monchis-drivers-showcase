@@ -53,8 +53,7 @@ import { getRucBadgeConfig } from "@/lib/utils/postulacion-ruc-badge.utils"
 import { AssistedCompletionButton } from "./postulaciones/assisted-completion-button"
 import { RefreshRucButton } from "./postulaciones/refresh-ruc-button"
 import { RunAgentButton } from "./postulaciones/run-agent-button"
-import { TriggerManychatFlowButton } from "./trigger-manychat-flow-button"
-import { LinkManychatSubscriberButton } from "./link-manychat-subscriber-button"
+import { TriggerApprovalNotificationButton } from "./trigger-approval-notification-button"
 import { AgentRunBadge } from "./agent-runs/agent-run-badge"
 
 interface PostulacionesTableProps {
@@ -619,7 +618,7 @@ export function PostulacionesTableExpandable({
                                 driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
                                 phoneNumber={postulacion.phoneNumber}
                                 contactStatus={postulacion.contactStatus}
-                                manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
+                                approvalNotifiedAt={postulacion.approvalNotifiedAt}
                               />
 
                               <DropdownMenu>
@@ -671,30 +670,14 @@ export function PostulacionesTableExpandable({
                                         onClick={(e) => e.stopPropagation()}
                                         className="p-0"
                                       >
-                                        <TriggerManychatFlowButton
+                                        <TriggerApprovalNotificationButton
                                           driverId={postulacion.id}
                                           driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
-                                          manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
+                                          approvalNotifiedAt={postulacion.approvalNotifiedAt}
                                           inDropdown={true}
                                           onSuccess={() => router.refresh()}
                                         />
                                       </DropdownMenuItem>
-                                      {!postulacion.manychatSubscriberId && (
-                                        <DropdownMenuItem
-                                          onSelect={(e) => e.preventDefault()}
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="p-0"
-                                        >
-                                          <LinkManychatSubscriberButton
-                                            driverId={postulacion.id}
-                                            driverName={postulacion.fullName || `${postulacion.firstName ?? ''} ${postulacion.lastName ?? ''}`.trim() || 'Driver'}
-                                            driverPhone={postulacion.phoneNumber}
-                                            manychatSubscriberId={postulacion.manychatSubscriberId}
-                                            inDropdown={true}
-                                            onSuccess={() => router.refresh()}
-                                          />
-                                        </DropdownMenuItem>
-                                      )}
 
                                       <DropdownMenuSeparator />
                                     </>

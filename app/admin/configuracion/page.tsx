@@ -47,8 +47,8 @@ Una sola llamada con todas las imágenes (cédulas + antecedentes). El modelo de
 ### 6. Auto-approve (solo cron + REAL + APPROVED limpio)
 Si la decisión es APPROVED y todas las acciones propuestas son únicamente
 \`propose_approve_document\` + \`propose_send_whatsapp_template('capacitaciones')\`,
-se aprueba automáticamente y se dispara ManyChat. Caso contrario, queda en PROPOSED
-para revisión humana.`
+se aprueba automáticamente y se dispara el mensaje WhatsApp de aprobación
+por el bot. Caso contrario, queda en PROPOSED para revisión humana.`
 
 const TOOLS_CATALOG = `## Tools que el agente puede proponer
 
@@ -60,7 +60,7 @@ Todas las acciones se crean con status=PROPOSED y requieren aprobación humana
 | \`propose_approve_document\` | Documento válido y listo para aprobar. |
 | \`propose_reject_document\` | Documento es claramente de otra persona o tipo incorrecto. |
 | \`propose_request_document_resubmission\` | El postulante subió el documento equivocado (ej. CV en vez de antecedentes). Envía mensaje específico via WhatsApp. |
-| \`propose_send_whatsapp_template\` | Disparar template de ManyChat (ej. 'capacitaciones' al aprobar). |
+| \`propose_send_whatsapp_template\` | Disparar template WhatsApp (ej. 'capacitaciones' al aprobar). |
 | \`propose_waive_ruc_inactive\` | Marcar excepción para RUC INACTIVO/SUSPENDIDO con nota. |
 | \`propose_update_driver_cedula\` | Corregir cédula del form cuando hay typo confirmado por los documentos. |
 | \`escalate_to_admin\` | Casos imposibles de resolver automáticamente (cédula vacía, señal de fraude). |`

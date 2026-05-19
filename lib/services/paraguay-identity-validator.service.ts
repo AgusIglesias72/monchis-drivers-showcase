@@ -1013,7 +1013,6 @@ Si ES un certificado válido, responde:
         type: WhatsAppMessageType.DOCUMENT_REJECTED,
         formDriverId: driver.id,
         source: WhatsAppMessageSource.TRIGGER,
-        botId: 'bot-adquisicion-prod',
         metadata: {
           documentType: documentType,
           documentTypeName: documentTypeName,

@@ -1353,7 +1353,7 @@ function emptyMetrics() {
 
 // ============================================================================
 // Auto-approve: cuando el agente decide APPROVED limpio desde un cron, dispara
-// el endpoint /api/agent/auto-approve que aprueba docs + manda ManyChat. Si las
+// el endpoint /api/agent/auto-approve que aprueba docs + manda WhatsApp. Si las
 // condiciones no se cumplen (admin manual, decisión amarilla/roja, overrides),
 // las AgentActions quedan PROPOSED para revisión humana — sin cambio de
 // comportamiento previo.
@@ -1425,11 +1425,12 @@ async function maybeTriggerAutoApprove(params: MaybeAutoApproveParams): Promise<
     }
 
     const json = (await response.json().catch(() => null)) as
-      | { manychatStatus?: string; manychatTriggered?: boolean; alreadyExecuted?: boolean }
+      | { notificationStatus?: string; notificationTriggered?: boolean; alreadyExecuted?: boolean }
       | null
     console.log('[agent.service] auto-approve OK', {
       agentRunId,
-      manychat: json?.manychatStatus ?? (json?.manychatTriggered ? 'triggered' : 'not-triggered'),
+      notification:
+        json?.notificationStatus ?? (json?.notificationTriggered ? 'triggered' : 'not-triggered'),
       alreadyExecuted: json?.alreadyExecuted ?? false,
     })
   } catch (err) {

@@ -43,19 +43,12 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
-// Logo ManyChat — usado en el badge sobre el botón Contactar cuando se envió flow.
-const ManyChatIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 80.6 57.6" className={className} fill="currentColor" aria-hidden="true">
-    <path d="M68.2,0h-0.6C51.2,0,43.2,24.6,43.2,24.6V5.7H0v51.9h17.3V23h9.2v34.6H45c0,0,9.5-41,18.4-38c6,2.3-10.9,37.9-10.9,37.9H77c0,0,3.4-23.2,3.4-31.3C81.2,12.6,79,0,68.2,0" />
-  </svg>
-)
-
 /**
- * Badge ManyChat absoluto que se monta sobre el botón Contactar cuando se
- * envió el flow de aprobación (manychatApprovalSentAt seteado). Sirve como
+ * Badge absoluto que se monta sobre el botón Contactar cuando se envió el
+ * mensaje automático de aprobación (approvalNotifiedAt seteado). Sirve como
  * indicador visual rápido sin abrir el detalle.
  */
-const ManyChatSentBadge = ({ sentAt }: { sentAt: Date | string }) => {
+const ApprovalNotifiedBadge = ({ sentAt }: { sentAt: Date | string }) => {
   const date = typeof sentAt === 'string' ? new Date(sentAt) : sentAt
   const dateLabel = date.toLocaleString('es-PY', {
     day: '2-digit',
@@ -69,15 +62,15 @@ const ManyChatSentBadge = ({ sentAt }: { sentAt: Date | string }) => {
       <Tooltip>
         <TooltipTrigger asChild>
           <span
-            aria-label={`Flow ManyChat enviado el ${dateLabel}`}
+            aria-label={`Mensaje de aprobación enviado el ${dateLabel}`}
             onClick={(e) => e.stopPropagation()}
-            className="absolute -top-1 -right-1 z-10 flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-[#0084FF] ring-2 ring-background"
+            className="absolute -top-1 -right-1 z-10 flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-[#25D366] ring-2 ring-background"
           >
-            <ManyChatIcon className="h-2.5 w-2.5 text-white" />
+            <WhatsAppIcon className="h-2.5 w-2.5 text-white" />
           </span>
         </TooltipTrigger>
         <TooltipContent side="top" align="end" className="text-xs">
-          <div className="font-medium">Flow ManyChat enviado</div>
+          <div className="font-medium">Mensaje de aprobación enviado</div>
           <div className="text-muted-foreground">{dateLabel}</div>
         </TooltipContent>
       </Tooltip>
@@ -93,8 +86,8 @@ interface ContactButtonProps {
   showLabel?: boolean
   size?: 'sm' | 'default'
   inDropdown?: boolean
-  /** Timestamp del último envío de flow ManyChat. Si está, muestra badge sobre el botón. */
-  manychatApprovalSentAt?: string | Date | null
+  /** Timestamp del último envío automático del mensaje de aprobación. Si está, muestra badge sobre el botón. */
+  approvalNotifiedAt?: string | Date | null
 }
 
 /**
@@ -102,8 +95,8 @@ interface ContactButtonProps {
  *  - Abrir WhatsApp (wa.me) en nueva pestaña — para que el admin escriba manualmente.
  *  - Registrar Contacto en el historial del driver (sin mandar nada).
  *
- * El envío automatizado de mensajes va por ManyChat (TriggerManychatFlowButton),
- * no por este componente.
+ * El envío automatizado de mensajes va por el bot WhatsApp
+ * (TriggerApprovalNotificationButton), no por este componente.
  */
 export function ContactButton({
   driverId,
@@ -113,7 +106,7 @@ export function ContactButton({
   showLabel = false,
   size = 'sm',
   inDropdown = false,
-  manychatApprovalSentAt = null,
+  approvalNotifiedAt = null,
 }: ContactButtonProps) {
   const router = useRouter()
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
@@ -122,7 +115,7 @@ export function ContactButton({
 
   const config = getContactStatusConfig(contactStatus)
   const isDisabled = !canContactDriver(contactStatus)
-  const showManychatBadge = !!manychatApprovalSentAt
+  const showApprovalBadge = !!approvalNotifiedAt
 
   const handleWhatsApp = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -234,8 +227,8 @@ export function ContactButton({
                       <WhatsAppIcon className="h-4 w-4" />
                       Contactar
                     </Button>
-                    {showManychatBadge && manychatApprovalSentAt && (
-                      <ManyChatSentBadge sentAt={manychatApprovalSentAt} />
+                    {showApprovalBadge && approvalNotifiedAt && (
+                      <ApprovalNotifiedBadge sentAt={approvalNotifiedAt} />
                     )}
                   </div>
                 </DropdownMenuTrigger>
@@ -243,7 +236,7 @@ export function ContactButton({
               {renderMenu()}
             </DropdownMenu>
 
-            {!showManychatBadge && (
+            {!showApprovalBadge && (
               <TooltipContent>
                 <p>{config.tooltip}</p>
               </TooltipContent>
@@ -317,8 +310,8 @@ export function ContactButton({
                   >
                     <MessageCircle className="h-4 w-4" />
                   </Button>
-                  {showManychatBadge && manychatApprovalSentAt && (
-                    <ManyChatSentBadge sentAt={manychatApprovalSentAt} />
+                  {showApprovalBadge && approvalNotifiedAt && (
+                    <ApprovalNotifiedBadge sentAt={approvalNotifiedAt} />
                   )}
                 </div>
               </DropdownMenuTrigger>
@@ -326,7 +319,7 @@ export function ContactButton({
             {renderMenu()}
           </DropdownMenu>
 
-          {!showManychatBadge && (
+          {!showApprovalBadge && (
             <TooltipContent>
               <p>{config.tooltip}</p>
             </TooltipContent>

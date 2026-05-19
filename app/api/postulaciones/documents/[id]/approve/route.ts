@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { FormDocumentsStatus, WhatsAppMessageSource, WhatsAppMessageType } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { after } from 'next/server'
-import { sendFlowByKey } from '@/lib/services/manychat-messaging.service'
+import { sendTemplateByKey } from '@/lib/services/whatsapp-messenger.service'
 import { requireAdminApi } from '@/lib/auth'
 
 const POSTULACION_APROBADA_TEMPLATE_KEY = 'capacitaciones'
@@ -72,53 +72,50 @@ export async function PATCH(
       }
     })
 
-    // 4. Si este approve dejó documentsStatus = APPROVED y todavía no mandamos el flow
-    //    de "postulación aprobada", lo disparamos por ManyChat. Idempotente vía
-    //    manychatApprovalSentAt: si ya tiene timestamp no se vuelve a mandar.
-    if (newDocumentStatus === 'APPROVED' && !updatedDriver.manychatApprovalSentAt) {
-      // Marcar primero (con condición de carrera mínima): el update solo entra si el campo
-      // sigue null. Si dos approves casi simultáneos pisan, solo uno gana el lock.
+    // 4. Si este approve dejó documentsStatus = APPROVED y todavía no mandamos el
+    //    mensaje de "postulación aprobada", lo disparamos por el bot WhatsApp.
+    //    Idempotente vía approvalNotifiedAt: si ya tiene timestamp no se vuelve a mandar.
+    if (newDocumentStatus === 'APPROVED' && !updatedDriver.approvalNotifiedAt) {
+      // Lock optimista: el update solo entra si el campo sigue null. Si dos approves
+      // casi simultáneos pisan, solo uno gana el lock.
       const lockResult = await prisma.formDriver.updateMany({
         where: {
           id: updatedDriver.id,
-          manychatApprovalSentAt: null,
+          approvalNotifiedAt: null,
         },
         data: {
-          manychatApprovalSentAt: new Date(),
+          approvalNotifiedAt: new Date(),
         },
       })
 
       if (lockResult.count === 1) {
-        const driverForFlow = updatedDriver
+        const driverForNotify = updatedDriver
         after(async () => {
           try {
-            const result = await sendFlowByKey(driverForFlow, POSTULACION_APROBADA_TEMPLATE_KEY, {
+            const result = await sendTemplateByKey(driverForNotify, POSTULACION_APROBADA_TEMPLATE_KEY, {
               source: WhatsAppMessageSource.TRIGGER,
               messageType: WhatsAppMessageType.APPLICATION_RECEIVED,
               step: 'postulacion_aprobada',
             })
             if (result.status !== 'sent') {
-              console.warn('[DOC_APPROVE] ManyChat no envió flow de aprobación', {
-                driverId: driverForFlow.id,
+              console.warn('[DOC_APPROVE] bot no envió mensaje de aprobación', {
+                driverId: driverForNotify.id,
                 result,
               })
-              // Soltar el lock en CUALQUIER caso que no haya enviado: failed (excepción
-              // de ManyChat) o skipped (template mal cableado: no existe, inactivo o
-              // sin manychatFlowId). Sin esto, si el template estaba mal configurado el
-              // driver queda atascado sin recibir nunca el mensaje aunque se arregle.
+              // Soltar el lock para que un retry futuro pueda volver a intentar.
               await prisma.formDriver.update({
-                where: { id: driverForFlow.id },
-                data: { manychatApprovalSentAt: null },
+                where: { id: driverForNotify.id },
+                data: { approvalNotifiedAt: null },
               })
             }
           } catch (err) {
-            console.error('[DOC_APPROVE] Error inesperado enviando ManyChat', {
-              driverId: driverForFlow.id,
+            console.error('[DOC_APPROVE] Error inesperado enviando WhatsApp', {
+              driverId: driverForNotify.id,
               error: err instanceof Error ? err.message : err,
             })
             await prisma.formDriver.update({
-              where: { id: driverForFlow.id },
-              data: { manychatApprovalSentAt: null },
+              where: { id: driverForNotify.id },
+              data: { approvalNotifiedAt: null },
             }).catch(() => undefined)
           }
         })

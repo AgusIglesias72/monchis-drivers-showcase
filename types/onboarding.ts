@@ -27,7 +27,35 @@ export type OnboardingEventWithRelations = Prisma.OnboardingEventGetPayload<{
         fullName: true
       }
     }
-    attendees: true
+    scheduleRule: {
+      select: {
+        id: true
+        slug: true
+        title: true
+        modality: true
+      }
+    }
+    attendees: {
+      include: {
+        formDriver: {
+          select: {
+            id: true
+            firstName: true
+            lastName: true
+            fullName: true
+            phoneNumber: true
+            email: true
+          }
+        }
+        invitedByUser: {
+          select: {
+            id: true
+            fullName: true
+            email: true
+          }
+        }
+      }
+    }
   }
 }>
 

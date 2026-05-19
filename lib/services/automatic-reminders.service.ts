@@ -24,7 +24,6 @@ export async function getEligibleDriversForReminder(limit: number = 20) {
         fullName: d.fullName,
         phoneNumber: d.phoneNumber,
         accessToken: d.accessToken,
-        manychatSubscriberId: d.manychatSubscriberId,
         messagesSentCount: d.messagesSentCount,
         concept: d.concept,
       })),
@@ -42,7 +41,6 @@ export async function getEligibleDriversForReminder(limit: number = 20) {
         fullName: string | null
         phoneNumber: string
         accessToken: string | null
-        manychatSubscriberId: string | null
         messagesSentCount: number
         concept: MessageConceptResult
       }>,

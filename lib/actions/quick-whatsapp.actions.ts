@@ -2,7 +2,7 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
-import { sendMessage } from "@/lib/services/whatsapp-multi-bot.service"
+import { whatsappBotService, WHATSAPP_BOT_ID } from "@/lib/services/whatsapp-bot.service"
 import { WhatsAppMessageType, WhatsAppMessageSource } from "@prisma/client"
 import { incrementTemplateUsage } from "@/lib/services/whatsapp-templates.service"
 
@@ -43,11 +43,10 @@ export async function sendQuickWhatsAppMessage(params: SendQuickWhatsAppMessageP
       formattedPhone = `+595${formattedPhone}`
     }
 
-    // Enviar mensaje vía WhatsApp
-    const botResponse = await sendMessage('bot-adquisicion-prod', {
+    const botResponse = await whatsappBotService.sendMessage({
       phone: formattedPhone,
       message: message,
-      type: 'custom'
+      type: 'custom',
     })
 
     if (!botResponse.success) {
@@ -57,7 +56,6 @@ export async function sendQuickWhatsAppMessage(params: SendQuickWhatsAppMessageP
       }
     }
 
-    // Registrar en la base de datos
     const chatId = `${formattedPhone.replace('+', '')}@c.us`
 
     await prisma.whatsAppMessage.create({
@@ -70,7 +68,7 @@ export async function sendQuickWhatsAppMessage(params: SendQuickWhatsAppMessageP
         messageLength: message.length,
         status: 'SENT',
         source: WhatsAppMessageSource.MANUAL,
-        botId: 'bot-adquisicion-prod',
+        botId: WHATSAPP_BOT_ID,
         formDriverId: driverId,
         metadata: {
           sentBy: 'admin',

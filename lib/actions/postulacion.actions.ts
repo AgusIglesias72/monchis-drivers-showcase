@@ -315,7 +315,6 @@ export async function rejectDocument(documentId: string, reason: string) {
             type: WhatsAppMessageType.DOCUMENT_REJECTED,
             formDriverId: driver.id,
             source: WhatsAppMessageSource.TRIGGER,
-            botId: 'bot-adquisicion-prod',
             metadata: {
               documentType: document.documentType,
               documentTypeName: 'Certificado de Antecedentes Penales',

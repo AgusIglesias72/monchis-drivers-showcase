@@ -65,8 +65,7 @@ import {
 } from "@/components/admin/postulacion-helpers"
 import { ContactButton } from "@/components/admin/postulaciones/contact-button"
 import { RejectButton } from "@/components/admin/postulaciones/reject-button"
-import { TriggerManychatFlowButton } from "@/components/admin/trigger-manychat-flow-button"
-import { LinkManychatSubscriberButton } from "@/components/admin/link-manychat-subscriber-button"
+import { TriggerApprovalNotificationButton } from "@/components/admin/trigger-approval-notification-button"
 import { AgentRunSummaryCard } from "@/components/admin/agent-runs/agent-run-summary-card"
 import { getContactStatus } from "@/lib/utils/contact-status.utils"
 import { toast } from "sonner"
@@ -564,7 +563,7 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                 phoneNumber={postulacion.phoneNumber}
                 contactStatus={contactStatus}
                 showLabel={true}
-                manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
+                approvalNotifiedAt={postulacion.approvalNotifiedAt}
               />
             )}
 
@@ -676,29 +675,14 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
                         onSelect={(e) => e.preventDefault()}
                         className="p-0"
                       >
-                        <TriggerManychatFlowButton
+                        <TriggerApprovalNotificationButton
                           driverId={postulacion.id}
                           driverName={postulacion.fullName || 'Driver'}
-                          manychatApprovalSentAt={postulacion.manychatApprovalSentAt}
+                          approvalNotifiedAt={postulacion.approvalNotifiedAt}
                           inDropdown={true}
                           onSuccess={handleActionSuccess}
                         />
                       </DropdownMenuItem>
-                      {!postulacion.manychatSubscriberId && (
-                        <DropdownMenuItem
-                          onSelect={(e) => e.preventDefault()}
-                          className="p-0"
-                        >
-                          <LinkManychatSubscriberButton
-                            driverId={postulacion.id}
-                            driverName={postulacion.fullName || 'Driver'}
-                            driverPhone={postulacion.phoneNumber}
-                            manychatSubscriberId={postulacion.manychatSubscriberId}
-                            inDropdown={true}
-                            onSuccess={handleActionSuccess}
-                          />
-                        </DropdownMenuItem>
-                      )}
 
                       <DropdownMenuSeparator />
                     </>

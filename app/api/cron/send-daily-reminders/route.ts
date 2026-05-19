@@ -5,7 +5,7 @@ import { requireCronAuth } from '@/lib/auth'
 import { WhatsAppMessageSource, WhatsAppMessageType } from '@prisma/client'
 import { getEligibleDriversForReminder, logReminderExecution } from '@/lib/services/automatic-reminders.service'
 import { recordMessageSent, type MessageConcept } from '@/lib/services/messaging-frequency.service'
-import { sendFlowByKey } from '@/lib/services/manychat-messaging.service'
+import { sendTemplateByKey } from '@/lib/services/whatsapp-messenger.service'
 
 /**
  * Cron job para enviar recordatorios automáticos con control de frecuencia.
@@ -219,13 +219,12 @@ interface DriverForMessaging {
   lastName: string | null
   fullName: string | null
   phoneNumber: string
-  manychatSubscriberId: string | null
 }
 
 /**
- * Mapeo concept → key de WhatsAppTemplate en DB. null = el concepto NO se envía por ManyChat
- * (típicamente porque lo maneja el multi-bot homegrown para otros números).
- * Para activar un concept, crear el template con ese key en la UI/DB y cablear manychatFlowId.
+ * Mapeo concept → key de WhatsAppTemplate en DB. null = el concepto no se envía
+ * (no hay template configurado todavía).
+ * Para activar un concept, crear el template con ese key en la UI/DB.
  */
 const CONCEPT_TO_TEMPLATE_KEY: Record<MessageConcept, string | null> = {
   FORM_STEP_1: 'form_step_1',
@@ -237,9 +236,8 @@ const CONCEPT_TO_TEMPLATE_KEY: Record<MessageConcept, string | null> = {
   DOCUMENTS_CORRECTIONS: 'documents_corrections',
   PAYMENT_PENDING: 'payment_pending',
   GENERAL_FOLLOWUP: 'general_followup',
-  // Capacitación sigue en el multi-bot (número existente).
-  SCHEDULE_CAPACITACION: null,
-  CAPACITACION_REMINDER: null,
+  SCHEDULE_CAPACITACION: 'schedule_capacitacion',
+  CAPACITACION_REMINDER: 'capacitacion_reminder',
 }
 
 /**
@@ -260,32 +258,20 @@ const CONCEPT_TO_MESSAGE_TYPE: Record<MessageConcept, WhatsAppMessageType> = {
 }
 
 /**
- * Envía el mensaje apropiado según el concepto.
- * - Capacitación (SCHEDULE_CAPACITACION / CAPACITACION_REMINDER) → multi-bot homegrown existente
- * - Resto (form abandonado, documentos, pago, followup) → ManyChat vía template resuelto por key
+ * Envía el mensaje apropiado según el concepto via bot WhatsApp.
+ * El template se resuelve por key desde WhatsAppTemplate; si no existe o está
+ * inactivo, el envío se skipea sin error.
  */
 async function sendMessageByConcept(
   concept: MessageConcept,
   driver: DriverForMessaging
 ): Promise<SendByConceptResult> {
-  const driverName = driver.firstName || driver.fullName || 'Conductor'
-
-  // Capacitación: el canal multi-bot quedó deprecated tras la migración a
-  // ManyChat. Los conceptos SCHEDULE_CAPACITACION / CAPACITACION_REMINDER
-  // se saltean hasta que se cree un Flow de ManyChat equivalente.
-  if (concept === 'SCHEDULE_CAPACITACION' || concept === 'CAPACITACION_REMINDER') {
-    return {
-      sent: false,
-      reason: 'Capacitación desactivada — pendiente migrar a ManyChat',
-    }
-  }
-
   const templateKey = CONCEPT_TO_TEMPLATE_KEY[concept]
   if (!templateKey) {
     return { sent: false, reason: `Concepto sin template key: ${concept}` }
   }
 
-  const result = await sendFlowByKey(driver, templateKey, {
+  const result = await sendTemplateByKey(driver, templateKey, {
     source: WhatsAppMessageSource.CRON,
     messageType: CONCEPT_TO_MESSAGE_TYPE[concept],
     step: concept.toLowerCase(),
@@ -300,6 +286,6 @@ async function sendMessageByConcept(
   return {
     sent: true,
     success: false,
-    error: result.error ?? result.reason ?? 'manychat failed',
+    error: result.error ?? result.reason ?? 'whatsapp bot failed',
   }
 }

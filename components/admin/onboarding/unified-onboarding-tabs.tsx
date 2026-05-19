@@ -1,6 +1,7 @@
 'use client'
 
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Calendar, Plus, Settings2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -42,16 +43,18 @@ function isTabValue(v: string | null): v is TabValue {
 }
 
 export function UnifiedOnboardingTabs({ rules, events, currentStatus }: Props) {
-  const router = useRouter()
-  const pathname = usePathname()
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
-  const activeTab: TabValue = isTabValue(tabParam) ? tabParam : 'capacitaciones'
+  const [activeTab, setActiveTab] = useState<TabValue>(isTabValue(tabParam) ? tabParam : 'capacitaciones')
 
   function setTab(next: TabValue) {
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('tab', next)
-    router.replace(`${pathname}?${params.toString()}`)
+    setActiveTab(next)
+    // Actualizamos la URL sin pasar por el router: evita refetch RSC en una página dynamic = 'force-dynamic'.
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('tab', next)
+      window.history.replaceState({}, '', url.toString())
+    }
   }
 
   return (
@@ -68,14 +71,14 @@ export function UnifiedOnboardingTabs({ rules, events, currentStatus }: Props) {
 
         <Tabs value={activeTab} onValueChange={(v) => setTab(v as TabValue)}>
           <TabsList>
-            <TabsTrigger value="capacitaciones" className="gap-1.5">
+            <TabsTrigger value="capacitaciones" className="gap-1.5 cursor-pointer">
               <Settings2 className="h-3.5 w-3.5" />
               Capacitaciones
               <span className="text-[11px] text-muted-foreground tabular-nums">
                 {rules.length}
               </span>
             </TabsTrigger>
-            <TabsTrigger value="eventos" className="gap-1.5">
+            <TabsTrigger value="eventos" className="gap-1.5 cursor-pointer">
               <Calendar className="h-3.5 w-3.5" />
               Eventos
               <span className="text-[11px] text-muted-foreground tabular-nums">
@@ -84,7 +87,11 @@ export function UnifiedOnboardingTabs({ rules, events, currentStatus }: Props) {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="capacitaciones" className="mt-6 space-y-4">
+          <TabsContent
+            value="capacitaciones"
+            forceMount
+            className="mt-6 space-y-4 data-[state=inactive]:hidden"
+          >
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">
                 Reglas que generan los slots automáticamente. Cada regla puede ser semanal o una sola vez.
@@ -114,7 +121,11 @@ export function UnifiedOnboardingTabs({ rules, events, currentStatus }: Props) {
             )}
           </TabsContent>
 
-          <TabsContent value="eventos" className="mt-6">
+          <TabsContent
+            value="eventos"
+            forceMount
+            className="mt-6 data-[state=inactive]:hidden"
+          >
             <OnboardingPageContent
               initialEvents={events}
               currentStatus={currentStatus}

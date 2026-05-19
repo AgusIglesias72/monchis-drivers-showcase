@@ -3,8 +3,8 @@
 // Aprobación masiva de documentos de un FormDriver en un solo paso. Reusa la
 // misma semántica que el approve manual (`/api/postulaciones/documents/[id]/approve`):
 // pasa cada FormDocument a APPROVED, deja `documentsStatus = APPROVED`, y dispara
-// el flow de ManyChat de "capacitaciones" con lock idempotente vía
-// `manychatApprovalSentAt`.
+// el mensaje de WhatsApp de "capacitaciones" con lock idempotente vía
+// `approvalNotifiedAt`.
 //
 // Caller principal: el endpoint `/api/agent/auto-approve` cuando el agente IA
 // resuelve APPROVED limpio en un cron.
@@ -15,7 +15,7 @@ import {
   WhatsAppMessageSource,
   WhatsAppMessageType,
 } from '@prisma/client'
-import { sendFlowByKey } from '@/lib/services/manychat-messaging.service'
+import { sendTemplateByKey } from '@/lib/services/whatsapp-messenger.service'
 
 const POSTULACION_APROBADA_TEMPLATE_KEY = 'capacitaciones'
 
@@ -24,18 +24,19 @@ export interface ApproveAllDocumentsResult {
   documentsApproved: number
   documentsTotal: number
   documentsStatus: FormDocumentsStatus
-  manychatTriggered: boolean
-  manychatStatus?: 'sent' | 'skipped' | 'failed'
-  manychatReason?: string
+  notificationTriggered: boolean
+  notificationStatus?: 'sent' | 'skipped' | 'failed'
+  notificationReason?: string
 }
 
 /**
- * Aprueba todos los documentos de un FormDriver y dispara el flow de aprobación
- * por ManyChat si el driver pasa a `documentsStatus = APPROVED` y aún no se envió.
+ * Aprueba todos los documentos de un FormDriver y dispara el mensaje de aprobación
+ * por el bot WhatsApp si el driver pasa a `documentsStatus = APPROVED` y aún no
+ * se envió.
  *
  * Idempotente:
  * - Si los documentos ya están APPROVED, no los re-toca.
- * - Si `manychatApprovalSentAt` ya está seteado, no reenvía el flow.
+ * - Si `approvalNotifiedAt` ya está seteado, no re-envía el mensaje.
  *
  * Lanza si el driver no existe o no tiene documentos cargados.
  */
@@ -80,29 +81,29 @@ export async function approveAllDocumentsForDriver(
     documentsApproved: docsToApprove.length,
     documentsTotal: driver.documents.length,
     documentsStatus: updatedDriver.documentsStatus,
-    manychatTriggered: false,
+    notificationTriggered: false,
   }
 
-  if (updatedDriver.manychatApprovalSentAt) {
+  if (updatedDriver.approvalNotifiedAt) {
     return result
   }
 
   const lockResult = await prisma.formDriver.updateMany({
     where: {
       id: driverId,
-      manychatApprovalSentAt: null,
+      approvalNotifiedAt: null,
     },
-    data: { manychatApprovalSentAt: now },
+    data: { approvalNotifiedAt: now },
   })
 
   if (lockResult.count !== 1) {
     return result
   }
 
-  result.manychatTriggered = true
+  result.notificationTriggered = true
 
   try {
-    const flowResult = await sendFlowByKey(
+    const sendResult = await sendTemplateByKey(
       updatedDriver,
       POSTULACION_APROBADA_TEMPLATE_KEY,
       {
@@ -111,35 +112,35 @@ export async function approveAllDocumentsForDriver(
         step: 'postulacion_aprobada',
       },
     )
-    result.manychatStatus = flowResult.status
-    result.manychatReason = flowResult.reason
+    result.notificationStatus = sendResult.status
+    result.notificationReason = sendResult.reason
 
-    // Liberar el lock en CUALQUIER caso que no haya enviado: failed (excepción de
-    // ManyChat) o skipped (template mal cableado: no existe en DB, inactivo o sin
-    // manychatFlowId). Sin esta liberación, si el template estaba mal configurado
-    // el driver queda con el lock seteado permanentemente y nunca recibe el mensaje
-    // aunque se arregle el template después.
-    if (flowResult.status !== 'sent') {
+    // Liberar el lock en CUALQUIER caso que no haya enviado: failed (error del
+    // bot) o skipped (template mal cableado: no existe en DB o inactivo). Sin esta
+    // liberación, si el template estaba mal configurado el driver queda con el
+    // lock seteado permanentemente y nunca recibe el mensaje aunque se arregle
+    // el template después.
+    if (sendResult.status !== 'sent') {
       await prisma.formDriver.update({
         where: { id: driverId },
-        data: { manychatApprovalSentAt: null },
+        data: { approvalNotifiedAt: null },
       })
-      result.manychatTriggered = false
+      result.notificationTriggered = false
     }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
-    console.error('[document-approval] Error inesperado enviando ManyChat', {
+    console.error('[document-approval] Error inesperado enviando WhatsApp', {
       driverId,
       error: errMsg,
     })
     await prisma.formDriver
       .update({
         where: { id: driverId },
-        data: { manychatApprovalSentAt: null },
+        data: { approvalNotifiedAt: null },
       })
       .catch(() => undefined)
-    result.manychatStatus = 'failed'
-    result.manychatReason = errMsg
+    result.notificationStatus = 'failed'
+    result.notificationReason = errMsg
   }
 
   return result

@@ -241,7 +241,6 @@ export async function getEligibleDriversForContact(limit: number = 20): Promise<
   fullName: string | null
   phoneNumber: string
   accessToken: string | null
-  manychatSubscriberId: string | null
   messagesSentCount: number
   concept: MessageConceptResult
 }>> {
@@ -269,7 +268,6 @@ export async function getEligibleDriversForContact(limit: number = 20): Promise<
       fullName: true,
       phoneNumber: true,
       accessToken: true,
-      manychatSubscriberId: true,
       messagesSentCount: true,
       status: true,
       currentStep: true,
@@ -303,8 +301,7 @@ export async function getEligibleDriversForContact(limit: number = 20): Promise<
     fullName: string | null
     phoneNumber: string
     accessToken: string | null
-    manychatSubscriberId: string | null
-    messagesSentCount: number
+      messagesSentCount: number
     concept: MessageConceptResult
   }> = []
 
@@ -321,7 +318,6 @@ export async function getEligibleDriversForContact(limit: number = 20): Promise<
       fullName: driver.fullName,
       phoneNumber: driver.phoneNumber,
       accessToken: driver.accessToken,
-      manychatSubscriberId: driver.manychatSubscriberId,
       messagesSentCount: driver.messagesSentCount,
       concept,
     })
