@@ -106,6 +106,8 @@ export interface CreateEventRequest {
   reminderHoursBefore?: number
   status?: OnboardingEventStatus
   notes?: string
+  /** clerkId del AdminUser que organiza el evento. */
+  organizer?: string
 }
 
 export interface UpdateEventRequest extends Partial<CreateEventRequest> {}

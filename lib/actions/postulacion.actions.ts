@@ -6,6 +6,7 @@ import { postulacionService } from '@/lib/services/postulacion.service'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { messagesService } from '@/lib/services/messages.service'
+import { buildDocumentRejectedMessage } from '@/lib/services/whatsapp-messenger.service'
 import { WhatsAppMessageType, WhatsAppMessageSource } from '@prisma/client'
 
 /**
@@ -308,11 +309,16 @@ export async function rejectDocument(documentId: string, reason: string) {
           // Extraer primer nombre
           const firstName = driver.fullName.split(' ')[0]
 
-          // Enviar mensaje de WhatsApp
+          // Enviar mensaje de WhatsApp con el motivo del rechazo.
           const messageResult = await messagesService.sendWhatsAppMessage({
             phone: driver.phoneNumber,
             name: firstName,
             type: WhatsAppMessageType.DOCUMENT_REJECTED,
+            customMessage: buildDocumentRejectedMessage({
+              firstName,
+              documentTypeName: 'Certificado de Antecedentes Penales',
+              reason,
+            }),
             formDriverId: driver.id,
             source: WhatsAppMessageSource.TRIGGER,
             metadata: {

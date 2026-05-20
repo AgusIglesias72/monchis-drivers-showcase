@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import { Loader2 } from 'lucide-react'
 import { onboardingService } from '@/lib/services/onboarding.service'
+import { prisma } from '@/lib/prisma'
 import { OnboardingEventContent } from '@/components/admin/onboarding/onboarding-event-content'
 
 // Aumentar revalidación para mejor performance
@@ -121,17 +122,34 @@ async function getEligibleDrivers(eventId: string) {
   }
 }
 
+// Lista de admins activos, para el Select del organizador en Configuración.
+async function getActiveAdminUsers() {
+  return prisma.adminUser.findMany({
+    where: { isActive: true },
+    select: {
+      id: true,
+      fullName: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      profileImageUrl: true,
+    },
+    orderBy: [{ fullName: 'asc' }, { email: 'asc' }],
+  })
+}
+
 export default async function OnboardingEventPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  
+
   // Optimización: Cargar en paralelo para mejor performance
-  const [event, eligibleDriversData] = await Promise.all([
+  const [event, eligibleDriversData, adminUsers] = await Promise.all([
     getEvent(id),
     getEligibleDrivers(id),
+    getActiveAdminUsers(),
   ])
 
   if (!event) {
@@ -140,10 +158,11 @@ export default async function OnboardingEventPage({
 
   return (
     <Suspense fallback={<EventPageLoading />}>
-      <OnboardingEventContent 
-        event={event} 
+      <OnboardingEventContent
+        event={event}
         initialEligibleDrivers={eligibleDriversData.drivers}
         initialPagination={eligibleDriversData.pagination}
+        adminUsers={adminUsers}
       />
     </Suspense>
   )

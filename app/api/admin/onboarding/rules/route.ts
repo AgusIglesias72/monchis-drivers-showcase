@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { listRules, createRule } from '@/lib/services/onboarding-rules.service'
 import { mapOnboardingErrorToStatus } from '@/lib/services/onboarding-errors'
+import { revalidateCapacitacionesPublic } from '@/lib/utils/revalidate-capacitaciones'
 import type { RuleCreateInput } from '@/lib/types/onboarding-rules.types'
 
 export async function GET(request: NextRequest) {
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
     }
     const rule = await createRule(input, user.id)
+    revalidateCapacitacionesPublic(rule.slug)
     return NextResponse.json({ rule }, { status: 201 })
   } catch (err) {
     const { status, body } = mapOnboardingErrorToStatus(err)

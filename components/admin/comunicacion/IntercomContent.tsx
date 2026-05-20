@@ -1,7 +1,14 @@
 // components/admin/comunicacion/IntercomContent.tsx
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Card,
   CardContent,
@@ -12,14 +19,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Popover,
   PopoverContent,
@@ -61,6 +60,7 @@ import {
   CornerDownLeft,
   X,
   MessageSquare,
+  ImagePlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -97,9 +97,36 @@ interface SendResult {
   status: 'idle' | 'success' | 'error';
   message?: string;
   conversationId?: string;
+  deliveryMethod?: 'reply' | 'outbound' | null;
+}
+
+interface Attachment {
+  id: string; // local-only, para keys de React
+  url: string;
+  filename: string;
+  size: number;
+  type: string;
+}
+
+type ConversationAuthorType = 'admin' | 'user' | 'lead' | 'bot';
+
+interface ConversationMessage {
+  id: string;
+  authorType: ConversationAuthorType;
+  authorName: string | null;
+  body: string;
+  createdAt: number; // epoch seconds
+  attachmentUrls: string[];
+}
+
+interface ConversationThread {
+  conversationId: string;
+  state: string | null;
+  messages: ConversationMessage[];
 }
 
 const NO_ASSIGNEE = '__none__';
+const MAX_ATTACHMENTS = 10;
 
 // ==================== ROOT ====================
 
@@ -237,10 +264,41 @@ function SandboxSection() {
   const [driver, setDriver] = useState<DriverOption | null>(null);
   const [senderId, setSenderId] = useState<string>('');
   const [assigneeId, setAssigneeId] = useState<string>(NO_ASSIGNEE);
+  const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<SendResult>({ status: 'idle' });
+
+  // Historial de la conversación de Intercom con el driver seleccionado.
+  const [thread, setThread] = useState<ConversationThread | null>(null);
+  const [threadLoading, setThreadLoading] = useState(false);
+
+  const loadThread = useCallback(async (contactId: string) => {
+    setThreadLoading(true);
+    try {
+      const res = await fetch(
+        `/api/intercom/conversation?contactId=${encodeURIComponent(contactId)}`,
+        { cache: 'no-store' },
+      );
+      const json = await res.json();
+      setThread(json.thread ?? null);
+    } catch {
+      setThread(null);
+    } finally {
+      setThreadLoading(false);
+    }
+  }, []);
+
+  // Al cambiar de driver, cargar su conversación.
+  useEffect(() => {
+    if (driver?.intercomContactId) {
+      loadThread(driver.intercomContactId);
+    } else {
+      setThread(null);
+    }
+  }, [driver?.intercomContactId, loadThread]);
 
   useEffect(() => {
     fetch('/api/intercom/admins', { cache: 'no-store' })
@@ -268,11 +326,12 @@ function SandboxSection() {
     [admins, assigneeId],
   );
 
+  // Permitimos enviar si hay body O al menos un attachment (Intercom acepta
+  // mensajes con solo adjuntos).
+  const hasContent =
+    body.trim().length > 0 || attachments.length > 0;
   const canSend =
-    !!driver?.intercomContactId &&
-    !!senderId &&
-    body.trim().length > 0 &&
-    !sending;
+    !!driver?.intercomContactId && !!senderId && hasContent && !sending;
 
   async function handleSend() {
     if (!driver?.intercomContactId || !senderId) return;
@@ -286,7 +345,9 @@ function SandboxSection() {
           contactId: driver.intercomContactId,
           senderAdminId: senderId,
           assigneeAdminId: assigneeId === NO_ASSIGNEE ? null : assigneeId,
+          subject,
           body,
+          attachmentUrls: attachments.map((a) => a.url),
           driverId: driver.driverId,
         }),
       });
@@ -299,10 +360,22 @@ function SandboxSection() {
       } else {
         setResult({
           status: 'success',
-          message: 'Mensaje enviado',
+          message:
+            json.deliveryMethod === 'outbound'
+              ? 'Enviado al Messenger (aparecerá en el inbox cuando responda)'
+              : 'Enviado a la conversación abierta (visible en el inbox)',
           conversationId: json.conversationId,
+          deliveryMethod: json.deliveryMethod,
         });
+        setSubject('');
         setBody('');
+        setAttachments([]);
+        // Refrescar el historial para que el mensaje nuevo aparezca en el hilo.
+        // Pequeño delay para dar tiempo a que Intercom lo indexe.
+        if (driver?.intercomContactId) {
+          const contactId = driver.intercomContactId;
+          setTimeout(() => loadThread(contactId), 1200);
+        }
       }
     } catch (err) {
       setResult({
@@ -331,13 +404,26 @@ function SandboxSection() {
         {/* ===== Chat header ===== */}
         <ChatHeader driver={driver} onDriverChange={setDriver} />
 
-        {/* ===== Chat body (preview) ===== */}
-        <ChatBody body={body} sender={sender} result={result} />
+        {/* ===== Chat body (historial + preview) ===== */}
+        <ChatBody
+          subject={subject}
+          body={body}
+          attachments={attachments}
+          sender={sender}
+          result={result}
+          thread={thread}
+          threadLoading={threadLoading}
+          driver={driver}
+        />
 
         {/* ===== Composer ===== */}
         <ChatComposer
+          subject={subject}
+          onSubjectChange={setSubject}
           body={body}
           onBodyChange={setBody}
+          attachments={attachments}
+          onAttachmentsChange={setAttachments}
           admins={admins}
           adminsLoading={adminsLoading}
           adminsError={adminsError}
@@ -363,16 +449,18 @@ function SandboxSection() {
                   <strong>{driver?.fullName}</strong>.
                 </div>
                 <div>
-                  Sender: <strong>{sender?.name ?? '—'}</strong>
+                  Remitente: <strong>{sender?.name ?? '—'}</strong>
                 </div>
                 <div>
-                  Assignee:{' '}
+                  Asignado a:{' '}
                   <strong>{assignee?.name ?? 'sin asignar'}</strong>
                 </div>
-                <div
-                  className="rounded border bg-muted/50 p-2 max-h-32 overflow-auto text-foreground"
-                  dangerouslySetInnerHTML={{ __html: body }}
-                />
+                <div className="rounded border bg-muted/50 p-2 max-h-40 overflow-auto text-foreground space-y-1">
+                  {subject.trim() && (
+                    <div className="font-semibold">{subject}</div>
+                  )}
+                  <div dangerouslySetInnerHTML={{ __html: body }} />
+                </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -452,40 +540,113 @@ function ChatHeader({
   );
 }
 
-// ==================== CHAT BODY (preview) ====================
+// ==================== CHAT BODY (historial + preview) ====================
 
 function ChatBody({
+  subject,
   body,
+  attachments,
   sender,
   result,
+  thread,
+  threadLoading,
+  driver,
 }: {
+  subject: string;
   body: string;
+  attachments: Attachment[];
   sender: IntercomAdminOption | null;
   result: SendResult;
+  thread: ConversationThread | null;
+  threadLoading: boolean;
+  driver: DriverOption | null;
 }) {
-  const hasContent = body.trim().length > 0;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const hasSubject = subject.trim().length > 0;
+  const hasText = body.trim().length > 0;
+  const hasAttachments = attachments.length > 0;
+  const hasPreview = hasSubject || hasText || hasAttachments;
+  const historyMessages = thread?.messages ?? [];
+  const hasHistory = historyMessages.length > 0;
+
+  // Auto-scroll al fondo cuando cambia el historial o el preview.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [historyMessages.length, hasPreview, threadLoading]);
+
+  const showEmpty = !driver || (!hasHistory && !hasPreview && !threadLoading);
 
   return (
-    <div className="min-h-[280px] max-h-[420px] overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,_theme(colors.muted.DEFAULT)_1px,_transparent_0)] [background-size:16px_16px] bg-background px-4 py-6">
-      {!hasContent ? (
-        <div className="flex flex-col items-center justify-center h-full min-h-[220px] text-center">
+    <div
+      ref={scrollRef}
+      className="min-h-[320px] max-h-[460px] overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,_theme(colors.muted.DEFAULT)_1px,_transparent_0)] [background-size:16px_16px] bg-background px-4 py-6 space-y-3"
+    >
+      {showEmpty && (
+        <div className="flex flex-col items-center justify-center h-full min-h-[260px] text-center">
           <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-3">
             <MessageSquare className="h-5 w-5 text-muted-foreground" />
           </div>
-          <p className="text-sm font-medium">Sin mensajes todavía</p>
+          <p className="text-sm font-medium">
+            {driver ? 'Sin conversación previa' : 'Sin mensajes todavía'}
+          </p>
           <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-            Escribí abajo y el preview aparecerá acá como burbuja del admin.
+            {driver
+              ? 'Este driver no tiene conversaciones en Intercom. Tu mensaje iniciará una nueva.'
+              : 'Seleccioná un driver para ver el historial de la conversación.'}
           </p>
         </div>
-      ) : (
+      )}
+
+      {driver && threadLoading && !hasHistory && (
+        <div className="flex items-center justify-center h-full min-h-[260px]">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Historial real de Intercom */}
+      {historyMessages.map((msg) => (
+        <ChatMessage key={msg.id} message={msg} />
+      ))}
+
+      {/* Preview del mensaje que se está escribiendo */}
+      {hasPreview && (
         <div className="flex items-end gap-2 justify-end">
           <div className="max-w-[75%] space-y-1">
-            <div
-              className="rounded-2xl rounded-br-sm bg-[#1F8DED] text-white px-4 py-2.5 text-sm leading-relaxed shadow-sm"
-              dangerouslySetInnerHTML={{ __html: body }}
-            />
+            {hasAttachments && (
+              <div
+                className={cn(
+                  'grid gap-1 rounded-2xl rounded-br-sm overflow-hidden bg-[#1F8DED]/10 p-1',
+                  attachments.length === 1 && 'grid-cols-1',
+                  attachments.length === 2 && 'grid-cols-2',
+                  attachments.length >= 3 && 'grid-cols-3',
+                )}
+              >
+                {attachments.map((att) => (
+                  <img
+                    key={att.id}
+                    src={att.url}
+                    alt={att.filename}
+                    className="w-full h-32 object-cover rounded-md"
+                  />
+                ))}
+              </div>
+            )}
+            {(hasSubject || hasText) && (
+              <div className="rounded-2xl rounded-br-sm bg-[#1F8DED] text-white px-4 py-2.5 text-sm leading-relaxed shadow-sm opacity-70 ring-1 ring-[#1F8DED]/30">
+                {hasSubject && (
+                  <div className="font-semibold mb-1">{subject}</div>
+                )}
+                {hasText && (
+                  <div
+                    className="[&_b]:font-semibold [&_strong]:font-semibold [&_i]:italic [&_em]:italic [&_a]:underline [&_a]:text-white"
+                    dangerouslySetInnerHTML={{ __html: body }}
+                  />
+                )}
+              </div>
+            )}
             <div className="text-[10px] text-muted-foreground text-right">
-              {sender ? sender.name : 'Sender no seleccionado'} · preview
+              {sender ? sender.name : 'Remitente no seleccionado'} · vista previa
             </div>
           </div>
           <Avatar className="size-7 flex-shrink-0">
@@ -497,7 +658,7 @@ function ChatBody({
       )}
 
       {result.status === 'success' && (
-        <div className="flex items-center justify-center gap-1.5 mt-4 text-xs text-emerald-700 dark:text-emerald-400">
+        <div className="flex items-center justify-center gap-1.5 pt-2 text-xs text-emerald-700 dark:text-emerald-400">
           <CheckCircle2 className="h-3.5 w-3.5" />
           {result.message}
           {result.conversationId && (
@@ -508,7 +669,7 @@ function ChatBody({
         </div>
       )}
       {result.status === 'error' && (
-        <div className="flex items-center justify-center gap-1.5 mt-4 text-xs text-destructive">
+        <div className="flex items-center justify-center gap-1.5 pt-2 text-xs text-destructive">
           <AlertCircle className="h-3.5 w-3.5" />
           {result.message}
         </div>
@@ -517,11 +678,93 @@ function ChatBody({
   );
 }
 
+// ==================== CHAT MESSAGE (mensaje del historial) ====================
+
+function ChatMessage({ message }: { message: ConversationMessage }) {
+  const isAdminSide = message.authorType === 'admin' || message.authorType === 'bot';
+  const hasText = message.body.trim().length > 0;
+  const hasImages = message.attachmentUrls.length > 0;
+
+  return (
+    <div
+      className={cn(
+        'flex items-end gap-2',
+        isAdminSide ? 'justify-end' : 'justify-start',
+      )}
+    >
+      {!isAdminSide && (
+        <Avatar className="size-7 flex-shrink-0">
+          <AvatarFallback className="bg-muted text-[10px] font-semibold">
+            {initials(message.authorName ?? 'Driver')}
+          </AvatarFallback>
+        </Avatar>
+      )}
+      <div className="max-w-[75%] space-y-1">
+        {hasImages && (
+          <div
+            className={cn(
+              'grid gap-1 rounded-2xl overflow-hidden p-1',
+              isAdminSide
+                ? 'rounded-br-sm bg-[#1F8DED]/10'
+                : 'rounded-bl-sm bg-muted',
+              message.attachmentUrls.length === 1 && 'grid-cols-1',
+              message.attachmentUrls.length === 2 && 'grid-cols-2',
+              message.attachmentUrls.length >= 3 && 'grid-cols-3',
+            )}
+          >
+            {message.attachmentUrls.map((url, i) => (
+              <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={url}
+                  alt="adjunto"
+                  className="w-full h-32 object-cover rounded-md"
+                />
+              </a>
+            ))}
+          </div>
+        )}
+        {hasText && (
+          <div
+            className={cn(
+              'rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm [&_b]:font-semibold [&_strong]:font-semibold [&_i]:italic [&_em]:italic [&_a]:underline',
+              isAdminSide
+                ? 'rounded-br-sm bg-[#1F8DED] text-white [&_a]:text-white'
+                : 'rounded-bl-sm bg-muted text-foreground [&_a]:text-[#1F8DED]',
+            )}
+            dangerouslySetInnerHTML={{ __html: message.body }}
+          />
+        )}
+        <div
+          className={cn(
+            'text-[10px] text-muted-foreground',
+            isAdminSide ? 'text-right' : 'text-left',
+          )}
+        >
+          {message.authorName ?? (isAdminSide ? 'Admin' : 'Driver')}
+          {' · '}
+          {formatChatTime(message.createdAt)}
+        </div>
+      </div>
+      {isAdminSide && (
+        <Avatar className="size-7 flex-shrink-0">
+          <AvatarFallback className="bg-[#1F8DED] text-white text-[10px] font-semibold">
+            {initials(message.authorName ?? 'Admin')}
+          </AvatarFallback>
+        </Avatar>
+      )}
+    </div>
+  );
+}
+
 // ==================== CHAT COMPOSER ====================
 
 function ChatComposer({
+  subject,
+  onSubjectChange,
   body,
   onBodyChange,
+  attachments,
+  onAttachmentsChange,
   admins,
   adminsLoading,
   adminsError,
@@ -534,8 +777,12 @@ function ChatComposer({
   onSend,
   driver,
 }: {
+  subject: string;
+  onSubjectChange: (s: string) => void;
   body: string;
   onBodyChange: (b: string) => void;
+  attachments: Attachment[];
+  onAttachmentsChange: (a: Attachment[]) => void;
   admins: IntercomAdminOption[];
   adminsLoading: boolean;
   adminsError: string | null;
@@ -548,116 +795,150 @@ function ChatComposer({
   onSend: () => void;
   driver: DriverOption | null;
 }) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-  function wrapSelection(open: string, close: string) {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const selected = body.slice(start, end);
-    const next =
-      body.slice(0, start) + open + selected + close + body.slice(end);
-    onBodyChange(next);
-    requestAnimationFrame(() => {
-      ta.focus();
-      ta.setSelectionRange(start + open.length, end + open.length);
-    });
-  }
-
-  function insertAtCursor(text: string) {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const next = body.slice(0, start) + text + body.slice(end);
-    onBodyChange(next);
-    requestAnimationFrame(() => {
-      ta.focus();
-      ta.setSelectionRange(start + text.length, start + text.length);
-    });
-  }
-
-  function insertLink() {
-    const url = window.prompt('URL del enlace:', 'https://');
-    if (!url) return;
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const selected = body.slice(start, end) || 'click acá';
-    wrapSelection(
-      `<a href="${url}" target="_blank" rel="noopener noreferrer">`,
-      '</a>',
-    );
-    // Si no había selección, reemplazo el placeholder
-    if (start === end) {
-      requestAnimationFrame(() => {
-        ta.focus();
-      });
+  async function handleFiles(files: FileList) {
+    setUploadError(null);
+    const remaining = MAX_ATTACHMENTS - attachments.length;
+    if (remaining <= 0) {
+      setUploadError(`Máximo ${MAX_ATTACHMENTS} imágenes por mensaje`);
+      return;
     }
-    void selected;
+    const toUpload = Array.from(files).slice(0, remaining);
+    setUploading(true);
+    try {
+      const uploaded: Attachment[] = [];
+      for (const file of toUpload) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/intercom/upload-attachment', {
+          method: 'POST',
+          body: formData,
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error ?? `Error subiendo ${file.name}`);
+        }
+        uploaded.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          url: json.url,
+          filename: json.filename,
+          size: json.size,
+          type: json.type,
+        });
+      }
+      onAttachmentsChange([...attachments, ...uploaded]);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Error al subir');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  function removeAttachment(id: string) {
+    onAttachmentsChange(attachments.filter((a) => a.id !== id));
   }
 
   return (
     <div className="border-t bg-card">
-      {/* Toolbar de formato */}
-      <div className="flex items-center gap-1 px-2 py-1.5 border-b">
-        <ToolbarButton
-          icon={<Bold className="h-3.5 w-3.5" />}
-          label="Negrita"
-          onClick={() => wrapSelection('<b>', '</b>')}
-        />
-        <ToolbarButton
-          icon={<Italic className="h-3.5 w-3.5" />}
-          label="Cursiva"
-          onClick={() => wrapSelection('<i>', '</i>')}
-        />
-        <ToolbarButton
-          icon={<LinkIcon className="h-3.5 w-3.5" />}
-          label="Enlace"
-          onClick={insertLink}
-        />
-        <ToolbarButton
-          icon={<CornerDownLeft className="h-3.5 w-3.5" />}
-          label="Salto de línea"
-          onClick={() => insertAtCursor('<br>\n')}
-        />
-        <div className="ml-auto text-[10px] text-muted-foreground pr-1">
-          {body.length} / 5000
-        </div>
-      </div>
+      {/* Asunto / título del mensaje */}
+      <input
+        type="text"
+        value={subject}
+        onChange={(e) => onSubjectChange(e.target.value)}
+        disabled={!driver}
+        placeholder="Asunto (opcional) — aparece como título del mensaje"
+        maxLength={255}
+        className="w-full border-b px-3 py-2 text-sm font-medium bg-transparent outline-none placeholder:font-normal placeholder:text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+      />
 
-      {/* Textarea — el editor */}
-      <Textarea
-        ref={textareaRef}
+      <RichEditor
         value={body}
-        onChange={(e) => onBodyChange(e.target.value)}
+        onChange={onBodyChange}
+        disabled={!driver}
         placeholder={
           driver
             ? `Escribí un mensaje para ${driver.fullName}…`
             : 'Primero seleccioná un driver arriba…'
         }
-        disabled={!driver}
-        className="min-h-32 max-h-64 border-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 resize-y text-sm leading-relaxed shadow-none"
-        maxLength={5000}
+        onImageClick={() => fileInputRef.current?.click()}
+        imageDisabled={
+          !driver || uploading || attachments.length >= MAX_ATTACHMENTS
+        }
       />
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            handleFiles(e.target.files);
+          }
+        }}
+      />
+
+      {/* Attachment thumbnails */}
+      {(attachments.length > 0 || uploading || uploadError) && (
+        <div className="flex items-center gap-2 px-3 py-2 border-t bg-muted/10 overflow-x-auto">
+          {attachments.map((att) => (
+            <div
+              key={att.id}
+              className="relative flex-shrink-0 group rounded-md overflow-hidden border bg-background"
+            >
+              <img
+                src={att.url}
+                alt={att.filename}
+                className="h-16 w-16 object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => removeAttachment(att.id)}
+                aria-label="Eliminar imagen"
+                className="absolute top-0.5 right-0.5 size-5 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/90"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+          {uploading && (
+            <div className="h-16 w-16 rounded-md border border-dashed flex items-center justify-center bg-muted/30 flex-shrink-0">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {uploadError && (
+            <div className="flex items-center gap-1.5 text-xs text-destructive ml-2">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {uploadError}
+            </div>
+          )}
+          {attachments.length > 0 && (
+            <div className="ml-auto text-[10px] text-muted-foreground flex-shrink-0">
+              {attachments.length} / {MAX_ATTACHMENTS}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Footer: De / Asignar a + botón Enviar */}
       <div className="flex items-center justify-between gap-2 border-t px-3 py-2 bg-muted/20 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
-          <AdminPickerInline
+          <AdminCombobox
             label="De"
-            placeholder={
-              adminsLoading ? 'Cargando…' : 'Seleccionar sender'
-            }
+            placeholder={adminsLoading ? 'Cargando…' : 'Seleccionar sender'}
             admins={admins}
             value={sender}
             onChange={onSenderChange}
             disabled={adminsLoading}
           />
           <span className="text-muted-foreground text-xs">·</span>
-          <AdminPickerInline
+          <AdminCombobox
             label="Asignar a"
             placeholder="Sin asignar"
             admins={admins}
@@ -690,14 +971,183 @@ function ChatComposer({
   );
 }
 
+// ==================== RICH EDITOR (contentEditable WYSIWYG) ====================
+
+function RichEditor({
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  onImageClick,
+  imageDisabled,
+}: {
+  value: string;
+  onChange: (html: string) => void;
+  disabled: boolean;
+  placeholder: string;
+  onImageClick?: () => void;
+  imageDisabled?: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Sincronizamos el DOM con el state SOLO cuando value se vacía desde afuera
+  // (reset post-send). Para todos los demás cambios, el contentEditable se
+  // autogestiona y reescribirle innerHTML rompe el cursor.
+  useLayoutEffect(() => {
+    if (
+      ref.current &&
+      value === '' &&
+      ref.current.innerHTML !== '' &&
+      ref.current.innerHTML !== '<br>'
+    ) {
+      ref.current.innerHTML = '';
+    }
+  }, [value]);
+
+  function emitChange() {
+    if (!ref.current) return;
+    const html = ref.current.innerHTML;
+    // Normalizamos el "<br>" solitario que Chrome agrega al borrar todo.
+    onChange(html === '<br>' ? '' : html);
+  }
+
+  function exec(cmd: string, arg?: string) {
+    ref.current?.focus();
+    // execCommand está deprecated pero soportado en todos los browsers.
+    // Para un editor interno alcanza. Si en el futuro se complica, migrar a
+    // Selection API + Range manual o a Tiptap.
+    document.execCommand(cmd, false, arg);
+    emitChange();
+  }
+
+  function handleLinkClick() {
+    const url = window.prompt('URL del enlace:', 'https://');
+    if (!url) return;
+    exec('createLink', url);
+    // Forzar target=_blank en el último <a> creado (execCommand no lo soporta).
+    if (ref.current) {
+      const anchors = ref.current.querySelectorAll('a');
+      const last = anchors[anchors.length - 1];
+      if (last && last.getAttribute('href') === url) {
+        last.setAttribute('target', '_blank');
+        last.setAttribute('rel', 'noopener noreferrer');
+        emitChange();
+      }
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    // Shortcuts estándar
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      exec('bold');
+    } else if (meta && e.key.toLowerCase() === 'i') {
+      e.preventDefault();
+      exec('italic');
+    }
+  }
+
+  // Pegado: forzamos plain text para no traer estilos raros del clipboard.
+  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, text);
+    emitChange();
+  }
+
+  const visibleLength = useMemo(() => {
+    if (!value) return 0;
+    if (typeof document === 'undefined') return 0;
+    const div = document.createElement('div');
+    div.innerHTML = value;
+    return div.textContent?.length ?? 0;
+  }, [value]);
+
+  const isEmpty = !value || value === '<br>';
+
+  return (
+    <>
+      {/* Toolbar de formato */}
+      <div className="flex items-center gap-1 px-2 py-1.5 border-b">
+        <ToolbarButton
+          icon={<Bold className="h-3.5 w-3.5" />}
+          label="Negrita (Cmd/Ctrl+B)"
+          onClick={() => exec('bold')}
+          disabled={disabled}
+        />
+        <ToolbarButton
+          icon={<Italic className="h-3.5 w-3.5" />}
+          label="Cursiva (Cmd/Ctrl+I)"
+          onClick={() => exec('italic')}
+          disabled={disabled}
+        />
+        <ToolbarButton
+          icon={<LinkIcon className="h-3.5 w-3.5" />}
+          label="Enlace"
+          onClick={handleLinkClick}
+          disabled={disabled}
+        />
+        <ToolbarButton
+          icon={<CornerDownLeft className="h-3.5 w-3.5" />}
+          label="Salto de línea"
+          onClick={() => exec('insertHTML', '<br>')}
+          disabled={disabled}
+        />
+        {onImageClick && (
+          <>
+            <div className="w-px h-4 bg-border mx-0.5" />
+            <ToolbarButton
+              icon={<ImagePlus className="h-3.5 w-3.5" />}
+              label="Adjuntar imagen"
+              onClick={onImageClick}
+              disabled={imageDisabled}
+            />
+          </>
+        )}
+        <div className="ml-auto text-[10px] text-muted-foreground pr-1">
+          {visibleLength} / 5000
+        </div>
+      </div>
+
+      {/* Editor */}
+      <div className="relative">
+        <div
+          ref={ref}
+          contentEditable={!disabled}
+          suppressContentEditableWarning
+          onInput={emitChange}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          className={cn(
+            'min-h-32 max-h-64 overflow-y-auto px-3 py-3 text-sm leading-relaxed focus:outline-none',
+            // Estilado de tags inline (lo que renderiza dentro del editor)
+            '[&_b]:font-semibold [&_strong]:font-semibold',
+            '[&_i]:italic [&_em]:italic',
+            '[&_a]:text-[#1F8DED] [&_a]:underline',
+            disabled && 'opacity-50 cursor-not-allowed bg-muted/30',
+          )}
+        />
+        {isEmpty && (
+          <div className="pointer-events-none absolute top-3 left-3 text-sm text-muted-foreground">
+            {placeholder}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 function ToolbarButton({
   icon,
   label,
   onClick,
+  disabled,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <Button
@@ -707,6 +1157,9 @@ function ToolbarButton({
       onClick={onClick}
       title={label}
       aria-label={label}
+      disabled={disabled}
+      // Evitamos que el blur del editor mueva el cursor antes de aplicar el cmd
+      onMouseDown={(e) => e.preventDefault()}
       className="h-7 w-7 p-0"
     >
       {icon}
@@ -714,9 +1167,9 @@ function ToolbarButton({
   );
 }
 
-// ==================== INLINE ADMIN PICKER ====================
+// ==================== ADMIN COMBOBOX (searchable) ====================
 
-function AdminPickerInline({
+function AdminCombobox({
   label,
   placeholder,
   admins,
@@ -733,59 +1186,161 @@ function AdminPickerInline({
   allowNone?: boolean;
   disabled?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+
+  const filtered = useMemo(() => {
+    const lower = q.trim().toLowerCase();
+    if (!lower) return admins;
+    return admins.filter(
+      (a) =>
+        a.name.toLowerCase().includes(lower) ||
+        a.email.toLowerCase().includes(lower) ||
+        (a.jobTitle?.toLowerCase().includes(lower) ?? false),
+    );
+  }, [admins, q]);
+
+  function pick(id: string) {
+    onChange(id);
+    setOpen(false);
+    setQ('');
+  }
+
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-xs text-muted-foreground">{label}:</span>
-      <Select
-        value={value?.id ?? (allowNone ? NO_ASSIGNEE : '')}
-        onValueChange={onChange}
-        disabled={disabled}
-      >
-        <SelectTrigger
-          size="sm"
-          className="h-7 min-w-[160px] text-xs bg-background gap-2"
-        >
-          <SelectValue placeholder={placeholder}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            role="combobox"
+            aria-expanded={open}
+            disabled={disabled}
+            className={cn(
+              'flex items-center gap-1.5 h-7 px-2 min-w-[160px] text-xs rounded-md border bg-background cursor-pointer [&_*]:cursor-pointer',
+              'hover:bg-accent transition-colors',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+            )}
+          >
             {value ? (
-              <span className="flex items-center gap-1.5">
+              <>
                 <Avatar className="size-4">
                   <AvatarFallback className="text-[8px] bg-muted">
                     {initials(value.name)}
                   </AvatarFallback>
                 </Avatar>
-                <span className="truncate">{value.name}</span>
-              </span>
-            ) : allowNone ? (
-              <span className="text-muted-foreground">{placeholder}</span>
-            ) : null}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {allowNone && (
-            <SelectItem value={NO_ASSIGNEE}>
-              <span className="text-muted-foreground">{placeholder}</span>
-            </SelectItem>
-          )}
-          {admins.map((a) => (
-            <SelectItem key={a.id} value={a.id}>
-              <span className="flex items-center gap-2">
-                <Avatar className="size-5">
-                  <AvatarFallback className="text-[9px] bg-muted">
-                    {initials(a.name)}
-                  </AvatarFallback>
-                </Avatar>
-                <span>{a.name}</span>
-                {a.awayMode && (
-                  <Badge variant="outline" className="text-[9px] px-1 py-0">
-                    away
+                <span className="truncate flex-1 text-left">{value.name}</span>
+                {value.awayMode && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] px-1 py-0 ml-1"
+                  >
+                    ausente
                   </Badge>
                 )}
+              </>
+            ) : (
+              <span className="text-muted-foreground flex-1 text-left">
+                {placeholder}
               </span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+            )}
+            <ChevronsUpDownSmall />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          className="w-[280px] p-0"
+          align="start"
+          sideOffset={4}
+        >
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder="Buscar admin…"
+              value={q}
+              onValueChange={setQ}
+            />
+            <CommandList>
+              {allowNone && (
+                <CommandGroup>
+                  <CommandItem
+                    value="__none__"
+                    onSelect={() => pick(NO_ASSIGNEE)}
+                    className="text-muted-foreground"
+                  >
+                    {placeholder}
+                  </CommandItem>
+                </CommandGroup>
+              )}
+              {filtered.length === 0 && (
+                <CommandEmpty>Sin resultados</CommandEmpty>
+              )}
+              {filtered.length > 0 && (
+                <CommandGroup>
+                  {filtered.map((a) => (
+                    <CommandItem
+                      key={a.id}
+                      value={a.id}
+                      onSelect={() => pick(a.id)}
+                      className="flex items-center gap-2 py-2"
+                    >
+                      <Avatar className="size-6 flex-shrink-0">
+                        <AvatarFallback className="text-[10px] bg-muted">
+                          {initials(a.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium truncate">
+                            {a.name}
+                          </span>
+                          {a.awayMode && (
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] px-1 py-0"
+                            >
+                              ausente
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          {a.email}
+                          {a.jobTitle && ` · ${a.jobTitle}`}
+                        </div>
+                      </div>
+                      <Check
+                        className={cn(
+                          'h-3.5 w-3.5 flex-shrink-0',
+                          value?.id === a.id ? 'opacity-100' : 'opacity-0',
+                        )}
+                      />
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
+  );
+}
+
+function ChevronsUpDownSmall() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="opacity-50 flex-shrink-0"
+    >
+      <path d="m7 15 5 5 5-5" />
+      <path d="m7 9 5-5 5 5" />
+    </svg>
   );
 }
 
@@ -843,7 +1398,7 @@ function DriverCombobox({
           type="button"
           role="combobox"
           aria-expanded={open}
-          className="flex items-center gap-2 text-sm font-medium hover:underline text-foreground"
+          className="flex items-center gap-2 text-sm font-medium hover:underline text-foreground cursor-pointer [&_*]:cursor-pointer"
         >
           <Search className="h-3.5 w-3.5 text-muted-foreground" />
           {value ? (
@@ -1038,4 +1593,23 @@ function initials(name: string): string {
   const parts = trimmed.split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function formatChatTime(epochSeconds: number): string {
+  if (!epochSeconds) return '';
+  const date = new Date(epochSeconds * 1000);
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  if (sameDay) {
+    return date.toLocaleTimeString('es', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+  return date.toLocaleDateString('es', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }

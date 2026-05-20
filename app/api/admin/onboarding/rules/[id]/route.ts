@@ -9,6 +9,7 @@ import {
   deactivateRule,
 } from '@/lib/services/onboarding-rules.service'
 import { mapOnboardingErrorToStatus } from '@/lib/services/onboarding-errors'
+import { revalidateCapacitacionesPublic } from '@/lib/utils/revalidate-capacitaciones'
 import type { RuleUpdateInput } from '@/lib/types/onboarding-rules.types'
 
 export async function GET(
@@ -36,6 +37,7 @@ export async function PATCH(
     const { id } = await params
     const input = (await request.json()) as RuleUpdateInput
     const rule = await updateRule(id, input, user.id)
+    revalidateCapacitacionesPublic(rule.slug)
     return NextResponse.json({ rule })
   } catch (err) {
     const { status, body } = mapOnboardingErrorToStatus(err)
@@ -51,6 +53,7 @@ export async function DELETE(
   try {
     const { id } = await params
     const rule = await deactivateRule(id, user.id)
+    revalidateCapacitacionesPublic(rule.slug)
     return NextResponse.json({ rule })
   } catch (err) {
     const { status, body } = mapOnboardingErrorToStatus(err)

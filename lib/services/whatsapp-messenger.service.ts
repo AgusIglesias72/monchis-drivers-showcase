@@ -183,6 +183,26 @@ export async function sendTemplateByKey(
   return { status: 'sent', messageId };
 }
 
+/**
+ * Construye el texto de aviso de documento rechazado, con el motivo, en el tono
+ * de Monchis (cercano, voseo, sin emojis). Usado en el rechazo manual y el de la
+ * IA validadora para que el mensaje sea consistente.
+ */
+export function buildDocumentRejectedMessage(input: {
+  firstName: string;
+  documentTypeName: string;
+  reason?: string | null;
+}): string {
+  const nombre = input.firstName?.trim() || 'Hola';
+  const doc = input.documentTypeName?.trim() || 'documento';
+  const motivo = input.reason?.trim();
+
+  let msg = `Hola ${nombre},\n\nRevisamos tu ${doc} y necesitamos que lo vuelvas a subir.`;
+  if (motivo) msg += `\n\nMotivo: ${motivo}`;
+  msg += `\n\nEntrá al portal y cargalo de nuevo. Cualquier duda, escribinos por acá.`;
+  return msg;
+}
+
 function buildMetadata(input: {
   channel: string;
   templateKey: string;

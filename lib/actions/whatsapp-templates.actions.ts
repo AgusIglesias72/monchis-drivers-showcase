@@ -60,7 +60,10 @@ export async function getAllTemplates() {
       templates
     }
   } catch (error) {
-    console.error("Error getting all templates:", error)
+    // No logueamos el error de DB acá — el page muestra un banner consistente
+    // cuando `success: false` y el overlay de Next dev se dispara por cualquier
+    // console.error en server actions, generando ruido visual durante caídas
+    // temporales de Railway. Si necesitás debugging puntual, log explícito.
     return {
       success: false,
       templates: [],

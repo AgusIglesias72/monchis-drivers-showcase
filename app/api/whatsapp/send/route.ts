@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     // botId queda como param legacy — ignorado (single-tenant).
-    const { phone, name, type, step, customMessage } = body;
+    const { phone, name, type, step, customMessage, imageUrl } = body;
 
     // Validaciones
     if (!phone || !name || !type) {
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
       type: type as WhatsAppMessageType,
       step,
       customMessage,
+      imageUrl,
       source: WhatsAppMessageSource.MANUAL,
       sentBy: adminUser.clerkId,
       ipAddress,

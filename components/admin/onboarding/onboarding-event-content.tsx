@@ -83,6 +83,15 @@ const STATUS_BADGE: Record<string, { className: string; icon: React.ReactNode; l
   },
 }
 
+export interface AdminUserOption {
+  id: string
+  fullName: string | null
+  firstName: string | null
+  lastName: string | null
+  email: string
+  profileImageUrl: string | null
+}
+
 interface OnboardingEventContentProps {
   event: any
   initialEligibleDrivers: any[]
@@ -93,6 +102,7 @@ interface OnboardingEventContentProps {
     totalPages: number
     hasMore: boolean
   }
+  adminUsers: AdminUserOption[]
 }
 
 function formatDate(dateStr: string | Date) {
@@ -138,6 +148,7 @@ export function OnboardingEventContent({
   event,
   initialEligibleDrivers,
   initialPagination,
+  adminUsers,
 }: OnboardingEventContentProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'attendees' | 'add' | 'settings'>('attendees')
@@ -160,7 +171,7 @@ export function OnboardingEventContent({
   const rule = event.scheduleRule
 
   return (
-    <div className="flex flex-1 flex-col container mx-auto">
+    <div className="flex flex-1 flex-col">
       <AdminHeader
         breadcrumbs={[
           { label: 'Capacitaciones', href: '/admin/onboarding?tab=eventos' },
@@ -168,7 +179,7 @@ export function OnboardingEventContent({
         ]}
       />
 
-      <div className="flex-1 p-4 md:p-8 space-y-6">
+      <div className="flex-1 p-4 md:p-8 space-y-6 container mx-auto w-full">
         {/* Hero del evento */}
         <Card className="overflow-hidden">
           <CardContent className="p-5">
@@ -316,16 +327,14 @@ export function OnboardingEventContent({
             })}
           </div>
 
-          {/* Connector line: 1px que conecta visualmente los tabs con el contenido.
-              El tab activo (z-10) la cubre donde sienta. */}
-          <div className="h-px bg-border" />
+          {/* Connector line: 1px que pasa por debajo del tab activo (z-10 + bg-background
+              lo cubre donde sienta) y conecta con el contenido inmediatamente debajo. */}
+          <div className="h-px bg-border -mt-px" />
 
-          {/* Contenido de la solapa activa */}
-          <div className="mt-4">
+          {/* Contenido de la solapa activa — sin margin top para fundirse con la línea */}
+          <div className="pt-6">
             {activeTab === 'attendees' && (
               <AttendeesManagementSection
-                eventId={event.id}
-                event={event}
                 attendees={event.attendees}
                 onRefresh={handleRefresh}
               />
@@ -342,7 +351,7 @@ export function OnboardingEventContent({
               />
             )}
             {activeTab === 'settings' && (
-              <EventSettingsSection event={event} onUpdate={handleRefresh} />
+              <EventSettingsSection event={event} onUpdate={handleRefresh} adminUsers={adminUsers} />
             )}
           </div>
         </div>

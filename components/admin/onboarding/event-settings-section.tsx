@@ -3,17 +3,18 @@
 "use client"
 
 import { useState } from 'react'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Calendar } from '@/components/ui/calendar'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import {
   Select,
   SelectContent,
@@ -21,13 +22,107 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Save, Calendar as CalendarIcon, MapPin, Clock } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import {
+  Loader2,
+  Save,
+  RotateCcw,
+  Calendar as CalendarIcon,
+  MapPin,
+  Settings,
+  Info,
+  Users,
+  Edit,
+  CheckCircle,
+  XCircle,
+  PauseCircle,
+  PlayCircle,
+} from 'lucide-react'
 import { updateOnboardingEvent } from '@/lib/actions/onboarding.actions'
 import { toast } from 'sonner'
+
+function toYmd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function parseYmd(s: string | undefined): Date | undefined {
+  if (!s) return undefined
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  if (!m) return undefined
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+}
+
+const STATUS_OPTIONS = [
+  { value: 'DRAFT', label: 'Borrador', icon: Edit, className: 'bg-gray-100 text-gray-800 border-gray-200' },
+  { value: 'SCHEDULED', label: 'Programado', icon: CalendarIcon, className: 'bg-blue-100 text-blue-800 border-blue-200' },
+  { value: 'IN_PROGRESS', label: 'En curso', icon: PlayCircle, className: 'bg-amber-100 text-amber-800 border-amber-200' },
+  { value: 'COMPLETED', label: 'Completado', icon: CheckCircle, className: 'bg-green-100 text-green-800 border-green-200' },
+  { value: 'CANCELLED', label: 'Cancelado', icon: XCircle, className: 'bg-red-100 text-red-800 border-red-200' },
+  { value: 'POSTPONED', label: 'Pospuesto', icon: PauseCircle, className: 'bg-purple-100 text-purple-800 border-purple-200' },
+] as const
+
+function SectionHeader({ icon: Icon, title, description }: { icon: typeof Settings; title: string; description?: string }) {
+  return (
+    <div className="mb-3">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground inline-flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5" />
+        {title}
+      </h4>
+      {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+    </div>
+  )
+}
+
+interface AdminUserOption {
+  id: string
+  fullName: string | null
+  firstName: string | null
+  lastName: string | null
+  email: string
+  profileImageUrl: string | null
+}
 
 interface EventSettingsSectionProps {
   event: any
   onUpdate: () => void
+  adminUsers?: AdminUserOption[]
+}
+
+function adminDisplayName(u: AdminUserOption): string {
+  if (u.fullName) return u.fullName
+  const fl = [u.firstName, u.lastName].filter(Boolean).join(' ')
+  return fl || u.email
+}
+
+function adminInitials(u: AdminUserOption): string {
+  const name = adminDisplayName(u).trim()
+  const parts = name.split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '–'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+function AdminAvatar({ user, size = 24 }: { user: AdminUserOption; size?: number }) {
+  if (user.profileImageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={user.profileImageUrl}
+        alt={adminDisplayName(user)}
+        width={size}
+        height={size}
+        className="rounded-full object-cover flex-shrink-0"
+        style={{ width: size, height: size }}
+      />
+    )
+  }
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full bg-muted text-muted-foreground font-semibold flex-shrink-0"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
+    >
+      {adminInitials(user)}
+    </span>
+  )
 }
 
 // Valores por defecto (mismos que el dialog)
@@ -35,9 +130,9 @@ const DEFAULT_LOCATION = 'HUB'
 const DEFAULT_ADDRESS = 'México 850'
 const FULL_ADDRESS = 'Mexico N° 850 e/ F.R. Moreno y Manuel Domínguez, Asunción, Paraguay'
 
-export function EventSettingsSection({ event, onUpdate }: EventSettingsSectionProps) {
+export function EventSettingsSection({ event, onUpdate, adminUsers = [] }: EventSettingsSectionProps) {
   const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
+  const initialFormData = {
     title: event.title || '',
     organizer: event.organizer || '',
     description: event.description || '',
@@ -50,7 +145,12 @@ export function EventSettingsSection({ event, onUpdate }: EventSettingsSectionPr
     maxCapacity: event.maxCapacity || '20',
     status: event.status,
     notes: event.notes || '',
-  })
+  }
+  const [formData, setFormData] = useState(initialFormData)
+
+  const hasChanges = JSON.stringify(formData) !== JSON.stringify(initialFormData)
+
+  const resetForm = () => setFormData(initialFormData)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,110 +173,190 @@ export function EventSettingsSection({ event, onUpdate }: EventSettingsSectionPr
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Información General */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Información General</CardTitle>
-          <CardDescription>
-            Datos básicos del evento de onboarding
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="title">Título del Evento</Label>
-              <Input
-                id="title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+      {/* Header flat — mismo patrón que "Agregar Participantes" */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            Configuración
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            Editá los datos del evento.
+          </p>
+        </div>
+        {hasChanges && (
+          <span className="inline-flex items-center gap-1 text-xs text-amber-600 px-2 py-1 rounded-md bg-amber-50 border border-amber-200">
+            <Info className="h-3 w-3" />
+            Cambios sin guardar
+          </span>
+        )}
+      </div>
+
+      {/* Una sola Card consolidada con secciones separadas por divider */}
+      <div className="rounded-lg border bg-card divide-y">
+        {/* Información general */}
+        <section className="p-4 md:p-5">
+          <SectionHeader icon={Info} title="Información general" />
+          <div className="space-y-3">
+            {/* Título + Organizador en la misma fila */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="title">Título</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  disabled={loading}
+                  placeholder="Ej: OnBoarding Octubre — Zona Norte"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Si lo dejás vacío, se genera automáticamente.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="organizer">Organizador *</Label>
+                <Select
+                  value={formData.organizer || undefined}
+                  onValueChange={(value) => setFormData({ ...formData, organizer: value })}
+                  disabled={loading || adminUsers.length === 0}
+                >
+                  <SelectTrigger id="organizer" className="w-full cursor-pointer">
+                    <SelectValue placeholder="Seleccionar organizador">
+                      {(() => {
+                        const current = adminUsers.find((u) => u.id === formData.organizer)
+                        if (current) {
+                          return (
+                            <span className="inline-flex items-center gap-2 text-left min-w-0">
+                              <AdminAvatar user={current} size={20} />
+                              <span className="capitalize text-sm truncate">{adminDisplayName(current)}</span>
+                            </span>
+                          )
+                        }
+                        if (formData.organizer) {
+                          return (
+                            <span className="text-sm text-muted-foreground truncate">
+                              {formData.organizer}
+                            </span>
+                          )
+                        }
+                        return null
+                      })()}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[320px]">
+                    {formData.organizer &&
+                      !adminUsers.some((u) => u.id === formData.organizer) && (
+                        <SelectItem value={formData.organizer} className="cursor-pointer">
+                          <span className="text-sm">{formData.organizer}</span>
+                          <span className="text-xs text-muted-foreground ml-2">actual</span>
+                        </SelectItem>
+                      )}
+                    {adminUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id} className="cursor-pointer py-2">
+                        <span className="inline-flex items-center gap-2">
+                          <AdminAvatar user={u} size={22} />
+                          <span className="flex flex-col leading-tight">
+                            <span className="capitalize text-sm">{adminDisplayName(u)}</span>
+                            <span className="text-[11px] text-muted-foreground">{u.email}</span>
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                    {adminUsers.length === 0 && (
+                      <div className="px-2 py-3 text-xs text-muted-foreground text-center">
+                        No hay administradores activos
+                      </div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="description">Descripción</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={3}
                 disabled={loading}
-                placeholder="Ej: OnBoarding Octubre - Zona Norte"
-              />
-              <p className="text-xs text-muted-foreground">
-                Opcional - Si no se especifica, se generará automáticamente
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="organizer">Organizador *</Label>
-              <Input
-                id="organizer"
-                value={formData.organizer}
-                onChange={(e) => setFormData({ ...formData, organizer: e.target.value })}
-                disabled={loading}
-                placeholder="Ej: Juan Pérez"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Descripción</Label>
-            <Textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={3}
-              disabled={loading}
-              placeholder="Descripción breve del evento"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="status">Estado</Label>
-            <Select
-              value={formData.status}
-              onValueChange={(value) => setFormData({ ...formData, status: value })}
-              disabled={loading}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="DRAFT">Borrador</SelectItem>
-                <SelectItem value="SCHEDULED">Programado</SelectItem>
-                <SelectItem value="IN_PROGRESS">En Curso</SelectItem>
-                <SelectItem value="COMPLETED">Completado</SelectItem>
-                <SelectItem value="CANCELLED">Cancelado</SelectItem>
-                <SelectItem value="POSTPONED">Pospuesto</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Fecha y Hora */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <CardTitle>Fecha y Hora</CardTitle>
-              <CardDescription>
-                Define cuándo se realizará el evento
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="scheduledDate">Fecha *</Label>
-              <Input
-                id="scheduledDate"
-                type="date"
-                value={formData.scheduledDate}
-                onChange={(e) => setFormData({ ...formData, scheduledDate: e.target.value })}
-                disabled={loading}
-                required
+                placeholder="Descripción breve del evento"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="startTime">
-                <Clock className="h-3 w-3 inline mr-1" />
-                Hora Inicio *
-              </Label>
+            <div className="space-y-1.5">
+              <Label>Estado</Label>
+              <div
+                role="radiogroup"
+                aria-label="Estado del evento"
+                className="flex flex-wrap gap-1.5"
+              >
+                {STATUS_OPTIONS.map((opt) => {
+                  const active = formData.status === opt.value
+                  const Icon = opt.icon
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setFormData({ ...formData, status: opt.value })}
+                      disabled={loading}
+                      className={`inline-flex items-center justify-center gap-1 px-2 py-1 rounded-md border text-[11px] font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                        active
+                          ? `${opt.className} shadow-sm`
+                          : 'bg-background border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                      }`}
+                    >
+                      <Icon className="h-3 w-3" />
+                      {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Fecha y hora */}
+        <section className="p-4 md:p-5">
+          <SectionHeader icon={CalendarIcon} title="Fecha y hora" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label>Fecha *</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loading}
+                    className={cn(
+                      'w-full justify-start text-left font-normal cursor-pointer',
+                      !formData.scheduledDate && 'text-muted-foreground'
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.scheduledDate
+                      ? format(parseYmd(formData.scheduledDate)!, 'EEE dd MMM yyyy', { locale: es })
+                      : 'Elegir fecha'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={parseYmd(formData.scheduledDate)}
+                    onSelect={(d) => {
+                      if (d) setFormData({ ...formData, scheduledDate: toYmd(d) })
+                    }}
+                    locale={es}
+                    showOutsideDays={false}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="startTime">Hora inicio *</Label>
               <Input
                 id="startTime"
                 type="time"
@@ -184,130 +364,131 @@ export function EventSettingsSection({ event, onUpdate }: EventSettingsSectionPr
                 onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
                 disabled={loading}
                 required
+                className="cursor-pointer"
               />
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="endTime">
-                <Clock className="h-3 w-3 inline mr-1" />
-                Hora Fin
-              </Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="endTime">Hora fin</Label>
               <Input
                 id="endTime"
                 type="time"
                 value={formData.endTime}
                 onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
                 disabled={loading}
+                className="cursor-pointer"
               />
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </section>
 
-      {/* Ubicación */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <CardTitle>Ubicación</CardTitle>
-              <CardDescription>
-                Define dónde se realizará el evento
-              </CardDescription>
+        {/* Ubicación */}
+        <section className="p-4 md:p-5">
+          <SectionHeader icon={MapPin} title="Ubicación" />
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="location">Lugar</Label>
+                <Input
+                  id="location"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  placeholder="Ej: HUB, Oficina Central"
+                  disabled={loading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Por defecto: {DEFAULT_LOCATION}
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="locationAddress">Dirección</Label>
+                <Input
+                  id="locationAddress"
+                  value={formData.locationAddress}
+                  onChange={(e) => setFormData({ ...formData, locationAddress: e.target.value })}
+                  placeholder="México 850"
+                  disabled={loading}
+                />
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  {FULL_ADDRESS}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="meetingLink">
+                Enlace de reunión <span className="text-muted-foreground font-normal">(opcional)</span>
+              </Label>
+              <Input
+                id="meetingLink"
+                type="url"
+                value={formData.meetingLink}
+                onChange={(e) => setFormData({ ...formData, meetingLink: e.target.value })}
+                placeholder="https://meet.google.com/xxx-xxxx-xxx"
+                disabled={loading}
+              />
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="location">Lugar</Label>
+        </section>
+
+        {/* Capacidad y notas */}
+        <section className="p-4 md:p-5">
+          <SectionHeader icon={Users} title="Capacidad y notas" />
+          <div className="space-y-3">
+            <div className="space-y-1.5 max-w-[200px]">
+              <Label htmlFor="maxCapacity">Capacidad máxima</Label>
               <Input
-                id="location"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                placeholder="Ej: HUB, Oficina Central"
+                id="maxCapacity"
+                type="number"
+                min="1"
+                max="100"
+                value={formData.maxCapacity}
+                onChange={(e) => setFormData({ ...formData, maxCapacity: e.target.value })}
+                placeholder="20"
                 disabled={loading}
               />
               <p className="text-xs text-muted-foreground">
-                Por defecto: {DEFAULT_LOCATION}
+                Drivers que pueden asistir.
               </p>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="locationAddress">Dirección</Label>
-              <Input
-                id="locationAddress"
-                value={formData.locationAddress}
-                onChange={(e) => setFormData({ ...formData, locationAddress: e.target.value })}
-                placeholder="México 850"
+            <div className="space-y-1.5">
+              <Label htmlFor="notes">Notas e instrucciones</Label>
+              <Textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                rows={4}
+                placeholder="Ej: Traer cédula y licencia original. Vestimenta casual."
                 disabled={loading}
               />
-              <p className="text-xs text-muted-foreground">
-                {FULL_ADDRESS}
-              </p>
             </div>
           </div>
+        </section>
+      </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="meetingLink">Link de Reunión Virtual (opcional)</Label>
-            <Input
-              id="meetingLink"
-              type="url"
-              value={formData.meetingLink}
-              onChange={(e) => setFormData({ ...formData, meetingLink: e.target.value })}
-              placeholder="https://meet.google.com/xxx-xxxx-xxx"
-              disabled={loading}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Capacidad y Notas */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Capacidad y Notas</CardTitle>
-          <CardDescription>
-            Configuración adicional del evento
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="maxCapacity">Capacidad Máxima</Label>
-            <Input
-              id="maxCapacity"
-              type="number"
-              min="1"
-              max="100"
-              value={formData.maxCapacity}
-              onChange={(e) => setFormData({ ...formData, maxCapacity: e.target.value })}
-              placeholder="20"
-              disabled={loading}
-            />
-            <p className="text-xs text-muted-foreground">
-              Número máximo de drivers que pueden asistir al evento
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notas e Instrucciones</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={4}
-              placeholder="Ej: Traer cédula y licencia original. Vestimenta casual."
-              disabled={loading}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Botón de guardar */}
-      <div className="flex justify-end gap-2">
-        <Button type="submit" disabled={loading} size="lg">
-          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          <Save className="mr-2 h-4 w-4" />
-          Guardar Cambios
+      {/* Acciones */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {hasChanges && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={resetForm}
+            disabled={loading}
+            className="cursor-pointer"
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Descartar cambios
+          </Button>
+        )}
+        <Button
+          type="submit"
+          disabled={loading || !hasChanges}
+          className="bg-brand text-brand-foreground hover:bg-brand-hover cursor-pointer"
+        >
+          {loading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="mr-2 h-4 w-4" />
+          )}
+          Guardar cambios
         </Button>
       </div>
     </form>

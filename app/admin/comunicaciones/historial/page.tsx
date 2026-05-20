@@ -1,75 +1,107 @@
 // app/admin/comunicaciones/historial/page.tsx
-import { Suspense } from 'react';
-import { AdminHeader } from '@/components/admin/admin-header';
-import { MessagesHistoryContent } from '@/components/admin/comunicacion/MessagesHistoryContent';
-import { getMessagesWithFilters, getMessageStats } from '@/lib/services/messages-history.service';
-import { Loader2 } from 'lucide-react';
-import { WhatsAppMessage } from '@prisma/client';
 
-async function LoadingState() {
-  return (
-    <div className="flex items-center justify-center p-12">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
-  );
-}
+import { AdminHeader } from '@/components/admin/admin-header'
+import { MessagesHistoryContent } from '@/components/admin/comunicacion/MessagesHistoryContent'
+import {
+  getMessagesWithFilters,
+  getMessageStats,
+  type MessageStats,
+} from '@/lib/services/messages-history.service'
+import type { WhatsAppMessageStatus, WhatsAppMessageSource, WhatsAppMessageType } from '@prisma/client'
 
-async function HistorialContent({ 
-  searchParams 
-}: { 
+export const dynamic = 'force-dynamic'
+
+interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
-  // ✅ ARREGLADO: Await searchParams antes de usar
-  const params = await searchParams;
-  
-  // Parsear parámetros de búsqueda
-  const page = parseInt(params.page as string) || 1;
-  const pageSize = 20;
-  
-  const search = params.search as string | undefined;
-  const messageType = params.messageType as any;
-  const botId = params.botId as string | undefined;
-  const status = params.status as any;
-  const source = params.source as any;
-  
-  const dateFromStr = params.dateFrom as string | undefined;
-  const dateToStr = params.dateTo as string | undefined;
-  
-  const dateFrom = dateFromStr ? new Date(dateFromStr) : undefined;
-  const dateTo = dateToStr ? new Date(dateToStr) : undefined;
-
-  // Cargar datos iniciales en el servidor
-  const [messagesResult, statsResult] = await Promise.all([
-    getMessagesWithFilters(
-      { search, messageType, botId, status, source, dateFrom, dateTo },
-      { page, pageSize }
-    ),
-    getMessageStats({ dateFrom, dateTo })
-  ]);
-
-  return (
-    <MessagesHistoryContent
-      initialMessages={messagesResult.messages as WhatsAppMessage[]}
-      initialPagination={messagesResult.pagination}
-      initialStats={statsResult}
-      initialFilters={{
-        search,
-        messageType,
-        botId,
-        status,
-        source,
-        dateFrom,
-        dateTo,
-      }}
-    />
-  );
 }
 
-export default async function HistorialMensajesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
+function parseYmd(s?: string): Date | undefined {
+  if (!s) return undefined
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  if (!m) return undefined
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+}
+
+function resolveRanges(startStr?: string, endStr?: string) {
+  const now = new Date()
+  let from: Date
+  let to: Date
+
+  if (startStr || endStr) {
+    from = parseYmd(startStr) ?? new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    to = parseYmd(endStr) ?? now
+    if (startStr) from.setHours(0, 0, 0, 0)
+    if (endStr) to.setHours(23, 59, 59, 999)
+    if (!endStr) to.setHours(23, 59, 59, 999)
+    if (!startStr) from = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 0, 0, 0, 0)
+  } else {
+    from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    to = now
+  }
+
+  const durationMs = to.getTime() - from.getTime()
+  const prevTo = new Date(from.getTime())
+  const prevFrom = new Date(prevTo.getTime() - durationMs)
+
+  return {
+    current: { from, to },
+    previous: { from: prevFrom, to: prevTo },
+    isDefault: !startStr && !endStr,
+  }
+}
+
+const EMPTY_STATS: MessageStats = {
+  total: 0,
+  successful: 0,
+  failed: 0,
+  pending: 0,
+  successRate: '0',
+  byBot: {},
+  byType: {},
+  bySource: {},
+}
+
+async function safe<T>(p: Promise<T>, fallback: T): Promise<{ value: T; ok: boolean }> {
+  try {
+    return { value: await p, ok: true }
+  } catch (err) {
+    console.error('[historial page] query failed:', err instanceof Error ? err.message : err)
+    return { value: fallback, ok: false }
+  }
+}
+
+export default async function HistorialMensajesPage({ searchParams }: PageProps) {
+  const params = await searchParams
+
+  // Filtros
+  const page = parseInt((params.page as string) || '1', 10)
+  const pageSize = 20
+  const search = (params.search as string) || undefined
+  const messageType = (params.messageType as WhatsAppMessageType) || undefined
+  const status = (params.status as WhatsAppMessageStatus) || undefined
+  const source = (params.source as WhatsAppMessageSource) || undefined
+
+  const startStr = params.dateFrom as string | undefined
+  const endStr = params.dateTo as string | undefined
+  const { current, previous, isDefault } = resolveRanges(startStr, endStr)
+
+  const [messagesResult, statsCurrent, statsPrev] = await Promise.all([
+    safe(
+      getMessagesWithFilters(
+        { search, messageType, status, source, dateFrom: current.from, dateTo: current.to },
+        { page, pageSize },
+      ),
+      {
+        messages: [],
+        pagination: { page: 1, pageSize, total: 0, totalPages: 0 },
+      },
+    ),
+    safe(getMessageStats({ dateFrom: current.from, dateTo: current.to }), EMPTY_STATS),
+    safe(getMessageStats({ dateFrom: previous.from, dateTo: previous.to }), EMPTY_STATS),
+  ])
+
+  const dbError = !messagesResult.ok || !statsCurrent.ok
+
   return (
     <>
       <AdminHeader
@@ -79,11 +111,23 @@ export default async function HistorialMensajesPage({
         ]}
       />
 
-      <div className="flex flex-1 flex-col container mx-auto">
-        <Suspense fallback={<LoadingState />}>
-          <HistorialContent searchParams={searchParams} />
-        </Suspense>
-      </div>
+      <MessagesHistoryContent
+        messages={messagesResult.value.messages as any}
+        pagination={messagesResult.value.pagination}
+        statsCurrent={statsCurrent.value}
+        statsPrev={statsPrev.value}
+        currentRange={current}
+        isDefaultRange={isDefault}
+        filters={{
+          search,
+          messageType,
+          status,
+          source,
+          dateFrom: startStr,
+          dateTo: endStr,
+        }}
+        dbError={dbError}
+      />
     </>
-  );
+  )
 }

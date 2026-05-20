@@ -1,17 +1,20 @@
 // lib/services/onboarding-notifications.service.ts
 //
 // Wrapper de notificaciones para el flujo público de capacitaciones.
-// MVP: email vía Resend. Hook ready para WhatsApp (queda en TODO hasta que los
-// templates `booking_confirmation` estén cargados en DB — usar
-// `sendTemplateByKey` de whatsapp-messenger.service).
+// Doble canal: email (Resend) + WhatsApp (bot). La audiencia es WhatsApp-first,
+// así que WhatsApp es el principal y el email queda de respaldo.
 
 import { Resend } from 'resend'
 import { render } from '@react-email/render'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+import { WhatsAppMessageType, WhatsAppMessageSource } from '@prisma/client'
 import BookingConfirmationEmail from '@/emails/booking-confirmation'
 import {
   NOTIFICATIONS_CONFIG,
   getResendApiKey,
 } from '@/lib/config/notifications.config'
+import { messagesService } from '@/lib/services/messages.service'
 
 let _resend: Resend | null = null
 function getResend(): Resend {
@@ -69,6 +72,89 @@ export async function sendBookingConfirmation(data: BookingConfirmationData): Pr
   }
 }
 
-// TODO V2: cuando exista el template `booking_confirmation` en DB, agregar aquí
-// `sendBookingConfirmationWhatsApp({ phoneNumber, ... })` llamando a
-// `sendTemplateByKey` de `lib/services/whatsapp-messenger.service.ts`.
+// ==================== WhatsApp: confirmación de reserva ====================
+
+export interface BookingConfirmationWhatsAppData {
+  phoneNumber: string | null
+  driverFirstName: string | null
+  formDriverId: string
+  ruleTitle: string
+  scheduledDateUTC: string
+  startTime: string
+  endTime: string
+  modality: 'IN_PERSON' | 'VIRTUAL' | 'HYBRID'
+  location: string | null
+  locationAddress: string | null
+  meetingLink: string | null
+  confirmationToken: string
+  appBaseUrl: string
+}
+
+/**
+ * Formatea la fecha del evento a "lunes 25 de mayo" en español. Toma solo la
+ * parte de fecha del ISO (sin conversión de timezone) para evitar off-by-one.
+ */
+function formatEventDate(scheduledDateUTC: string): string {
+  const datePart = scheduledDateUTC.slice(0, 10) // YYYY-MM-DD
+  const d = new Date(`${datePart}T12:00:00`)
+  if (isNaN(d.getTime())) return ''
+  const label = format(d, "EEEE d 'de' MMMM", { locale: es })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+/**
+ * Manda la confirmación de reserva por WhatsApp (best-effort). Incluye fecha,
+ * hora, lugar/link y el link de gestión (clave: única forma de volver a la
+ * reserva sin re-identificarse). Persiste en WhatsAppMessage para el historial.
+ */
+export async function sendBookingConfirmationWhatsApp(
+  data: BookingConfirmationWhatsAppData,
+): Promise<void> {
+  if (!data.phoneNumber) return // sin teléfono no hay nada que mandar
+
+  const nombre = data.driverFirstName?.trim() || 'Hola'
+  const fecha = formatEventDate(data.scheduledDateUTC)
+  const manageUrl = `${data.appBaseUrl}/capacitaciones/reserva/${data.confirmationToken}`
+
+  // Lugar según modalidad: presencial muestra dirección; virtual muestra link.
+  let dondeLine: string
+  if (data.modality === 'VIRTUAL' && data.meetingLink) {
+    dondeLine = `Es virtual. Link de la reunión: ${data.meetingLink}`
+  } else {
+    const lugar = [data.location, data.locationAddress].filter(Boolean).join(' — ')
+    dondeLine = lugar ? `Dónde: ${lugar}` : ''
+  }
+
+  const lines = [
+    `¡Buenas ${nombre}! Tu capacitación quedó reservada.`,
+    '',
+    `Cuándo: ${fecha}, de ${data.startTime} a ${data.endTime}`,
+    dondeLine,
+    '',
+    'Llevá tu cédula y tu licencia de conducir.',
+    '',
+    'Si necesitás cambiar o cancelar tu reserva, entrá acá:',
+    manageUrl,
+  ].filter(line => line !== null && line !== undefined)
+
+  const message = lines.join('\n').replace(/\n{3,}/g, '\n\n')
+
+  try {
+    await messagesService.sendWhatsAppMessage({
+      phone: data.phoneNumber,
+      name: nombre,
+      type: WhatsAppMessageType.CAPACITACION_SELECTED,
+      customMessage: message,
+      formDriverId: data.formDriverId,
+      source: WhatsAppMessageSource.TRIGGER,
+      metadata: {
+        flow: 'booking_confirmation',
+        confirmationToken: data.confirmationToken,
+        ruleTitle: data.ruleTitle,
+      },
+    })
+  } catch (err) {
+    // No relanzamos: la reserva ya quedó creada, el WhatsApp es best-effort.
+    console.error('[onboarding-notifications] Failed to send WhatsApp confirmation:', err)
+  }
+}

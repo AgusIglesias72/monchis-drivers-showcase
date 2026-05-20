@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { materializeRule } from '@/lib/services/onboarding-materialization.service'
 import { mapOnboardingErrorToStatus } from '@/lib/services/onboarding-errors'
+import { revalidateCapacitacionesPublic } from '@/lib/utils/revalidate-capacitaciones'
 
 export async function POST(
   request: NextRequest,
@@ -24,6 +25,7 @@ export async function POST(
       // body opcional
     }
     const result = await materializeRule(id, weeksAhead)
+    revalidateCapacitacionesPublic()
     return NextResponse.json({ ...result, weeksAhead })
   } catch (err) {
     const { status, body } = mapOnboardingErrorToStatus(err)

@@ -44,17 +44,6 @@ export function RuleCard({ rule, sessionToken }: { rule: RuleWithSlots; sessionT
     ? `/capacitaciones/${rule.slug}?session=${flow.sessionToken}`
     : `/capacitaciones/${rule.slug}`
 
-  // Estado de cupos
-  let cupoStatus: { label: string; tone: 'low' | 'medium' | 'high' | 'full' } | null = null
-  if (next) {
-    const remaining = next.availableSlots
-    const total = next.maxCapacity
-    if (remaining === 0) cupoStatus = { label: 'Sin cupos', tone: 'full' }
-    else if (remaining <= 2) cupoStatus = { label: `Quedan ${remaining}`, tone: 'low' }
-    else if (remaining / total < 0.4)
-      cupoStatus = { label: `${remaining} cupos`, tone: 'medium' }
-    else cupoStatus = { label: `${remaining} cupos`, tone: 'high' }
-  }
 
   const plainDescription = rule.description
     ? rule.description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
@@ -195,22 +184,6 @@ export function RuleCard({ rule, sessionToken }: { rule: RuleWithSlots; sessionT
                   {next.startTime} hs
                 </div>
               </div>
-              {cupoStatus && (
-                <Badge
-                  variant="secondary"
-                  className={`shrink-0 border-0 ${
-                    cupoStatus.tone === 'low'
-                      ? 'bg-warning-soft text-warning'
-                      : cupoStatus.tone === 'medium'
-                        ? 'bg-info-soft text-info'
-                        : cupoStatus.tone === 'full'
-                          ? 'bg-muted text-muted-foreground'
-                          : 'bg-success-soft text-success'
-                  }`}
-                >
-                  {cupoStatus.label}
-                </Badge>
-              )}
             </div>
           </div>
         ) : (

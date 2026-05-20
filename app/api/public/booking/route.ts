@@ -5,7 +5,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createBooking } from '@/lib/services/onboarding-booking.service'
 import { mapOnboardingErrorToStatus } from '@/lib/services/onboarding-errors'
-import { sendBookingConfirmation } from '@/lib/services/onboarding-notifications.service'
+import {
+  sendBookingConfirmation,
+  sendBookingConfirmationWhatsApp,
+} from '@/lib/services/onboarding-notifications.service'
 import { prisma } from '@/lib/prisma'
 import type { BookingCreateInput } from '@/lib/types/onboarding-rules.types'
 
@@ -45,30 +48,51 @@ export async function POST(request: NextRequest) {
       try {
         const attendee = await prisma.onboardingAttendee.findUnique({
           where: { confirmationToken: response.confirmationToken },
-          include: { formDriver: { select: { email: true, firstName: true } } },
+          include: {
+            formDriver: { select: { id: true, email: true, firstName: true, phoneNumber: true } },
+          },
         })
         if (attendee?.formDriver) {
           const proto = request.headers.get('x-forwarded-proto') || 'https'
           const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || ''
           const appBaseUrl = `${proto}://${host}`
-          await sendBookingConfirmation({
-            driverEmail: attendee.formDriver.email,
-            driverFirstName: attendee.formDriver.firstName,
-            ruleTitle: response.ruleTitle,
-            scheduledDateUTC: response.scheduledDateUTC,
-            startTime: response.startTime,
-            endTime: response.endTime,
-            modality: response.modality,
-            location: response.location,
-            locationAddress: response.locationAddress,
-            meetingLink: response.meetingLink,
-            instructions: response.instructions,
-            confirmationToken: response.confirmationToken,
-            appBaseUrl,
-          })
+
+          // Doble canal, ambos best-effort e independientes (uno no bloquea al otro).
+          await Promise.allSettled([
+            sendBookingConfirmation({
+              driverEmail: attendee.formDriver.email,
+              driverFirstName: attendee.formDriver.firstName,
+              ruleTitle: response.ruleTitle,
+              scheduledDateUTC: response.scheduledDateUTC,
+              startTime: response.startTime,
+              endTime: response.endTime,
+              modality: response.modality,
+              location: response.location,
+              locationAddress: response.locationAddress,
+              meetingLink: response.meetingLink,
+              instructions: response.instructions,
+              confirmationToken: response.confirmationToken,
+              appBaseUrl,
+            }),
+            sendBookingConfirmationWhatsApp({
+              phoneNumber: attendee.formDriver.phoneNumber,
+              driverFirstName: attendee.formDriver.firstName,
+              formDriverId: attendee.formDriver.id,
+              ruleTitle: response.ruleTitle,
+              scheduledDateUTC: response.scheduledDateUTC,
+              startTime: response.startTime,
+              endTime: response.endTime,
+              modality: response.modality,
+              location: response.location,
+              locationAddress: response.locationAddress,
+              meetingLink: response.meetingLink,
+              confirmationToken: response.confirmationToken,
+              appBaseUrl,
+            }),
+          ])
         }
       } catch (e) {
-        console.error('[booking] post-create email failed', e)
+        console.error('[booking] post-create notifications failed', e)
       }
     })()
 

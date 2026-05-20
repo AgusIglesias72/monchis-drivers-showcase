@@ -244,6 +244,7 @@ class OnboardingService {
     if (data.reminderHoursBefore !== undefined) updateData.reminderHoursBefore = data.reminderHoursBefore
     if (data.status !== undefined) updateData.status = data.status
     if (data.notes !== undefined) updateData.notes = data.notes
+    if (data.organizer !== undefined) updateData.organizer = data.organizer
 
     return await prisma.onboardingEvent.update({
       where: { id: eventId },

@@ -169,16 +169,16 @@ export function LandingCalendar({ initialSlots = [], sessionToken }: Props) {
   const selectedModalities = selectedYmd ? dayModalities.get(selectedYmd) : null
 
   return (
-    <section className="my-12 lg:my-14">
+    <section className="mt-2 mb-12 lg:mb-14">
       <div className="text-center mb-6 lg:mb-8">
         <div className="text-xs uppercase tracking-wider font-semibold text-brand mb-2">
-          Calendario general
+          Agendá tu capacitación
         </div>
         <h2 className="text-2xl lg:text-3xl font-bold tracking-tight">
-          Mirá todas las fechas disponibles
+          Elegí tu fecha
         </h2>
         <p className="text-sm text-muted-foreground mt-1.5 max-w-md mx-auto">
-          Tocá un día con capacitación para ver el detalle de cada evento.
+          Tocá un día disponible y reservá tu lugar en el momento.
         </p>
       </div>
 
@@ -394,15 +394,13 @@ function SlotItem({
           {slot.startTime} — {slot.endTime}
         </span>
       </div>
-      <div className="font-semibold text-sm leading-tight mb-1">{slot.ruleTitle}</div>
-      <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mb-3">
-        <Users className="h-3 w-3" />
-        {disabled
-          ? slot.isFull
-            ? 'Sin cupos disponibles'
-            : 'Cerrado'
-          : `${slot.availableSlots} de ${slot.maxCapacity} cupos`}
-      </div>
+      <div className="font-semibold text-sm leading-tight mb-3">{slot.ruleTitle}</div>
+      {disabled && (
+        <div className="text-xs text-muted-foreground inline-flex items-center gap-1 mb-3 -mt-1.5">
+          <Users className="h-3 w-3" />
+          {slot.isFull ? 'Sin cupos disponibles' : 'Cerrado'}
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <button
           type="button"

@@ -406,8 +406,18 @@ export interface SendDirectMessageInput {
   senderAdminId: string;
   /** Admin a quien se asigna la conversación tras crearse. Opcional. */
   assigneeAdminId?: string | null;
+  /**
+   * Asunto/título del mensaje. Intercom lo muestra como encabezado destacado
+   * arriba del body. Opcional; si se omite, Intercom lo deriva del body.
+   */
+  subject?: string;
   /** Cuerpo del mensaje (HTML, Intercom lo soporta nativamente). */
   body: string;
+  /**
+   * URLs públicas de imágenes a adjuntar. Intercom las baja y las muestra en
+   * el Messenger. Máximo 10 (límite de la API).
+   */
+  attachmentUrls?: string[];
   /** Clerk user id del admin de Monchis que dispara el envío (para log). */
   clerkUserId: string;
   /** Driver id en nuestra cache, si se conoce (para log). */
@@ -418,7 +428,13 @@ export interface SendDirectMessageInput {
 
 export interface SendDirectMessageResult {
   logId: string;
-  conversationId: string;
+  /**
+   * Id de la conversación. Presente si fue un reply a una conversación abierta;
+   * null si fue un outbound (no genera conversación de inbox hasta respuesta).
+   */
+  conversationId: string | null;
+  /** Cómo se entregó: 'reply' (en inbox) u 'outbound' (Messenger). */
+  deliveryMethod: 'reply' | 'outbound' | null;
   status: 'sent';
 }
 
@@ -427,6 +443,184 @@ interface IntercomConversation {
   id: string;
   conversation_id?: string;
   // ...campos adicionales que no usamos
+}
+
+interface ConversationSearchResponse {
+  type: 'conversation.list';
+  conversations: Array<{
+    id: string;
+    created_at: number;
+  }>;
+  total_count: number;
+}
+
+/**
+ * Devuelve el id de la conversación más reciente del contact. Lo usamos
+ * después de POST /messages porque ese endpoint devuelve un message_id, no
+ * un conversation_id — por eso intentar asignar con el id devuelto daba 404.
+ *
+ * Usa POST /conversations/search en vez del GET /contacts/{id}/conversations
+ * porque éste último devuelve 404 en algunas versiones de la API. El search
+ * además devuelve sólo conversaciones que el caller tiene permiso de ver.
+ *
+ * Implementa retries con backoff porque Intercom puede tardar 1-2s en indexar
+ * una conversación recién creada (eventual consistency del search).
+ */
+async function getLatestConversationId(
+  contactId: string,
+  attempts = 3,
+): Promise<string | null> {
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await sleep(500 * i);
+    try {
+      const res = await intercomFetch<ConversationSearchResponse>(
+        '/conversations/search',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            query: {
+              field: 'contact_ids',
+              operator: '=',
+              value: contactId,
+            },
+            pagination: { per_page: 1 },
+            sort: { field: 'created_at', order: 'descending' },
+          }),
+        },
+      );
+      if (res.conversations?.[0]) return res.conversations[0].id;
+    } catch (err) {
+      console.error(
+        `[intercom] getLatestConversationId attempt ${i + 1}/${attempts} failed:`,
+        err,
+      );
+    }
+  }
+  return null;
+}
+
+// ==================== CONVERSATION THREAD ====================
+
+export type ConversationAuthorType = 'admin' | 'user' | 'lead' | 'bot';
+
+export interface ConversationMessage {
+  id: string;
+  authorType: ConversationAuthorType;
+  authorName: string | null;
+  /** HTML del mensaje (Intercom lo devuelve con tags). Puede ser vacío si
+   * el mensaje es solo imágenes. */
+  body: string;
+  createdAt: number; // epoch seconds
+  attachmentUrls: string[];
+}
+
+export interface ConversationThread {
+  conversationId: string;
+  state: string | null; // 'open' | 'closed' | 'snoozed'
+  messages: ConversationMessage[];
+}
+
+interface IntercomAttachment {
+  type?: string;
+  name?: string;
+  url?: string;
+  content_type?: string;
+}
+
+interface IntercomConversationPart {
+  type: 'conversation_part';
+  id: string;
+  part_type: string; // 'comment' | 'assignment' | 'open' | 'close' | 'note' ...
+  body?: string | null;
+  created_at: number;
+  author?: { type?: string; name?: string | null };
+  attachments?: IntercomAttachment[];
+}
+
+interface IntercomConversationDetail {
+  type: 'conversation';
+  id: string;
+  created_at: number;
+  state?: string;
+  source?: {
+    body?: string | null;
+    author?: { type?: string; name?: string | null };
+    attachments?: IntercomAttachment[];
+  };
+  conversation_parts?: {
+    conversation_parts: IntercomConversationPart[];
+  };
+}
+
+function normalizeAuthorType(type?: string): ConversationAuthorType {
+  if (type === 'admin') return 'admin';
+  if (type === 'bot') return 'bot';
+  if (type === 'lead') return 'lead';
+  return 'user';
+}
+
+function extractAttachmentUrls(attachments?: IntercomAttachment[]): string[] {
+  return (attachments ?? [])
+    .map((a) => a.url)
+    .filter((u): u is string => typeof u === 'string' && u.length > 0);
+}
+
+/**
+ * Trae la conversación más reciente del contact y la normaliza como una lista
+ * de mensajes para renderizar como chat. Filtra los conversation_parts que no
+ * son mensajes reales (assignments, opens, closes) — solo deja 'comment' y
+ * los que tengan attachments.
+ *
+ * Devuelve null si el contact no tiene conversaciones.
+ */
+export async function getConversationThread(
+  contactId: string,
+): Promise<ConversationThread | null> {
+  const conversationId = await getLatestConversationId(contactId);
+  if (!conversationId) return null;
+
+  const conv = await intercomFetch<IntercomConversationDetail>(
+    `/conversations/${conversationId}?display_as=plaintext`,
+    { method: 'GET' },
+  );
+
+  const messages: ConversationMessage[] = [];
+
+  // El primer mensaje vive en `source`.
+  if (conv.source) {
+    const sourceAttachments = extractAttachmentUrls(conv.source.attachments);
+    if (conv.source.body || sourceAttachments.length > 0) {
+      messages.push({
+        id: `${conversationId}-source`,
+        authorType: normalizeAuthorType(conv.source.author?.type),
+        authorName: conv.source.author?.name ?? null,
+        body: conv.source.body ?? '',
+        createdAt: conv.created_at ?? 0,
+        attachmentUrls: sourceAttachments,
+      });
+    }
+  }
+
+  // El resto vive en conversation_parts. Solo nos quedamos con 'comment'.
+  for (const part of conv.conversation_parts?.conversation_parts ?? []) {
+    if (part.part_type !== 'comment') continue;
+    const attachmentUrls = extractAttachmentUrls(part.attachments);
+    if (!part.body && attachmentUrls.length === 0) continue;
+    messages.push({
+      id: part.id,
+      authorType: normalizeAuthorType(part.author?.type),
+      authorName: part.author?.name ?? null,
+      body: part.body ?? '',
+      createdAt: part.created_at,
+      attachmentUrls,
+    });
+  }
+
+  return {
+    conversationId,
+    state: conv.state ?? null,
+    messages,
+  };
 }
 
 /**
@@ -441,59 +635,81 @@ interface IntercomConversation {
  * El log de auditoría se escribe SIEMPRE (tanto si Intercom acepta como si
  * falla). Si falla, lanza el error original tras escribir el log.
  */
+function escapeHtmlText(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Construye el body final que se manda a Intercom (outbound inapp):
+ *  - subject → título en negrita al inicio. Lo embebemos en el body porque el
+ *    campo `subject` de la API NO se renderiza en mensajes in-app (solo en
+ *    emails/posts). Ver [[project_intercom_api_behavior]].
+ *  - body → el HTML del editor.
+ *  - imágenes → <img> al final. Intercom ignora `attachment_urls` en outbound
+ *    pero renderiza <img> embebido.
+ */
+function buildFinalBody(
+  subject: string | undefined,
+  body: string,
+  imageUrls: string[],
+): string {
+  const parts: string[] = [];
+  if (subject) parts.push(`<b>${escapeHtmlText(subject)}</b>`);
+  if (body) parts.push(body);
+  if (imageUrls.length > 0) {
+    parts.push(imageUrls.map((url) => `<img src="${url}">`).join('<br>'));
+  }
+  return parts.join('<br>');
+}
+
 export async function sendDirectMessage(
   input: SendDirectMessageInput,
 ): Promise<SendDirectMessageResult> {
+  let messageSent = false;
   let conversationId: string | null = null;
+  let deliveryMethod: 'reply' | 'outbound' | null = null;
+  let assignmentOk: boolean | null = null;
   let errorMessage: string | null = null;
   let errorStatusCode: number | null = null;
 
+  const attachmentUrls = (input.attachmentUrls ?? []).slice(0, 10);
+
+  // El subject (título), el body y las imágenes se combinan en un solo HTML.
+  // El subject va como <b> al inicio porque el campo `subject` de la API no se
+  // ve en mensajes in-app. Las imágenes van como <img> embebido (attachment_urls
+  // se ignora en outbound). Ver [[project_intercom_api_behavior]].
+  const finalBody = buildFinalBody(
+    input.subject?.trim() || undefined,
+    input.body,
+    attachmentUrls,
+  );
+
   try {
-    // 1) Crear la conversación admin → user.
+    // Approach simple (decidido con Agus): outbound in-app directo via
+    // POST /messages. Le llega al driver en el Messenger de Monchis Express;
+    // si responde, se crea la conversación en el inbox.
     //
-    // Endpoint: POST /messages con message_type: "inapp", from.type "admin",
-    // to.type "user". Intercom devuelve el id de la conversación creada.
+    // POST /messages devuelve un message_id (no conversation_id) y NO genera
+    // una conversación de inbox visible hasta que el driver responda, así que
+    // conversationId queda null intencionalmente.
     //
-    // Nota: el endpoint /conversations también funciona pero /messages es el
-    // que Intercom documenta para iniciar conversaciones desde un admin.
-    // Ref: https://developers.intercom.com/intercom-api-reference/reference/create-a-message
-    const message = await intercomFetch<IntercomConversation>('/messages', {
+    // Trade-off conocido: el assignee NO se puede aplicar acá (no hay
+    // conversación todavía). Se guarda en el log para referencia; cuando
+    // armemos webhooks podríamos auto-asignar al recibir la respuesta.
+    await intercomFetch<IntercomConversation>('/messages', {
       method: 'POST',
       body: JSON.stringify({
         message_type: 'inapp',
-        body: input.body,
+        body: finalBody,
         from: { type: 'admin', id: input.senderAdminId },
         to: { type: 'user', id: input.contactId },
       }),
     });
-
-    conversationId = message.conversation_id ?? message.id ?? null;
-
-    // 2) Si se pidió asignar, hacerlo via parts.
-    // El admin que asigna y el assignee pueden ser distintos.
-    if (input.assigneeAdminId && conversationId) {
-      try {
-        await intercomFetch(
-          `/conversations/${conversationId}/parts`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              message_type: 'assignment',
-              type: 'admin',
-              admin_id: input.senderAdminId,
-              assignee_id: input.assigneeAdminId,
-            }),
-          },
-        );
-      } catch (assignErr) {
-        // El mensaje ya se mandó. La asignación fallida la logueamos pero no
-        // tiramos error completo: el envío fue exitoso.
-        console.error(
-          '[intercom] assignment failed (message was sent):',
-          assignErr,
-        );
-      }
-    }
+    messageSent = true;
+    deliveryMethod = 'outbound';
   } catch (err) {
     if (err instanceof IntercomError) {
       errorMessage =
@@ -506,7 +722,23 @@ export async function sendDirectMessage(
     }
   }
 
-  // 3) Escribir log siempre.
+  // 4) Escribir log siempre.
+  const mergedMetadata: Record<string, unknown> = {
+    ...(input.metadata ?? {}),
+  };
+  if (input.attachmentUrls && input.attachmentUrls.length > 0) {
+    mergedMetadata.attachmentUrls = input.attachmentUrls;
+  }
+  if (input.subject?.trim()) {
+    mergedMetadata.subject = input.subject.trim();
+  }
+  if (deliveryMethod) {
+    mergedMetadata.deliveryMethod = deliveryMethod;
+  }
+  if (assignmentOk !== null) {
+    mergedMetadata.assignmentOk = assignmentOk;
+  }
+
   const log = await prisma.intercomMessageLog.create({
     data: {
       clerkUserId: input.clerkUserId,
@@ -515,17 +747,23 @@ export async function sendDirectMessage(
       intercomSenderAdminId: input.senderAdminId,
       intercomAssigneeAdminId: input.assigneeAdminId ?? null,
       intercomConversationId: conversationId,
-      body: input.body,
-      status: conversationId ? 'sent' : 'failed',
+      // Guardamos el body realmente enviado (con los <img> embebidos) para
+      // auditoría fiel. Las URLs sueltas también van en metadata.
+      body: finalBody,
+      // El mensaje fue 'sent' si POST /messages no tiró error. La conv_id es
+      // un dato accesorio (para asignar / linkear) que puede faltar sin que
+      // eso signifique que el driver no recibió el mensaje.
+      status: messageSent ? 'sent' : 'failed',
       errorMessage,
       errorStatusCode,
-      metadata: input.metadata
-        ? (input.metadata as Prisma.InputJsonValue)
-        : undefined,
+      metadata:
+        Object.keys(mergedMetadata).length > 0
+          ? (mergedMetadata as Prisma.InputJsonValue)
+          : undefined,
     },
   });
 
-  if (!conversationId) {
+  if (!messageSent) {
     throw new IntercomError(
       `Intercom send-direct-message failed (log #${log.id})`,
       errorStatusCode ?? 500,
@@ -536,6 +774,7 @@ export async function sendDirectMessage(
   return {
     logId: log.id,
     conversationId,
+    deliveryMethod,
     status: 'sent',
   };
 }

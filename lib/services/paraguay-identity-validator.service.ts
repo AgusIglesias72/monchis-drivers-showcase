@@ -5,6 +5,7 @@ import sharp from 'sharp';
 import { prisma } from '@/lib/prisma';
 import { FormDocumentStatus, FormDocumentsStatus, WhatsAppMessageType, WhatsAppMessageSource } from '@prisma/client';
 import { messagesService } from '@/lib/services/messages.service';
+import { buildDocumentRejectedMessage } from '@/lib/services/whatsapp-messenger.service';
 
 // ==================== TIPOS DE DATOS EXTRAÍDOS ====================
 
@@ -1006,11 +1007,16 @@ Si ES un certificado válido, responde:
       const documentTypeName = documentTypeNames[documentType] || documentType;
       const firstName = driver.fullName.split(' ')[0];
 
-      // Enviar mensaje de WhatsApp
+      // Enviar mensaje de WhatsApp con el motivo del rechazo.
       const messageResult = await messagesService.sendWhatsAppMessage({
         phone: driver.phoneNumber,
         name: firstName,
         type: WhatsAppMessageType.DOCUMENT_REJECTED,
+        customMessage: buildDocumentRejectedMessage({
+          firstName,
+          documentTypeName,
+          reason: rejectionReason,
+        }),
         formDriverId: driver.id,
         source: WhatsAppMessageSource.TRIGGER,
         metadata: {

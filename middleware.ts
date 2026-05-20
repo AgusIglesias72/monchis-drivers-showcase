@@ -8,6 +8,7 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up',
   '/reset-password',
   '/sso-callback',
+  '/manifest.json', // ← PWA manifest: estático, no debe pasar por auth (el matcher no excluye .json)
   '/postulacion(.*)', // ← Portal de autogestión (rutas públicas con token)
   '/capacitaciones(.*)', // ← Pantalla pública de capacitaciones (gating al reservar)
   '/api/public(.*)', // ← APIs públicas (capacitaciones, auth via shareToken)

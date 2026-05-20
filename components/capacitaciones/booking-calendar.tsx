@@ -224,7 +224,7 @@ export function BookingCalendar({
                     : s.isPastNotice
                       ? 'Cierre de inscripción anticipado'
                       : 'Ya pasó'
-                  : `${s.availableSlots} de ${s.maxCapacity} cupos`
+                  : 'Disponible'
                 return (
                   <button
                     key={i}

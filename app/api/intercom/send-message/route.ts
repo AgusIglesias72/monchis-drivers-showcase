@@ -17,8 +17,10 @@ interface SendMessageBody {
   contactId?: unknown;
   senderAdminId?: unknown;
   assigneeAdminId?: unknown;
+  subject?: unknown;
   body?: unknown;
   driverId?: unknown;
+  attachmentUrls?: unknown;
 }
 
 export async function POST(req: NextRequest) {
@@ -36,8 +38,14 @@ export async function POST(req: NextRequest) {
   const contactId = strOrNull(payload.contactId);
   const senderAdminId = strOrNull(payload.senderAdminId);
   const assigneeAdminId = strOrNull(payload.assigneeAdminId);
+  const subject = strOrNull(payload.subject);
   const body = strOrNull(payload.body);
   const driverId = strOrNull(payload.driverId);
+  const attachmentUrls = Array.isArray(payload.attachmentUrls)
+    ? payload.attachmentUrls.filter(
+        (u): u is string => typeof u === 'string' && u.startsWith('https://'),
+      )
+    : [];
 
   if (!contactId) {
     return NextResponse.json({ error: 'contactId requerido' }, { status: 400 });
@@ -48,12 +56,22 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  if (!body) {
-    return NextResponse.json({ error: 'body requerido' }, { status: 400 });
+  // Intercom acepta mensaje vacío si hay attachments. Validamos eso.
+  if (!body && attachmentUrls.length === 0) {
+    return NextResponse.json(
+      { error: 'Se requiere body o al menos una imagen adjunta' },
+      { status: 400 },
+    );
   }
-  if (body.length > MAX_BODY_LENGTH) {
+  if (body && body.length > MAX_BODY_LENGTH) {
     return NextResponse.json(
       { error: `body excede los ${MAX_BODY_LENGTH} caracteres` },
+      { status: 400 },
+    );
+  }
+  if (attachmentUrls.length > 10) {
+    return NextResponse.json(
+      { error: 'Máximo 10 attachments por mensaje (límite de Intercom)' },
       { status: 400 },
     );
   }
@@ -63,7 +81,9 @@ export async function POST(req: NextRequest) {
       contactId,
       senderAdminId,
       assigneeAdminId,
-      body,
+      subject: subject ?? undefined,
+      body: body ?? '',
+      attachmentUrls,
       driverId,
       clerkUserId: adminUser.clerkId,
       metadata: { source: 'sandbox' },

@@ -24,7 +24,43 @@ const STATS: Stat[] = [
   },
 ]
 
-export function LandingHero({ availableCount }: { availableCount: number }) {
+export function LandingHero({
+  availableCount,
+  compact = false,
+}: {
+  availableCount: number
+  compact?: boolean
+}) {
+  // Compact: header mínimo para que el protagonista sea el calendario debajo.
+  if (compact) {
+    return (
+      <section className="relative overflow-hidden rounded-2xl border bg-card mb-6">
+        <div
+          className="absolute inset-0 opacity-[0.07]"
+          style={{
+            background:
+              'radial-gradient(circle at 0% 0%, var(--brand) 0%, transparent 50%), radial-gradient(circle at 100% 100%, var(--brand-hover) 0%, transparent 50%)',
+          }}
+        />
+        <div className="h-1.5 bg-gradient-to-r from-brand via-brand-hover to-brand relative" />
+        <div className="relative px-5 py-5 lg:px-8 lg:py-6">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-brand/20 bg-brand-soft text-brand px-3 py-1 text-xs font-semibold mb-2.5">
+            <Sparkles className="h-3 w-3" />
+            {availableCount > 0
+              ? `${availableCount} ${availableCount === 1 ? 'capacitación disponible' : 'capacitaciones disponibles'}`
+              : 'Capacitaciones para drivers Monchis'}
+          </div>
+          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight leading-tight">
+            Reservá tu <span className="text-brand">capacitación</span>
+          </h1>
+          <p className="text-muted-foreground mt-1.5 text-sm lg:text-base max-w-xl">
+            Elegí el día que te quede mejor y arrancá a entregar con Monchis.
+          </p>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="relative overflow-hidden rounded-2xl border bg-card mb-8 lg:mb-10">
       {/* Background gradient sutil */}

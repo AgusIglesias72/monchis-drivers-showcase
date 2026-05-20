@@ -1,22 +1,38 @@
 // app/admin/plantillas-whatsapp/page.tsx
 
-import { getAllTemplates } from "@/lib/actions/whatsapp-templates.actions"
-import { TemplatesManagementContent } from "@/components/admin/templates-management-content"
+import { AdminHeader } from '@/components/admin/admin-header'
+import { getAllTemplates } from '@/lib/actions/whatsapp-templates.actions'
+import { TemplatesManagementContent } from '@/components/admin/templates-management-content'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { DatabaseZap } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
 export default async function PlantillasWhatsAppPage() {
   const result = await getAllTemplates()
 
-  if (!result.success) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-600">Error al cargar las plantillas: {result.error}</p>
-        </div>
-      </div>
-    )
-  }
+  return (
+    <>
+      <AdminHeader
+        breadcrumbs={[
+          { label: 'Comunicaciones', href: '/admin/comunicaciones' },
+          { label: 'Plantillas' },
+        ]}
+      />
 
-  return <TemplatesManagementContent initialTemplates={result.templates} />
+      {!result.success ? (
+        <div className="container mx-auto px-6 py-8">
+          <Alert variant="destructive">
+            <DatabaseZap className="h-4 w-4" />
+            <AlertTitle>No pudimos cargar las plantillas</AlertTitle>
+            <AlertDescription>
+              {result.error || 'Error desconocido al consultar la base de datos.'}
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : (
+        <TemplatesManagementContent initialTemplates={result.templates} />
+      )}
+    </>
+  )
 }

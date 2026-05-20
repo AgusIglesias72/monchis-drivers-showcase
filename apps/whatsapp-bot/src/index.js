@@ -6,6 +6,7 @@ import {
   getClient,
   isClientReady,
   formatPhoneNumber,
+  resolveChatId,
   logoutAndReinit,
 } from './whatsapp.js';
 import { handleIncomingMessage } from './messageHandler.js';
@@ -197,7 +198,20 @@ app.post('/send-message', verifyApiKey, async (req, res) => {
     }
 
     const client = getClient();
-    const chatId = formatPhoneNumber(phone);
+
+    // Validar que el número exista en WhatsApp antes de enviar. Esto evita el
+    // error críptico "No LID for user" cuando el número está mal o no tiene WA.
+    const resolved = await resolveChatId(phone);
+    if (!resolved.ok) {
+      const msg =
+        resolved.reason === 'invalid_format'
+          ? 'El número tiene un formato inválido (revisá el código de país y que sean solo dígitos)'
+          : resolved.reason === 'not_registered'
+          ? 'Ese número no tiene WhatsApp (o está mal escrito)'
+          : 'No se pudo verificar el número en WhatsApp, probá de nuevo';
+      return res.status(400).json({ error: msg, phone, reason: resolved.reason });
+    }
+    const chatId = resolved.chatId;
 
     if (imageUrl) {
       const { MessageMedia } = await import('whatsapp-web.js');
@@ -221,13 +235,14 @@ app.post('/send-message', verifyApiKey, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error en /send-message:', error);
-    if (error.message?.includes('phone number is not registered')) {
+    const m = error.message || '';
+    if (m.includes('phone number is not registered') || m.includes('No LID for user')) {
       return res.status(400).json({
-        error: 'Número no registrado en WhatsApp',
+        error: 'Ese número no tiene WhatsApp (o está mal escrito)',
         phone: req.body.phone,
       });
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: m || 'Error al enviar' });
   }
 });
 
@@ -309,7 +324,16 @@ app.get('/message-types', verifyApiKey, (req, res) => {
 /**
  * POST /send-bulk
  * Body: { messages: [{ phone, message, type?, imageUrl? }], delayMs? }
+ *
+ * Rate-limiting de seguridad (no se puede bypassear desde el caller):
+ *  - BULK_MIN_DELAY_MS: piso de espera entre mensajes (default 4000ms). Aunque
+ *    el caller pida menos, se respeta el piso para no arriesgar ban del número.
+ *  - BULK_MAX_RECIPIENTS: tope de mensajes por request (default 50). Si se
+ *    supera, se rechaza para que el caller divida el envío en tandas.
  */
+const BULK_MIN_DELAY_MS = Math.max(0, parseInt(process.env.BULK_MIN_DELAY_MS || '4000', 10));
+const BULK_MAX_RECIPIENTS = Math.max(1, parseInt(process.env.BULK_MAX_RECIPIENTS || '50', 10));
+
 app.post('/send-bulk', verifyApiKey, async (req, res) => {
   try {
     const { messages, delayMs } = req.body;
@@ -317,16 +341,26 @@ app.post('/send-bulk', verifyApiKey, async (req, res) => {
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'Se requiere array messages no vacío' });
     }
+    if (messages.length > BULK_MAX_RECIPIENTS) {
+      return res.status(400).json({
+        error: `Máximo ${BULK_MAX_RECIPIENTS} mensajes por envío. Dividí en tandas.`,
+        max: BULK_MAX_RECIPIENTS,
+        received: messages.length,
+      });
+    }
     if (!isClientReady()) {
       return res.status(503).json({ error: 'WhatsApp no está conectado todavía' });
     }
 
     const client = getClient();
     const results = [];
-    // Delay mínimo entre mensajes para mitigar riesgo de ban en envíos masivos.
-    const minDelay = typeof delayMs === 'number' && delayMs >= 0 ? delayMs : 2000;
+    // Piso de delay: el caller puede pedir MÁS, nunca menos. Mitiga ban.
+    const requested = typeof delayMs === 'number' && delayMs >= 0 ? delayMs : 0;
+    const minDelay = Math.max(BULK_MIN_DELAY_MS, requested);
 
-    console.log(`📤 Bulk: enviando ${messages.length} mensajes (delay ${minDelay}ms)`);
+    console.log(
+      `📤 Bulk: ${messages.length}/${BULK_MAX_RECIPIENTS} mensajes (delay piso ${BULK_MIN_DELAY_MS}ms, efectivo ${minDelay}ms)`,
+    );
 
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];

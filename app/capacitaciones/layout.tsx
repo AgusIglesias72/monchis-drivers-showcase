@@ -22,6 +22,7 @@ export default function CapacitacionesLayout({ children }: { children: React.Rea
               width={120}
               height={40}
               className="object-contain"
+              style={{ height: 'auto' }}
               priority
             />
           </Link>

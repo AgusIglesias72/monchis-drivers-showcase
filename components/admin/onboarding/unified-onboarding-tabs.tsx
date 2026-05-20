@@ -45,7 +45,7 @@ function isTabValue(v: string | null): v is TabValue {
 export function UnifiedOnboardingTabs({ rules, events, currentStatus }: Props) {
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
-  const [activeTab, setActiveTab] = useState<TabValue>(isTabValue(tabParam) ? tabParam : 'capacitaciones')
+  const [activeTab, setActiveTab] = useState<TabValue>(isTabValue(tabParam) ? tabParam : 'eventos')
 
   function setTab(next: TabValue) {
     setActiveTab(next)

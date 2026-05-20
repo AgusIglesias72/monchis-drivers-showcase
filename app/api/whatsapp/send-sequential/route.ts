@@ -30,9 +30,17 @@ export async function POST(request: NextRequest) {
       message: messageTemplate,
       imageUrl,
       // botId queda como param legacy — ignorado (single-tenant).
-      delaySeconds = 5,
+      delaySeconds: requestedDelay = 5,
       testMode = false,
     } = body;
+
+    // Rate-limiting de seguridad para envíos masivos (mitigar ban del número):
+    //  - piso de delay: el caller puede pedir más, nunca menos.
+    //  - cap de destinatarios por envío: si se supera, hay que dividir en tandas.
+    // Configurables por env var (sin redeploy).
+    const MIN_DELAY_S = Math.max(1, parseInt(process.env.WHATSAPP_BULK_MIN_DELAY_S || '4', 10));
+    const MAX_RECIPIENTS = Math.max(1, parseInt(process.env.WHATSAPP_BULK_MAX || '50', 10));
+    const delaySeconds = Math.max(MIN_DELAY_S, Number(requestedDelay) || 0);
 
     // Validaciones básicas
     if (!recipientsInput || !messageTemplate) {
@@ -57,10 +65,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validar límite razonable para envío secuencial
-    if (parsed.recipients.length > 100) {
+    // Cap de destinatarios por envío (configurable). Forzamos dividir en tandas.
+    if (parsed.recipients.length > MAX_RECIPIENTS) {
       return NextResponse.json(
-        { error: 'Máximo 100 destinatarios para envío secuencial' },
+        {
+          error: `Máximo ${MAX_RECIPIENTS} destinatarios por envío. Dividí la lista en tandas.`,
+          max: MAX_RECIPIENTS,
+          received: parsed.recipients.length,
+        },
         { status: 400 }
       );
     }

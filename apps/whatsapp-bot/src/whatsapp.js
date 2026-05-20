@@ -137,6 +137,25 @@ export function isClientReady() {
 }
 
 /**
+ * Resuelve el chatId real de un número validando que tenga WhatsApp.
+ * Devuelve { ok: true, chatId } si existe, o { ok: false } si el número no
+ * está registrado / está mal escrito. Usa getNumberId de WA (más confiable que
+ * construir @c.us a mano, sobre todo con el formato @lid de números nuevos).
+ */
+export async function resolveChatId(phone) {
+  const raw = String(phone).replace(/\D/g, '');
+  if (!raw || raw.length < 8) return { ok: false, reason: 'invalid_format' };
+  try {
+    const numberId = await client.getNumberId(raw);
+    if (!numberId) return { ok: false, reason: 'not_registered' };
+    return { ok: true, chatId: numberId._serialized };
+  } catch (err) {
+    console.warn('getNumberId falló:', err?.message);
+    return { ok: false, reason: 'lookup_failed' };
+  }
+}
+
+/**
  * Formatea un número al formato @c.us de WhatsApp.
  * Acepta con/sin código de país; default Argentina (54). Para Paraguay (595),
  * MX (52), etc., el caller debe pasar el código incluido.

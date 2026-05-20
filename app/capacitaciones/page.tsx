@@ -98,6 +98,7 @@ export default async function CapacitacionesPage({
   // Driver identificado y eligible → ocultamos contenido "para no-postulantes"
   const showOnboardingContent = !identity.found || !identity.driver?.isEligible
   const noUsableSlots = rules.length > 0 && !hasUsableSlots(rules)
+  const showBooking = rules.length > 0 && !noUsableSlots
   const isAnonymous = !identity.found && !sessionFromUrl
 
   return (
@@ -128,14 +129,27 @@ export default async function CapacitacionesPage({
       {/* Si no hay SSR identity pero sí session en URL, validamos en cliente */}
       {!identity.found && sessionFromUrl && <LandingBanner sessionToken={sessionFromUrl} />}
 
-      <LandingHero availableCount={rules.length} />
+      <LandingHero availableCount={rules.length} compact={showBooking} />
 
-      {rules.length === 0 || noUsableSlots ? (
+      {!showBooking ? (
         <EmptyState noSlots={noUsableSlots} />
       ) : (
         <>
-          <RulesGrid rules={rules} sessionToken={sessionToken} />
+          {/* Protagonista: el calendario de fechas para agendar directo */}
           <LandingCalendar initialSlots={initialSlots} sessionToken={sessionToken} />
+
+          {/* Info de la(s) capacitación(es), secundario debajo del calendario */}
+          <section className="mt-12 lg:mt-14">
+            <div className="text-center mb-6">
+              <div className="text-xs uppercase tracking-wider font-semibold text-brand mb-2">
+                {rules.length === 1 ? 'Sobre la capacitación' : 'Nuestras capacitaciones'}
+              </div>
+              <h2 className="text-2xl lg:text-3xl font-bold tracking-tight">
+                {rules.length === 1 ? 'Qué vas a aprender' : 'Elegí tu capacitación'}
+              </h2>
+            </div>
+            <RulesGrid rules={rules} sessionToken={sessionToken} />
+          </section>
         </>
       )}
 

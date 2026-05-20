@@ -23,6 +23,7 @@ export interface SendWhatsAppMessageParams {
   step?: string;
   metadata?: Record<string, any>;
   customMessage?: string;
+  imageUrl?: string;
   formDriverId?: string;
   source?: WhatsAppMessageSource;
   sentBy?: string;
@@ -157,11 +158,16 @@ export async function sendWhatsAppMessage(
 
     let botResponse;
 
-    if (params.type === WhatsAppMessageType.CUSTOM && params.customMessage) {
+    // Si el caller ya armó el texto (customMessage) o manda imagen, lo enviamos
+    // directo — sin importar el `type`. El `type` se usa solo para auditoría.
+    // Solo caemos al template contextual del bot cuando NO hay texto propio
+    // (camino legacy, prácticamente sin uso hoy).
+    if (params.customMessage || params.imageUrl) {
       botResponse = await whatsappBotService.sendMessage({
         phone: formattedPhone,
-        message: params.customMessage,
-        type: 'custom',
+        message: params.customMessage || '',
+        type: params.type.toLowerCase(),
+        ...(params.imageUrl ? { imageUrl: params.imageUrl } : {}),
       });
     } else {
       botResponse = await whatsappBotService.sendContextualMessage({

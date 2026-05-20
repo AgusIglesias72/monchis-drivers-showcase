@@ -1,115 +1,119 @@
 // prisma/seed-templates.ts
-// Script para inicializar las plantillas de WhatsApp
+// Seed de plantillas WhatsApp. Las `key`s deben matchear con las que el código
+// del Next.js consume (ver lib/constants/whatsapp-template-keys.ts).
+//
+// Set consolidado: 5 plantillas para los momentos clave del funnel.
+// Tono: cercano, voseo paraguayo, sin emojis. Variables: {nombre}, {fullname}, etc.
+//
+// Comportamiento:
+//   - Por defecto: SKIP si la key ya existe (no pisa lo que edites en la UI).
+//   - Con SEED_FORCE=true: ACTUALIZA el contenido de las existentes.
+//       SEED_FORCE=true npx tsx prisma/seed-templates.ts
 
 import { prisma } from '../lib/prisma'
 
 const INITIAL_TEMPLATES = [
   {
-    key: 'capacitaciones',
-    name: 'Info sobre Capacitaciones',
-    description: 'Información general sobre las capacitaciones disponibles',
-    content: `Hola {name}! 👋
+    key: 'form_completed',
+    name: 'Postulación completada',
+    description: 'Confirmación post-form. Se dispara desde /api/form/complete.',
+    content: `¡Felicitaciones, {nombre}!
 
-¿Cómo estás? Te escribo para contarte sobre nuestras capacitaciones.
+Ya recibimos tu postulación para sumarte como repartidor de Monchis.
 
-📅 Tenemos eventos todos los días de la semana donde te explicamos todo lo que necesitas saber para trabajar con nosotros.
+Qué sigue:
+1. Revisamos tus documentos (24-48 hs)
+2. Te avisamos por acá para agendar tu capacitación
+3. Capacitás y arrancás a repartir
 
-¿Te gustaría agendar una fecha? Estamos a tu disposición para cualquier consulta o duda que tengas.
-
-¡Saludos! 😊`,
-    category: 'capacitacion',
+Cualquier duda, escribinos por acá. ¡Bienvenido al equipo!`,
+    category: 'general',
     order: 1,
   },
   {
-    key: 'seguimiento_documentos',
-    name: 'Seguimiento de Documentos',
-    description: 'Mensaje para hacer seguimiento de documentos pendientes',
-    content: `Hola {name}! 👋
+    key: 'capacitaciones',
+    name: 'Postulación aprobada - agendar capacitación',
+    description:
+      'Se dispara al aprobar todos los documentos. Incluye link de autoagendamiento + identificación.',
+    content: `¡Buenas, {nombre}!
 
-Te escribo para hacer un seguimiento de tu postulación.
+Tu postulación ya está aprobada. Ahora elegí el día de tu capacitación así arrancás a repartir con Monchis.
 
-Veo que aún faltan algunos documentos por completar. ¿Hay algo en lo que pueda ayudarte?
+Entrá a: https://monchisdrivers.com/capacitaciones
 
-Estoy aquí para resolver cualquier duda que tengas.
+Para reservar, identificate con tu cédula y los últimos 4 dígitos del teléfono que usaste al postularte. Elegís el día que mejor te queda y listo.
 
-¡Saludos! 😊`,
-    category: 'documentos',
+Cualquier duda respondé este mensaje.`,
+    category: 'capacitacion',
     order: 2,
   },
   {
-    key: 'bienvenida_completo',
-    name: 'Bienvenida - Formulario Completo',
-    description: 'Mensaje de bienvenida cuando el conductor completa el formulario',
-    content: `¡Felicitaciones {name}! 🎉
+    key: 'form_incomplete',
+    name: 'Form incompleto (recordatorio)',
+    description:
+      'Cron. Postulante que empezó el form y lo dejó a medias (cualquier step) o seguimiento genérico.',
+    content: `Hola {nombre}, ¿cómo andás?
 
-Completaste exitosamente tu postulación. Ahora vamos a revisar tu información y documentos.
+Vimos que empezaste tu postulación para Monchis pero te quedó a medias. ¿Seguís interesado en sumarte?
 
-📋 Próximos pasos:
-1. Revisión de documentos (24-48 hs)
-2. Te contactaremos para agendar tu capacitación
-3. Una vez capacitado, ¡podrás empezar a trabajar!
-
-¿Tienes alguna pregunta? Estoy aquí para ayudarte.
-
-¡Bienvenido al equipo! 💪`,
-    category: 'general',
+Es rápido terminarla. Si querés retomarla o tenés alguna duda, escribinos por acá y te damos una mano.`,
+    category: 'recordatorio',
     order: 3,
   },
   {
-    key: 'recordatorio_pago',
-    name: 'Recordatorio de Pago',
-    description: 'Recordatorio para completar el pago de equipamiento',
-    content: `Hola {name}! 👋
+    key: 'documents_pending',
+    name: 'Pasos pendientes post-form (documentos / pago)',
+    description:
+      'Cron. Postulante que completó el form pero le faltan pasos: subir/corregir documentos o el pago de equipamiento.',
+    content: `Hola {nombre},
 
-Te escribo para recordarte que aún falta que completes el pago de equipamiento.
+Estamos revisando tu postulación y te faltan algunos pasos para terminar (puede ser documentación por subir o corregir, o el pago del equipamiento).
 
-💳 Una vez que realices el pago, no olvides subir el comprobante en el formulario.
-
-Si ya realizaste el pago y no pudiste cargar el comprobante, podés enviármelo por aquí.
-
-¿Necesitas ayuda con algo?
-
-¡Saludos! 😊`,
-    category: 'pago',
+Entrá al portal para ver el detalle y completarlo. Si tenés alguna duda, escribinos por acá.`,
+    category: 'documentos',
     order: 4,
   },
   {
-    key: 'consulta_general',
-    name: 'Consulta General / Disponibilidad',
-    description: 'Consulta sobre el interés del conductor en continuar',
-    content: `Hola {name}! 👋
+    key: 'capacitacion_reminder',
+    name: 'Recordatorio de capacitación agendada',
+    description: 'Cron. Recordatorio para postulantes con capacitación próxima.',
+    content: `Hola {nombre},
 
-¿Cómo estás? Te escribo para saber si seguís interesado en trabajar con nosotros.
+Te recordamos que tenés tu capacitación de Monchis agendada.
 
-Veo que empezaste tu postulación pero quedó pendiente de completar.
-
-Si tenés alguna duda o necesitás ayuda con algo, estoy aquí para ayudarte. 😊
-
-¿Seguimos adelante?`,
-    category: 'general',
+Confirmanos tu asistencia respondiendo este mensaje. ¡Te esperamos!`,
+    category: 'capacitacion',
     order: 5,
-  },
-  {
-    key: 'info_zona_trabajo',
-    name: 'Info sobre Zona de Trabajo',
-    description: 'Información sobre las zonas de trabajo disponibles',
-    content: `Hola {name}! 👋
-
-Te escribo para contarte más sobre cómo funciona la zona de trabajo.
-
-🗺️ Actualmente tenemos disponibilidad en varias zonas de Asunción y alrededores.
-Una vez que completes tu capacitación, vos elegís en qué zona preferís trabajar según tu ubicación.
-
-¿Te interesa alguna zona en particular? Puedo darte más información.
-
-¡Saludos! 😊`,
-    category: 'general',
-    order: 6,
   },
 ]
 
+// Keys que ya no usamos — se borran de la DB al correr con SEED_FORCE para
+// dejar el set limpio en 5.
+const DEPRECATED_KEYS = [
+  'form_step_1',
+  'form_step_2',
+  'form_step_3',
+  'form_step_4',
+  'documents_corrections',
+  'payment_pending',
+  'general_followup',
+  'schedule_capacitacion',
+  // Keys legacy del seed viejo (por si quedaron en alguna DB):
+  'seguimiento_documentos',
+  'bienvenida_completo',
+  'recordatorio_pago',
+  'consulta_general',
+  'info_zona_trabajo',
+]
+
+const FORCE = process.env.SEED_FORCE === 'true'
+
 async function main() {
-  console.log('🌱 Iniciando seed de plantillas de WhatsApp...')
+  console.log(`🌱 Seed de plantillas WhatsApp${FORCE ? ' (FORCE)' : ''}...`)
+
+  let created = 0
+  let updated = 0
+  let skipped = 0
 
   for (const template of INITIAL_TEMPLATES) {
     const existing = await prisma.whatsAppTemplate.findUnique({
@@ -117,7 +121,11 @@ async function main() {
     })
 
     if (existing) {
-      console.log(`⚠️  Plantilla "${template.key}" ya existe, actualizando...`)
+      if (!FORCE) {
+        console.log(`⏭️  "${template.key}" ya existe — skip`)
+        skipped++
+        continue
+      }
       await prisma.whatsAppTemplate.update({
         where: { key: template.key },
         data: {
@@ -126,17 +134,32 @@ async function main() {
           content: template.content,
           category: template.category,
           order: template.order,
+          isActive: true,
         },
       })
-    } else {
-      console.log(`✅ Creando plantilla "${template.key}"...`)
-      await prisma.whatsAppTemplate.create({
-        data: template,
-      })
+      console.log(`♻️  "${template.key}" actualizada`)
+      updated++
+      continue
     }
+
+    await prisma.whatsAppTemplate.create({ data: template })
+    console.log(`✅ "${template.key}" creada`)
+    created++
   }
 
-  console.log('✨ Seed de plantillas completado!')
+  // Limpieza de keys deprecadas (solo con FORCE para no borrar sin querer).
+  let deleted = 0
+  if (FORCE) {
+    const res = await prisma.whatsAppTemplate.deleteMany({
+      where: { key: { in: DEPRECATED_KEYS } },
+    })
+    deleted = res.count
+    if (deleted > 0) console.log(`🗑️  ${deleted} plantillas deprecadas eliminadas`)
+  }
+
+  console.log(
+    `\n✨ Seed completado: ${created} creadas, ${updated} actualizadas, ${skipped} saltadas, ${deleted} borradas.`,
+  )
 }
 
 main()

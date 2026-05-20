@@ -24,7 +24,28 @@ function isAuthorizedNumber(phoneNumber) {
 export async function handleIncomingMessage(message, webhookUrl) {
   try {
     const isGroup = message.from.includes('@g.us');
-    
+
+    // Filtrar ruido: notificaciones internas de WhatsApp (confirmaciones de
+    // entrega de templates, eventos de protocolo) llegan con body vacío y/o
+    // type notification_template. No son mensajes de personas — no los
+    // reenviamos al webhook ni intentamos auto-responder.
+    const isSystemNotification =
+      message.type === 'notification_template' ||
+      message.type === 'notification' ||
+      message.type === 'e2e_notification' ||
+      message.type === 'protocol' ||
+      message.from?.endsWith('@lid'); // LID = device-id oculto, no es un chat real
+
+    if (isSystemNotification) {
+      console.log(`⏭️  Ignorado (notificación del sistema): type=${message.type} from=${message.from}`);
+      return;
+    }
+
+    if (!message.body || message.body.trim() === '') {
+      console.log('⏭️  Ignorado (mensaje sin texto)');
+      return;
+    }
+
     // Extraer información del mensaje
     const messageData = {
       from: message.from,

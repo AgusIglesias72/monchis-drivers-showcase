@@ -55,10 +55,10 @@ import {
   Settings2,
   ChevronLeft,
   ChevronRight,
+  ArrowUpRight,
   StickyNote,
   Bell,
   Link as LinkIcon,
-  Mail,
   User,
   UserCheck,
   ShieldCheck,
@@ -697,7 +697,7 @@ export function OnboardingPageContent({
                     <SortableHeader field="location">Ubicación</SortableHeader>
                     <SortableHeader field="capacity">Cupo</SortableHeader>
                     <SortableHeader field="status">Estado</SortableHeader>
-                    <TableHead className="w-12"></TableHead>
+                    <TableHead className="text-right w-[140px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -839,6 +839,16 @@ export function OnboardingPageContent({
 
                               {/* Acciones */}
                               <TableCell onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-end gap-0.5">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleViewEvent(event)}
+                                    className="h-8 cursor-pointer gap-1 text-brand hover:text-brand hover:bg-brand-soft"
+                                  >
+                                    Ingresar
+                                    <ArrowUpRight className="h-3.5 w-3.5" />
+                                  </Button>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="cursor-pointer">
@@ -877,6 +887,7 @@ export function OnboardingPageContent({
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
+                                </div>
                               </TableCell>
                             </tr>
 

@@ -9,13 +9,6 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import {
   Table,
   TableBody,
   TableCell,
@@ -31,21 +24,16 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   CheckCircle,
-  XCircle,
   Ban,
   MoreVertical,
   Eye,
   Loader2,
-  AlertTriangle,
-  Clock,
   Check,
   X,
   CircleDashed,
   Search,
   FileText,
-  DollarSign,
   UserCog,
-  Filter,
   UserCheck,
   ShieldCheck,
   GraduationCap,
@@ -55,7 +43,7 @@ import { toast } from 'sonner'
 import { CancelAttendeeDialog } from './cancel-attendee-dialog'
 import { DriverManagementSheet } from './driver-management-sheet'
 
-/** Segmented control / radio-group estilo pills.
+/** Segmented control / radio-group estilo pills, con count opcional por opción.
  *  Reemplaza Select cuando hay pocas opciones y querés que estén visibles. */
 function FilterPills({
   label,
@@ -66,7 +54,7 @@ function FilterPills({
   label: string
   value: string
   onChange: (v: string) => void
-  options: { value: string; label: string }[]
+  options: { value: string; label: string; count?: number }[]
 }) {
   return (
     <div className="flex items-center gap-2 min-w-0">
@@ -76,23 +64,35 @@ function FilterPills({
       <div
         role="radiogroup"
         aria-label={label}
-        className="inline-flex h-8 items-center justify-start rounded-md bg-muted p-[3px] text-muted-foreground overflow-x-auto"
+        className="inline-flex h-9 items-center justify-start rounded-lg bg-muted p-1 text-muted-foreground overflow-x-auto gap-0.5"
       >
         {options.map((opt) => {
           const active = value === opt.value
+          const hasCount = opt.count !== undefined
           return (
             <button
               key={opt.value}
               role="radio"
               aria-checked={active}
               onClick={() => onChange(opt.value)}
-              className={`inline-flex h-[calc(100%-2px)] items-center justify-center px-2.5 rounded text-xs font-medium whitespace-nowrap transition-all cursor-pointer flex-shrink-0 ${
+              className={`inline-flex h-full items-center justify-center gap-1.5 px-2.5 rounded-md text-xs font-medium whitespace-nowrap transition-all cursor-pointer flex-shrink-0 ${
                 active
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'hover:text-foreground'
+                  ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
+                  : 'hover:bg-background/50 hover:text-foreground'
               }`}
             >
-              {opt.label}
+              <span>{opt.label}</span>
+              {hasCount && (
+                <span
+                  className={`tabular-nums text-[10px] font-semibold rounded px-1.5 py-0.5 ${
+                    active
+                      ? 'bg-muted text-muted-foreground'
+                      : 'bg-background/70 text-muted-foreground'
+                  }`}
+                >
+                  {opt.count}
+                </span>
+              )}
             </button>
           )
         })}
@@ -102,22 +102,11 @@ function FilterPills({
 }
 
 interface AttendeesManagementSectionProps {
-  eventId: string
-  event: {
-    id: string
-    title: string | null
-    scheduledDate: string
-    startTime: string
-    endTime: string | null
-    location: string | null
-  }
   attendees: any[]
   onRefresh: () => void
 }
 
 export function AttendeesManagementSection({
-  eventId,
-  event,
   attendees,
   onRefresh,
 }: AttendeesManagementSectionProps) {
@@ -215,12 +204,23 @@ export function AttendeesManagementSection({
     }
   }
 
+  // Formato fecha + hora forzado a UTC-3 (zona horaria de Paraguay).
   const formatInvitedAt = (dateStr: string | Date) => {
     const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
     return date.toLocaleDateString('es-PY', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
+      timeZone: 'America/Asuncion',
+    })
+  }
+  const formatInvitedTime = (dateStr: string | Date) => {
+    const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
+    return date.toLocaleTimeString('es-PY', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'America/Asuncion',
     })
   }
 
@@ -357,43 +357,71 @@ export function AttendeesManagementSection({
     return true
   })
 
+  // Counts por filtro — para mostrar dentro de cada pill.
+  const statusCounts = attendees.reduce<Record<string, number>>((acc, a) => {
+    acc[a.status] = (acc[a.status] || 0) + 1
+    return acc
+  }, {})
+
+  const paymentCounts = attendees.reduce<Record<string, number>>(
+    (acc, a) => {
+      const payments = a.formDriver?.equipmentPayments || []
+      const payment = payments[0]
+      if (!payment) acc.NONE++
+      else if (payment.status === 'VERIFIED') acc.VERIFIED++
+      else acc.PENDING++
+      return acc
+    },
+    { VERIFIED: 0, PENDING: 0, NONE: 0 }
+  )
+
   if (attendees.length === 0) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <UserCog className="h-5 w-5" />
+            Participantes
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            Gestiona la asistencia y pagos de cada driver
+          </p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground border border-dashed rounded-lg">
           <p className="text-lg font-medium">No hay drivers asignados</p>
           <p className="text-sm mt-1">Ve a la pestaña &quot;Agregar Drivers&quot;</p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     )
   }
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                Participantes ({attendees.length})
-                {filteredAttendees.length !== attendees.length && (
-                  <Badge variant="secondary" className="text-xs">
-                    {filteredAttendees.length} filtrados
-                  </Badge>
-                )}
-              </CardTitle>
-              <CardDescription>
-                Gestiona la asistencia y pagos de cada driver
-              </CardDescription>
-            </div>
-            <Badge variant="outline" className="gap-1">
-              <CheckCircle className="h-3 w-3 text-green-600" />
-              {attendees.filter(a => a.status === 'ATTENDED').length} asistieron
-            </Badge>
+      <div className="space-y-4">
+        {/* Header — mismo patrón que "Agregar Participantes" */}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <UserCog className="h-5 w-5" />
+              Participantes ({attendees.length})
+              {filteredAttendees.length !== attendees.length && (
+                <Badge variant="secondary" className="text-xs">
+                  {filteredAttendees.length} filtrados
+                </Badge>
+              )}
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Gestiona la asistencia y pagos de cada driver
+            </p>
           </div>
-        </CardHeader>
+          <Badge variant="outline" className="gap-1 flex-shrink-0">
+            <CheckCircle className="h-3 w-3 text-green-600" />
+            {attendees.filter(a => a.status === 'ATTENDED').length} asistieron
+          </Badge>
+        </div>
 
-        <CardContent className="space-y-4">
+        {/* Filtros + tabla */}
+        <div className="space-y-4">
           {/* Filtros */}
           <div className="space-y-3">
             {/* Búsqueda */}
@@ -414,12 +442,11 @@ export function AttendeesManagementSection({
                 value={statusFilter}
                 onChange={setStatusFilter}
                 options={[
-                  { value: 'all', label: 'Todos' },
-                  { value: 'INVITED', label: 'Invitados' },
-                  { value: 'CONFIRMED', label: 'Confirmados' },
-                  { value: 'ATTENDED', label: 'Asistieron' },
-                  { value: 'NO_SHOW', label: 'No Show' },
-                  { value: 'CANCELLED', label: 'Cancelados' },
+                  { value: 'all', label: 'Todos', count: attendees.length },
+                  { value: 'INVITED', label: 'Invitados', count: statusCounts.INVITED || 0 },
+                  { value: 'CONFIRMED', label: 'Confirmados', count: statusCounts.CONFIRMED || 0 },
+                  { value: 'ATTENDED', label: 'Asistieron', count: statusCounts.ATTENDED || 0 },
+                  { value: 'NO_SHOW', label: 'No Show', count: statusCounts.NO_SHOW || 0 },
                 ]}
               />
               <FilterPills
@@ -427,10 +454,10 @@ export function AttendeesManagementSection({
                 value={paymentFilter}
                 onChange={setPaymentFilter}
                 options={[
-                  { value: 'all', label: 'Todos' },
-                  { value: 'VERIFIED', label: 'Verificados' },
-                  { value: 'PENDING', label: 'Pendientes' },
-                  { value: 'NONE', label: 'Sin pago' },
+                  { value: 'all', label: 'Todos', count: attendees.length },
+                  { value: 'VERIFIED', label: 'Verificados', count: paymentCounts.VERIFIED },
+                  { value: 'PENDING', label: 'Pendientes', count: paymentCounts.PENDING },
+                  { value: 'NONE', label: 'Sin pago', count: paymentCounts.NONE },
                 ]}
               />
 
@@ -507,10 +534,12 @@ export function AttendeesManagementSection({
                         </div>
                       </TableCell>
 
-                      {/* Agendado: cuándo + por quién */}
+                      {/* Agendado: cuándo (fecha + hora UTC-3) + por quién */}
                       <TableCell className="whitespace-nowrap">
                         <div className="text-sm tabular-nums">
                           {formatInvitedAt(attendee.invitedAt)}
+                          <span className="text-muted-foreground"> · </span>
+                          <span className="text-muted-foreground">{formatInvitedTime(attendee.invitedAt)}</span>
                         </div>
                         {isSelfServed ? (
                           <div
@@ -629,8 +658,8 @@ export function AttendeesManagementSection({
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Dialog de cancelación */}
       <CancelAttendeeDialog

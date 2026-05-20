@@ -27,7 +27,10 @@ export async function GET(request: NextRequest) {
 
     console.log('[DAILY REMINDERS] Starting with frequency control...')
 
-    const DAILY_LIMIT = 20
+    // Límite de mensajes por corrida del cron. Configurable por env var para
+    // ajustar el volumen sin redeploy y evitar saturar / arriesgar ban del
+    // número (el bot es whatsapp-web.js, no API oficial). Default conservador.
+    const DAILY_LIMIT = Math.max(1, parseInt(process.env.WHATSAPP_DAILY_LIMIT || '20', 10))
     const eligibleResult = await getEligibleDriversForReminder(DAILY_LIMIT)
 
     if (!eligibleResult.success) {
@@ -222,21 +225,24 @@ interface DriverForMessaging {
 }
 
 /**
- * Mapeo concept → key de WhatsAppTemplate en DB. null = el concepto no se envía
- * (no hay template configurado todavía).
- * Para activar un concept, crear el template con ese key en la UI/DB.
+ * Mapeo concept → key de WhatsAppTemplate en DB. null = el concepto no se envía.
+ *
+ * Set consolidado en 5 plantillas: varios conceptos del funnel comparten key.
+ *  - form a medias (cualquier step) + followup genérico → form_incomplete
+ *  - documentos faltantes/correcciones + pago pendiente → documents_pending
+ *  - agendar capacitación → capacitaciones (mismo mensaje que el trigger de aprobación)
  */
 const CONCEPT_TO_TEMPLATE_KEY: Record<MessageConcept, string | null> = {
-  FORM_STEP_1: 'form_step_1',
-  FORM_STEP_2: 'form_step_2',
-  FORM_STEP_3: 'form_step_3',
-  FORM_STEP_4: 'form_step_4',
+  FORM_STEP_1: 'form_incomplete',
+  FORM_STEP_2: 'form_incomplete',
+  FORM_STEP_3: 'form_incomplete',
+  FORM_STEP_4: 'form_incomplete',
   FORM_INCOMPLETE: 'form_incomplete',
   DOCUMENTS_PENDING: 'documents_pending',
-  DOCUMENTS_CORRECTIONS: 'documents_corrections',
-  PAYMENT_PENDING: 'payment_pending',
-  GENERAL_FOLLOWUP: 'general_followup',
-  SCHEDULE_CAPACITACION: 'schedule_capacitacion',
+  DOCUMENTS_CORRECTIONS: 'documents_pending',
+  PAYMENT_PENDING: 'documents_pending',
+  GENERAL_FOLLOWUP: 'form_incomplete',
+  SCHEDULE_CAPACITACION: 'capacitaciones',
   CAPACITACION_REMINDER: 'capacitacion_reminder',
 }
 

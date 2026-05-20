@@ -192,7 +192,9 @@ export default function EnvioMasivoPage() {
   const [message, setMessage] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [botId, setBotId] = useState<string>('bot-reactivacion-prod');
+  // Single-tenant: el bot es siempre el mismo. Se manda al endpoint que lo
+  // ignora (param legacy), pero lo dejamos consistente.
+  const [botId] = useState<string>('whatsapp-bot');
   const [imageMode, setImageMode] = useState<'url' | 'upload'>('url');
 
   const [isValidating, setIsValidating] = useState(false);
@@ -867,20 +869,15 @@ Ejemplo: Hola {nombre}, tu código es {codigo}."
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <Label htmlFor="bot" className="text-sm font-medium">Bot a Usar</Label>
-                    <Select value={botId} onValueChange={setBotId}>
-                      <SelectTrigger id="bot" className="cursor-pointer h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="bot-reactivacion-prod" className="cursor-pointer">🔁 Bot Reactivación</SelectItem>
-                        <SelectItem value="bot-adquisicion-prod" className="cursor-pointer">📥 Bot Adquisición</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground pt-1">
-                      Delay de 5 segundos entre mensajes para evitar bloqueos
-                    </p>
+                  <div className="flex items-start gap-2 rounded-md border bg-muted/30 p-3">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium">Bot WhatsApp</p>
+                      <p className="text-xs text-muted-foreground">
+                        Envío secuencial con delay de 5 segundos entre mensajes para
+                        evitar bloqueos del número.
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

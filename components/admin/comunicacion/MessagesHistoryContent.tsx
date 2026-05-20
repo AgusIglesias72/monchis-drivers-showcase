@@ -1,698 +1,778 @@
 // components/admin/comunicacion/MessagesHistoryContent.tsx
-'use client';
+'use client'
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+import { useState, useTransition } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { format, formatDistanceToNow } from 'date-fns'
+import { es } from 'date-fns/locale'
+import { toast } from 'sonner'
+import * as RadioGroupPrimitive from '@radix-ui/react-radio-group'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  History,
-  Filter,
-  Download,
-  RefreshCw,
   Search,
-  Calendar as CalendarIcon,
+  X,
+  Download,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Send,
   TrendingUp,
-  Phone,
-  Image as ImageIcon,
+  TrendingDown,
+  Minus,
+  DatabaseZap,
   Loader2,
-  X,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
-import { exportMessages } from '@/app/admin/comunicaciones/historial/actions';
-import type { MessageStats } from '@/lib/services/messages-history.service';
+  MessageSquare,
+  FileText,
+  Send,
+  FlaskConical,
+} from 'lucide-react'
+import type {
+  WhatsAppMessageStatus,
+  WhatsAppMessageSource,
+  WhatsAppMessageType,
+} from '@prisma/client'
+
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import { ComunicacionesDateFilter } from './comunicaciones-date-filter'
+import { exportMessages } from '@/app/admin/comunicaciones/historial/actions'
+import { cn } from '@/lib/utils'
 
 interface Message {
-  id: string;
-  recipientName: string;
-  recipientPhone: string;
-  messageType: string;
-  botId: string | null;
-  status: string;
-  source: string;
-  sentAt: Date | string;
-  metadata?: any;
+  id: string
+  recipientName: string
+  recipientPhone: string
+  messageType: string
+  status: WhatsAppMessageStatus
+  source: WhatsAppMessageSource
+  sentAt: Date | string
+  message: string
+  metadata?: any
+  formDriver?: { id: string; fullName: string | null } | null
+  sentByUser?: { id: string; fullName: string | null; email: string } | null
 }
 
-interface MessagesHistoryContentProps {
-  initialMessages: Message[];
-  initialPagination: {
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-  };
-  initialStats: MessageStats;
-  initialFilters?: {
-    search?: string;
-    messageType?: string;
-    botId?: string;
-    status?: string;
-    source?: string;
-    dateFrom?: Date;
-    dateTo?: Date;
-  };
+interface MessageStatsLike {
+  total: number
+  successful: number
+  failed: number
+  successRate: string
 }
 
-const MESSAGE_TYPES = [
-  { value: 'all', label: 'Todos', color: 'default' },
-  { value: 'WELCOME', label: 'Bienvenida', emoji: '👋' },
-  { value: 'APPLICATION_RECEIVED', label: 'Postulación Recibida', emoji: '📨' },
-  { value: 'FORM_INCOMPLETE', label: 'Form. Incompleto', emoji: '📝' },
-  { value: 'DOCUMENT_MISSING', label: 'Doc. Faltante', emoji: '📄' },
-  { value: 'PAYMENT_REMINDER', label: 'Record. Pago', emoji: '💰' },
-  { value: 'ONBOARDING_INVITATION', label: 'Onboarding', emoji: '🎓' },
-  { value: 'CAPACITATION_NO_SHOW', label: 'No Asistió', emoji: '❌' },
-  { value: 'REACTIVATION', label: 'Reactivación', emoji: '🔁' },
-  { value: 'CUSTOM', label: 'Personalizado', emoji: '✨' },
-];
+interface Props {
+  messages: Message[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+  statsCurrent: MessageStatsLike
+  statsPrev: MessageStatsLike
+  currentRange: { from: Date; to: Date }
+  isDefaultRange: boolean
+  filters: {
+    search?: string
+    messageType?: WhatsAppMessageType
+    status?: WhatsAppMessageStatus
+    source?: WhatsAppMessageSource
+    dateFrom?: string
+    dateTo?: string
+  }
+  dbError: boolean
+}
 
-const BOTS = [
-  { value: 'all', label: 'Todos los bots' },
-  { value: 'bot-adquisicion-prod', label: '📥 Adquisición' },
-  { value: 'bot-reactivacion-prod', label: '🔁 Reactivación' },
-];
-
-const STATUSES = [
+const STATUS_OPTIONS = [
   { value: 'all', label: 'Todos' },
   { value: 'SENT', label: 'Enviado' },
   { value: 'DELIVERED', label: 'Entregado' },
   { value: 'READ', label: 'Leído' },
-  { value: 'FAILED', label: 'Fallido' },
-];
+  { value: 'FAILED', label: 'Falló' },
+  { value: 'SENDING', label: 'Enviando' },
+] as const
 
-const SOURCES = [
-  { value: 'all', label: 'Todas' },
-  { value: 'MANUAL', label: 'Manual', emoji: '👤' },
-  { value: 'CRON', label: 'Auto', emoji: '🤖' },
-  { value: 'TRIGGER', label: 'Trigger', emoji: '⚡' },
-  { value: 'API', label: 'API', emoji: '🔌' },
-];
+const SOURCE_OPTIONS = [
+  { value: 'all', label: 'Todos' },
+  { value: 'TRIGGER', label: 'Trigger' },
+  { value: 'CRON', label: 'Cron' },
+  { value: 'MANUAL', label: 'Manual' },
+  { value: 'API', label: 'API' },
+] as const
+
+const statusCopy: Record<string, { label: string; tone: 'ok' | 'pending' | 'bad' }> = {
+  SENT: { label: 'Enviado', tone: 'ok' },
+  DELIVERED: { label: 'Entregado', tone: 'ok' },
+  READ: { label: 'Leído', tone: 'ok' },
+  SENDING: { label: 'Enviando', tone: 'pending' },
+  FAILED: { label: 'Falló', tone: 'bad' },
+  PENDING: { label: 'Pendiente', tone: 'pending' },
+}
+
+function formatPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  if (digits.startsWith('595') && digits.length >= 11) {
+    return `+595 ${digits.slice(3, 6)} ${digits.slice(6, 9)}-${digits.slice(9)}`
+  }
+  if (digits.startsWith('54') && digits.length >= 12) {
+    return `+54 9 ${digits.slice(2, 4)} ${digits.slice(4, 8)}-${digits.slice(8)}`
+  }
+  return `+${digits}`
+}
+
+function rangeLabel(range: { from: Date; to: Date }, isDefault: boolean): string {
+  if (isDefault) return 'últimos 7 días'
+  const sameYear = range.from.getFullYear() === range.to.getFullYear()
+  const sameDay =
+    sameYear &&
+    range.from.getMonth() === range.to.getMonth() &&
+    range.from.getDate() === range.to.getDate()
+  if (sameDay) return format(range.from, "d 'de' MMM", { locale: es })
+  return `${format(range.from, 'd MMM', { locale: es })} – ${format(range.to, 'd MMM', { locale: es })}`
+}
+
+function computeDelta(curr: number, prev: number): {
+  pct: number | null
+  direction: 'up' | 'down' | 'flat'
+} {
+  if (prev === 0 && curr === 0) return { pct: null, direction: 'flat' }
+  if (prev === 0) return { pct: null, direction: 'up' }
+  const change = ((curr - prev) / prev) * 100
+  if (Math.abs(change) < 1) return { pct: 0, direction: 'flat' }
+  return {
+    pct: Math.abs(Math.round(change)),
+    direction: change > 0 ? 'up' : 'down',
+  }
+}
+
+function groupByDay(messages: Message[]) {
+  const groups = new Map<string, Message[]>()
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  for (const m of messages) {
+    const d = new Date(m.sentAt)
+    let label: string
+    if (d >= today) label = 'Hoy'
+    else if (d >= yesterday) label = 'Ayer'
+    else label = format(d, "EEEE d 'de' MMMM 'de' yyyy", { locale: es })
+    const cap = label.charAt(0).toUpperCase() + label.slice(1)
+    if (!groups.has(cap)) groups.set(cap, [])
+    groups.get(cap)!.push(m)
+  }
+  return Array.from(groups.entries())
+}
 
 export function MessagesHistoryContent({
-  initialMessages,
-  initialPagination,
-  initialStats,
-  initialFilters = {},
-}: MessagesHistoryContentProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [isExporting, setIsExporting] = useState(false);
+  messages,
+  pagination,
+  statsCurrent,
+  statsPrev,
+  currentRange,
+  isDefaultRange,
+  filters,
+  dbError,
+}: Props) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [isPending, startTransition] = useTransition()
+  const [isExporting, setIsExporting] = useState(false)
+  const [localSearch, setLocalSearch] = useState(filters.search || '')
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null)
 
-  // Estado local de filtros
-  const [localSearch, setLocalSearch] = useState(initialFilters.search || '');
-  const [localMessageType, setLocalMessageType] = useState(initialFilters.messageType || 'all');
-  const [localBotId, setLocalBotId] = useState(initialFilters.botId || 'all');
-  const [localStatus, setLocalStatus] = useState(initialFilters.status || 'all');
-  const [localSource, setLocalSource] = useState(initialFilters.source || 'all');
-  const [localDateFrom, setLocalDateFrom] = useState<Date | undefined>(initialFilters.dateFrom);
-  const [localDateTo, setLocalDateTo] = useState<Date | undefined>(initialFilters.dateTo);
+  const sentDelta = computeDelta(statsCurrent.total, statsPrev.total)
+  const periodLabel = rangeLabel(currentRange, isDefaultRange)
+  const groupedMessages = groupByDay(messages)
 
-  // Construir URL con filtros
-  const buildUrl = (params: Record<string, string | undefined>) => {
-    const url = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value && value !== 'all') {
-        url.set(key, value);
-      }
-    });
-    return `/admin/comunicaciones/historial${url.toString() ? `?${url.toString()}` : ''}`;
-  };
-
-  // Aplicar filtros
-  const applyFilters = (page: number = 1) => {
-    const params: Record<string, string | undefined> = {
-      page: page.toString(),
-      search: localSearch || undefined,
-      messageType: localMessageType !== 'all' ? localMessageType : undefined,
-      botId: localBotId !== 'all' ? localBotId : undefined,
-      status: localStatus !== 'all' ? localStatus : undefined,
-      source: localSource !== 'all' ? localSource : undefined,
-      dateFrom: localDateFrom?.toISOString(),
-      dateTo: localDateTo?.toISOString(),
-    };
-
+  const updateParam = (key: string, value: string | null) => {
+    const params = new URLSearchParams(searchParams?.toString() || '')
+    if (value === null || value === '' || value === 'all') params.delete(key)
+    else params.set(key, value)
+    // Reset paginación al filtrar.
+    if (key !== 'page') params.delete('page')
     startTransition(() => {
-      router.push(buildUrl(params));
-    });
-  };
+      router.push(`/admin/comunicaciones/historial${params.toString() ? `?${params.toString()}` : ''}`)
+    })
+  }
 
-  // Limpiar filtros
-  const clearFilters = () => {
-    setLocalSearch('');
-    setLocalMessageType('all');
-    setLocalBotId('all');
-    setLocalStatus('all');
-    setLocalSource('all');
-    setLocalDateFrom(undefined);
-    setLocalDateTo(undefined);
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    updateParam('search', localSearch.trim() || null)
+  }
 
+  const handleClearAll = () => {
+    setLocalSearch('')
     startTransition(() => {
-      router.push('/admin/comunicaciones/historial');
-    });
-  };
+      router.push('/admin/comunicaciones/historial')
+    })
+  }
 
-  // Cambiar página
-  const goToPage = (page: number) => {
-    applyFilters(page);
-  };
-
-  // Refrescar
-  const handleRefresh = () => {
-    startTransition(() => {
-      router.refresh();
-    });
-  };
-
-  // Exportar
   const handleExport = async () => {
-    setIsExporting(true);
-    toast.info('Exportando mensajes...');
-
+    setIsExporting(true)
     try {
       const result = await exportMessages({
-        search: localSearch || undefined,
-        messageType: localMessageType !== 'all' ? localMessageType as any : undefined,
-        botId: localBotId !== 'all' ? localBotId : undefined,
-        status: localStatus !== 'all' ? localStatus as any : undefined,
-        source: localSource !== 'all' ? localSource as any : undefined,
-        dateFrom: localDateFrom,
-        dateTo: localDateTo,
-      });
-
-      if (!result.success) {
-        throw new Error(result.error);
+        search: filters.search,
+        messageType: filters.messageType,
+        status: filters.status,
+        source: filters.source,
+        dateFrom: currentRange.from,
+        dateTo: currentRange.to,
+      })
+      if (result.success && result.data) {
+        const blob = new Blob([result.data], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = result.filename || 'mensajes.csv'
+        a.click()
+        URL.revokeObjectURL(url)
+        toast.success(`Exportado: ${result.filename}`)
+      } else {
+        toast.error(result.error || 'No se pudo exportar')
       }
-
-      const blob = new Blob([result.data!], { type: 'text/csv;charset=utf-8;' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = result.filename!;
-      a.click();
-      window.URL.revokeObjectURL(url);
-
-      toast.success('Mensajes exportados correctamente');
-    } catch (error) {
-      console.error('Error exporting:', error);
-      toast.error('Error al exportar mensajes');
+    } catch (err) {
+      toast.error('Error al exportar')
     } finally {
-      setIsExporting(false);
+      setIsExporting(false)
     }
-  };
+  }
 
-  // Helpers de renderizado
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'SENT':
-        return <Badge variant="outline" className="gap-1 border-blue-200 text-blue-700 bg-blue-50"><Send className="h-3 w-3" />Enviado</Badge>;
-      case 'DELIVERED':
-        return <Badge variant="outline" className="gap-1 border-green-200 text-green-700 bg-green-50"><CheckCircle2 className="h-3 w-3" />Entregado</Badge>;
-      case 'READ':
-        return <Badge className="gap-1 bg-green-500 hover:bg-green-600"><CheckCircle2 className="h-3 w-3" />Leído</Badge>;
-      case 'FAILED':
-        return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Fallido</Badge>;
-      case 'SENDING':
-        return <Badge variant="outline" className="gap-1 border-orange-200 text-orange-700 bg-orange-50"><Clock className="h-3 w-3" />Enviando</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const getBotBadge = (botId: string | null) => {
-    if (!botId) return <Badge variant="outline" className="text-xs">Sin bot</Badge>;
-    if (botId.includes('adquisicion')) return <Badge variant="secondary" className="gap-1 text-xs">📥 Adquisición</Badge>;
-    if (botId.includes('reactivacion')) return <Badge variant="secondary" className="gap-1 text-xs">🔁 Reactivación</Badge>;
-    return <Badge variant="outline" className="text-xs">{botId}</Badge>;
-  };
-
-  const getTypeBadge = (type: string) => {
-    const typeInfo = MESSAGE_TYPES.find(t => t.value === type);
-    if (!typeInfo || type === 'all') {
-      return <Badge variant="outline" className="text-xs">{type}</Badge>;
-    }
-    return (
-      <Badge variant="outline" className="gap-1 text-xs">
-        <span>{typeInfo.emoji}</span>
-        {typeInfo.label}
-      </Badge>
-    );
-  };
-
-  const getSourceBadge = (source: string) => {
-    const sourceInfo = SOURCES.find(s => s.value === source);
-    if (!sourceInfo || source === 'all') {
-      return <Badge variant="secondary" className="text-xs">{source}</Badge>;
-    }
-    return (
-      <Badge variant="secondary" className="gap-1 text-xs">
-        <span>{sourceInfo.emoji}</span>
-        {sourceInfo.label}
-      </Badge>
-    );
-  };
-
-  const hasActiveFilters = 
-    localSearch || 
-    localMessageType !== 'all' || 
-    localBotId !== 'all' || 
-    localStatus !== 'all' || 
-    localSource !== 'all' || 
-    localDateFrom || 
-    localDateTo;
+  const hasActiveFilters = !!(
+    filters.search ||
+    filters.messageType ||
+    filters.status ||
+    filters.source ||
+    filters.dateFrom ||
+    filters.dateTo
+  )
 
   return (
-    <div className="flex-1 p-6 md:p-8 space-y-6">
+    <div className="container mx-auto px-6 py-8 space-y-8">
+      {dbError && (
+        <Alert variant="destructive">
+          <DatabaseZap className="h-4 w-4" />
+          <AlertTitle>No pudimos conectar con la base de datos</AlertTitle>
+          <AlertDescription>
+            Las métricas y el listado pueden estar vacíos hasta que la DB vuelva.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <History className="h-8 w-8" />
-            Historial de Mensajes
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Visualiza y analiza todos los mensajes enviados
+          <h1 className="text-3xl font-semibold tracking-tight">Historial de mensajes</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground max-w-xl">
+            Todos los mensajes WhatsApp enviados. Filtrá por fecha, estado, origen
+            o buscá por nombre, teléfono o contenido.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleRefresh} 
-            disabled={isPending}
-          >
-            <RefreshCw className={cn('h-4 w-4 mr-2', isPending && 'animate-spin')} />
-            Actualizar
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/plantillas-whatsapp">
+              <FileText className="mr-1.5 h-3.5 w-3.5" />
+              Plantillas
+            </Link>
           </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleExport}
-            disabled={isExporting}
-          >
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/comunicaciones/masivo">
+              <Send className="mr-1.5 h-3.5 w-3.5" />
+              Envío masivo
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/comunicaciones/pruebas?bot=whatsapp-bot">
+              <FlaskConical className="mr-1.5 h-3.5 w-3.5" />
+              Probar
+            </Link>
+          </Button>
+          <Button onClick={handleExport} disabled={isExporting || dbError} size="sm">
             {isExporting ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Exportando...
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Exportando…
               </>
             ) : (
               <>
-                <Download className="h-4 w-4 mr-2" />
-                Exportar
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                Exportar CSV
               </>
             )}
           </Button>
         </div>
+      </header>
+
+      {/* Sub-header: rango */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-y py-3">
+        <div className="text-xs text-muted-foreground">
+          Métricas y listado de{' '}
+          <span className="font-medium text-foreground">{periodLabel}</span>
+        </div>
+        <ComunicacionesDateFilter
+          currentStartDate={filters.dateFrom}
+          currentEndDate={filters.dateTo}
+          basePath="/admin/comunicaciones/historial"
+          paramKeys={{ from: 'dateFrom', to: 'dateTo' }}
+        />
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Enviados</p>
-                <p className="text-2xl font-bold">{initialStats.total.toLocaleString()}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-blue-500/10">
-                <Send className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* KPI strip */}
+      <section className="grid grid-cols-2 gap-x-8 gap-y-6 pb-6 border-b sm:grid-cols-4">
+        <Kpi
+          label="Enviados"
+          value={statsCurrent.total.toLocaleString('es-AR')}
+          delta={sentDelta}
+          prevValue={statsPrev.total}
+        />
+        <Kpi
+          label="Tasa de éxito"
+          value={`${parseFloat(statsCurrent.successRate).toFixed(0)}%`}
+          hint={
+            statsCurrent.total === 0
+              ? 'sin datos en el período'
+              : `${statsCurrent.successful} de ${statsCurrent.total}`
+          }
+          tone={
+            statsCurrent.total > 0 && statsCurrent.failed > 0 && parseFloat(statsCurrent.successRate) < 90
+              ? 'warn'
+              : 'default'
+          }
+        />
+        <Kpi
+          label="Fallidos"
+          value={statsCurrent.failed.toLocaleString('es-AR')}
+          hint={
+            statsCurrent.failed === 0
+              ? 'todo OK'
+              : statsPrev.failed > 0
+              ? `${statsPrev.failed} en período anterior`
+              : 'ninguno en período anterior'
+          }
+          tone={statsCurrent.failed > 0 ? 'warn' : 'default'}
+        />
+        <Kpi
+          label="Resultados visibles"
+          value={pagination.total.toLocaleString('es-AR')}
+          hint={
+            pagination.totalPages > 1
+              ? `página ${pagination.page} de ${pagination.totalPages}`
+              : pagination.total === 0
+              ? 'sin coincidencias'
+              : 'todos en esta página'
+          }
+        />
+      </section>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Exitosos</p>
-                <p className="text-2xl font-bold text-green-600">{initialStats.successful.toLocaleString()}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-green-500/10">
-                <CheckCircle2 className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Filtros */}
+      <section className="space-y-4">
+        <form onSubmit={handleSearchSubmit} className="space-y-1.5 max-w-md">
+          <Label htmlFor="historial-search" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Buscar
+          </Label>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="historial-search"
+              type="search"
+              placeholder="Nombre, teléfono o contenido del mensaje…"
+              value={localSearch}
+              onChange={e => setLocalSearch(e.target.value)}
+              className="pl-9 h-9"
+              aria-describedby="historial-search-hint"
+            />
+            <span id="historial-search-hint" className="sr-only">
+              Apretá Enter para aplicar la búsqueda
+            </span>
+          </div>
+        </form>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Fallidos</p>
-                <p className="text-2xl font-bold text-red-600">{initialStats.failed.toLocaleString()}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-red-500/10">
-                <XCircle className="h-6 w-6 text-red-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <FilterRadioGroup
+            label="Estado"
+            options={STATUS_OPTIONS as any}
+            value={filters.status || 'all'}
+            onChange={v => updateParam('status', v === 'all' ? null : v)}
+          />
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Tasa de Éxito</p>
-                <p className="text-2xl font-bold">{initialStats.successRate}%</p>
-              </div>
-              <div className="p-3 rounded-lg bg-purple-500/10">
-                <TrendingUp className="h-6 w-6 text-purple-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          <FilterRadioGroup
+            label="Origen"
+            options={SOURCE_OPTIONS as any}
+            value={filters.source || 'all'}
+            onChange={v => updateParam('source', v === 'all' ? null : v)}
+          />
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Pendientes</p>
-                <p className="text-2xl font-bold text-orange-600">{initialStats.pending.toLocaleString()}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-orange-500/10">
-                <Clock className="h-6 w-6 text-orange-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filtros Mejorados */}
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filtros
-            </CardTitle>
+          <div className="flex items-center gap-2 sm:ml-auto">
+            {isPending && (
+              <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Aplicando…
+              </span>
+            )}
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters} disabled={isPending}>
-                <X className="h-4 w-4 mr-1" />
-                Limpiar
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearAll}
+                disabled={isPending}
+                className="text-muted-foreground"
+              >
+                Limpiar filtros
               </Button>
             )}
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {/* Búsqueda */}
-            <div className="lg:col-span-2 space-y-2">
-              <Label htmlFor="search" className="text-xs font-medium text-muted-foreground">Buscar</Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="search"
-                    placeholder="Teléfono, nombre..."
-                    value={localSearch}
-                    onChange={(e) => setLocalSearch(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-                    className="pl-9 h-9"
-                  />
-                </div>
-                <Button onClick={() => applyFilters()} size="sm" disabled={isPending} className="h-9 px-3">
-                  Buscar
-                </Button>
+        </div>
+      </section>
+
+      {/* Timeline */}
+      <section>
+        {messages.length === 0 ? (
+          <EmptyState hasFilters={hasActiveFilters} />
+        ) : (
+          <div className="space-y-6">
+            {groupedMessages.map(([day, msgs]) => (
+              <div key={day}>
+                <h3 className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground/70 font-medium">
+                  {day}
+                </h3>
+                <ul className="divide-y border-y">
+                  {msgs.map(msg => (
+                    <MessageRow
+                      key={msg.id}
+                      msg={msg}
+                      onOpen={() => setSelectedMessage(msg)}
+                    />
+                  ))}
+                </ul>
               </div>
-            </div>
-
-            {/* Tipo */}
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground">Tipo</Label>
-              <Select value={localMessageType} onValueChange={(value) => { setLocalMessageType(value); setTimeout(() => applyFilters(), 100); }}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MESSAGE_TYPES.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.emoji && <span className="mr-2">{type.emoji}</span>}
-                      {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Bot */}
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground">Bot</Label>
-              <Select value={localBotId} onValueChange={(value) => { setLocalBotId(value); setTimeout(() => applyFilters(), 100); }}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {BOTS.map((bot) => (
-                    <SelectItem key={bot.value} value={bot.value}>
-                      {bot.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Estado */}
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground">Estado</Label>
-              <Select value={localStatus} onValueChange={(value) => { setLocalStatus(value); setTimeout(() => applyFilters(), 100); }}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUSES.map((status) => (
-                    <SelectItem key={status.value} value={status.value}>
-                      {status.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Fuente */}
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground">Fuente</Label>
-              <Select value={localSource} onValueChange={(value) => { setLocalSource(value); setTimeout(() => applyFilters(), 100); }}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SOURCES.map((source) => (
-                    <SelectItem key={source.value} value={source.value}>
-                      {source.emoji && <span className="mr-2">{source.emoji}</span>}
-                      {source.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Fecha desde */}
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground">Desde</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal h-9 text-sm">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {localDateFrom ? format(localDateFrom, 'PPP', { locale: es }) : 'Fecha'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={localDateFrom}
-                    onSelect={(date) => { setLocalDateFrom(date); if (date) setTimeout(() => applyFilters(), 100); }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Fecha hasta */}
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground">Hasta</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal h-9 text-sm">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {localDateTo ? format(localDateTo, 'PPP', { locale: es }) : 'Fecha'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={localDateTo}
-                    onSelect={(date) => { setLocalDateTo(date); if (date) setTimeout(() => applyFilters(), 100); }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </section>
 
-      {/* Tabla Mejorada */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">
-              Mensajes ({initialPagination.total.toLocaleString()})
-            </CardTitle>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Página {initialPagination.page} de {initialPagination.totalPages}</span>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isPending ? (
-            <div className="flex items-center justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : initialMessages.length === 0 ? (
-            <div className="text-center py-12">
-              <History className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-              <p className="text-muted-foreground">No se encontraron mensajes</p>
-            </div>
-          ) : (
-            <>
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="font-semibold">Fecha</TableHead>
-                      <TableHead className="font-semibold">Destinatario</TableHead>
-                      <TableHead className="font-semibold">Tipo</TableHead>
-                      <TableHead className="font-semibold">Bot</TableHead>
-                      <TableHead className="font-semibold">Estado</TableHead>
-                      <TableHead className="font-semibold">Fuente</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {initialMessages.map((message) => (
-                      <TableRow key={message.id} className="hover:bg-muted/30">
-                        <TableCell className="font-medium">
-                          <div className="flex flex-col">
-                            <span className="text-sm">
-                              {format(new Date(message.sentAt), 'd MMM', { locale: es })}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {format(new Date(message.sentAt), 'HH:mm', { locale: es })}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col max-w-[200px]">
-                            <span className="font-medium text-sm truncate">{message.recipientName}</span>
-                            <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {message.recipientPhone}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getTypeBadge(message.messageType)}
-                            {message.metadata?.hasImage && (
-                              <Badge variant="secondary" className="gap-1 text-xs h-5 px-1.5">
-                                <ImageIcon className="h-3 w-3" />
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {getBotBadge(message.botId)}
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(message.status)}
-                        </TableCell>
-                        <TableCell>
-                          {getSourceBadge(message.source)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+      {/* Paginación */}
+      {pagination.totalPages > 1 && (
+        <Pagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          onChange={p => updateParam('page', String(p))}
+        />
+      )}
 
-              {/* Paginación */}
-              <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-muted-foreground">
-                  Mostrando {((initialPagination.page - 1) * initialPagination.pageSize) + 1} a{' '}
-                  {Math.min(initialPagination.page * initialPagination.pageSize, initialPagination.total)} de {initialPagination.total.toLocaleString()}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => goToPage(initialPagination.page - 1)}
-                    disabled={initialPagination.page === 1 || isPending}
-                  >
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    Anterior
-                  </Button>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, initialPagination.totalPages) }, (_, i) => {
-                      const pageNum = i + 1;
-                      return (
-                        <Button
-                          key={pageNum}
-                          variant={initialPagination.page === pageNum ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => goToPage(pageNum)}
-                          disabled={isPending}
-                          className="h-8 w-8 p-0"
-                        >
-                          {pageNum}
-                        </Button>
-                      );
-                    })}
-                    {initialPagination.totalPages > 5 && <span className="text-muted-foreground">...</span>}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => goToPage(initialPagination.page + 1)}
-                    disabled={initialPagination.page === initialPagination.totalPages || isPending}
-                  >
-                    Siguiente
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      {/* Drawer detalle */}
+      <Sheet
+        open={!!selectedMessage}
+        onOpenChange={open => !open && setSelectedMessage(null)}
+      >
+        <SheetContent className="sm:max-w-md overflow-y-auto">
+          {selectedMessage && <MessageDetail msg={selectedMessage} />}
+        </SheetContent>
+      </Sheet>
     </div>
-  );
+  )
+}
+
+function Kpi({
+  label,
+  value,
+  hint,
+  delta,
+  prevValue,
+  tone = 'default',
+}: {
+  label: string
+  value: string
+  hint?: React.ReactNode
+  delta?: { pct: number | null; direction: 'up' | 'down' | 'flat' }
+  prevValue?: number
+  tone?: 'default' | 'ok' | 'warn'
+}) {
+  const valueColor = tone === 'warn' ? 'text-amber-600 dark:text-amber-500' : 'text-foreground'
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground/80 font-medium">
+        {label}
+      </div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <div className={`text-3xl font-semibold tabular-nums ${valueColor}`}>{value}</div>
+        {delta && <DeltaBadge delta={delta} />}
+      </div>
+      {delta ? (
+        <div className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+          {prevValue !== undefined
+            ? `vs ${prevValue.toLocaleString('es-AR')} en período anterior`
+            : null}
+        </div>
+      ) : hint != null ? (
+        <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>
+      ) : null}
+    </div>
+  )
+}
+
+function DeltaBadge({
+  delta,
+}: {
+  delta: { pct: number | null; direction: 'up' | 'down' | 'flat' }
+}) {
+  if (delta.direction === 'flat' && delta.pct === null) return null
+  const Icon =
+    delta.direction === 'up' ? TrendingUp : delta.direction === 'down' ? TrendingDown : Minus
+  const color =
+    delta.direction === 'up'
+      ? 'text-emerald-600 dark:text-emerald-500'
+      : delta.direction === 'down'
+      ? 'text-red-600 dark:text-red-500'
+      : 'text-muted-foreground'
+  const text =
+    delta.pct === null
+      ? delta.direction === 'up'
+        ? 'nuevo'
+        : '—'
+      : `${delta.pct}%`
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-xs font-medium tabular-nums ${color}`}>
+      <Icon className="h-3 w-3" />
+      {text}
+    </span>
+  )
+}
+
+function FilterRadioGroup({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  options: ReadonlyArray<{ value: string; label: string }>
+  value: string
+  onChange: (v: string) => void
+}) {
+  const id = `filter-${label.toLowerCase()}`
+  return (
+    <div className="space-y-1.5">
+      <Label id={`${id}-label`} className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </Label>
+      <RadioGroupPrimitive.Root
+        value={value}
+        onValueChange={v => v && onChange(v)}
+        aria-labelledby={`${id}-label`}
+        className="inline-flex rounded-md border bg-background p-0.5"
+      >
+        {options.map(opt => {
+          const isSelected = value === opt.value
+          return (
+            <RadioGroupPrimitive.Item
+              key={opt.value}
+              value={opt.value}
+              className={cn(
+                'rounded px-2.5 py-1 text-xs font-medium outline-none transition-colors',
+                'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+                isSelected
+                  ? 'bg-foreground text-background'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+              )}
+            >
+              {opt.label}
+            </RadioGroupPrimitive.Item>
+          )
+        })}
+      </RadioGroupPrimitive.Root>
+    </div>
+  )
+}
+
+function MessageRow({
+  msg,
+  onOpen,
+}: {
+  msg: Message
+  onOpen: () => void
+}) {
+  const status = statusCopy[msg.status] ?? { label: msg.status, tone: 'pending' as const }
+  const time = format(new Date(msg.sentAt), 'HH:mm', { locale: es })
+  const templateKey = (msg.metadata as any)?.templateKey as string | undefined
+  const displayName = msg.formDriver?.fullName || msg.recipientName || 'Sin nombre'
+  const sourceLabel =
+    msg.source === 'TRIGGER'
+      ? 'auto'
+      : msg.source === 'CRON'
+      ? 'cron'
+      : msg.source === 'MANUAL'
+      ? 'manual'
+      : msg.source.toLowerCase()
+
+  return (
+    <li
+      onClick={onOpen}
+      className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 py-3 text-sm cursor-pointer hover:bg-muted/40 transition-colors px-1 -mx-1 rounded"
+    >
+      <span className="tabular-nums text-xs text-muted-foreground w-10">{time}</span>
+
+      <div className="min-w-0">
+        <div className="truncate font-medium">{displayName}</div>
+        <div className="text-xs text-muted-foreground tabular-nums">
+          {formatPhone(msg.recipientPhone)}
+        </div>
+      </div>
+
+      <div className="hidden sm:flex flex-col items-end gap-0.5 text-right">
+        <code className="text-xs text-muted-foreground">
+          {templateKey || msg.messageType.toLowerCase()}
+        </code>
+        <span className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">
+          {sourceLabel}
+        </span>
+      </div>
+
+      <StatusDot tone={status.tone} label={status.label} />
+    </li>
+  )
+}
+
+function StatusDot({ tone, label }: { tone: 'ok' | 'pending' | 'bad'; label: string }) {
+  const color =
+    tone === 'ok' ? 'bg-emerald-500' : tone === 'bad' ? 'bg-red-500' : 'bg-amber-500'
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className={`h-1.5 w-1.5 rounded-full ${color}`} aria-hidden />
+      <span>{label}</span>
+    </span>
+  )
+}
+
+function Pagination({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number
+  totalPages: number
+  onChange: (p: number) => void
+}) {
+  return (
+    <div className="flex items-center justify-between border-t pt-4">
+      <span className="text-xs text-muted-foreground">
+        Página {page} de {totalPages}
+      </span>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onChange(page - 1)}
+          disabled={page <= 1}
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Anterior
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onChange(page + 1)}
+          disabled={page >= totalPages}
+        >
+          Siguiente
+          <ChevronRight className="h-4 w-4 ml-1" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({ hasFilters }: { hasFilters: boolean }) {
+  return (
+    <div className="rounded-md border border-dashed py-16 text-center">
+      <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
+      <p className="text-sm font-medium">
+        {hasFilters ? 'Ningún mensaje coincide con los filtros' : 'No hay mensajes en el período'}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+        {hasFilters
+          ? 'Ajustá la fecha, el estado o el origen para ver más resultados.'
+          : 'Cuando el bot mande mensajes vas a verlos acá.'}
+      </p>
+    </div>
+  )
+}
+
+function MessageDetail({ msg }: { msg: Message }) {
+  const status = statusCopy[msg.status] ?? { label: msg.status, tone: 'pending' as const }
+  const templateKey = (msg.metadata as any)?.templateKey as string | undefined
+  const sentAt = new Date(msg.sentAt)
+  const displayName = msg.formDriver?.fullName || msg.recipientName || 'Sin nombre'
+
+  return (
+    <div className="space-y-5">
+      <SheetHeader>
+        <SheetTitle>{displayName}</SheetTitle>
+        <SheetDescription className="tabular-nums">
+          {formatPhone(msg.recipientPhone)} ·{' '}
+          {format(sentAt, "d MMM yyyy 'a las' HH:mm", { locale: es })} (
+          {formatDistanceToNow(sentAt, { addSuffix: true, locale: es })})
+        </SheetDescription>
+      </SheetHeader>
+
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+        <dt className="text-xs uppercase tracking-wide text-muted-foreground">Estado</dt>
+        <dd>
+          <StatusDot tone={status.tone} label={status.label} />
+        </dd>
+
+        <dt className="text-xs uppercase tracking-wide text-muted-foreground">Origen</dt>
+        <dd className="text-sm">{msg.source}</dd>
+
+        <dt className="text-xs uppercase tracking-wide text-muted-foreground">Tipo</dt>
+        <dd className="text-sm">{msg.messageType}</dd>
+
+        {templateKey && (
+          <>
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Plantilla</dt>
+            <dd>
+              <code className="text-xs">{templateKey}</code>
+            </dd>
+          </>
+        )}
+
+        {msg.sentByUser && (
+          <>
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Enviado por</dt>
+            <dd className="text-sm">{msg.sentByUser.fullName || msg.sentByUser.email}</dd>
+          </>
+        )}
+
+        {msg.formDriver?.id && (
+          <>
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Postulación</dt>
+            <dd className="text-sm">
+              <Link
+                href={`/admin/postulaciones/${msg.formDriver.id}`}
+                className="underline hover:text-foreground"
+              >
+                Ver detalle
+              </Link>
+            </dd>
+          </>
+        )}
+      </dl>
+
+      <div className="border-t pt-4">
+        <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+          Contenido
+        </div>
+        <div className="rounded-md bg-muted/40 p-3 text-sm whitespace-pre-wrap">
+          {msg.message || <span className="text-muted-foreground italic">Sin contenido</span>}
+        </div>
+      </div>
+    </div>
+  )
 }

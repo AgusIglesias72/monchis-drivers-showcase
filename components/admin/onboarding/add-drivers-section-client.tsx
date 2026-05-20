@@ -537,9 +537,9 @@ export function AddDriversSectionClient({
           />
         </div>
 
-        {/* Filtros rápidos */}
+        {/* Filtros rápidos (solapas) */}
         <div className="relative">
-          <div className="flex flex-wrap items-end gap-1 pb-0">
+          <div className="flex flex-wrap items-end gap-1 pb-0 relative z-10">
             <button
               onClick={() => setActiveQuickFilter('all')}
               disabled={loading || submitting}
@@ -611,6 +611,8 @@ export function AddDriversSectionClient({
               <span className="sm:hidden">Sin Onb.</span>
             </button>
           </div>
+          {/* Connector line: el solapa activo (z-10) cubre esta línea donde sienta. */}
+          <div className="h-px bg-border" />
         </div>
 
         {/* Botón limpiar filtros */}
