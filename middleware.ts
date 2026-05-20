@@ -15,6 +15,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/form(.*)',
   '/api/postulacion/(.*)', // ← APIs del portal (generate-token tiene auth interna)
   '/api/webhooks(.*)',
+  '/api/whatsapp/webhook(.*)', // ← Webhook entrante del bot WhatsApp (valida origen propio, sin Clerk)
   '/api/cron(.*)',
   '/api/admin/postulaciones/export-json(.*)',
   '/api/reports/external-drivers(.*)',
