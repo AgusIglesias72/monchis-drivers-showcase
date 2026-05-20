@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertCircle, ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
+import { WHATSAPP_ACQUISITION_URL } from '@/lib/constants/contact'
 
 interface Props {
   open: boolean
@@ -219,7 +220,7 @@ export function IdentityModal({ open, onOpenChange, onValidated }: Props) {
               </Button>
             </DialogFooter>
             <a
-              href="https://wa.me/15754194027?text=Hola%2C%20no%20puedo%20identificarme%20para%20reservar%20capacitaci%C3%B3n"
+              href={`${WHATSAPP_ACQUISITION_URL}?text=Hola%2C%20no%20puedo%20identificarme%20para%20reservar%20capacitaci%C3%B3n`}
               target="_blank"
               rel="noopener"
               className="inline-flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-2"

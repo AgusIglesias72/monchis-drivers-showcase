@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Calendar, MessageCircle, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { WHATSAPP_ACQUISITION_URL } from '@/lib/constants/contact'
 
 interface Props {
   /** Hay rules activas pero ninguna con cupos disponibles cerca. Mostramos
@@ -23,7 +24,7 @@ export function EmptyState({ noSlots = false }: Props) {
         <div className="flex flex-wrap gap-2 justify-center">
           <Button asChild variant="outline">
             <a
-              href="https://wa.me/15754194027?text=Hola%2C%20quiero%20saber%20cu%C3%A1ndo%20abren%20nuevas%20fechas%20de%20capacitaci%C3%B3n"
+              href={`${WHATSAPP_ACQUISITION_URL}?text=Hola%2C%20quiero%20saber%20cu%C3%A1ndo%20abren%20nuevas%20fechas%20de%20capacitaci%C3%B3n`}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -51,7 +52,7 @@ export function EmptyState({ noSlots = false }: Props) {
           <Link href="/">Empezar postulación</Link>
         </Button>
         <Button asChild variant="outline">
-          <a href="https://wa.me/15754194027" target="_blank" rel="noopener noreferrer">
+          <a href={WHATSAPP_ACQUISITION_URL} target="_blank" rel="noopener noreferrer">
             <MessageCircle className="mr-1.5 h-4 w-4" />
             WhatsApp
           </a>

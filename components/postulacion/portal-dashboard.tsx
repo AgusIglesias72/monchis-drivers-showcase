@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Loader2, FileText, User, Calendar, AlertCircle, X, ArrowLeftRight, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { WHATSAPP_ACQUISITION_URL } from '@/lib/constants/contact'
 import type { PortalData } from '@/lib/types/portal.types'
 import { DocumentsSection } from './documents-section'
 import { PersonalDataSection } from './personal-data-section'
@@ -151,7 +152,7 @@ export function PortalDashboard({ token }: PortalDashboardProps) {
           )}
 
           <a
-            href="https://wa.me/15754194027?text=Hola%2C%20no%20puedo%20acceder%20a%20mi%20portal"
+            href={`${WHATSAPP_ACQUISITION_URL}?text=Hola%2C%20no%20puedo%20acceder%20a%20mi%20portal`}
             target="_blank"
             rel="noopener noreferrer"
             className="block mt-3 text-xs text-center text-gray-500 hover:text-gray-900"

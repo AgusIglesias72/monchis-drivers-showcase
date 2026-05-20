@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { Toaster } from '@/components/ui/sonner'
+import { WHATSAPP_ACQUISITION_URL } from '@/lib/constants/contact'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -27,7 +28,7 @@ export default function CapacitacionesLayout({ children }: { children: React.Rea
             />
           </Link>
           <Link
-            href="https://wa.me/15754194027"
+            href={WHATSAPP_ACQUISITION_URL}
             target="_blank"
             rel="noopener"
             className="text-xs text-muted-foreground hover:text-foreground"

@@ -13,6 +13,7 @@ import {
   trackFormStepView
 } from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
+import { WHATSAPP_ACQUISITION_URL } from '@/lib/constants/contact';
 import { LoadingScreen } from './LoadingScreen';
 import { Header } from './Header';
 import { InformationSection } from './InformationSection';
@@ -615,7 +616,7 @@ const validateCurrentStep = (): boolean => {
               // iniciar conversaciones con números desconocidos.
               // TODO: mover a env var NEXT_PUBLIC_PUBLIC_WHATSAPP_NUMBER cuando
               // se decida el número definitivo del bot.
-              window.open(`https://wa.me/15754194027?text=${message}`, '_blank');
+              window.open(`${WHATSAPP_ACQUISITION_URL}?text=${message}`, '_blank');
             }}
             variant="outline"
             className="w-full cursor-pointer"

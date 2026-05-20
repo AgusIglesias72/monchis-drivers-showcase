@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { WHATSAPP_ACQUISITION_URL } from '@/lib/constants/contact'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -413,7 +414,7 @@ export function CapacitacionSelector({
         <p className="text-sm text-gray-600">
           ¿Tenés alguna consulta?{' '}
           <a
-            href="https://wa.me/595974236666"
+            href={WHATSAPP_ACQUISITION_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="underline font-medium"

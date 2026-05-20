@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { WHATSAPP_ACQUISITION_URL } from '@/lib/constants/contact'
 import {
   Calendar,
   CheckCircle2,
@@ -83,7 +84,7 @@ export function ActiveBookingCard({ booking, onUpdate }: Props) {
   const detailHref = `/capacitaciones/reserva/${booking.confirmationToken}`
 
   // WhatsApp pre-llenado para cambios fuera de la UI (legacy o post-deadline)
-  const whatsappChangeHref = `https://wa.me/15754194027?text=${encodeURIComponent(
+  const whatsappChangeHref = `${WHATSAPP_ACQUISITION_URL}?text=${encodeURIComponent(
     `Hola, quiero cambiar mi capacitación del ${formatDate(booking.scheduledDate)} a las ${booking.startTime}.`,
   )}`
 
@@ -229,7 +230,7 @@ export function ActiveBookingCard({ booking, onUpdate }: Props) {
           </Button>
         ) : (
           <a
-            href="https://wa.me/15754194027?text=Hola%2C%20necesito%20cancelar%20mi%20capacitaci%C3%B3n"
+            href={`${WHATSAPP_ACQUISITION_URL}?text=Hola%2C%20necesito%20cancelar%20mi%20capacitaci%C3%B3n`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 h-9 px-3"

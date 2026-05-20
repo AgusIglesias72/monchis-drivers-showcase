@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { ArrowRight, MessageCircle, FileEdit, UserCheck } from 'lucide-react'
+import { WHATSAPP_ACQUISITION_URL } from '@/lib/constants/contact'
 
 const ACTIONS = [
   {
@@ -22,7 +23,7 @@ const ACTIONS = [
     icon: MessageCircle,
     title: '¿Necesitás ayuda?',
     description: 'Escribinos por WhatsApp y te respondemos en menos de 1 hora hábil.',
-    href: 'https://wa.me/15754194027',
+    href: WHATSAPP_ACQUISITION_URL,
     cta: 'WhatsApp',
     external: true,
   },

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { WHATSAPP_ACQUISITION_URL } from '@/lib/constants/contact'
 import {
   AlertCircle,
   ArrowLeft,
@@ -125,7 +126,7 @@ export function PortalIdentifyForm() {
               <Link href="/">Empezar mi postulación</Link>
             </Button>
             <a
-              href="https://wa.me/15754194027?text=Hola%2C%20no%20puedo%20identificarme%20en%20mi%20portal"
+              href={`${WHATSAPP_ACQUISITION_URL}?text=Hola%2C%20no%20puedo%20identificarme%20en%20mi%20portal`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-1 text-xs text-gray-500 hover:text-gray-900 mt-1"
