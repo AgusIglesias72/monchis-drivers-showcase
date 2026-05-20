@@ -1,9 +1,45 @@
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode-terminal';
+import fs from 'fs';
+import path from 'path';
+
+const DATA_PATH = './.wwebjs_auth';
 
 let client = null;
 let isReady = false;
+
+/**
+ * Borra los lock files de Chromium que pudo dejar un deploy anterior en el
+ * volumen persistente. Sin esto, el nuevo contenedor falla con
+ * "The profile appears to be in use by another Chromium process" porque el
+ * lock quedó stale (el proceso que lo creó ya no existe — perdió el volumen).
+ */
+function clearChromiumLocks(dataPath) {
+  const lockNames = new Set(['SingletonLock', 'SingletonSocket', 'SingletonCookie']);
+  const walk = dir => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (lockNames.has(entry.name) || entry.name.startsWith('SingletonLock')) {
+        try {
+          fs.unlinkSync(full);
+          console.log('🔓 Lock de Chromium borrado:', full);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  };
+  walk(dataPath);
+}
 
 // Puppeteer trae su propio Chromium (matchea exacto con la versión de la lib).
 // Solo seteamos executablePath si PUPPETEER_EXECUTABLE_PATH viene del entorno
@@ -85,10 +121,13 @@ function attachListeners(c, onMessageReceived) {
  * onMessageReceived: callback cuando llega un mensaje entrante.
  */
 export function initializeWhatsApp(onMessageReceived) {
+  // Limpiar locks stale de Chromium de deploys anteriores (volumen persistente).
+  clearChromiumLocks(DATA_PATH);
+
   client = new Client({
     authStrategy: new LocalAuth({
       clientId: 'whatsapp-bot-main',
-      dataPath: './.wwebjs_auth',
+      dataPath: DATA_PATH,
     }),
     puppeteer: buildPuppeteerConfig(),
     webVersionCache: {
@@ -102,7 +141,13 @@ export function initializeWhatsApp(onMessageReceived) {
 
   console.log('🚀 Inicializando cliente de WhatsApp con LocalAuth...');
   console.log('💾 Sesión se guarda en ./.wwebjs_auth');
-  client.initialize();
+  // initialize() es async: si rechaza (Chromium, sesión corrupta, etc.) lo
+  // capturamos para NO tumbar el proceso. El server Express sigue vivo y el
+  // healthcheck pasa; el cliente reintenta o se reconecta solo.
+  client.initialize().catch(err => {
+    console.error('❌ client.initialize() falló:', err?.message || err);
+    isReady = false;
+  });
 
   return client;
 }
