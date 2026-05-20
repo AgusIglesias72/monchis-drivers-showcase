@@ -1000,15 +1000,16 @@ model IntercomMessageLog {
   @@map("intercom_message_log")
 }
 
-// Índice de conversaciones para la vista tipo sandbox. Una fila por contact
-// (driver). La lista sale de acá; el hilo se trae on-demand de la API. El
-// webhook la mantiene actualizada. Ver 2026-05-20-intercom-conversations-webhooks.sql
+// Índice de conversaciones que NOSOTROS iniciamos (una fila por conversación,
+// identificada por intercom_conversation_id que devuelve el POST /messages con
+// create_conversation_without_contact_reply). La lista de la vista sale de acá;
+// el hilo se trae on-demand por conv_id. El webhook la mantiene actualizada.
 model IntercomConversation {
   id String @id @default(cuid())
 
-  intercomContactId      String  @unique @map("intercom_contact_id")
+  intercomConversationId String  @unique @map("intercom_conversation_id")
+  intercomContactId      String  @map("intercom_contact_id")
   driverId               String? @map("driver_id")
-  intercomConversationId String? @map("intercom_conversation_id")
 
   // 'open' | 'closed' | 'snoozed'
   state  String?
@@ -1021,6 +1022,7 @@ model IntercomConversation {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([intercomContactId])
   @@index([driverId])
   @@index([unread])
   @@index([lastMessageAt])

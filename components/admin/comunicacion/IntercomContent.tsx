@@ -285,35 +285,6 @@ function SandboxSection() {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<SendResult>({ status: 'idle' });
 
-  // Historial de la conversación de Intercom con el driver seleccionado.
-  const [thread, setThread] = useState<ConversationThread | null>(null);
-  const [threadLoading, setThreadLoading] = useState(false);
-
-  const loadThread = useCallback(async (contactId: string) => {
-    setThreadLoading(true);
-    try {
-      const res = await fetch(
-        `/api/intercom/conversation?contactId=${encodeURIComponent(contactId)}`,
-        { cache: 'no-store' },
-      );
-      const json = await res.json();
-      setThread(json.thread ?? null);
-    } catch {
-      setThread(null);
-    } finally {
-      setThreadLoading(false);
-    }
-  }, []);
-
-  // Al cambiar de driver, cargar su conversación.
-  useEffect(() => {
-    if (driver?.intercomContactId) {
-      loadThread(driver.intercomContactId);
-    } else {
-      setThread(null);
-    }
-  }, [driver?.intercomContactId, loadThread]);
-
   useEffect(() => {
     fetch('/api/intercom/admins', { cache: 'no-store' })
       .then((r) => r.json())
@@ -375,21 +346,13 @@ function SandboxSection() {
         setResult({
           status: 'success',
           message:
-            json.deliveryMethod === 'outbound'
-              ? 'Enviado al Messenger (aparecerá en el inbox cuando responda)'
-              : 'Enviado a la conversación abierta (visible en el inbox)',
+            'Mensaje enviado. La conversación queda en la pestaña Conversaciones.',
           conversationId: json.conversationId,
           deliveryMethod: json.deliveryMethod,
         });
         setSubject('');
         setBody('');
         setAttachments([]);
-        // Refrescar el historial para que el mensaje nuevo aparezca en el hilo.
-        // Pequeño delay para dar tiempo a que Intercom lo indexe.
-        if (driver?.intercomContactId) {
-          const contactId = driver.intercomContactId;
-          setTimeout(() => loadThread(contactId), 1200);
-        }
       }
     } catch (err) {
       setResult({
@@ -418,15 +381,13 @@ function SandboxSection() {
         {/* ===== Chat header ===== */}
         <ChatHeader driver={driver} onDriverChange={setDriver} />
 
-        {/* ===== Chat body (historial + preview) ===== */}
+        {/* ===== Chat body (preview del mensaje a enviar) ===== */}
         <ChatBody
           subject={subject}
           body={body}
           attachments={attachments}
           sender={sender}
           result={result}
-          thread={thread}
-          threadLoading={threadLoading}
           driver={driver}
         />
 
@@ -554,7 +515,7 @@ function ChatHeader({
   );
 }
 
-// ==================== CHAT BODY (historial + preview) ====================
+// ==================== CHAT BODY (preview del mensaje a enviar) ====================
 
 function ChatBody({
   subject,
@@ -562,8 +523,6 @@ function ChatBody({
   attachments,
   sender,
   result,
-  thread,
-  threadLoading,
   driver,
 }: {
   subject: string;
@@ -571,57 +530,32 @@ function ChatBody({
   attachments: Attachment[];
   sender: IntercomAdminOption | null;
   result: SendResult;
-  thread: ConversationThread | null;
-  threadLoading: boolean;
   driver: DriverOption | null;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
   const hasSubject = subject.trim().length > 0;
   const hasText = body.trim().length > 0;
   const hasAttachments = attachments.length > 0;
   const hasPreview = hasSubject || hasText || hasAttachments;
-  const historyMessages = thread?.messages ?? [];
-  const hasHistory = historyMessages.length > 0;
 
-  // Auto-scroll al fondo cuando cambia el historial o el preview.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [historyMessages.length, hasPreview, threadLoading]);
-
-  const showEmpty = !driver || (!hasHistory && !hasPreview && !threadLoading);
+  const showEmpty = !hasPreview;
 
   return (
-    <div
-      ref={scrollRef}
-      className="min-h-[320px] max-h-[460px] overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,_theme(colors.muted.DEFAULT)_1px,_transparent_0)] [background-size:16px_16px] bg-background px-4 py-6 space-y-3"
-    >
+    <div className="min-h-[280px] max-h-[420px] overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,_theme(colors.muted.DEFAULT)_1px,_transparent_0)] [background-size:16px_16px] bg-background px-4 py-6 space-y-3">
       {showEmpty && (
-        <div className="flex flex-col items-center justify-center h-full min-h-[260px] text-center">
+        <div className="flex flex-col items-center justify-center h-full min-h-[220px] text-center">
           <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-3">
             <MessageSquare className="h-5 w-5 text-muted-foreground" />
           </div>
           <p className="text-sm font-medium">
-            {driver ? 'Sin conversación previa' : 'Sin mensajes todavía'}
+            {driver ? 'Listo para escribir' : 'Sin mensajes todavía'}
           </p>
           <p className="text-xs text-muted-foreground mt-1 max-w-xs">
             {driver
-              ? 'Este driver no tiene conversaciones en Intercom. Tu mensaje iniciará una nueva.'
-              : 'Seleccioná un driver para ver el historial de la conversación.'}
+              ? 'Escribí abajo y el preview aparece acá como lo verá el driver.'
+              : 'Seleccioná un driver para empezar.'}
           </p>
         </div>
       )}
-
-      {driver && threadLoading && !hasHistory && (
-        <div className="flex items-center justify-center h-full min-h-[260px]">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
-      )}
-
-      {/* Historial real de Intercom */}
-      {historyMessages.map((msg) => (
-        <ChatMessage key={msg.id} message={msg} />
-      ))}
 
       {/* Preview del mensaje que se está escribiendo */}
       {hasPreview && (
@@ -1540,23 +1474,30 @@ function ConversationsView() {
     setThread(null);
     setThreadLoading(true);
 
-    // Marcar leído (optimista en la lista).
-    if (c.unread) {
+    // Marcar leído (optimista en la lista) por conv_id.
+    if (c.unread && c.conversationId) {
+      const convId = c.conversationId;
       setConversations((prev) =>
         prev.map((x) =>
-          x.contactId === c.contactId ? { ...x, unread: false } : x,
+          x.conversationId === convId ? { ...x, unread: false } : x,
         ),
       );
       fetch('/api/intercom/conversations/read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactId: c.contactId }),
+        body: JSON.stringify({ conversationId: convId }),
       }).catch(() => {});
+    }
+
+    if (!c.conversationId) {
+      setThread(null);
+      setThreadLoading(false);
+      return;
     }
 
     try {
       const res = await fetch(
-        `/api/intercom/conversation?contactId=${encodeURIComponent(c.contactId)}`,
+        `/api/intercom/conversation?conversationId=${encodeURIComponent(c.conversationId)}`,
         { cache: 'no-store' },
       );
       const json = await res.json();
@@ -1597,13 +1538,13 @@ function ConversationsView() {
         ) : (
           <ul>
             {conversations.map((c) => (
-              <li key={c.contactId}>
+              <li key={c.conversationId ?? c.contactId}>
                 <button
                   type="button"
                   onClick={() => selectConversation(c)}
                   className={cn(
                     'w-full text-left px-3 py-2.5 border-b flex items-center gap-3 cursor-pointer hover:bg-accent transition-colors',
-                    selected?.contactId === c.contactId && 'bg-accent',
+                    selected?.conversationId === c.conversationId && 'bg-accent',
                   )}
                 >
                   <Avatar className="size-9 flex-shrink-0">

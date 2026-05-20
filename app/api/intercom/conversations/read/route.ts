@@ -1,6 +1,6 @@
 // app/api/intercom/conversations/read/route.ts
 // POST — marca una conversación como leída (al abrirla en la vista).
-// Body: { contactId }
+// Body: { conversationId }
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth';
@@ -12,18 +12,22 @@ export async function POST(req: NextRequest) {
   const guard = await requireAdminApi();
   if (!guard.ok) return guard.response;
 
-  let contactId: string | null = null;
+  let conversationId: string | null = null;
   try {
     const body = await req.json();
-    contactId = typeof body.contactId === 'string' ? body.contactId : null;
+    conversationId =
+      typeof body.conversationId === 'string' ? body.conversationId : null;
   } catch {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
   }
 
-  if (!contactId) {
-    return NextResponse.json({ error: 'contactId requerido' }, { status: 400 });
+  if (!conversationId) {
+    return NextResponse.json(
+      { error: 'conversationId requerido' },
+      { status: 400 },
+    );
   }
 
-  await markConversationRead(contactId);
+  await markConversationRead(conversationId);
   return NextResponse.json({ ok: true });
 }

@@ -446,60 +446,6 @@ interface IntercomConversation {
   // ...campos adicionales que no usamos
 }
 
-interface ConversationSearchResponse {
-  type: 'conversation.list';
-  conversations: Array<{
-    id: string;
-    created_at: number;
-  }>;
-  total_count: number;
-}
-
-/**
- * Devuelve el id de la conversación más reciente del contact. Lo usamos
- * después de POST /messages porque ese endpoint devuelve un message_id, no
- * un conversation_id — por eso intentar asignar con el id devuelto daba 404.
- *
- * Usa POST /conversations/search en vez del GET /contacts/{id}/conversations
- * porque éste último devuelve 404 en algunas versiones de la API. El search
- * además devuelve sólo conversaciones que el caller tiene permiso de ver.
- *
- * Implementa retries con backoff porque Intercom puede tardar 1-2s en indexar
- * una conversación recién creada (eventual consistency del search).
- */
-async function getLatestConversationId(
-  contactId: string,
-  attempts = 3,
-): Promise<string | null> {
-  for (let i = 0; i < attempts; i++) {
-    if (i > 0) await sleep(500 * i);
-    try {
-      const res = await intercomFetch<ConversationSearchResponse>(
-        '/conversations/search',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            query: {
-              field: 'contact_ids',
-              operator: '=',
-              value: contactId,
-            },
-            pagination: { per_page: 1 },
-            sort: { field: 'created_at', order: 'descending' },
-          }),
-        },
-      );
-      if (res.conversations?.[0]) return res.conversations[0].id;
-    } catch (err) {
-      console.error(
-        `[intercom] getLatestConversationId attempt ${i + 1}/${attempts} failed:`,
-        err,
-      );
-    }
-  }
-  return null;
-}
-
 // ==================== CONVERSATION THREAD ====================
 
 export type ConversationAuthorType = 'admin' | 'user' | 'lead' | 'bot';
@@ -567,23 +513,26 @@ function extractAttachmentUrls(attachments?: IntercomAttachment[]): string[] {
 }
 
 /**
- * Trae la conversación más reciente del contact y la normaliza como una lista
- * de mensajes para renderizar como chat. Filtra los conversation_parts que no
- * son mensajes reales (assignments, opens, closes) — solo deja 'comment' y
- * los que tengan attachments.
- *
- * Devuelve null si el contact no tiene conversaciones.
+ * Trae el hilo de UNA conversación específica (por conv_id) y lo normaliza como
+ * lista de mensajes. Filtra los conversation_parts que no son mensajes reales
+ * (assignments, opens, closes) — solo deja 'comment' y los que tengan
+ * attachments. Devuelve null si la conversación no existe.
  */
 export async function getConversationThread(
-  contactId: string,
+  conversationId: string,
 ): Promise<ConversationThread | null> {
-  const conversationId = await getLatestConversationId(contactId);
   if (!conversationId) return null;
 
-  const conv = await intercomFetch<IntercomConversationDetail>(
-    `/conversations/${conversationId}?display_as=plaintext`,
-    { method: 'GET' },
-  );
+  let conv: IntercomConversationDetail;
+  try {
+    conv = await intercomFetch<IntercomConversationDetail>(
+      `/conversations/${conversationId}?display_as=plaintext`,
+      { method: 'GET' },
+    );
+  } catch (err) {
+    if (err instanceof IntercomError && err.status === 404) return null;
+    throw err;
+  }
 
   const messages: ConversationMessage[] = [];
 
@@ -689,28 +638,47 @@ export async function sendDirectMessage(
   );
 
   try {
-    // Approach simple (decidido con Agus): outbound in-app directo via
-    // POST /messages. Le llega al driver en el Messenger de Monchis Express;
-    // si responde, se crea la conversación en el inbox.
-    //
-    // POST /messages devuelve un message_id (no conversation_id) y NO genera
-    // una conversación de inbox visible hasta que el driver responda, así que
-    // conversationId queda null intencionalmente.
-    //
-    // Trade-off conocido: el assignee NO se puede aplicar acá (no hay
-    // conversación todavía). Se guarda en el log para referencia; cuando
-    // armemos webhooks podríamos auto-asignar al recibir la respuesta.
-    await intercomFetch<IntercomConversation>('/messages', {
+    // Outbound in-app via POST /messages con create_conversation_without_contact_reply:
+    // true. Ese flag hace que el mensaje del admin cree YA una conversación de
+    // inbox y devuelva el conversation_id en el response (sin él, POST /messages
+    // devuelve solo un message_id y la conversación no existe hasta que el driver
+    // responde). El mensaje sigue siendo admin → user (el driver lo recibe).
+    // Ver [[project_intercom_api_behavior]].
+    const message = await intercomFetch<IntercomConversation>('/messages', {
       method: 'POST',
       body: JSON.stringify({
         message_type: 'inapp',
         body: finalBody,
         from: { type: 'admin', id: input.senderAdminId },
         to: { type: 'user', id: input.contactId },
+        create_conversation_without_contact_reply: true,
       }),
     });
     messageSent = true;
     deliveryMethod = 'outbound';
+    conversationId = message.conversation_id ?? null;
+
+    // Asignar a otro admin, si se pidió y tenemos la conversación.
+    if (input.assigneeAdminId && conversationId) {
+      try {
+        await intercomFetch(`/conversations/${conversationId}/parts`, {
+          method: 'POST',
+          body: JSON.stringify({
+            message_type: 'assignment',
+            type: 'admin',
+            admin_id: input.senderAdminId,
+            assignee_id: input.assigneeAdminId,
+          }),
+        });
+        assignmentOk = true;
+      } catch (assignErr) {
+        assignmentOk = false;
+        console.error(
+          '[intercom] assignment failed (message was sent):',
+          assignErr,
+        );
+      }
+    }
   } catch (err) {
     if (err instanceof IntercomError) {
       errorMessage =
@@ -772,18 +740,22 @@ export async function sendDirectMessage(
     );
   }
 
-  // Registrar/actualizar el índice de conversaciones para la vista.
+  // Registrar la conversación en el índice (solo las que iniciamos nosotros).
+  // Requiere el conversationId — si por algo no vino, no la registramos.
   // No bloqueamos el envío si esto falla.
-  try {
-    await upsertConversationIndex({
-      contactId: input.contactId,
-      driverId: input.driverId ?? null,
-      lastOutboundAt: new Date(),
-      // Un mensaje saliente no marca unread (lo nuestro ya está leído).
-      unread: false,
-    });
-  } catch (err) {
-    console.error('[intercom] upsertConversationIndex (send) failed:', err);
+  if (conversationId) {
+    try {
+      await upsertConversationIndex({
+        conversationId,
+        contactId: input.contactId,
+        driverId: input.driverId ?? null,
+        lastOutboundAt: new Date(),
+        // Un mensaje saliente no marca unread (lo nuestro ya está leído).
+        unread: false,
+      });
+    } catch (err) {
+      console.error('[intercom] upsertConversationIndex (send) failed:', err);
+    }
   }
 
   return {
@@ -797,9 +769,9 @@ export async function sendDirectMessage(
 // ==================== ÍNDICE DE CONVERSACIONES ====================
 
 interface UpsertConversationParams {
+  conversationId: string;
   contactId: string;
   driverId?: string | null;
-  conversationId?: string | null;
   state?: string | null;
   unread?: boolean;
   lastOutboundAt?: Date;
@@ -807,9 +779,10 @@ interface UpsertConversationParams {
 }
 
 /**
- * Crea o actualiza la fila del índice de conversaciones (una por contact).
+ * Crea o actualiza la fila del índice (una por CONVERSACIÓN, por conv_id).
  * Lo usan tanto el envío (sendDirectMessage) como el webhook. Resuelve el
- * driverId desde la cache si no se pasó.
+ * driverId desde la cache si no se pasó. Solo registra conversaciones que
+ * nosotros iniciamos (las que tienen conv_id).
  */
 async function upsertConversationIndex(
   params: UpsertConversationParams,
@@ -827,11 +800,11 @@ async function upsertConversationIndex(
     params.lastReplyAt ?? params.lastOutboundAt ?? new Date();
 
   await prisma.intercomConversation.upsert({
-    where: { intercomContactId: params.contactId },
+    where: { intercomConversationId: params.conversationId },
     create: {
+      intercomConversationId: params.conversationId,
       intercomContactId: params.contactId,
       driverId,
-      intercomConversationId: params.conversationId ?? null,
       state: params.state ?? null,
       unread: params.unread ?? false,
       lastOutboundAt: params.lastOutboundAt ?? null,
@@ -840,9 +813,6 @@ async function upsertConversationIndex(
     },
     update: {
       ...(driverId ? { driverId } : {}),
-      ...(params.conversationId
-        ? { intercomConversationId: params.conversationId }
-        : {}),
       ...(params.state !== undefined ? { state: params.state } : {}),
       ...(params.unread !== undefined ? { unread: params.unread } : {}),
       ...(params.lastOutboundAt
@@ -918,10 +888,12 @@ export async function listConversations(opts: {
   });
 }
 
-/** Marca una conversación como leída (al abrirla en la vista). */
-export async function markConversationRead(contactId: string): Promise<void> {
+/** Marca una conversación específica como leída (al abrirla en la vista). */
+export async function markConversationRead(
+  conversationId: string,
+): Promise<void> {
   await prisma.intercomConversation.updateMany({
-    where: { intercomContactId: contactId },
+    where: { intercomConversationId: conversationId },
     data: { unread: false },
   });
 }
@@ -990,41 +962,34 @@ export async function handleWebhookEvent(
   try {
     const item = payload.data?.item;
     const conversationId = item?.id ?? null;
-    const contactId = item?.contacts?.contacts?.[0]?.id ?? null;
     const state = item?.state ?? null;
 
-    if (contactId) {
+    // Solo actualizamos conversaciones que YA están en el índice (las que
+    // iniciamos nosotros). Si el webhook es de una conversación que no
+    // iniciamos, updateMany no toca nada (count 0) y queda 'ignored'.
+    if (conversationId) {
+      let data: Prisma.IntercomConversationUpdateManyMutationInput | null = null;
       switch (topic) {
         case 'conversation.user.replied':
-          await upsertConversationIndex({
-            contactId,
-            conversationId,
-            state,
-            unread: true,
-            lastReplyAt: new Date(),
-          });
-          status = 'processed';
+          data = { unread: true, state, lastReplyAt: new Date(), lastMessageAt: new Date() };
           break;
         case 'conversation.admin.replied':
-          await upsertConversationIndex({
-            contactId,
-            conversationId,
-            state,
-            unread: false,
-          });
-          status = 'processed';
+          data = { unread: false, state, lastMessageAt: new Date() };
           break;
         case 'conversation.admin.closed':
-        case 'conversation.admin.opened':
-          await upsertConversationIndex({
-            contactId,
-            conversationId,
-            state: topic.endsWith('closed') ? 'closed' : 'open',
-          });
-          status = 'processed';
+          data = { state: 'closed' };
           break;
-        default:
-          status = 'ignored';
+        case 'conversation.admin.opened':
+          data = { state: 'open' };
+          break;
+      }
+
+      if (data) {
+        const res = await prisma.intercomConversation.updateMany({
+          where: { intercomConversationId: conversationId },
+          data,
+        });
+        status = res.count > 0 ? 'processed' : 'ignored';
       }
     }
   } catch (err) {

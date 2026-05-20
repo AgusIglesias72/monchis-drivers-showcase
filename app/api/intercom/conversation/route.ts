@@ -1,6 +1,6 @@
 // app/api/intercom/conversation/route.ts
-// GET ?contactId=X — devuelve la conversación más reciente del contact,
-// normalizada como lista de mensajes para renderizar en el sandbox.
+// GET ?conversationId=X — devuelve el hilo de una conversación específica,
+// normalizado como lista de mensajes para renderizar.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth';
@@ -15,13 +15,18 @@ export async function GET(req: NextRequest) {
   const guard = await requireAdminApi();
   if (!guard.ok) return guard.response;
 
-  const contactId = req.nextUrl.searchParams.get('contactId')?.trim();
-  if (!contactId) {
-    return NextResponse.json({ error: 'contactId requerido' }, { status: 400 });
+  const conversationId = req.nextUrl.searchParams
+    .get('conversationId')
+    ?.trim();
+  if (!conversationId) {
+    return NextResponse.json(
+      { error: 'conversationId requerido' },
+      { status: 400 },
+    );
   }
 
   try {
-    const thread = await getConversationThread(contactId);
+    const thread = await getConversationThread(conversationId);
     return NextResponse.json({ thread });
   } catch (err) {
     const status = err instanceof IntercomError ? err.status : 500;
