@@ -10,6 +10,7 @@
 // disparar campañas. Requiere confirmar qué endpoint NO consume el cupo
 // outbound del plan.
 
+import { createHmac, timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { Prisma, type MonchisDriverCache } from '@prisma/client';
 
@@ -771,12 +772,285 @@ export async function sendDirectMessage(
     );
   }
 
+  // Registrar/actualizar el índice de conversaciones para la vista.
+  // No bloqueamos el envío si esto falla.
+  try {
+    await upsertConversationIndex({
+      contactId: input.contactId,
+      driverId: input.driverId ?? null,
+      lastOutboundAt: new Date(),
+      // Un mensaje saliente no marca unread (lo nuestro ya está leído).
+      unread: false,
+    });
+  } catch (err) {
+    console.error('[intercom] upsertConversationIndex (send) failed:', err);
+  }
+
   return {
     logId: log.id,
     conversationId,
     deliveryMethod,
     status: 'sent',
   };
+}
+
+// ==================== ÍNDICE DE CONVERSACIONES ====================
+
+interface UpsertConversationParams {
+  contactId: string;
+  driverId?: string | null;
+  conversationId?: string | null;
+  state?: string | null;
+  unread?: boolean;
+  lastOutboundAt?: Date;
+  lastReplyAt?: Date;
+}
+
+/**
+ * Crea o actualiza la fila del índice de conversaciones (una por contact).
+ * Lo usan tanto el envío (sendDirectMessage) como el webhook. Resuelve el
+ * driverId desde la cache si no se pasó.
+ */
+async function upsertConversationIndex(
+  params: UpsertConversationParams,
+): Promise<void> {
+  let driverId = params.driverId ?? null;
+  if (!driverId) {
+    const driver = await prisma.monchisDriverCache.findFirst({
+      where: { intercomContactId: params.contactId },
+      select: { driverId: true },
+    });
+    driverId = driver?.driverId ?? null;
+  }
+
+  const lastMessageAt =
+    params.lastReplyAt ?? params.lastOutboundAt ?? new Date();
+
+  await prisma.intercomConversation.upsert({
+    where: { intercomContactId: params.contactId },
+    create: {
+      intercomContactId: params.contactId,
+      driverId,
+      intercomConversationId: params.conversationId ?? null,
+      state: params.state ?? null,
+      unread: params.unread ?? false,
+      lastOutboundAt: params.lastOutboundAt ?? null,
+      lastReplyAt: params.lastReplyAt ?? null,
+      lastMessageAt,
+    },
+    update: {
+      ...(driverId ? { driverId } : {}),
+      ...(params.conversationId
+        ? { intercomConversationId: params.conversationId }
+        : {}),
+      ...(params.state !== undefined ? { state: params.state } : {}),
+      ...(params.unread !== undefined ? { unread: params.unread } : {}),
+      ...(params.lastOutboundAt
+        ? { lastOutboundAt: params.lastOutboundAt }
+        : {}),
+      ...(params.lastReplyAt ? { lastReplyAt: params.lastReplyAt } : {}),
+      lastMessageAt,
+    },
+  });
+}
+
+export interface ConversationListItem {
+  contactId: string;
+  conversationId: string | null;
+  driverId: string | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  state: string | null;
+  unread: boolean;
+  lastMessageAt: string | null;
+  lastReplyAt: string | null;
+  lastOutboundAt: string | null;
+}
+
+/**
+ * Lista las conversaciones del índice para la vista, enriquecidas con nombre/
+ * teléfono del driver. Ordenadas por actividad reciente.
+ */
+export async function listConversations(opts: {
+  unreadOnly?: boolean;
+  limit?: number;
+} = {}): Promise<ConversationListItem[]> {
+  const rows = await prisma.intercomConversation.findMany({
+    where: opts.unreadOnly ? { unread: true } : undefined,
+    orderBy: { lastMessageAt: 'desc' },
+    take: opts.limit ?? 100,
+  });
+
+  const driverIds = rows
+    .map((r) => r.driverId)
+    .filter((d): d is string => !!d);
+  const drivers = driverIds.length
+    ? await prisma.monchisDriverCache.findMany({
+        where: { driverId: { in: driverIds } },
+        select: {
+          driverId: true,
+          fullName: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+        },
+      })
+    : [];
+  const driverMap = new Map(drivers.map((d) => [d.driverId, d]));
+
+  return rows.map((r) => {
+    const d = r.driverId ? driverMap.get(r.driverId) : undefined;
+    const name =
+      d?.fullName ??
+      ([d?.firstName, d?.lastName].filter(Boolean).join(' ').trim() || null);
+    return {
+      contactId: r.intercomContactId,
+      conversationId: r.intercomConversationId,
+      driverId: r.driverId,
+      driverName: name,
+      driverPhone: d?.phone ?? null,
+      state: r.state,
+      unread: r.unread,
+      lastMessageAt: r.lastMessageAt?.toISOString() ?? null,
+      lastReplyAt: r.lastReplyAt?.toISOString() ?? null,
+      lastOutboundAt: r.lastOutboundAt?.toISOString() ?? null,
+    };
+  });
+}
+
+/** Marca una conversación como leída (al abrirla en la vista). */
+export async function markConversationRead(contactId: string): Promise<void> {
+  await prisma.intercomConversation.updateMany({
+    where: { intercomContactId: contactId },
+    data: { unread: false },
+  });
+}
+
+// ==================== WEBHOOKS ====================
+
+/**
+ * Verifica la firma HMAC-SHA1 que Intercom manda en el header X-Hub-Signature
+ * (formato "sha1=<hex>"), computada sobre el raw body con el Client Secret.
+ */
+export function verifyWebhookSignature(
+  rawBody: string,
+  signature: string | null,
+): boolean {
+  const secret = process.env.INTERCOM_CLIENT_SECRET;
+  if (!secret || !signature) return false;
+
+  const expected =
+    'sha1=' + createHmac('sha1', secret).update(rawBody, 'utf8').digest('hex');
+
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+interface IntercomWebhookPayload {
+  type?: string;
+  id?: string; // id de la notificación (para dedup)
+  topic?: string;
+  data?: {
+    item?: {
+      id?: string; // conversation_id
+      state?: string;
+      contacts?: { contacts?: Array<{ id?: string }> };
+    };
+  };
+}
+
+/**
+ * Procesa un webhook de Intercom: deduplica por event id, actualiza el índice
+ * de conversaciones según el topic, y registra el evento para auditoría.
+ *
+ * Topics manejados:
+ *  - conversation.user.replied  → unread = true (hay que responder)
+ *  - conversation.admin.replied → unread = false (ya respondimos)
+ *  - conversation.admin.closed/opened → actualiza state
+ */
+export async function handleWebhookEvent(
+  payload: IntercomWebhookPayload,
+): Promise<{ deduped: boolean; status: string }> {
+  const eventId = payload.id;
+  const topic = payload.topic ?? 'unknown';
+  if (!eventId) return { deduped: false, status: 'ignored' };
+
+  // Dedup: si ya lo procesamos, no repetir.
+  const existing = await prisma.intercomWebhookEvent.findUnique({
+    where: { intercomEventId: eventId },
+    select: { id: true },
+  });
+  if (existing) return { deduped: true, status: 'duplicate' };
+
+  let status = 'ignored';
+  let errorMessage: string | null = null;
+
+  try {
+    const item = payload.data?.item;
+    const conversationId = item?.id ?? null;
+    const contactId = item?.contacts?.contacts?.[0]?.id ?? null;
+    const state = item?.state ?? null;
+
+    if (contactId) {
+      switch (topic) {
+        case 'conversation.user.replied':
+          await upsertConversationIndex({
+            contactId,
+            conversationId,
+            state,
+            unread: true,
+            lastReplyAt: new Date(),
+          });
+          status = 'processed';
+          break;
+        case 'conversation.admin.replied':
+          await upsertConversationIndex({
+            contactId,
+            conversationId,
+            state,
+            unread: false,
+          });
+          status = 'processed';
+          break;
+        case 'conversation.admin.closed':
+        case 'conversation.admin.opened':
+          await upsertConversationIndex({
+            contactId,
+            conversationId,
+            state: topic.endsWith('closed') ? 'closed' : 'open',
+          });
+          status = 'processed';
+          break;
+        default:
+          status = 'ignored';
+      }
+    }
+  } catch (err) {
+    status = 'error';
+    errorMessage = err instanceof Error ? err.message : String(err);
+    console.error('[intercom] handleWebhookEvent failed:', err);
+  }
+
+  // Auditoría + dedup. Si dos llegan en paralelo, el unique constraint protege.
+  try {
+    await prisma.intercomWebhookEvent.create({
+      data: {
+        intercomEventId: eventId,
+        topic,
+        payload: payload as unknown as Prisma.InputJsonValue,
+        status,
+        errorMessage,
+        processedAt: new Date(),
+      },
+    });
+  } catch {
+    // Probable carrera con otro request del mismo evento — ya quedó registrado.
+    return { deduped: true, status };
+  }
+
+  return { deduped: false, status };
 }
 
 // ==================== FASE 2 — PENDIENTE ====================

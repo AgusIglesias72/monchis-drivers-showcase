@@ -1000,6 +1000,50 @@ model IntercomMessageLog {
   @@map("intercom_message_log")
 }
 
+// Índice de conversaciones para la vista tipo sandbox. Una fila por contact
+// (driver). La lista sale de acá; el hilo se trae on-demand de la API. El
+// webhook la mantiene actualizada. Ver 2026-05-20-intercom-conversations-webhooks.sql
+model IntercomConversation {
+  id String @id @default(cuid())
+
+  intercomContactId      String  @unique @map("intercom_contact_id")
+  driverId               String? @map("driver_id")
+  intercomConversationId String? @map("intercom_conversation_id")
+
+  // 'open' | 'closed' | 'snoozed'
+  state  String?
+  unread Boolean @default(false)
+
+  lastOutboundAt DateTime? @map("last_outbound_at")
+  lastReplyAt    DateTime? @map("last_reply_at")
+  lastMessageAt  DateTime? @map("last_message_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([driverId])
+  @@index([unread])
+  @@index([lastMessageAt])
+  @@map("intercom_conversation")
+}
+
+// Dedup + auditoría de webhooks entrantes de Intercom.
+model IntercomWebhookEvent {
+  id              String    @id @default(cuid())
+  intercomEventId String    @unique @map("intercom_event_id")
+  topic           String
+  payload         Json
+  // 'processed' | 'ignored' | 'error'
+  status          String
+  errorMessage    String?   @map("error_message")
+  processedAt     DateTime? @map("processed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([topic])
+  @@index([createdAt])
+  @@map("intercom_webhook_event")
+}
+
 // ==================== GESTIÓN ADMIN: ATTENDANCE DEL DRIVER ====================
 
 // Snapshot de la asistencia y pedidos de un driver, día por día.

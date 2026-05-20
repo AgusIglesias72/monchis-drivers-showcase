@@ -24,6 +24,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Command,
   CommandEmpty,
@@ -53,7 +54,6 @@ import {
   AlertCircle,
   Loader2,
   CheckCircle2,
-  XCircle,
   Bold,
   Italic,
   Link as LinkIcon,
@@ -125,21 +125,61 @@ interface ConversationThread {
   messages: ConversationMessage[];
 }
 
+interface ConversationListItem {
+  contactId: string;
+  conversationId: string | null;
+  driverId: string | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  state: string | null;
+  unread: boolean;
+  lastMessageAt: string | null;
+  lastReplyAt: string | null;
+  lastOutboundAt: string | null;
+}
+
 const NO_ASSIGNEE = '__none__';
 const MAX_ATTACHMENTS = 10;
 
 // ==================== ROOT ====================
 
 export function IntercomContent() {
+  const [tab, setTab] = useState('enviar');
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <Header />
       <Separator />
-      <StatusSection />
-      <Separator />
-      <SandboxSection />
-      <Separator />
-      <ComingSoonSection />
+
+      <Tabs value={tab} onValueChange={setTab} className="w-full">
+        <TabsList className="h-auto p-1 bg-muted rounded-lg gap-1">
+          <TabsTrigger
+            value="enviar"
+            className="px-5 py-2.5 text-sm font-medium gap-2 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-[#1F8DED]"
+          >
+            <Send className="h-4 w-4" />
+            Enviar mensaje
+          </TabsTrigger>
+          <TabsTrigger
+            value="conversaciones"
+            className="px-5 py-2.5 text-sm font-medium gap-2 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-[#1F8DED]"
+          >
+            <MessageSquare className="h-4 w-4" />
+            Conversaciones
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="enviar" className="space-y-8 mt-6">
+          <SandboxSection />
+          <Separator />
+          <ComingSoonSection />
+        </TabsContent>
+
+        <TabsContent value="conversaciones" className="mt-6">
+          <ConversationsView />
+        </TabsContent>
+      </Tabs>
+
       <Separator />
       <InfoFooter />
     </div>
@@ -155,23 +195,22 @@ function Header() {
         <IntercomIcon className="h-7 w-7" />
       </div>
       <div className="flex-1">
-        <h1 className="text-3xl font-bold tracking-tight">Intercom</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-3xl font-bold tracking-tight">Intercom</h1>
+          <StatusBadge />
+        </div>
         <p className="text-muted-foreground mt-1 max-w-2xl">
-          Sandbox para enviar mensajes 1-1 a drivers via Intercom desde el
-          panel. Cada envío queda registrado en{' '}
-          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-            intercom_message_log
-          </code>
-          .
+          Mensajería 1-1 con drivers via Intercom: lanzá conversaciones manuales
+          y seguí las respuestas. Cada envío queda registrado.
         </p>
       </div>
     </header>
   );
 }
 
-// ==================== STATUS ====================
+// ==================== STATUS (badge compacto) ====================
 
-function StatusSection() {
+function StatusBadge() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -192,65 +231,40 @@ function StatusSection() {
     refresh();
   }, [refresh]);
 
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Estado del conector
-          </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Health check contra la API de Intercom (GET /me).
-          </p>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={refresh}
-          disabled={loading}
-          className="text-xs"
-        >
-          Reintentar
-        </Button>
-      </div>
+  const ok = health?.ok;
+  const title = loading
+    ? 'Verificando conexión con Intercom…'
+    : ok
+      ? `Conectado${health?.workspace ? ` · ${health.workspace.name}` : ''}`
+      : `Sin conexión: ${health?.error ?? 'error desconocido'}`;
 
-      <div className="flex items-center gap-3 rounded-md border bg-card p-4">
-        {loading ? (
-          <>
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Verificando…</span>
-          </>
-        ) : health?.ok ? (
-          <>
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-            <div className="flex-1">
-              <div className="text-sm font-medium">OK</div>
-              {health.workspace && (
-                <div className="text-xs text-muted-foreground">
-                  Workspace{' '}
-                  <span className="font-mono">{health.workspace.name}</span>{' '}
-                  · región {health.workspace.region}
-                </div>
-              )}
-            </div>
-            <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-600">
-              Conectado
-            </Badge>
-          </>
-        ) : (
-          <>
-            <XCircle className="h-5 w-5 text-destructive" />
-            <div className="flex-1">
-              <div className="text-sm font-medium">Sin conexión</div>
-              <div className="text-xs text-muted-foreground">
-                {health?.error ?? 'Error desconocido'}
-              </div>
-            </div>
-            <Badge variant="destructive">Down</Badge>
-          </>
-        )}
-      </div>
-    </section>
+  return (
+    <button
+      type="button"
+      onClick={refresh}
+      disabled={loading}
+      title={`${title} (click para reintentar)`}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors',
+        loading
+          ? 'text-muted-foreground border-border'
+          : ok
+            ? 'text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30'
+            : 'text-destructive border-destructive/30 bg-destructive/10',
+      )}
+    >
+      {loading ? (
+        <Loader2 className="h-3 w-3 animate-spin" />
+      ) : (
+        <span
+          className={cn(
+            'size-2 rounded-full',
+            ok ? 'bg-emerald-500' : 'bg-destructive',
+          )}
+        />
+      )}
+      {loading ? 'Verificando…' : ok ? 'Conectado' : 'Sin conexión'}
+    </button>
   );
 }
 
@@ -1490,6 +1504,205 @@ function DriverCombobox({
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+// ==================== CONVERSATIONS VIEW (2 columnas) ====================
+
+function ConversationsView() {
+  const [conversations, setConversations] = useState<ConversationListItem[]>([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [selected, setSelected] = useState<ConversationListItem | null>(null);
+  const [thread, setThread] = useState<ConversationThread | null>(null);
+  const [threadLoading, setThreadLoading] = useState(false);
+
+  const loadList = useCallback(async () => {
+    setListLoading(true);
+    try {
+      const res = await fetch('/api/intercom/conversations', {
+        cache: 'no-store',
+      });
+      const json = await res.json();
+      setConversations(json.conversations ?? []);
+    } catch {
+      setConversations([]);
+    } finally {
+      setListLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadList();
+  }, [loadList]);
+
+  async function selectConversation(c: ConversationListItem) {
+    setSelected(c);
+    setThread(null);
+    setThreadLoading(true);
+
+    // Marcar leído (optimista en la lista).
+    if (c.unread) {
+      setConversations((prev) =>
+        prev.map((x) =>
+          x.contactId === c.contactId ? { ...x, unread: false } : x,
+        ),
+      );
+      fetch('/api/intercom/conversations/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactId: c.contactId }),
+      }).catch(() => {});
+    }
+
+    try {
+      const res = await fetch(
+        `/api/intercom/conversation?contactId=${encodeURIComponent(c.contactId)}`,
+        { cache: 'no-store' },
+      );
+      const json = await res.json();
+      setThread(json.thread ?? null);
+    } catch {
+      setThread(null);
+    } finally {
+      setThreadLoading(false);
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] h-[600px] border rounded-lg overflow-hidden">
+      {/* Lista */}
+      <div className="border-r overflow-y-auto bg-muted/10">
+        <div className="flex items-center justify-between px-3 py-2 border-b sticky top-0 bg-background/95 backdrop-blur z-10">
+          <span className="text-sm font-semibold">Conversaciones</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={loadList}
+            disabled={listLoading}
+            className="h-7 px-2 text-xs"
+          >
+            Actualizar
+          </Button>
+        </div>
+
+        {listLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="px-4 py-12 text-center text-sm text-muted-foreground">
+            Todavía no hay conversaciones. Aparecen acá cuando enviás un mensaje
+            o un driver responde.
+          </div>
+        ) : (
+          <ul>
+            {conversations.map((c) => (
+              <li key={c.contactId}>
+                <button
+                  type="button"
+                  onClick={() => selectConversation(c)}
+                  className={cn(
+                    'w-full text-left px-3 py-2.5 border-b flex items-center gap-3 cursor-pointer hover:bg-accent transition-colors',
+                    selected?.contactId === c.contactId && 'bg-accent',
+                  )}
+                >
+                  <Avatar className="size-9 flex-shrink-0">
+                    <AvatarFallback className="bg-[#1F8DED]/10 text-[#1F8DED] text-xs font-semibold">
+                      {initials(c.driverName ?? 'Driver')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          'truncate text-sm',
+                          c.unread ? 'font-semibold' : 'font-medium',
+                        )}
+                      >
+                        {c.driverName ?? '(sin nombre)'}
+                      </span>
+                      {c.unread && (
+                        <span className="size-2 rounded-full bg-[#1F8DED] flex-shrink-0" />
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {c.state === 'closed' ? 'Cerrada' : 'Abierta'}
+                      {c.lastMessageAt &&
+                        ` · ${formatChatTime(
+                          Math.floor(new Date(c.lastMessageAt).getTime() / 1000),
+                        )}`}
+                    </div>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Detalle / hilo */}
+      <div className="flex flex-col min-w-0">
+        {!selected ? (
+          <div className="flex flex-col items-center justify-center h-full text-center px-6">
+            <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-3">
+              <MessageSquare className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium">Elegí una conversación</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Seleccioná de la lista para ver el hilo completo.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Header del hilo */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b bg-muted/30">
+              <Avatar className="size-9 flex-shrink-0">
+                <AvatarFallback className="bg-[#1F8DED]/10 text-[#1F8DED] text-xs font-semibold">
+                  {initials(selected.driverName ?? 'Driver')}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold truncate">
+                  {selected.driverName ?? '(sin nombre)'}
+                </div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {selected.driverPhone ?? '—'}
+                  {' · '}
+                  {selected.state === 'closed' ? 'Cerrada' : 'Abierta'}
+                </div>
+              </div>
+            </div>
+
+            {/* Mensajes */}
+            <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,_theme(colors.muted.DEFAULT)_1px,_transparent_0)] [background-size:16px_16px] bg-background px-4 py-6 space-y-3">
+              {threadLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : !thread || thread.messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <p className="text-sm font-medium">Sin mensajes en el hilo</p>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                    Puede ser un envío outbound que el driver todavía no respondió
+                    (no genera conversación de inbox hasta que conteste).
+                  </p>
+                </div>
+              ) : (
+                thread.messages.map((msg) => (
+                  <ChatMessage key={msg.id} message={msg} />
+                ))
+              )}
+            </div>
+
+            {/* Footer read-only */}
+            <div className="border-t px-4 py-3 bg-muted/20 text-xs text-muted-foreground text-center">
+              Vista de solo lectura. Para responder, usá la pestaña{' '}
+              <span className="font-medium">Enviar mensaje</span>.
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
