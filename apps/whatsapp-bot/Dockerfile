@@ -1,48 +1,50 @@
-# Dockerfile para WhatsApp Bot con Puppeteer
-FROM node:20-bullseye-slim
+# Dockerfile para WhatsApp Bot (whatsapp-web.js + Puppeteer)
+# Puppeteer baja su propio Chromium (matchea con la versión de la librería).
+# Solo instalamos las libs del sistema que ese Chromium necesita para correr.
+FROM node:20-bookworm-slim
 
-# Instalar dependencias del sistema para Puppeteer/Chromium
+# Dependencias del sistema requeridas por el Chromium de Puppeteer.
 RUN apt-get update && apt-get install -y \
-    chromium \
+    ca-certificates \
     fonts-liberation \
-    libappindicator3-1 \
     libasound2 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
+    libc6 \
+    libcairo2 \
     libcups2 \
     libdbus-1-3 \
+    libexpat1 \
+    libfontconfig1 \
     libgbm1 \
+    libgcc-s1 \
+    libglib2.0-0 \
     libgtk-3-0 \
     libnspr4 \
     libnss3 \
+    libpango-1.0-0 \
+    libx11-6 \
+    libxcb1 \
     libxcomposite1 \
     libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxkbcommon0 \
     libxrandr2 \
-    xdg-utils \
     wget \
-    ca-certificates \
+    xdg-utils \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Directorio de trabajo
 WORKDIR /app
 
-# Copiar package.json
+# Instalar deps. El postinstall de puppeteer descarga su Chromium a
+# /root/.cache/puppeteer dentro de la imagen.
 COPY package*.json ./
-
-# Instalar dependencias
 RUN npm install --production
 
-# Copiar código fuente
 COPY . .
 
-# Puerto
 EXPOSE 3000
 
-# Variables de entorno para Puppeteer
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-
-# Iniciar
 CMD ["npm", "start"]
-

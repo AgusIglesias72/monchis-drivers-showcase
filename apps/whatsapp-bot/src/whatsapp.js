@@ -5,13 +5,14 @@ import qrcode from 'qrcode-terminal';
 let client = null;
 let isReady = false;
 
-// En Railway el chromium del sistema vive en /usr/bin/chromium. Si está seteado
-// PUPPETEER_EXECUTABLE_PATH (Docker), preferirlo.
+// Puppeteer trae su propio Chromium (matchea exacto con la versión de la lib).
+// Solo seteamos executablePath si PUPPETEER_EXECUTABLE_PATH viene del entorno
+// (override manual); por defecto dejamos que puppeteer use el suyo.
 function buildPuppeteerConfig() {
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
   return {
     headless: true,
-    executablePath,
+    ...(executablePath ? { executablePath } : {}),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -93,7 +94,7 @@ export function initializeWhatsApp(onMessageReceived) {
     webVersionCache: {
       type: 'remote',
       remotePath:
-        'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+        'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1039829830-alpha.html',
     },
   });
 
