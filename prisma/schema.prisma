@@ -1152,6 +1152,94 @@ model MonchisOrderCache {
   @@map("monchis_order_cache")
 }
 
+// ==================== GESTIÓN ADMIN: SNAPSHOTS DE TURNOS ====================
+
+// Foto horaria del estado de planificación de turnos (reservas por zona/hora).
+// Un cron (`/api/cron/snapshot-turnos`, schedule `0 * * * *`) consulta la API
+// externa SIN caché y persiste la foto completa. A partir de estas fotos se
+// derivan métricas hora-a-hora (más/menos drivers por zona) y deserciones
+// (bajas en un mismo turno), y se postea un resumen a Slack vía SLACK_WEBHOOK_URL.
+//
+// NO altera la vista on-the-fly de /admin/gestion/turnos: estas tablas son solo
+// el registro histórico.
+model TurnosSnapshot {
+  id             String   @id @default(cuid())
+  capturedAt     DateTime @default(now()) @map("captured_at")
+  localDate      String   @map("local_date") // "YYYY-MM-DD" (Asunción)
+  localHour      Int      @map("local_hour") // 0-23 (Asunción)
+  // Totales pre-computados del slot activo a la hora de captura (todas las zonas).
+  activeAssigned Int      @default(0) @map("active_assigned")
+  activeMax      Int      @default(0) @map("active_max")
+  shiftCount     Int      @default(0) @map("shift_count")
+  // { zoneName: { zoneId, assigned, max, driverIds[] } } del slot activo. Se usa
+  // para el diff hora-a-hora sin tener que releer las filas de turnos.
+  activeByZone   Json?    @map("active_by_zone")
+  errors         Json? // [{ zoneId, message }]
+
+  shifts TurnosShiftSnapshot[]
+  events TurnosShiftEvent[]
+
+  @@index([capturedAt])
+  @@index([localDate, localHour])
+  @@map("turnos_snapshot")
+}
+
+model TurnosShiftSnapshot {
+  id              String   @id @default(cuid())
+  snapshotId      String   @map("snapshot_id")
+  shiftId         String   @map("shift_id")
+  zoneId          String   @map("zone_id")
+  zoneName        String   @map("zone_name")
+  shiftName       String   @default("") @map("shift_name")
+  dateIso         String   @map("date_iso") // "YYYY-MM-DD" del turno (puede ser futuro)
+  fromHour        Float?   @map("from_hour")
+  toHour          Float?   @map("to_hour")
+  driversAssigned Int      @default(0) @map("drivers_assigned")
+  maxDrivers      Int      @default(0) @map("max_drivers")
+  occupancyPct    Float    @default(0) @map("occupancy_pct")
+  paymentType     String   @map("payment_type")
+  pctHourCompliance Float  @default(0) @map("pct_hour_compliance")
+  enabled         Boolean  @default(false)
+  driverIds       Json     @map("driver_ids") // string[]
+  driverNames     Json     @map("driver_names") // string[]
+
+  snapshot TurnosSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId])
+  @@index([shiftId])
+  @@index([zoneId, dateIso])
+  @@map("turnos_shift_snapshot")
+}
+
+// Alta ("join") o baja ("leave") de un driver en un turno, detectada al
+// diffear una foto contra la anterior. Es el motor de las "variaciones":
+// permite responder "el viernes a las 19h se sumaron 5 drivers (quiénes)".
+// Solo se emiten para turnos presentes en ambas fotos (no en la aparición
+// inicial de un turno futuro nuevo, para no inflar con altas falsas).
+model TurnosShiftEvent {
+  id         String   @id @default(cuid())
+  snapshotId String   @map("snapshot_id") // foto donde se detectó
+  detectedAt DateTime @map("detected_at") // = snapshot.capturedAt
+  shiftId    String   @map("shift_id")
+  zoneId     String   @map("zone_id")
+  zoneName   String   @map("zone_name")
+  dateIso    String   @map("date_iso") // día del turno
+  fromHour   Float?   @map("from_hour")
+  toHour     Float?   @map("to_hour")
+  eventType  String   @map("event_type") // "join" | "leave"
+  driverId   String   @map("driver_id")
+  driverName String?  @map("driver_name") // resuelto vía monchis_driver_cache
+
+  snapshot TurnosSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([detectedAt])
+  @@index([dateIso, fromHour])
+  @@index([zoneId, dateIso])
+  @@index([shiftId])
+  @@index([driverId])
+  @@map("turnos_shift_event")
+}
+
 // ==================== ENUMS ====================
 
 enum JobType {

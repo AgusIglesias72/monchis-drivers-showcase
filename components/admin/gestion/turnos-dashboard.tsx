@@ -21,22 +21,13 @@ import {
   uniqueDates,
 } from "@/lib/services/turnos-aggregate"
 import type { FlattenedShift, Metric } from "@/lib/types/turnos.types"
+import { todayInPyIso } from "@/lib/utils/turnos-dates"
 import { AlertTriangle } from "lucide-react"
 
 interface Props {
   initialShifts: FlattenedShift[]
   fetchedAtIso: string
   errors: { zoneId: string; message: string }[]
-}
-
-function todayInPyIso(): string {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TURNOS_CONFIG.timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
-  return fmt.format(new Date())
 }
 
 function shiftDateInPyIso(offsetDays: number): string {

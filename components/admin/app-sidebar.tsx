@@ -24,6 +24,7 @@ import {
   CalendarRange,
   ShoppingBag,
   Radio,
+  History,
 } from "lucide-react"
 import { IntercomIcon } from "@/components/admin/icons/intercom-icon"
 
@@ -101,6 +102,11 @@ const menuItems = [
         title: "Turnos",
         url: "/admin/gestion/turnos",
         icon: CalendarClock,
+      },
+      {
+        title: "Turnos histórico",
+        url: "/admin/gestion/turnos/historial",
+        icon: History,
       },
       {
         title: "Pedidos",

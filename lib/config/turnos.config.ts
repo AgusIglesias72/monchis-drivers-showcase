@@ -25,3 +25,12 @@ export const TURNOS_ZONE_IDS = [
 ] as const
 
 export const TURNOS_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24] as const
+
+// Config del registro histórico (cron `/api/cron/snapshot-turnos`).
+export const TURNOS_SNAPSHOT = {
+  // Caída de drivers en una zona (vs la hora anterior) a partir de la cual
+  // marcamos la línea con ⚠️ en el resumen de Slack.
+  dropAlertThreshold: 3,
+  // Días de fotos que retenemos; el cron borra las más viejas en cada corrida.
+  retentionDays: 90,
+} as const

@@ -1,7 +1,7 @@
 "use client"
 
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group"
-import { format, formatDistanceToNow, isToday, isTomorrow, isYesterday, parseISO } from "date-fns"
+import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import { RefreshCw } from "lucide-react"
 
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { METRIC_LABELS, type Metric } from "@/lib/types/turnos.types"
+import { formatDatePill } from "@/lib/utils/turnos-dates"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -25,21 +26,6 @@ interface Props {
   fetchedAtIso: string
   isRefreshing: boolean
   onRefresh: () => void
-}
-
-function formatDatePill(iso: string): { primary: string; secondary: string } {
-  try {
-    const d = parseISO(iso)
-    if (isToday(d)) return { primary: "Hoy", secondary: format(d, "d MMM", { locale: es }) }
-    if (isTomorrow(d)) return { primary: "Mañana", secondary: format(d, "d MMM", { locale: es }) }
-    if (isYesterday(d)) return { primary: "Ayer", secondary: format(d, "d MMM", { locale: es }) }
-    return {
-      primary: format(d, "EEE", { locale: es }),
-      secondary: format(d, "d MMM", { locale: es }),
-    }
-  } catch {
-    return { primary: iso, secondary: "" }
-  }
 }
 
 export function TurnosFilters({

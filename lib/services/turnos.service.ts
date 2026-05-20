@@ -67,6 +67,7 @@ function flattenShift(raw: RawShift): FlattenedShift | null {
 
 async function fetchZone(
   zoneId: string,
+  fresh = false,
 ): Promise<{ shifts: FlattenedShift[]; error?: string }> {
   if (!TURNOS_CONFIG.token) {
     return { shifts: [], error: "MONCHIS_DRIVERS_API_TOKEN no configurado" }
@@ -80,10 +81,16 @@ async function fetchZone(
         Authorization: TURNOS_CONFIG.token,
       },
       body: JSON.stringify({ zone_id: zoneId }),
-      next: {
-        revalidate: TURNOS_CONFIG.revalidateSeconds,
-        tags: [TURNOS_CONFIG.cacheTag],
-      },
+      // El cron de snapshot pide `fresh` para saltear la caché de 10 min de la
+      // página y registrar el estado real al momento de la foto.
+      ...(fresh
+        ? { cache: "no-store" as const }
+        : {
+            next: {
+              revalidate: TURNOS_CONFIG.revalidateSeconds,
+              tags: [TURNOS_CONFIG.cacheTag],
+            },
+          }),
     })
 
     if (!res.ok) {
@@ -112,10 +119,13 @@ async function fetchZone(
   }
 }
 
-export async function fetchAllZoneShifts(): Promise<FetchResult> {
+export async function fetchAllZoneShifts(
+  opts?: { fresh?: boolean },
+): Promise<FetchResult> {
+  const fresh = opts?.fresh ?? false
   const results = await Promise.all(
     TURNOS_ZONE_IDS.map((zoneId) =>
-      fetchZone(zoneId).then((r) => ({ zoneId, ...r })),
+      fetchZone(zoneId, fresh).then((r) => ({ zoneId, ...r })),
     ),
   )
 
