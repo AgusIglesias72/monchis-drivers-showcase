@@ -898,6 +898,56 @@ export async function markConversationRead(
   });
 }
 
+/**
+ * Cierra la conversación en Intercom (POST /conversations/{id}/parts close) y
+ * la marca como cerrada en el índice. Usa el admin que envió el último mensaje
+ * de esa conversación (del message log); si no hay, el primer admin con seat.
+ */
+export async function closeConversation(conversationId: string): Promise<void> {
+  const log = await prisma.intercomMessageLog.findFirst({
+    where: { intercomConversationId: conversationId },
+    orderBy: { createdAt: 'desc' },
+    select: { intercomSenderAdminId: true },
+  });
+
+  let adminId = log?.intercomSenderAdminId ?? null;
+  if (!adminId) {
+    const admins = await listAdmins();
+    adminId = admins.find((a) => a.has_inbox_seat)?.id ?? admins[0]?.id ?? null;
+  }
+  if (!adminId) {
+    throw new Error('No hay un admin disponible para cerrar la conversación');
+  }
+
+  await intercomFetch(`/conversations/${conversationId}/parts`, {
+    method: 'POST',
+    body: JSON.stringify({
+      message_type: 'close',
+      type: 'admin',
+      admin_id: adminId,
+    }),
+  });
+
+  await prisma.intercomConversation.updateMany({
+    where: { intercomConversationId: conversationId },
+    data: { state: 'closed' },
+  });
+}
+
+/**
+ * Quita la conversación de NUESTRA bandeja (borra la fila del índice). No toca
+ * Intercom — solo limpia la vista. Si vuelve a haber actividad, el webhook NO
+ * la recrea (solo actualiza existentes), así que queda fuera salvo que mandemos
+ * un mensaje nuevo a ese contact.
+ */
+export async function removeConversation(
+  conversationId: string,
+): Promise<void> {
+  await prisma.intercomConversation.deleteMany({
+    where: { intercomConversationId: conversationId },
+  });
+}
+
 // ==================== WEBHOOKS ====================
 
 /**

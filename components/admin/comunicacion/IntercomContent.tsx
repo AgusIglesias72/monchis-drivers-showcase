@@ -1443,15 +1443,23 @@ function DriverCombobox({
 
 // ==================== CONVERSATIONS VIEW (2 columnas) ====================
 
+const CONVERSATIONS_POLL_MS = 45_000;
+
 function ConversationsView() {
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [selected, setSelected] = useState<ConversationListItem | null>(null);
   const [thread, setThread] = useState<ConversationThread | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
+  const [actioningId, setActioningId] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<ConversationListItem | null>(
+    null,
+  );
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selected?.conversationId ?? null;
 
-  const loadList = useCallback(async () => {
-    setListLoading(true);
+  const loadList = useCallback(async (opts: { silent?: boolean } = {}) => {
+    if (!opts.silent) setListLoading(true);
     try {
       const res = await fetch('/api/intercom/conversations', {
         cache: 'no-store',
@@ -1459,15 +1467,81 @@ function ConversationsView() {
       const json = await res.json();
       setConversations(json.conversations ?? []);
     } catch {
-      setConversations([]);
+      if (!opts.silent) setConversations([]);
     } finally {
-      setListLoading(false);
+      if (!opts.silent) setListLoading(false);
+    }
+  }, []);
+
+  const loadThread = useCallback(async (conversationId: string) => {
+    try {
+      const res = await fetch(
+        `/api/intercom/conversation?conversationId=${encodeURIComponent(conversationId)}`,
+        { cache: 'no-store' },
+      );
+      const json = await res.json();
+      // Solo aplicar si sigue siendo la conversación abierta.
+      if (selectedIdRef.current === conversationId) {
+        setThread(json.thread ?? null);
+      }
+    } catch {
+      /* silencioso en polling */
     }
   }, []);
 
   useEffect(() => {
     loadList();
   }, [loadList]);
+
+  // Polling: refresca la lista (barato, lee el índice local) y el hilo abierto.
+  useEffect(() => {
+    const id = setInterval(() => {
+      loadList({ silent: true });
+      const convId = selectedIdRef.current;
+      if (convId) loadThread(convId);
+    }, CONVERSATIONS_POLL_MS);
+    return () => clearInterval(id);
+  }, [loadList, loadThread]);
+
+  async function closeConv(conversationId: string) {
+    setActioningId(conversationId);
+    try {
+      await fetch('/api/intercom/conversations/close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId }),
+      });
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.conversationId === conversationId ? { ...c, state: 'closed' } : c,
+        ),
+      );
+      setSelected((s) =>
+        s?.conversationId === conversationId ? { ...s, state: 'closed' } : s,
+      );
+    } finally {
+      setActioningId(null);
+    }
+  }
+
+  async function removeConv(conversationId: string) {
+    setActioningId(conversationId);
+    try {
+      await fetch('/api/intercom/conversations/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId }),
+      });
+      setConversations((prev) =>
+        prev.filter((c) => c.conversationId !== conversationId),
+      );
+      setSelected((s) =>
+        s?.conversationId === conversationId ? null : s,
+      );
+    } finally {
+      setActioningId(null);
+    }
+  }
 
   async function selectConversation(c: ConversationListItem) {
     setSelected(c);
@@ -1495,18 +1569,9 @@ function ConversationsView() {
       return;
     }
 
-    try {
-      const res = await fetch(
-        `/api/intercom/conversation?conversationId=${encodeURIComponent(c.conversationId)}`,
-        { cache: 'no-store' },
-      );
-      const json = await res.json();
-      setThread(json.thread ?? null);
-    } catch {
-      setThread(null);
-    } finally {
-      setThreadLoading(false);
-    }
+    setThreadLoading(true);
+    await loadThread(c.conversationId);
+    setThreadLoading(false);
   }
 
   return (
@@ -1515,15 +1580,12 @@ function ConversationsView() {
       <div className="border-r overflow-y-auto bg-muted/10">
         <div className="flex items-center justify-between px-3 py-2 border-b sticky top-0 bg-background/95 backdrop-blur z-10">
           <span className="text-sm font-semibold">Conversaciones</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={loadList}
-            disabled={listLoading}
-            className="h-7 px-2 text-xs"
+          <span
+            className="text-[10px] text-muted-foreground"
+            title="Se actualiza automáticamente cada 45s"
           >
-            Actualizar
-          </Button>
+            Auto · 45s
+          </span>
         </div>
 
         {listLoading ? (
@@ -1612,6 +1674,32 @@ function ConversationsView() {
                   {selected.state === 'closed' ? 'Cerrada' : 'Abierta'}
                 </div>
               </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {selected.conversationId && selected.state !== 'closed' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs gap-1"
+                    disabled={actioningId === selected.conversationId}
+                    onClick={() => closeConv(selected.conversationId!)}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Cerrar
+                  </Button>
+                )}
+                {selected.conversationId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive"
+                    disabled={actioningId === selected.conversationId}
+                    onClick={() => setRemoveTarget(selected)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Eliminar
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Mensajes */}
@@ -1643,6 +1731,38 @@ function ConversationsView() {
           </>
         )}
       </div>
+
+      {/* Confirmación de eliminar (dialog con estilo de la app) */}
+      <AlertDialog
+        open={removeTarget !== null}
+        onOpenChange={(open) => !open && setRemoveTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quitar de la bandeja</AlertDialogTitle>
+            <AlertDialogDescription>
+              {removeTarget?.driverName
+                ? `Vas a quitar la conversación con ${removeTarget.driverName} de esta vista. `
+                : 'Vas a quitar esta conversación de esta vista. '}
+              No se borra de Intercom, solo deja de aparecer acá.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                if (removeTarget?.conversationId) {
+                  removeConv(removeTarget.conversationId);
+                }
+                setRemoveTarget(null);
+              }}
+            >
+              Quitar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
