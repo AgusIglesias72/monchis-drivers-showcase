@@ -26,6 +26,13 @@ import {
 } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -61,6 +68,10 @@ import {
   X,
   MessageSquare,
   ImagePlus,
+  Layers,
+  ChevronDown,
+  RefreshCw,
+  MapPin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -167,6 +178,13 @@ export function IntercomContent() {
             <MessageSquare className="h-4 w-4" />
             Conversaciones
           </TabsTrigger>
+          <TabsTrigger
+            value="segmentos"
+            className="px-5 py-2.5 text-sm font-medium gap-2 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-[#1F8DED]"
+          >
+            <Layers className="h-4 w-4" />
+            Segmentos
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="enviar" className="space-y-8 mt-6">
@@ -177,6 +195,10 @@ export function IntercomContent() {
 
         <TabsContent value="conversaciones" className="mt-6">
           <ConversationsView />
+        </TabsContent>
+
+        <TabsContent value="segmentos" className="mt-6">
+          <SegmentsView />
         </TabsContent>
       </Tabs>
 
@@ -1767,6 +1789,437 @@ function ConversationsView() {
   );
 }
 
+// ==================== SEGMENTOS ====================
+
+interface SegmentShiftDto {
+  shiftId: string;
+  zoneName: string;
+  dateIso: string;
+  dayName: string;
+  fromHour: number | null;
+  toHour: number | null;
+  paymentType: 'guaranteed' | 'per-order';
+}
+
+interface SegmentDriverDto {
+  driverId: string;
+  fullName: string;
+  phone: string | null;
+  primaryZone: string | null;
+  linked: boolean;
+  intercomContactId: string | null;
+  shiftCount: number;
+  shifts: SegmentShiftDto[];
+  workedLastWeekDays: number;
+}
+
+interface SegmentsDto {
+  windowDays: number;
+  windowFromIso: string;
+  windowToIso: string;
+  fetchedAt: string;
+  attendanceMaxDay: string | null;
+  errors: { zoneId: string; message: string }[];
+  conTurnos: SegmentDriverDto[];
+  sinTurnos: SegmentDriverDto[];
+  totals: {
+    drivers: number;
+    conTurnos: number;
+    sinTurnos: number;
+    linkedConTurnos: number;
+    linkedSinTurnos: number;
+    linkedTotal: number;
+  };
+}
+
+type SegmentKey = 'con' | 'sin' | 'todos';
+
+const MAX_SEGMENT_ROWS = 200;
+
+function SegmentsView() {
+  const [data, setData] = useState<SegmentsDto | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [segment, setSegment] = useState<SegmentKey>('con');
+  const [query, setQuery] = useState('');
+  const [zoneFilter, setZoneFilter] = useState('all');
+  const [dayFilter, setDayFilter] = useState('all');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const load = useCallback(async (fresh = false) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/intercom/segments${fresh ? '?fresh=1' : ''}`,
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setData(json as SegmentsDto);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const toggleExpanded = useCallback((driverId: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(driverId)) next.delete(driverId);
+      else next.add(driverId);
+      return next;
+    });
+  }, []);
+
+  // Opciones de los filtros zona/día (derivadas de los turnos en la ventana).
+  const zoneOptions = useMemo<string[]>(() => {
+    if (!data) return [];
+    const set = new Set<string>();
+    for (const d of data.conTurnos)
+      for (const s of d.shifts) if (s.zoneName) set.add(s.zoneName);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [data]);
+
+  const dayOptions = useMemo<{ value: string; label: string }[]>(() => {
+    if (!data) return [];
+    const map = new Map<string, string>();
+    for (const d of data.conTurnos)
+      for (const s of d.shifts)
+        if (!map.has(s.dateIso))
+          map.set(s.dateIso, `${capitalize(s.dayName)} ${fmtSegDate(s.dateIso)}`);
+    return [...map.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([value, label]) => ({ value, label }));
+  }, [data]);
+
+  // Los filtros zona/día solo aplican al detalle de turnos (segmento "con").
+  const applyShiftFilters = useCallback(
+    (driver: SegmentDriverDto): SegmentDriverDto => {
+      if (zoneFilter === 'all' && dayFilter === 'all') return driver;
+      const shifts = driver.shifts.filter(
+        (s) =>
+          (zoneFilter === 'all' || s.zoneName === zoneFilter) &&
+          (dayFilter === 'all' || s.dateIso === dayFilter),
+      );
+      return { ...driver, shifts, shiftCount: shifts.length };
+    },
+    [zoneFilter, dayFilter],
+  );
+
+  const list = useMemo<SegmentDriverDto[]>(() => {
+    if (!data) return [];
+    if (segment === 'sin') return data.sinTurnos;
+    if (segment === 'con')
+      return data.conTurnos
+        .map(applyShiftFilters)
+        .filter((d) => d.shifts.length > 0);
+    // "todos": sin filtros zona/día (no aplican a drivers sin turnos)
+    return [...data.conTurnos, ...data.sinTurnos].sort((a, b) =>
+      a.fullName.localeCompare(b.fullName),
+    );
+  }, [data, segment, applyShiftFilters]);
+
+  const filtered = useMemo<SegmentDriverDto[]>(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (d) =>
+        d.fullName.toLowerCase().includes(q) ||
+        (d.phone ?? '').toLowerCase().includes(q) ||
+        (d.primaryZone ?? '').toLowerCase().includes(q) ||
+        d.driverId.toLowerCase().includes(q),
+    );
+  }, [list, query]);
+
+  const visible = filtered.slice(0, MAX_SEGMENT_ROWS);
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Segmentos de drivers
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Drivers según sus turnos de los próximos {data?.windowDays ?? 3} días
+            {data ? ` (hasta ${fmtSegDate(data.windowToIso)})` : ''}. El badge
+            indica si están vinculados en Intercom.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {data && (
+            <span className="text-xs text-muted-foreground">
+              {data.totals.linkedTotal} de {data.totals.drivers} vinculados
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => load(true)}
+            disabled={loading}
+            className="gap-2"
+          >
+            <RefreshCw
+              className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
+            />
+            Actualizar
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por nombre, zona, teléfono…"
+            className="w-full h-9 pl-9 pr-3 rounded-md border bg-background text-sm outline-none focus:ring-2 focus:ring-ring/40"
+          />
+        </div>
+        {segment === 'con' && (
+          <>
+            <Select value={zoneFilter} onValueChange={setZoneFilter}>
+              <SelectTrigger className="h-9 w-full sm:w-44">
+                <SelectValue placeholder="Zona" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las zonas</SelectItem>
+                {zoneOptions.map((z) => (
+                  <SelectItem key={z} value={z}>
+                    {z}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={dayFilter} onValueChange={setDayFilter}>
+              <SelectTrigger className="h-9 w-full sm:w-44">
+                <SelectValue placeholder="Día" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los días</SelectItem>
+                {dayOptions.map((d) => (
+                  <SelectItem key={d.value} value={d.value}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
+        <SegmentTab
+          active={segment === 'con'}
+          onClick={() => setSegment('con')}
+          label="Con turnos (3 días)"
+          count={data?.totals.conTurnos}
+        />
+        <SegmentTab
+          active={segment === 'sin'}
+          onClick={() => setSegment('sin')}
+          label="Sin turnos"
+          count={data?.totals.sinTurnos}
+        />
+        <SegmentTab
+          active={segment === 'todos'}
+          onClick={() => setSegment('todos')}
+          label="Todos"
+          count={data?.totals.drivers}
+        />
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {segment === 'sin' && data?.attendanceMaxDay && (
+        <p className="text-xs text-muted-foreground">
+          &quot;Trabajó&quot; usa la asistencia registrada de los últimos 7 días
+          (datos hasta {fmtSegDate(data.attendanceMaxDay)}).
+        </p>
+      )}
+
+      {loading && !data ? (
+        <div className="flex items-center justify-center py-16 text-sm text-muted-foreground gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Cargando segmentos…
+        </div>
+      ) : (
+        <div className="rounded-lg border divide-y max-h-[560px] overflow-y-auto">
+          {visible.length === 0 ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              No hay drivers en este segmento.
+            </div>
+          ) : (
+            visible.map((d) => (
+              <SegmentRow
+                key={d.driverId}
+                driver={d}
+                expanded={expanded.has(d.driverId)}
+                onToggle={() => toggleExpanded(d.driverId)}
+              />
+            ))
+          )}
+        </div>
+      )}
+
+      {filtered.length > MAX_SEGMENT_ROWS && (
+        <p className="text-xs text-muted-foreground text-center">
+          Mostrando {MAX_SEGMENT_ROWS} de {filtered.length}. Refiná con el
+          buscador para ver más.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function SegmentTab({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count?: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'px-4 py-1.5 text-sm font-medium rounded-md transition-colors cursor-pointer',
+        active
+          ? 'bg-background shadow-sm text-[#1F8DED]'
+          : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {label}
+      {typeof count === 'number' && (
+        <span className="ml-1.5 text-xs text-muted-foreground">{count}</span>
+      )}
+    </button>
+  );
+}
+
+function SegmentRow({
+  driver,
+  expanded,
+  onToggle,
+}: {
+  driver: SegmentDriverDto;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const hasShifts = driver.shifts.length > 0;
+  return (
+    <div className="px-3 py-2.5">
+      <div
+        className={cn(
+          'flex items-center gap-3',
+          hasShifts && 'cursor-pointer',
+        )}
+        onClick={hasShifts ? onToggle : undefined}
+      >
+        <Avatar className="h-8 w-8 flex-shrink-0">
+          <AvatarFallback className="text-xs bg-muted">
+            {initials(driver.fullName)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium truncate">{driver.fullName}</p>
+          <p className="text-xs text-muted-foreground truncate">
+            {[driver.primaryZone, driver.phone].filter(Boolean).join(' · ') ||
+              'Sin datos'}
+          </p>
+        </div>
+        {!hasShifts &&
+          (driver.workedLastWeekDays > 0 ? (
+            <Badge
+              variant="outline"
+              className="gap-1 border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-medium flex-shrink-0 tabular-nums"
+            >
+              Trabajó {driver.workedLastWeekDays}d últ. sem.
+            </Badge>
+          ) : (
+            <Badge
+              variant="outline"
+              className="text-[11px] text-muted-foreground flex-shrink-0"
+            >
+              Sin actividad 7d
+            </Badge>
+          ))}
+        {driver.linked ? (
+          <Badge
+            variant="outline"
+            className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-medium flex-shrink-0"
+          >
+            <IntercomIcon className="h-3 w-3" />
+            En Intercom
+          </Badge>
+        ) : (
+          <Badge
+            variant="outline"
+            className="text-[11px] text-muted-foreground flex-shrink-0"
+          >
+            Sin vincular
+          </Badge>
+        )}
+        {hasShifts && (
+          <>
+            <Badge
+              variant="secondary"
+              className="text-[11px] flex-shrink-0 tabular-nums"
+            >
+              {driver.shiftCount} turno{driver.shiftCount === 1 ? '' : 's'}
+            </Badge>
+            <ChevronDown
+              className={cn(
+                'h-4 w-4 text-muted-foreground transition-transform flex-shrink-0',
+                expanded && 'rotate-180',
+              )}
+            />
+          </>
+        )}
+      </div>
+
+      {hasShifts && expanded && (
+        <div className="mt-2 ml-11 space-y-1">
+          {driver.shifts.map((s) => (
+            <div
+              key={s.shiftId}
+              className="flex items-center gap-2 text-xs text-muted-foreground"
+            >
+              <span className="font-medium text-foreground tabular-nums">
+                {capitalize(s.dayName)} {fmtSegDate(s.dateIso)}
+              </span>
+              <span className="tabular-nums">
+                {fmtSegHour(s.fromHour)}–{fmtSegHour(s.toHour)}
+              </span>
+              <span className="flex items-center gap-1 truncate">
+                <MapPin className="h-3 w-3 flex-shrink-0" />
+                {s.zoneName}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ==================== COMING SOON ====================
 
 function ComingSoonSection() {
@@ -1860,6 +2313,24 @@ function InfoFooter() {
 }
 
 // ==================== HELPERS ====================
+
+function capitalize(s: string): string {
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function fmtSegHour(h: number | null): string {
+  if (h == null) return '—';
+  const hh = Math.floor(h);
+  const mm = Math.round((h - hh) * 60);
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+function fmtSegDate(iso: string): string {
+  const [, m, d] = iso.split('-');
+  if (!m || !d) return iso;
+  return `${d}/${m}`;
+}
 
 function initials(name: string): string {
   const trimmed = name.trim();
