@@ -24,7 +24,7 @@ async function getRule(slug: string): Promise<RuleSummary | null> {
   const proto = h.get('x-forwarded-proto') || 'http'
   const base = host ? `${proto}://${host}` : ''
   const res = await fetch(`${base}/api/public/capacitaciones/${slug}`, {
-    next: { revalidate: 60, tags: [`capacitaciones-rule-${slug}`] },
+    cache: 'no-store',
   })
   if (!res.ok) return null
   const json = await res.json()
@@ -53,7 +53,7 @@ async function getInitialSlots(slug: string): Promise<SlotResponse[]> {
 
     const res = await fetch(
       `${base}/api/public/capacitaciones/${slug}/slots?from=${from}&to=${to}`,
-      { next: { revalidate: 30, tags: [`capacitaciones-slots-${slug}`] } },
+      { cache: 'no-store' },
     )
     if (!res.ok) return []
     const json = await res.json()

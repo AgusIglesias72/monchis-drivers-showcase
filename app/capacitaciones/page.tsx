@@ -36,8 +36,11 @@ async function fetchPublic<T>(path: string, init?: RequestInit): Promise<T | nul
 }
 
 async function getRules(): Promise<RulePayload[]> {
+  // no-store: el calendario tiene que reflejar reglas/cupos en tiempo real.
+  // Con cache (revalidate) una capacitación recién publicada no aparecía hasta
+  // que vencía el TTL, y los cupos podían quedar desactualizados.
   const json = await fetchPublic<{ rules: RulePayload[] }>('/api/public/capacitaciones', {
-    next: { revalidate: 60, tags: ['capacitaciones-rules'] },
+    cache: 'no-store',
   })
   return json?.rules || []
 }
@@ -52,7 +55,7 @@ async function getInitialCombinedSlots(): Promise<SlotResponse[]> {
 
   const json = await fetchPublic<{ slots: SlotResponse[] }>(
     `/api/public/capacitaciones/slots?from=${from}&to=${to}`,
-    { next: { revalidate: 30, tags: ['capacitaciones-combined-slots'] } },
+    { cache: 'no-store' },
   )
   return json?.slots || []
 }
