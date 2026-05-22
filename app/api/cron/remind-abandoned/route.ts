@@ -1,6 +1,7 @@
 // app/api/cron/remind-abandoned/route.ts
 //
-// Cron cada 20 min: recordatorio a postulaciones con el formulario a medias
+// Cron cada 20 min en horario laboral (PYT 9:00–16:40 = 12-19 UTC; Paraguay es
+// UTC-3 fijo, sin DST): recordatorio a postulaciones con el formulario a medias
 // (status IN_PROGRESS) que llevan al menos 24h sin movimiento. Manda el template
 // `form_incomplete` y aplica el backoff exponencial compartido (recordMessageSent)
 // para no atormentar. Convive con send-daily-reminders, que solo sigue a los que
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
     if (cronError) return cronError
 
     // Tope por corrida: bajo a propósito (bot whatsapp-web.js, riesgo de ban).
-    const LIMIT = Math.max(1, parseInt(process.env.ABANDONED_REMINDER_LIMIT || '10', 10))
+    const LIMIT = Math.max(1, parseInt(process.env.ABANDONED_REMINDER_LIMIT || '5', 10))
     // Horas de inactividad para considerar "abandonada".
     const STALE_HOURS = Math.max(1, parseInt(process.env.ABANDONED_STALE_HOURS || '24', 10))
     // Tope de antigüedad: no perseguir abandonos más viejos que esto (evita

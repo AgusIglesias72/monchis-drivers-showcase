@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/remind-abandoned",
-      "schedule": "*/20 * * * *"
+      "schedule": "*/20 12-19 * * *"
     },
     {
       "path": "/api/cron/refresh-google-token",
