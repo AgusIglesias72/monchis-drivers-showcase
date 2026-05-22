@@ -9,6 +9,10 @@
       "schedule": "0 10 * * *"
     },
     {
+      "path": "/api/cron/remind-abandoned",
+      "schedule": "*/20 * * * *"
+    },
+    {
       "path": "/api/cron/refresh-google-token",
       "schedule": "0 2 */5 * *"
     },

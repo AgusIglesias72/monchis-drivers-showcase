@@ -254,6 +254,10 @@ export async function getEligibleDriversForContact(limit: number = 20): Promise<
         { noContactBefore: null },
         { noContactBefore: { lte: now } },
       ],
+      // El form a medias (IN_PROGRESS) lo maneja el cron remind-abandoned (cada
+      // 20 min). Acá solo seguimos a los que ya completaron el form: docs, pago,
+      // capacitación. Así ambos crons trabajan en conjunto sin pisarse.
+      status: { not: 'IN_PROGRESS' },
       // No en estado terminal de onboarding
       NOT: {
         onboardingStatus: { in: ['COMPLETED', 'IN_PROGRESS'] },
@@ -383,6 +387,65 @@ function resolveMessageConceptFromData(driver: {
   }
 
   return null
+}
+
+/**
+ * Postulaciones "abandonadas": formulario a medias (status IN_PROGRESS) que no
+ * tuvo movimiento en un rato. Para el cron de recordatorio cada 20 min.
+ *
+ * Criterios (todos deben cumplirse):
+ * - status = IN_PROGRESS (nunca terminó el formulario).
+ * - startedAt hace al menos `staleHours` horas (le dimos margen para volver solo)
+ *   pero no más de `maxAgeDays` días (no perseguir abandonos viejos: molesta al
+ *   postulante y, con un bot no oficial, dispara el volumen y el riesgo de ban).
+ * - lastActivityAt hace al menos `staleHours` horas (sin modificaciones recientes,
+ *   así no le escribimos justo cuando está completando el form).
+ * - noContactBefore null o ya pasó (respeta el backoff exponencial compartido).
+ * - tiene teléfono.
+ *
+ * NOTA: lastActivityAt es @updatedAt; cuando se le manda el recordatorio
+ * (recordMessageSent) se bumpea, lo que junto al noContactBefore evita reenviar
+ * dentro de las próximas `staleHours`/backoff.
+ */
+export async function getAbandonedFormDrivers(
+  limit: number = 10,
+  staleHours: number = 24,
+  maxAgeDays: number = 30,
+): Promise<Array<{
+  id: string
+  firstName: string | null
+  lastName: string | null
+  fullName: string | null
+  phoneNumber: string
+  messagesSentCount: number
+}>> {
+  const now = new Date()
+  const staleCutoff = new Date(now.getTime() - staleHours * 60 * 60 * 1000)
+  const oldestStart = new Date(now.getTime() - maxAgeDays * 24 * 60 * 60 * 1000)
+
+  return prisma.formDriver.findMany({
+    where: {
+      status: 'IN_PROGRESS',
+      // Iniciada hace ≥ staleHours pero ≤ maxAgeDays.
+      startedAt: { lte: staleCutoff, gte: oldestStart },
+      lastActivityAt: { lte: staleCutoff },
+      OR: [{ noContactBefore: null }, { noContactBefore: { lte: now } }],
+      phoneNumber: { not: '' },
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      fullName: true,
+      phoneNumber: true,
+      messagesSentCount: true,
+    },
+    orderBy: [
+      { messagesSentCount: 'asc' }, // primero los que recibieron menos
+      { startedAt: 'asc' },          // y dentro de eso, los más antiguos
+    ],
+    take: limit,
+  })
 }
 
 /**
