@@ -1858,6 +1858,7 @@ function SegmentsView() {
   const [zoneFilter, setZoneFilter] = useState('all');
   const [dayFilter, setDayFilter] = useState('all');
   const [sinSort, setSinSort] = useState<'shifts30d' | 'name'>('shifts30d');
+  const [excludeContacted, setExcludeContacted] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
@@ -1949,20 +1950,23 @@ function SegmentsView() {
 
   const filtered = useMemo<SegmentDriverDto[]>(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter(
-      (d) =>
-        d.fullName.toLowerCase().includes(q) ||
-        (d.phone ?? '').toLowerCase().includes(q) ||
-        (d.primaryZone ?? '').toLowerCase().includes(q) ||
-        d.driverId.toLowerCase().includes(q),
-    );
-  }, [list, query]);
+    let res = list;
+    if (q)
+      res = res.filter(
+        (d) =>
+          d.fullName.toLowerCase().includes(q) ||
+          (d.phone ?? '').toLowerCase().includes(q) ||
+          (d.primaryZone ?? '').toLowerCase().includes(q) ||
+          d.driverId.toLowerCase().includes(q),
+      );
+    if (excludeContacted) res = res.filter((d) => !d.hasConversation);
+    return res;
+  }, [list, query, excludeContacted]);
 
   // Reset de página al cambiar de vista; reset de selección al cambiar segmento.
   useEffect(() => {
     setPage(0);
-  }, [segment, query, zoneFilter, dayFilter, sinSort]);
+  }, [segment, query, zoneFilter, dayFilter, sinSort, excludeContacted]);
   useEffect(() => {
     setSelected(new Set());
   }, [segment]);
@@ -2002,6 +2006,14 @@ function SegmentsView() {
       return next;
     });
   }, [selectableIds]);
+
+  // Selección rápida: los primeros N vinculados en el orden actual del segmento
+  // (p.ej. en "sin turnos" ordenado por 30d → los N más activos). Reemplaza la
+  // selección actual.
+  const selectFirst = useCallback(
+    (n: number) => setSelected(new Set(selectableIds.slice(0, n))),
+    [selectableIds],
+  );
 
   const selectedDrivers = useMemo<SegmentDriverDto[]>(() => {
     if (!data || selected.size === 0) return [];
@@ -2112,6 +2124,13 @@ function SegmentsView() {
             </SelectContent>
           </Select>
         )}
+        <label className="flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer h-9 px-1 sm:px-2">
+          <Checkbox
+            checked={excludeContacted}
+            onCheckedChange={(v) => setExcludeContacted(v === true)}
+          />
+          <span className="text-muted-foreground">Excluir ya contactados</span>
+        </label>
       </div>
 
       <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
@@ -2150,18 +2169,36 @@ function SegmentsView() {
       )}
 
       {!loading && selectableIds.length > 0 && (
-        <div className="flex items-center justify-between gap-2 px-1">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <Checkbox
-              checked={
-                allSelected ? true : someSelected ? 'indeterminate' : false
-              }
-              onCheckedChange={toggleSelectAll}
-            />
-            <span className="text-muted-foreground">
-              Seleccionar vinculados ({selectableIds.length})
-            </span>
-          </label>
+        <div className="flex items-center justify-between gap-x-4 gap-y-2 px-1 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox
+                checked={
+                  allSelected ? true : someSelected ? 'indeterminate' : false
+                }
+                onCheckedChange={toggleSelectAll}
+              />
+              <span className="text-muted-foreground">
+                Seleccionar vinculados ({selectableIds.length})
+              </span>
+            </label>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">Primeros:</span>
+              {[50, 100, 150, 200].map((n) => (
+                <Button
+                  key={n}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={selectableIds.length < n}
+                  onClick={() => selectFirst(n)}
+                >
+                  {n}
+                </Button>
+              ))}
+            </div>
+          </div>
           {selected.size > 0 && (
             <button
               type="button"
