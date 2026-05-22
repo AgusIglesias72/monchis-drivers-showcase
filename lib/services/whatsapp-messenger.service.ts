@@ -18,6 +18,7 @@ import {
   WhatsAppMessageType,
 } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { formatPhoneNumber } from '@/lib/utils/phone';
 import { whatsappBotService, WHATSAPP_BOT_ID } from './whatsapp-bot.service';
 
 export type MessengerStatus = 'sent' | 'skipped' | 'failed';
@@ -112,8 +113,13 @@ export async function sendTemplateByKey(
   };
   const message = renderTemplate(template.content, variables);
 
+  // El teléfono en DB viene en formato local (ej "0982398492"); el bot necesita
+  // el código de país (595...) para resolver el chat. Normalizar acá es lo único
+  // que faltaba para que los triggers por template salieran.
+  const formattedPhone = formatPhoneNumber(driver.phoneNumber);
+
   const sendResp = await whatsappBotService.sendMessage({
-    phone: driver.phoneNumber,
+    phone: formattedPhone,
     message,
     type: (options.messageType ?? WhatsAppMessageType.CUSTOM).toLowerCase(),
   });
@@ -135,11 +141,11 @@ export async function sendTemplateByKey(
   let messageId: string | undefined;
   try {
     const recipientName = driver.fullName || driver.firstName || 'Postulante';
-    const chatId = sendResp.data?.chatId || `${driver.phoneNumber}@c.us`;
+    const chatId = sendResp.data?.chatId || `${formattedPhone}@c.us`;
 
     const record = await prisma.whatsAppMessage.create({
       data: {
-        recipientPhone: driver.phoneNumber,
+        recipientPhone: formattedPhone,
         recipientName,
         chatId,
         messageType: options.messageType ?? WhatsAppMessageType.CUSTOM,

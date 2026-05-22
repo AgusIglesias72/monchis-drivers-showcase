@@ -2,6 +2,7 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
+import { formatPhoneNumber } from "@/lib/utils/phone"
 import { whatsappBotService, WHATSAPP_BOT_ID } from "@/lib/services/whatsapp-bot.service"
 import { WhatsAppMessageType, WhatsAppMessageSource } from "@prisma/client"
 import { incrementTemplateUsage } from "@/lib/services/whatsapp-templates.service"
@@ -31,17 +32,8 @@ export async function sendQuickWhatsAppMessage(params: SendQuickWhatsAppMessageP
       }
     }
 
-    // Formatear número de teléfono (asegurar formato internacional)
-    let formattedPhone = phoneNumber.trim()
-
-    // Si no empieza con +, agregar +595 (Paraguay)
-    if (!formattedPhone.startsWith('+')) {
-      // Si empieza con 0, removerlo
-      if (formattedPhone.startsWith('0')) {
-        formattedPhone = formattedPhone.substring(1)
-      }
-      formattedPhone = `+595${formattedPhone}`
-    }
+    // Normalizar al formato internacional que espera el bot (595...).
+    const formattedPhone = formatPhoneNumber(phoneNumber)
 
     const botResponse = await whatsappBotService.sendMessage({
       phone: formattedPhone,
