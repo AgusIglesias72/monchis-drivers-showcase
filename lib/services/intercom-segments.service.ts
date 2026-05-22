@@ -31,6 +31,12 @@ export interface SegmentDriver {
   // Días distintos con asistencia registrada en los últimos 7 días. Relevante
   // sobre todo para el segmento "sin turnos" (¿estuvo activo igual?).
   workedLastWeekDays: number
+  // Turnos tomados en los últimos 30 días (snapshot materializado en la cache,
+  // = filas de asistencia). Para detectar potenciales activos en "sin turnos".
+  shiftsLast30d: number
+  // True si ya iniciamos una conversación de Intercom con este driver (existe
+  // fila en IntercomConversation). Se muestra como badge en todos los segmentos.
+  hasConversation: boolean
 }
 
 export interface DriverSegments {
@@ -166,7 +172,8 @@ export async function getDriverSegments(opts?: {
   // el día más reciente registrado (para señalar atraso de datos en la UI).
   const weekAgoIso = pseudoIso(new Date(nowMs - 7 * MS_PER_DAY))
   const todayIso = pseudoIso(now)
-  const [drivers, attendanceRows, attendanceMax] = await Promise.all([
+  const [drivers, attendanceRows, attendanceMax, conversationRows] =
+    await Promise.all([
     prisma.monchisDriverCache.findMany({
       where: { enabled: true },
       select: {
@@ -177,6 +184,7 @@ export async function getDriverSegments(opts?: {
         phone: true,
         primaryZone30d: true,
         intercomContactId: true,
+        sessions30d: true,
       },
       orderBy: { fullName: "asc" },
     }),
@@ -186,11 +194,21 @@ export async function getDriverSegments(opts?: {
       distinct: ["driverId", "day"],
     }),
     prisma.monchisDriverAttendance.aggregate({ _max: { day: true } }),
+    prisma.intercomConversation.findMany({
+      where: { driverId: { not: null } },
+      select: { driverId: true },
+      distinct: ["driverId"],
+    }),
   ])
 
   const workedDays = new Map<string, number>()
   for (const r of attendanceRows) {
     workedDays.set(r.driverId, (workedDays.get(r.driverId) ?? 0) + 1)
+  }
+
+  const driversWithConversation = new Set<string>()
+  for (const c of conversationRows) {
+    if (c.driverId) driversWithConversation.add(c.driverId)
   }
 
   const conTurnos: SegmentDriver[] = []
@@ -208,6 +226,8 @@ export async function getDriverSegments(opts?: {
       linked,
       intercomContactId: d.intercomContactId,
       workedLastWeekDays: workedDays.get(d.driverId) ?? 0,
+      shiftsLast30d: d.sessions30d,
+      hasConversation: driversWithConversation.has(d.driverId),
     }
 
     const driverShifts = byDriver.get(d.driverId)
@@ -227,6 +247,11 @@ export async function getDriverSegments(opts?: {
 
   conTurnos.sort(
     (a, b) => b.shiftCount - a.shiftCount || a.fullName.localeCompare(b.fullName),
+  )
+  // Default útil: potenciales activos primero (más turnos en los últimos 30d).
+  sinTurnos.sort(
+    (a, b) =>
+      b.shiftsLast30d - a.shiftsLast30d || a.fullName.localeCompare(b.fullName),
   )
 
   return {

@@ -766,6 +766,106 @@ export async function sendDirectMessage(
   };
 }
 
+// ==================== BROADCAST (difusión) ====================
+
+export interface BroadcastRecipient {
+  driverId: string;
+  contactId: string;
+}
+
+export interface BroadcastInput {
+  recipients: BroadcastRecipient[];
+  senderAdminId: string;
+  assigneeAdminId?: string | null;
+  subject?: string;
+  body: string;
+  attachmentUrls?: string[];
+  clerkUserId: string;
+}
+
+export interface BroadcastItemResult {
+  driverId: string;
+  status: 'sent' | 'failed';
+  conversationId?: string | null;
+  error?: string;
+}
+
+export interface BroadcastResult {
+  total: number;
+  sent: number;
+  failed: number;
+  results: BroadcastItemResult[];
+}
+
+// Concurrencia y pausa entre tandas: cada envío puede gatillar 1-2 llamadas a
+// Intercom; intercomFetch ya reintenta ante 429, esto reduce los bursts.
+const BROADCAST_CONCURRENCY = 4;
+const BROADCAST_BATCH_DELAY_MS = 350;
+
+/**
+ * Envía el mismo mensaje a varios drivers en tandas. Reusa sendDirectMessage
+ * (que registra log + índice de conversación por cada envío, así aparecen en la
+ * vista de Conversaciones). Captura el error por destinatario: una falla no
+ * aborta la difusión.
+ */
+export async function sendBroadcast(
+  input: BroadcastInput,
+): Promise<BroadcastResult> {
+  const results: BroadcastItemResult[] = [];
+
+  for (let i = 0; i < input.recipients.length; i += BROADCAST_CONCURRENCY) {
+    const chunk = input.recipients.slice(i, i + BROADCAST_CONCURRENCY);
+    const chunkResults = await Promise.all(
+      chunk.map(async (r): Promise<BroadcastItemResult> => {
+        try {
+          const res = await sendDirectMessage({
+            contactId: r.contactId,
+            senderAdminId: input.senderAdminId,
+            assigneeAdminId: input.assigneeAdminId,
+            subject: input.subject,
+            body: input.body,
+            attachmentUrls: input.attachmentUrls,
+            driverId: r.driverId,
+            clerkUserId: input.clerkUserId,
+            metadata: {
+              source: 'broadcast',
+              recipientCount: input.recipients.length,
+            },
+          });
+          return {
+            driverId: r.driverId,
+            status: 'sent',
+            conversationId: res.conversationId,
+          };
+        } catch (err) {
+          return {
+            driverId: r.driverId,
+            status: 'failed',
+            error:
+              err instanceof IntercomError
+                ? err.message
+                : err instanceof Error
+                  ? err.message
+                  : 'Error desconocido',
+          };
+        }
+      }),
+    );
+    results.push(...chunkResults);
+    if (i + BROADCAST_CONCURRENCY < input.recipients.length) {
+      await sleep(BROADCAST_BATCH_DELAY_MS);
+    }
+  }
+
+  const sent = results.filter((r) => r.status === 'sent').length;
+  return {
+    total: results.length,
+    sent,
+    failed: results.length - sent,
+    results,
+  };
+}
+
 // ==================== ÍNDICE DE CONVERSACIONES ====================
 
 interface UpsertConversationParams {

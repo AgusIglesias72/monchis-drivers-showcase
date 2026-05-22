@@ -51,6 +51,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { IntercomIcon } from '@/components/admin/icons/intercom-icon';
 import {
   Check,
@@ -70,6 +79,8 @@ import {
   ImagePlus,
   Layers,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   RefreshCw,
   MapPin,
 } from 'lucide-react';
@@ -1811,6 +1822,8 @@ interface SegmentDriverDto {
   shiftCount: number;
   shifts: SegmentShiftDto[];
   workedLastWeekDays: number;
+  shiftsLast30d: number;
+  hasConversation: boolean;
 }
 
 interface SegmentsDto {
@@ -1834,7 +1847,7 @@ interface SegmentsDto {
 
 type SegmentKey = 'con' | 'sin' | 'todos';
 
-const MAX_SEGMENT_ROWS = 200;
+const PAGE_SIZE = 25;
 
 function SegmentsView() {
   const [data, setData] = useState<SegmentsDto | null>(null);
@@ -1844,7 +1857,11 @@ function SegmentsView() {
   const [query, setQuery] = useState('');
   const [zoneFilter, setZoneFilter] = useState('all');
   const [dayFilter, setDayFilter] = useState('all');
+  const [sinSort, setSinSort] = useState<'shifts30d' | 'name'>('shifts30d');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(0);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const load = useCallback(async (fresh = false) => {
     setLoading(true);
@@ -1913,7 +1930,13 @@ function SegmentsView() {
 
   const list = useMemo<SegmentDriverDto[]>(() => {
     if (!data) return [];
-    if (segment === 'sin') return data.sinTurnos;
+    if (segment === 'sin')
+      return [...data.sinTurnos].sort((a, b) =>
+        sinSort === 'name'
+          ? a.fullName.localeCompare(b.fullName)
+          : b.shiftsLast30d - a.shiftsLast30d ||
+            a.fullName.localeCompare(b.fullName),
+      );
     if (segment === 'con')
       return data.conTurnos
         .map(applyShiftFilters)
@@ -1922,7 +1945,7 @@ function SegmentsView() {
     return [...data.conTurnos, ...data.sinTurnos].sort((a, b) =>
       a.fullName.localeCompare(b.fullName),
     );
-  }, [data, segment, applyShiftFilters]);
+  }, [data, segment, applyShiftFilters, sinSort]);
 
   const filtered = useMemo<SegmentDriverDto[]>(() => {
     const q = query.trim().toLowerCase();
@@ -1936,7 +1959,59 @@ function SegmentsView() {
     );
   }, [list, query]);
 
-  const visible = filtered.slice(0, MAX_SEGMENT_ROWS);
+  // Reset de página al cambiar de vista; reset de selección al cambiar segmento.
+  useEffect(() => {
+    setPage(0);
+  }, [segment, query, zoneFilter, dayFilter, sinSort]);
+  useEffect(() => {
+    setSelected(new Set());
+  }, [segment]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const visible = filtered.slice(
+    safePage * PAGE_SIZE,
+    safePage * PAGE_SIZE + PAGE_SIZE,
+  );
+
+  // Solo los vinculados pueden recibir mensajes → solo ellos son seleccionables.
+  const selectableIds = useMemo(
+    () => filtered.filter((d) => d.linked).map((d) => d.driverId),
+    [filtered],
+  );
+  const allSelected =
+    selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+  const someSelected = selectableIds.some((id) => selected.has(id));
+
+  const toggleSelected = useCallback((driverId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(driverId)) next.delete(driverId);
+      else next.add(driverId);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const all =
+        selectableIds.length > 0 && selectableIds.every((id) => next.has(id));
+      if (all) selectableIds.forEach((id) => next.delete(id));
+      else selectableIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [selectableIds]);
+
+  const selectedDrivers = useMemo<SegmentDriverDto[]>(() => {
+    if (!data || selected.size === 0) return [];
+    const byId = new Map(
+      [...data.conTurnos, ...data.sinTurnos].map((d) => [d.driverId, d]),
+    );
+    return [...selected]
+      .map((id) => byId.get(id))
+      .filter((d): d is SegmentDriverDto => Boolean(d));
+  }, [data, selected]);
 
   return (
     <section className="space-y-4">
@@ -1968,6 +2043,16 @@ function SegmentsView() {
               className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
             />
             Actualizar
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setComposerOpen(true)}
+            disabled={selected.size === 0}
+            className="gap-2"
+          >
+            <Send className="h-3.5 w-3.5" />
+            Enviar Comunicación
+            {selected.size > 0 && ` (${selected.size})`}
           </Button>
         </div>
       </div>
@@ -2013,6 +2098,20 @@ function SegmentsView() {
             </Select>
           </>
         )}
+        {segment === 'sin' && (
+          <Select
+            value={sinSort}
+            onValueChange={(v) => setSinSort(v as 'shifts30d' | 'name')}
+          >
+            <SelectTrigger className="h-9 w-full sm:w-48">
+              <SelectValue placeholder="Ordenar" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="shifts30d">Más turnos (30 días)</SelectItem>
+              <SelectItem value="name">Nombre (A-Z)</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
@@ -2050,6 +2149,31 @@ function SegmentsView() {
         </p>
       )}
 
+      {!loading && selectableIds.length > 0 && (
+        <div className="flex items-center justify-between gap-2 px-1">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <Checkbox
+              checked={
+                allSelected ? true : someSelected ? 'indeterminate' : false
+              }
+              onCheckedChange={toggleSelectAll}
+            />
+            <span className="text-muted-foreground">
+              Seleccionar vinculados ({selectableIds.length})
+            </span>
+          </label>
+          {selected.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              {selected.size} seleccionados · limpiar
+            </button>
+          )}
+        </div>
+      )}
+
       {loading && !data ? (
         <div className="flex items-center justify-center py-16 text-sm text-muted-foreground gap-2">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -2068,18 +2192,54 @@ function SegmentsView() {
                 driver={d}
                 expanded={expanded.has(d.driverId)}
                 onToggle={() => toggleExpanded(d.driverId)}
+                selected={selected.has(d.driverId)}
+                onToggleSelect={() => toggleSelected(d.driverId)}
               />
             ))
           )}
         </div>
       )}
 
-      {filtered.length > MAX_SEGMENT_ROWS && (
-        <p className="text-xs text-muted-foreground text-center">
-          Mostrando {MAX_SEGMENT_ROWS} de {filtered.length}. Refiná con el
-          buscador para ver más.
-        </p>
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            {filtered.length} driver{filtered.length === 1 ? '' : 's'} · página{' '}
+            {safePage + 1} de {pageCount}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1"
+              disabled={safePage === 0}
+              onClick={() => setPage(safePage - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1"
+              disabled={safePage >= pageCount - 1}
+              onClick={() => setPage(safePage + 1)}
+            >
+              Siguiente
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       )}
+
+      <BroadcastSheet
+        open={composerOpen}
+        onOpenChange={setComposerOpen}
+        recipients={selectedDrivers}
+        onSent={() => {
+          setSelected(new Set());
+          load();
+        }}
+      />
     </section>
   );
 }
@@ -2118,10 +2278,14 @@ function SegmentRow({
   driver,
   expanded,
   onToggle,
+  selected,
+  onToggleSelect,
 }: {
   driver: SegmentDriverDto;
   expanded: boolean;
   onToggle: () => void;
+  selected: boolean;
+  onToggleSelect: () => void;
 }) {
   const hasShifts = driver.shifts.length > 0;
   return (
@@ -2133,6 +2297,14 @@ function SegmentRow({
         )}
         onClick={hasShifts ? onToggle : undefined}
       >
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onToggleSelect}
+          disabled={!driver.linked}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Seleccionar ${driver.fullName}`}
+          className="flex-shrink-0"
+        />
         <Avatar className="h-8 w-8 flex-shrink-0">
           <AvatarFallback className="text-xs bg-muted">
             {initials(driver.fullName)}
@@ -2141,26 +2313,35 @@ function SegmentRow({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium truncate">{driver.fullName}</p>
           <p className="text-xs text-muted-foreground truncate">
-            {[driver.primaryZone, driver.phone].filter(Boolean).join(' · ') ||
-              'Sin datos'}
+            {[
+              driver.primaryZone,
+              driver.phone,
+              !hasShifts && driver.workedLastWeekDays > 0
+                ? `activo ${driver.workedLastWeekDays}d últ. sem.`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'Sin datos'}
           </p>
         </div>
-        {!hasShifts &&
-          (driver.workedLastWeekDays > 0 ? (
-            <Badge
-              variant="outline"
-              className="gap-1 border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-medium flex-shrink-0 tabular-nums"
-            >
-              Trabajó {driver.workedLastWeekDays}d últ. sem.
-            </Badge>
-          ) : (
-            <Badge
-              variant="outline"
-              className="text-[11px] text-muted-foreground flex-shrink-0"
-            >
-              Sin actividad 7d
-            </Badge>
-          ))}
+        {!hasShifts && (
+          <Badge
+            variant="secondary"
+            className="text-[11px] flex-shrink-0 tabular-nums"
+          >
+            {driver.shiftsLast30d} {driver.shiftsLast30d === 1 ? 'turno' : 'turnos'}{' '}
+            · 30d
+          </Badge>
+        )}
+        {driver.hasConversation && (
+          <Badge
+            variant="outline"
+            className="gap-1 border-sky-200 bg-sky-50 text-sky-700 text-[11px] font-medium flex-shrink-0"
+          >
+            <MessageSquare className="h-3 w-3" />
+            Chat iniciado
+          </Badge>
+        )}
         {driver.linked ? (
           <Badge
             variant="outline"
@@ -2216,6 +2397,398 @@ function SegmentRow({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ==================== BROADCAST SHEET ====================
+
+interface BroadcastResponse {
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  results: { driverId: string; status: 'sent' | 'failed'; error?: string }[];
+}
+
+function BroadcastSheet({
+  open,
+  onOpenChange,
+  recipients,
+  onSent,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  recipients: SegmentDriverDto[];
+  onSent: () => void;
+}) {
+  const [admins, setAdmins] = useState<IntercomAdminOption[]>([]);
+  const [adminsLoading, setAdminsLoading] = useState(true);
+  const [adminsError, setAdminsError] = useState<string | null>(null);
+  const [senderId, setSenderId] = useState('');
+  const [assigneeId, setAssigneeId] = useState(NO_ASSIGNEE);
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<BroadcastResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFiles(files: FileList) {
+    setUploadError(null);
+    const remaining = MAX_ATTACHMENTS - attachments.length;
+    if (remaining <= 0) {
+      setUploadError(`Máximo ${MAX_ATTACHMENTS} imágenes por mensaje`);
+      return;
+    }
+    const toUpload = Array.from(files).slice(0, remaining);
+    setUploading(true);
+    try {
+      const uploaded: Attachment[] = [];
+      for (const file of toUpload) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/intercom/upload-attachment', {
+          method: 'POST',
+          body: formData,
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? `Error subiendo ${file.name}`);
+        uploaded.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          url: json.url,
+          filename: json.filename,
+          size: json.size,
+          type: json.type,
+        });
+      }
+      setAttachments((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Error al subir');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  useEffect(() => {
+    if (!open || admins.length > 0) return;
+    setAdminsLoading(true);
+    fetch('/api/intercom/admins', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.error) setAdminsError(json.error);
+        else setAdmins(json.admins ?? []);
+      })
+      .catch((err) => setAdminsError(String(err)))
+      .finally(() => setAdminsLoading(false));
+  }, [open, admins.length]);
+
+  // Limpiar el resultado al reabrir (para una nueva difusión).
+  useEffect(() => {
+    if (open) {
+      setResult(null);
+      setError(null);
+    }
+  }, [open]);
+
+  const sender = useMemo(
+    () => admins.find((a) => a.id === senderId) ?? null,
+    [admins, senderId],
+  );
+  const assignee = useMemo(
+    () =>
+      assigneeId === NO_ASSIGNEE
+        ? null
+        : admins.find((a) => a.id === assigneeId) ?? null,
+    [admins, assigneeId],
+  );
+
+  const recipientCount = recipients.length;
+  const hasContent = body.trim().length > 0 || attachments.length > 0;
+  const canSend =
+    recipientCount > 0 && !!senderId && hasContent && !uploading && !sending;
+
+  async function handleSend() {
+    if (!senderId || !hasContent) return;
+    setSending(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await fetch('/api/intercom/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driverIds: recipients.map((r) => r.driverId),
+          senderAdminId: senderId,
+          assigneeAdminId: assigneeId === NO_ASSIGNEE ? null : assigneeId,
+          subject,
+          body,
+          attachmentUrls: attachments.map((a) => a.url),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error ?? `Error ${res.status}`);
+      } else {
+        setResult(json as BroadcastResponse);
+        setSubject('');
+        setBody('');
+        setAttachments([]);
+        onSent();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-lg flex flex-col gap-0 p-0">
+        <SheetHeader className="px-5 py-4 border-b text-left">
+          <SheetTitle>Enviar comunicación</SheetTitle>
+          <SheetDescription>
+            Difusión 1-1 via Intercom a {recipientCount} driver
+            {recipientCount === 1 ? '' : 's'}. Cada uno la recibe en su Messenger
+            y la conversación queda en la pestaña Conversaciones.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+          {result ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+                <CheckCircle2 className="h-5 w-5" />
+                Difusión enviada
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <ResultStat label="Enviados" value={result.sent} tone="ok" />
+                <ResultStat label="Fallidos" value={result.failed} tone="err" />
+                <ResultStat label="Omitidos" value={result.skipped} tone="mut" />
+              </div>
+              {result.skipped > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Omitidos = seleccionados sin vincular en Intercom (no se les
+                  puede enviar).
+                </p>
+              )}
+              {result.failed > 0 && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive space-y-1 max-h-40 overflow-y-auto">
+                  {result.results
+                    .filter((r) => r.status === 'failed')
+                    .slice(0, 20)
+                    .map((r) => (
+                      <div key={r.driverId}>
+                        {r.driverId}: {r.error ?? 'error'}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Destinatarios ({recipientCount})
+                </p>
+                {recipientCount === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No hay drivers seleccionados.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto rounded-md border bg-muted/30 p-2">
+                    {recipients.map((r) => (
+                      <Badge
+                        key={r.driverId}
+                        variant="secondary"
+                        className="text-[11px] font-normal"
+                      >
+                        {r.fullName}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {adminsError && (
+                <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{adminsError}</span>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3">
+                <AdminCombobox
+                  label="Remitente"
+                  placeholder={
+                    adminsLoading ? 'Cargando…' : 'Elegir remitente'
+                  }
+                  admins={admins}
+                  value={sender}
+                  onChange={setSenderId}
+                  disabled={adminsLoading}
+                />
+                <AdminCombobox
+                  label="Asignar a"
+                  placeholder="Sin asignar"
+                  admins={admins}
+                  value={assignee}
+                  onChange={setAssigneeId}
+                  allowNone
+                  disabled={adminsLoading}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Asunto (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="Título destacado del mensaje"
+                  className="w-full h-9 px-3 rounded-md border bg-background text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Mensaje
+                </label>
+                <RichEditor
+                  value={body}
+                  onChange={setBody}
+                  disabled={sending}
+                  placeholder="Escribí el mensaje a difundir…"
+                  onImageClick={() => fileInputRef.current?.click()}
+                  imageDisabled={
+                    sending || uploading || attachments.length >= MAX_ATTACHMENTS
+                  }
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleFiles(e.target.files);
+                    }
+                  }}
+                />
+                {(attachments.length > 0 || uploading || uploadError) && (
+                  <div className="flex items-center gap-2 rounded-md border bg-muted/10 p-2 overflow-x-auto">
+                    {attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="relative flex-shrink-0 group rounded-md overflow-hidden border bg-background"
+                      >
+                        <img
+                          src={att.url}
+                          alt={att.filename}
+                          className="h-16 w-16 object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(att.id)}
+                          aria-label="Eliminar imagen"
+                          className="absolute top-0.5 right-0.5 size-5 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/90"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {uploading && (
+                      <div className="h-16 w-16 rounded-md border border-dashed flex items-center justify-center bg-muted/30 flex-shrink-0">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      </div>
+                    )}
+                    {uploadError && (
+                      <div className="flex items-center gap-1.5 text-xs text-destructive ml-2">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        {uploadError}
+                      </div>
+                    )}
+                    {attachments.length > 0 && (
+                      <div className="ml-auto text-[10px] text-muted-foreground flex-shrink-0">
+                        {attachments.length} / {MAX_ATTACHMENTS}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <SheetFooter className="px-5 py-4 border-t flex-row justify-end gap-2">
+          {result ? (
+            <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={sending}
+              >
+                Cancelar
+              </Button>
+              <Button onClick={handleSend} disabled={!canSend} className="gap-2">
+                {sending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                {sending ? 'Enviando…' : `Enviar a ${recipientCount}`}
+              </Button>
+            </>
+          )}
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function ResultStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: 'ok' | 'err' | 'mut';
+}) {
+  return (
+    <div className="rounded-md border p-2">
+      <div
+        className={cn(
+          'text-lg font-semibold tabular-nums',
+          tone === 'ok' && 'text-emerald-700',
+          tone === 'err' && value > 0 && 'text-destructive',
+          tone === 'mut' && 'text-muted-foreground',
+        )}
+      >
+        {value}
+      </div>
+      <div className="text-[11px] text-muted-foreground">{label}</div>
     </div>
   );
 }
