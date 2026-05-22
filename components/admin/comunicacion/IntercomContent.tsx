@@ -2474,7 +2474,7 @@ function BroadcastSheet({
   const [error, setError] = useState<string | null>(null);
   const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
   const [tagId, setTagId] = useState('');
-  const [closeAfter, setCloseAfter] = useState(false);
+  const [closeAfter, setCloseAfter] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleFiles(files: FileList) {
@@ -2536,7 +2536,12 @@ function BroadcastSheet({
     fetch('/api/intercom/tags', { cache: 'no-store' })
       .then((r) => r.json())
       .then((json) => {
-        if (!json.error) setTags(json.tags ?? []);
+        if (json.error) return;
+        const list: { id: string; name: string }[] = json.tags ?? [];
+        setTags(list);
+        // Preseleccionar "Bonos Semanales" por defecto (si no hay otra elegida).
+        const def = list.find((t) => t.name === 'Bonos Semanales');
+        if (def) setTagId((prev) => prev || def.id);
       })
       .catch(() => {});
   }, [open, tags.length]);
@@ -2563,8 +2568,16 @@ function BroadcastSheet({
 
   const recipientCount = recipients.length;
   const hasContent = body.trim().length > 0 || attachments.length > 0;
+  // Si se cierra al enviar, la etiqueta es obligatoria: sin ella el cierre
+  // dispara el workflow de CSAT ("Gracias por tu calificación") y reabre la conv.
+  const needsTag = closeAfter && !tagId;
   const canSend =
-    recipientCount > 0 && !!senderId && hasContent && !uploading && !sending;
+    recipientCount > 0 &&
+    !!senderId &&
+    hasContent &&
+    !uploading &&
+    !sending &&
+    !needsTag;
 
   async function handleSend() {
     if (!senderId || !hasContent) return;
@@ -2811,10 +2824,14 @@ function BroadcastSheet({
                   <span>Cerrar la conversación al enviar</span>
                 </label>
                 {closeAfter && !tagId && (
-                  <p className="text-xs text-amber-600">
-                    Sin etiqueta, al cerrar se dispara el flujo de Intercom
-                    (&quot;Gracias por tu calificación&quot;). Elegí la etiqueta
-                    excluida del workflow para evitarlo.
+                  <p className="flex items-start gap-1.5 text-xs text-destructive">
+                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                    <span>
+                      Para cerrar al enviar necesitás elegir una etiqueta
+                      (&quot;Bonos Semanales&quot;). Sin ella, el cierre dispara
+                      el &quot;Gracias por tu calificación&quot; y reabre la
+                      conversación. El envío está bloqueado hasta elegirla.
+                    </span>
                   </p>
                 )}
               </div>
