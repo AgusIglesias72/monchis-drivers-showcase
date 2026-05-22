@@ -781,6 +781,10 @@ export interface BroadcastInput {
   body: string;
   attachmentUrls?: string[];
   clerkUserId: string;
+  /** Tag de Intercom a aplicar a cada conversación creada (id del tag). */
+  tagId?: string | null;
+  /** Cerrar la conversación tras enviarla (y taguearla, si hay tag). */
+  closeAfter?: boolean;
 }
 
 export interface BroadcastItemResult {
@@ -802,11 +806,44 @@ export interface BroadcastResult {
 const BROADCAST_CONCURRENCY = 4;
 const BROADCAST_BATCH_DELAY_MS = 350;
 
+export interface IntercomTag {
+  id: string;
+  name: string;
+}
+
+/** Lista los tags del workspace (para el selector de la difusión). */
+export async function listTags(): Promise<IntercomTag[]> {
+  const res = await intercomFetch<{ data?: { id: string; name: string }[] }>(
+    '/tags',
+    { method: 'GET' },
+  );
+  return (res.data ?? [])
+    .map((t) => ({ id: String(t.id), name: t.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Aplica un tag a una conversación. admin_id = quién lo aplica (requerido). */
+async function tagConversation(
+  conversationId: string,
+  tagId: string,
+  adminId: string,
+): Promise<void> {
+  await intercomFetch(`/conversations/${conversationId}/tags`, {
+    method: 'POST',
+    body: JSON.stringify({ id: tagId, admin_id: adminId }),
+  });
+}
+
 /**
  * Envía el mismo mensaje a varios drivers en tandas. Reusa sendDirectMessage
  * (que registra log + índice de conversación por cada envío, así aparecen en la
  * vista de Conversaciones). Captura el error por destinatario: una falla no
  * aborta la difusión.
+ *
+ * Si se pasa tagId, taguea cada conversación; si closeAfter, la cierra DESPUÉS
+ * de taguear (orden importante: el tag exime del workflow de cierre/CSAT, que se
+ * evalúa al cerrar). Si el tag estaba pedido pero falló, no se cierra (para no
+ * disparar el workflow sin la etiqueta de exclusión).
  */
 export async function sendBroadcast(
   input: BroadcastInput,
@@ -832,6 +869,38 @@ export async function sendBroadcast(
               recipientCount: input.recipients.length,
             },
           });
+
+          // Tag + cierre (best-effort; no invalidan el envío ya hecho).
+          let tagOk = true;
+          if (res.conversationId && input.tagId) {
+            try {
+              await tagConversation(
+                res.conversationId,
+                input.tagId,
+                input.senderAdminId,
+              );
+            } catch (tagErr) {
+              tagOk = false;
+              console.error('[broadcast] tag falló:', tagErr);
+            }
+          }
+          if (res.conversationId && input.closeAfter) {
+            // Si el tag estaba pedido pero falló, NO cerramos: cerrar sin la
+            // etiqueta dispararía el workflow de CSAT que justamente evitamos.
+            if (input.tagId && !tagOk) {
+              console.warn(
+                '[broadcast] no se cierra (tag falló) conv',
+                res.conversationId,
+              );
+            } else {
+              try {
+                await closeConversation(res.conversationId);
+              } catch (closeErr) {
+                console.error('[broadcast] close falló:', closeErr);
+              }
+            }
+          }
+
           return {
             driverId: r.driverId,
             status: 'sent',

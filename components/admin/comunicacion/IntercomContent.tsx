@@ -2472,6 +2472,9 @@ function BroadcastSheet({
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<BroadcastResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
+  const [tagId, setTagId] = useState('');
+  const [closeAfter, setCloseAfter] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleFiles(files: FileList) {
@@ -2528,6 +2531,16 @@ function BroadcastSheet({
       .finally(() => setAdminsLoading(false));
   }, [open, admins.length]);
 
+  useEffect(() => {
+    if (!open || tags.length > 0) return;
+    fetch('/api/intercom/tags', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((json) => {
+        if (!json.error) setTags(json.tags ?? []);
+      })
+      .catch(() => {});
+  }, [open, tags.length]);
+
   // Limpiar el resultado al reabrir (para una nueva difusión).
   useEffect(() => {
     if (open) {
@@ -2569,6 +2582,8 @@ function BroadcastSheet({
           subject,
           body,
           attachmentUrls: attachments.map((a) => a.url),
+          tagId: tagId || null,
+          closeAfter,
         }),
       });
       const json = await res.json();
@@ -2763,6 +2778,44 @@ function BroadcastSheet({
                       </div>
                     )}
                   </div>
+                )}
+              </div>
+
+              <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Etiqueta en Intercom (opcional)
+                  </label>
+                  <Select
+                    value={tagId || 'none'}
+                    onValueChange={(v) => setTagId(v === 'none' ? '' : v)}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Sin etiqueta" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin etiqueta</SelectItem>
+                      {tags.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={closeAfter}
+                    onCheckedChange={(v) => setCloseAfter(v === true)}
+                  />
+                  <span>Cerrar la conversación al enviar</span>
+                </label>
+                {closeAfter && !tagId && (
+                  <p className="text-xs text-amber-600">
+                    Sin etiqueta, al cerrar se dispara el flujo de Intercom
+                    (&quot;Gracias por tu calificación&quot;). Elegí la etiqueta
+                    excluida del workflow para evitarlo.
+                  </p>
                 )}
               </div>
 

@@ -25,6 +25,8 @@ interface BroadcastBody {
   subject?: unknown;
   body?: unknown;
   attachmentUrls?: unknown;
+  tagId?: unknown;
+  closeAfter?: unknown;
 }
 
 export async function POST(req: NextRequest) {
@@ -52,6 +54,8 @@ export async function POST(req: NextRequest) {
   const assigneeAdminId = strOrNull(payload.assigneeAdminId);
   const subject = strOrNull(payload.subject);
   const body = strOrNull(payload.body);
+  const tagId = strOrNull(payload.tagId);
+  const closeAfter = payload.closeAfter === true;
   const attachmentUrls = Array.isArray(payload.attachmentUrls)
     ? payload.attachmentUrls.filter(
         (u): u is string => typeof u === 'string' && u.startsWith('https://'),
@@ -123,6 +127,8 @@ export async function POST(req: NextRequest) {
     body: body ?? '',
     attachmentUrls,
     clerkUserId: adminUser.clerkId,
+    tagId,
+    closeAfter,
   });
 
   return NextResponse.json({ ...result, skipped });
