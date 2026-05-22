@@ -65,6 +65,7 @@ export async function validateShareToken(shareToken: string): Promise<PublicBook
     firstName: fd.firstName,
     lastName: fd.lastName,
     documents: fd.documents,
+    assistedCompletion: fd.assistedCompletion,
   })
 
   return {
@@ -138,6 +139,7 @@ export async function createBooking(input: BookingCreateInput): Promise<BookingR
     firstName: fd.firstName,
     lastName: fd.lastName,
     documents: fd.documents,
+    assistedCompletion: fd.assistedCompletion,
   })
   if (!eligibility.isEligible) {
     throw new NotEligibleError(eligibility.reason ?? undefined)
@@ -371,6 +373,7 @@ export async function rescheduleBooking(
           documentsStatus: true,
           firstName: true,
           lastName: true,
+          assistedCompletion: true,
           documents: { select: { documentType: true, status: true } },
         },
       },

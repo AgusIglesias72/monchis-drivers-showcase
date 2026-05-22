@@ -107,6 +107,7 @@ export async function POST(request: NextRequest) {
       firstName: driver.firstName,
       lastName: driver.lastName,
       documents: driver.documents,
+      assistedCompletion: driver.assistedCompletion,
     })
 
     response.found = true

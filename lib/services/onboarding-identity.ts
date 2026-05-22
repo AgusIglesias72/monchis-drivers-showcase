@@ -53,6 +53,7 @@ export async function resolveIdentityFromCookie(): Promise<ResolvedIdentity> {
       firstName: driver.firstName,
       lastName: driver.lastName,
       documents: driver.documents,
+      assistedCompletion: driver.assistedCompletion,
     })
 
     let shareToken: string | null = null

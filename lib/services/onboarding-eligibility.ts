@@ -6,11 +6,13 @@
 // confirmación. Mantenerla en un solo lugar evita que las 3 fuentes diverjan.
 //
 // Reglas (con OR — alcanza con que cumpla una):
-//   1. status ∈ {APPROVED, READY_ONBOARDING, ONBOARDING, ACTIVE}
+//   1. assistedCompletion === true
+//      → un admin completó la postulación a mano; habilitada para reservar
+//   2. status ∈ {APPROVED, READY_ONBOARDING, ONBOARDING, ACTIVE}
 //      → la postulación ya pasó la revisión humana
-//   2. documentsStatus === APPROVED
+//   3. documentsStatus === APPROVED
 //      → el bot de IA o un admin aprobó todos los docs
-//   3. documents tienen CEDULA y CRIMINAL_RECORD individualmente APPROVED
+//   4. documents tienen CEDULA y CRIMINAL_RECORD individualmente APPROVED
 //      → fallback para postulaciones intermedias
 //
 // Si está REJECTED, no puede reservar nunca. Si todavía le falta nombre o
@@ -29,6 +31,8 @@ interface EligibilityInput {
   firstName: string | null
   lastName: string | null
   documents: Array<{ documentType: string; status: string }>
+  /** Postulación completada de forma asistida por un admin → habilitada a reservar. */
+  assistedCompletion?: boolean
 }
 
 const APPROVED_FORM_DRIVER_STATUSES = new Set<FormDriverStatus>([
@@ -46,7 +50,12 @@ export function checkEligibility(input: EligibilityInput): EligibilityResult {
     return { isEligible: false, reason: 'Completá tu nombre y apellido en el portal' }
   }
 
-  // 1. Status del FormDriver indica postulación aprobada
+  // 1. Postulación asistida por un admin → habilitada a reservar
+  if (input.assistedCompletion) {
+    return { isEligible: true, reason: null }
+  }
+
+  // 2. Status del FormDriver indica postulación aprobada
   if (APPROVED_FORM_DRIVER_STATUSES.has(input.status)) {
     return { isEligible: true, reason: null }
   }
