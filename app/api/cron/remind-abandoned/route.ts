@@ -16,6 +16,9 @@ import {
 } from '@/lib/services/messaging-frequency.service'
 import { sendTemplateByKey } from '@/lib/services/whatsapp-messenger.service'
 
+// 5 mensajes × 10s de pausa + envíos del bot ≈ 90s peor caso. 120s da margen.
+export const maxDuration = 120
+
 const TEMPLATE_KEY = 'form_incomplete'
 
 export async function GET(request: NextRequest) {
@@ -33,7 +36,7 @@ export async function GET(request: NextRequest) {
     // escribir a postulaciones de hace meses y dispara de volumen / ban).
     const MAX_AGE_DAYS = Math.max(1, parseInt(process.env.ABANDONED_MAX_AGE_DAYS || '30', 10))
     // Pausa entre mensajes (anti rate-limit / anti ban).
-    const DELAY_MS = Math.max(0, parseInt(process.env.ABANDONED_REMINDER_DELAY_MS || '5000', 10))
+    const DELAY_MS = Math.max(0, parseInt(process.env.ABANDONED_REMINDER_DELAY_MS || '10000', 10))
 
     const drivers = await getAbandonedFormDrivers(LIMIT, STALE_HOURS, MAX_AGE_DAYS)
     console.log(`[REMIND ABANDONED] ${drivers.length} postulaciones abandonadas a contactar`)
