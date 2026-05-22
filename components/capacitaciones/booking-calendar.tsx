@@ -25,6 +25,12 @@ interface Props {
 
 const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 
+// ymd desde las partes LOCALES del Date de DayPicker — consistente con cómo
+// availableDays/fullDays posicionan los días (new Date(ymd+'T12:00')). Evita el
+// off-by-one en SSR (servidor UTC) que tachaba días que sí existen.
+const dayPickerYmd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
 export function BookingCalendar({
   slug,
   initialSession,
@@ -127,7 +133,7 @@ export function BookingCalendar({
 
   const selectedDaySlots = useMemo(() => {
     if (!selectedDay) return []
-    const ymd = ymdInTZ(selectedDay)
+    const ymd = dayPickerYmd(selectedDay)
     return slotsByDate.get(ymd) || []
   }, [selectedDay, slotsByDate])
 
@@ -164,7 +170,7 @@ export function BookingCalendar({
                 const today = new Date()
                 today.setHours(0, 0, 0, 0)
                 if (date < today) return true
-                const ymd = ymdInTZ(date)
+                const ymd = dayPickerYmd(date)
                 const ss = slotsByDate.get(ymd)
                 if (!ss || ss.length === 0) return true
                 return ss.every((s) => s.isFull || s.isPast || s.isPastNotice)

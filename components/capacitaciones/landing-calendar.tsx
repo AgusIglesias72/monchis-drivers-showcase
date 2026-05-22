@@ -31,6 +31,14 @@ import type { SlotResponse } from '@/lib/types/onboarding-rules.types'
 
 const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 
+// ymd a partir de las PARTES LOCALES del Date que maneja DayPicker (cada celda
+// es la medianoche local de ese día). Tiene que ser consistente con cómo
+// `availableDays` posiciona los días (new Date(ymd+'T12:00')), si no, en SSR
+// (servidor en UTC) ymdInTZ devuelve el día anterior y desincroniza
+// "disponible" (rosa) vs "deshabilitado" → días tachados que sí existen.
+const dayPickerYmd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
 const MODALITY_ICON = {
   IN_PERSON: MapPin,
   VIRTUAL: Video,
@@ -152,7 +160,7 @@ export function LandingCalendar({ initialSlots = [], sessionToken }: Props) {
 
   const selectedDaySlots = useMemo(() => {
     if (!selectedDay) return []
-    const ymd = ymdInTZ(selectedDay)
+    const ymd = dayPickerYmd(selectedDay)
     return slotsByDate.get(ymd) || []
   }, [selectedDay, slotsByDate])
 
@@ -165,7 +173,7 @@ export function LandingCalendar({ initialSlots = [], sessionToken }: Props) {
     return set
   }, [dayModalities])
 
-  const selectedYmd = selectedDay ? ymdInTZ(selectedDay) : null
+  const selectedYmd = selectedDay ? dayPickerYmd(selectedDay) : null
   const selectedModalities = selectedYmd ? dayModalities.get(selectedYmd) : null
 
   return (
@@ -210,7 +218,7 @@ export function LandingCalendar({ initialSlots = [], sessionToken }: Props) {
                 const today = new Date()
                 today.setHours(0, 0, 0, 0)
                 if (date < today) return true
-                const ymd = ymdInTZ(date)
+                const ymd = dayPickerYmd(date)
                 return !dayModalities.has(ymd)
               }}
               locale={es}
