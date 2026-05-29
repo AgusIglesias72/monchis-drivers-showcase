@@ -80,11 +80,22 @@ interface FilterState {
   sortOrder: string // "asc" | "desc"
 }
 
+interface CaptureStatus {
+  lastRunAt: string | null
+  captureLagMs: number | null
+  isStale: boolean
+  staleThresholdMs: number
+  inProgressCount: number
+  queuePending: number
+  queueFailed: number
+}
+
 interface Props {
   rows: OrderRow[]
   total: number
   page: number
   pageSize: number
+  capture: CaptureStatus
   filters: FilterState
 }
 
@@ -178,6 +189,7 @@ export function PedidosHomeContent({
   total,
   page,
   pageSize,
+  capture,
   filters,
 }: Props) {
   const router = useRouter()
@@ -306,6 +318,8 @@ export function PedidosHomeContent({
             </Button>
           </Link>
         </div>
+
+        <CaptureStatusBar capture={capture} />
 
         {/* Búsqueda directa por request_id (atajo a detalle) */}
         <Card>
@@ -801,6 +815,47 @@ function SignalIcons({ row }: { row: OrderRow }) {
           </Tooltip>
         )
       })}
+    </div>
+  )
+}
+
+function formatLag(ms: number | null): string {
+  if (ms === null) return "sin datos"
+  const s = Math.round(ms / 1000)
+  if (s < 90) return `hace ${s}s`
+  const m = Math.floor(s / 60)
+  if (m < 90) return `hace ${m}m`
+  return `hace ${Math.floor(m / 60)}h`
+}
+
+// Estado de la captura automática de pedidos (cron collect-live-orders). Tira
+// alerta visual si la captura está atrasada o si hay items fallados en la cola.
+function CaptureStatusBar({ capture }: { capture: CaptureStatus }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <span
+        className={cn(
+          "inline-flex items-center gap-1.5",
+          capture.isStale && "font-medium text-amber-600",
+        )}
+      >
+        <span
+          className={cn(
+            "h-2 w-2 rounded-full",
+            capture.isStale ? "bg-amber-500" : "bg-emerald-500",
+          )}
+        />
+        Captura {formatLag(capture.captureLagMs)}
+        {capture.isStale && " — atrasada"}
+      </span>
+      <span>·</span>
+      <span>{capture.inProgressCount} en curso</span>
+      <span>·</span>
+      <span className={cn(capture.queueFailed > 0 && "text-amber-600")}>
+        Cola: {capture.queuePending.toLocaleString("es")} pendientes
+        {capture.queueFailed > 0 &&
+          ` · ${capture.queueFailed.toLocaleString("es")} fallados`}
+      </span>
     </div>
   )
 }

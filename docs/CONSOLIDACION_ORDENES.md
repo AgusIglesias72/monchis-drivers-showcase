@@ -10,8 +10,12 @@
 - `lib/config/live-capture.config.ts` — umbrales (ventana 2h, cap 200, lag alert, retención, reintento not_found).
 - `app/api/cron/collect-live-orders/route.ts` — captura autónoma (cada min) + alerta Slack en caída + poda horaria.
 - `app/api/cron/refresh-recent-orders/route.ts` — lane rápido (cada 2 min).
-- `lib/services/live-capture-health.service.ts` — salud/cobertura para la vista.
-- `app/admin/gestion/ordenes/page.tsx` + `components/admin/gestion/ordenes-content.tsx` — vista operativa.
+- `lib/services/live-capture-health.service.ts` — salud/cobertura de captura.
+
+> **Decisión de UI (corregida):** NO hay vista separada. Todo vive en
+> `/admin/gestion/pedidos`: ahí está el listado (que los crons mantienen
+> actualizado) + un indicador compacto de estado de captura (`CaptureStatusBar`
+> en `pedidos-home-content.tsx`, alimentado por `getCaptureHealth`).
 
 **Archivos modificados**
 - `lib/services/live-panel.service.ts` — extraído `collectLiveData()`; nuevo `captureLiveOrders()`.

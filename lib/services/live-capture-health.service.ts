@@ -6,15 +6,6 @@ import { getOrderImportQueueStats } from "@/lib/services/pedidos-import-queue.se
 import { IN_PROGRESS_STATES } from "@/lib/services/pedidos.service"
 import type { QueueStats } from "@/lib/types/pedidos-queue.types"
 
-export interface CaptureRunPoint {
-  fetchedAt: string
-  idsSeen: number
-  idsNewEnqueued: number
-  zonesTotalRequest: number
-  errorCount: number
-  durationMs: number
-}
-
 export interface CaptureHealth {
   lastRunAt: string | null
   captureLagMs: number | null // now - lastRunAt
@@ -28,29 +19,11 @@ export interface CaptureHealth {
   inProgressCount: number
   // Cola de importación
   queue: QueueStats
-  // Tendencia (últimas N corridas, ascendente por tiempo)
-  trend: CaptureRunPoint[]
 }
 
-export async function getCaptureHealth(
-  trendLimit = 30,
-): Promise<CaptureHealth> {
-  const [lastRun, recent, inProgressCount, queue] = await Promise.all([
-    prisma.liveCaptureRun.findFirst({
-      orderBy: { fetchedAt: "desc" },
-    }),
-    prisma.liveCaptureRun.findMany({
-      orderBy: { fetchedAt: "desc" },
-      take: trendLimit,
-      select: {
-        fetchedAt: true,
-        idsSeen: true,
-        idsNewEnqueued: true,
-        zonesTotalRequest: true,
-        errors: true,
-        durationMs: true,
-      },
-    }),
+export async function getCaptureHealth(): Promise<CaptureHealth> {
+  const [lastRun, inProgressCount, queue] = await Promise.all([
+    prisma.liveCaptureRun.findFirst({ orderBy: { fetchedAt: "desc" } }),
     prisma.monchisOrderCache.count({
       where: {
         status: { in: IN_PROGRESS_STATES },
@@ -62,42 +35,26 @@ export async function getCaptureHealth(
 
   const lastRunAt = lastRun?.fetchedAt ?? null
   const captureLagMs = lastRunAt ? Date.now() - lastRunAt.getTime() : null
-  const lastErrors = parseErrors(lastRun?.errors)
 
   return {
     lastRunAt: lastRunAt?.toISOString() ?? null,
     captureLagMs,
     isStale:
-      captureLagMs === null || captureLagMs > LIVE_CAPTURE_CONFIG.captureLagAlertMs,
+      captureLagMs === null ||
+      captureLagMs > LIVE_CAPTURE_CONFIG.captureLagAlertMs,
     staleThresholdMs: LIVE_CAPTURE_CONFIG.captureLagAlertMs,
-    lastErrors,
+    lastErrors: parseErrors(lastRun?.errors),
     lastIdsSeen: lastRun?.idsSeen ?? 0,
     lastZonesTotalRequest: lastRun?.zonesTotalRequest ?? 0,
     inProgressCount,
     queue,
-    trend: recent
-      .slice()
-      .reverse()
-      .map((r) => ({
-        fetchedAt: r.fetchedAt.toISOString(),
-        idsSeen: r.idsSeen,
-        idsNewEnqueued: r.idsNewEnqueued,
-        zonesTotalRequest: r.zonesTotalRequest,
-        errorCount: parseErrors(r.errors).length,
-        durationMs: r.durationMs,
-      })),
   }
 }
 
-function parseErrors(
-  raw: unknown,
-): { source: string; message: string }[] {
+function parseErrors(raw: unknown): { source: string; message: string }[] {
   if (!Array.isArray(raw)) return []
   return raw.filter(
     (e): e is { source: string; message: string } =>
-      !!e &&
-      typeof e === "object" &&
-      "source" in e &&
-      "message" in e,
+      !!e && typeof e === "object" && "source" in e && "message" in e,
   )
 }

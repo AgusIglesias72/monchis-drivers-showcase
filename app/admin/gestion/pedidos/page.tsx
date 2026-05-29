@@ -1,6 +1,7 @@
 // app/admin/gestion/pedidos/page.tsx
 
 import { PedidosHomeContent } from "@/components/admin/gestion/pedidos-home-content"
+import { getCaptureHealth } from "@/lib/services/live-capture-health.service"
 import {
   searchOrders,
   type OrderSignalFilter,
@@ -66,17 +67,20 @@ export default async function PedidosHomePage({ searchParams }: PageProps) {
   const from = parseDateOrNull(sp.from)
   const to = parseDateOrNull(sp.to, true)
 
-  const { rows, total } = await searchOrders({
-    q: q || undefined,
-    status,
-    signal,
-    from,
-    to,
-    page,
-    pageSize: PAGE_SIZE,
-    sortBy,
-    sortOrder,
-  })
+  const [{ rows, total }, health] = await Promise.all([
+    searchOrders({
+      q: q || undefined,
+      status,
+      signal,
+      from,
+      to,
+      page,
+      pageSize: PAGE_SIZE,
+      sortBy,
+      sortOrder,
+    }),
+    getCaptureHealth(),
+  ])
 
   return (
     <PedidosHomeContent
@@ -97,6 +101,15 @@ export default async function PedidosHomePage({ searchParams }: PageProps) {
       total={total}
       page={page}
       pageSize={PAGE_SIZE}
+      capture={{
+        lastRunAt: health.lastRunAt,
+        captureLagMs: health.captureLagMs,
+        isStale: health.isStale,
+        staleThresholdMs: health.staleThresholdMs,
+        inProgressCount: health.inProgressCount,
+        queuePending: health.queue.pending,
+        queueFailed: health.queue.failed,
+      }}
       filters={{
         q,
         status,

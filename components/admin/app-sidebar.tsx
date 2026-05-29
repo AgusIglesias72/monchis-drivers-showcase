@@ -23,7 +23,6 @@ import {
   CalendarClock,
   CalendarRange,
   ShoppingBag,
-  PackageSearch,
   Radio,
   History,
 } from "lucide-react"
@@ -108,11 +107,6 @@ const menuItems = [
         title: "Turnos histórico",
         url: "/admin/gestion/turnos/historial",
         icon: History,
-      },
-      {
-        title: "Órdenes en vivo",
-        url: "/admin/gestion/ordenes",
-        icon: PackageSearch,
       },
       {
         title: "Pedidos",
