@@ -8,7 +8,14 @@ export const PEDIDOS_CONFIG = {
   token: process.env.MONCHIS_DRIVERS_API_TOKEN || "",
   // Estados terminales: una vez en cualquiera de éstos, el pedido es inmutable
   // y servimos siempre desde cache (excepto si forceRefresh=true).
-  terminalStates: new Set(["FINALIZED", "CANCELLED"] as string[]),
+  // OJO: la API devuelve "CANCELED" (una L) y "CANCELED_BY_CLIENT". Incluimos
+  // también "CANCELLED" (dos L) por robustez aunque no se observa en los datos.
+  terminalStates: new Set([
+    "FINALIZED",
+    "CANCELED",
+    "CANCELED_BY_CLIENT",
+    "CANCELLED",
+  ] as string[]),
 } as const
 
 export const REQUEST_ID_REGEX = /^[a-f0-9]{24}$/i

@@ -33,8 +33,16 @@
       "schedule": "0 5 * * *"
     },
     {
+      "path": "/api/cron/collect-live-orders",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/process-pedidos-import-queue",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/refresh-recent-orders",
+      "schedule": "1-59/2 * * * *"
     },
     {
       "path": "/api/cron/refresh-non-terminal-orders",

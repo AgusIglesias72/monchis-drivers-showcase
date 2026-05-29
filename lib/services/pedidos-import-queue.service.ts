@@ -1,5 +1,6 @@
 import "server-only"
 
+import { LIVE_CAPTURE_CONFIG } from "@/lib/config/live-capture.config"
 import { PEDIDOS_CONFIG, REQUEST_ID_REGEX } from "@/lib/config/pedidos.config"
 import { prisma } from "@/lib/prisma"
 import {
@@ -196,17 +197,14 @@ export interface RefreshNonTerminalResult {
   durationMs: number
 }
 
-// Edad mínima de un pedido para entrar al refresh: < 2h se asume que está en
-// flujo normal y refrescarlo es gasto al pedo. Sólo pedidos viejos que aún no
-// llegaron a estado terminal son candidatos a estar "trabados" en la cache.
-const REFRESH_MIN_AGE_MS = 2 * 60 * 60 * 1000
-
-// Re-encola pedidos cacheados que aún no llegaron a estado terminal
-// (FINALIZED/CANCELLED) para que el processor vuelva a consultar la API
-// y refresque su estado.
+// Re-encola pedidos cacheados que aún no llegaron a estado terminal para que
+// el processor vuelva a consultar la API y refresque su estado. Barrido LENTO:
+// sólo los capturados hace > recentWindowMs (los recientes los cubre el lane
+// rápido refreshRecentNonTerminalOrders). Ancla en capturedAt — NO confirmedAt,
+// que viene PY-mislabeled y quedaría ~3h atrasado en cache.
 export async function enqueueNonTerminalOrdersForRefresh(): Promise<RefreshNonTerminalResult> {
   const start = Date.now()
-  const ageCutoff = new Date(Date.now() - REFRESH_MIN_AGE_MS)
+  const ageCutoff = new Date(Date.now() - LIVE_CAPTURE_CONFIG.recentWindowMs)
 
   const cacheRows = await prisma.monchisOrderCache.findMany({
     where: {
@@ -217,20 +215,7 @@ export async function enqueueNonTerminalOrdersForRefresh(): Promise<RefreshNonTe
             { status: { notIn: [...PEDIDOS_CONFIG.terminalStates] } },
           ],
         },
-        {
-          // Pedido con >2h de antigüedad real (confirmedAt) o de captura
-          // si nunca fue confirmado, para no procesar al pedo pedidos en
-          // flujo normal.
-          OR: [
-            { confirmedAt: { lt: ageCutoff } },
-            {
-              AND: [
-                { confirmedAt: null },
-                { capturedAt: { lt: ageCutoff } },
-              ],
-            },
-          ],
-        },
+        { capturedAt: { lt: ageCutoff } },
       ],
     },
     select: { requestId: true },
@@ -274,4 +259,104 @@ export async function retryFailedQueueItems(): Promise<number> {
     data: { status: "pending", errorMessage: null, processedAt: null },
   })
   return result.count
+}
+
+export interface RefreshRecentResult {
+  scanned: number
+  refreshed: number
+  terminalNow: number
+  failed: number
+  dropped: number
+  notFoundRetried: number
+  durationMs: number
+}
+
+// Lane rápido: refresca DIRECTO (forceRefresh) los pedidos no-terminales
+// recientes (< recentWindowMs) para que su estado en admin esté fresco sin
+// esperar al barrido lento de >2h. Llama la API en chunks paralelos, con tope
+// y oldest-first para que ninguno del rango quede sin refrescar.
+export async function refreshRecentNonTerminalOrders(): Promise<RefreshRecentResult> {
+  const start = Date.now()
+  const since = new Date(Date.now() - LIVE_CAPTURE_CONFIG.recentWindowMs)
+  const max = LIVE_CAPTURE_CONFIG.recentRefreshMax
+
+  // Anclamos la ventana en capturedAt (now() real al insertar), NO en
+  // confirmedAt: el endpoint del pedido devuelve confirmed_at como PY local
+  // mal etiquetado Z, así que en cache queda ~3h atrasado y "gte now-2h"
+  // casi nunca matchearía. capturedAt = primera vez que vimos el pedido.
+  const where = {
+    AND: [
+      {
+        OR: [
+          { status: null },
+          { status: { notIn: [...PEDIDOS_CONFIG.terminalStates] } },
+        ],
+      },
+      { capturedAt: { gte: since } },
+    ],
+  }
+
+  const [total, rows] = await Promise.all([
+    prisma.monchisOrderCache.count({ where }),
+    prisma.monchisOrderCache.findMany({
+      where,
+      // Oldest-first dentro del rango: prioriza los que están por cruzar las 2h.
+      orderBy: { capturedAt: "asc" },
+      take: max,
+      select: { requestId: true },
+    }),
+  ])
+
+  const dropped = Math.max(0, total - rows.length)
+
+  let refreshed = 0
+  let terminalNow = 0
+  let failed = 0
+
+  const parallel = LIVE_CAPTURE_CONFIG.recentRefreshParallel
+  for (let i = 0; i < rows.length; i += parallel) {
+    const chunk = rows.slice(i, i + parallel)
+    await Promise.all(
+      chunk.map(async (row) => {
+        try {
+          const res = await getOrderByRequestId(row.requestId, {
+            forceRefresh: true,
+          })
+          refreshed += 1
+          const state = res.order.driver_request_state
+          if (state && PEDIDOS_CONFIG.terminalStates.has(state)) {
+            terminalNow += 1
+          }
+        } catch {
+          // No rompemos el batch por un pedido puntual; el próximo ciclo reintenta.
+          failed += 1
+        }
+      }),
+    )
+  }
+
+  // Reintento de not_found recientes (carrera: visto en live pero todavía no
+  // consultable en request_histories). Los reseteamos a pending para que el
+  // processor los vuelva a intentar, hasta un máximo de intentos.
+  const notFoundCutoff = new Date(
+    Date.now() - LIVE_CAPTURE_CONFIG.notFoundRetryWindowMs,
+  )
+  const retry = await prisma.monchisOrderImportQueue.updateMany({
+    where: {
+      status: "not_found",
+      enqueuedAt: { gte: notFoundCutoff },
+      attempts: { lt: LIVE_CAPTURE_CONFIG.notFoundMaxAttempts },
+    },
+    data: { status: "pending", processedAt: null, errorMessage: null },
+  })
+
+  return {
+    scanned: rows.length,
+    refreshed,
+    terminalNow,
+    failed,
+    dropped,
+    notFoundRetried: retry.count,
+    durationMs: Date.now() - start,
+  }
 }

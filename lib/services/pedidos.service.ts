@@ -214,13 +214,20 @@ const SLOW_ACCEPT_THRESHOLD = 10 * 60
 const LONG_E2E_THRESHOLD = 60 * 60
 const MANY_OFFERS_THRESHOLD = 3
 
-const IN_PROGRESS_STATES = [
+// No-terminales que la API expone. ASSIGNED = asignado a driver pero aún sin
+// aceptar; debe contar como "en curso".
+export const IN_PROGRESS_STATES = [
   "PENDING",
+  "ASSIGNED",
   "ACCEPTED",
   "WAITING_ORDER",
   "DELIVERY",
   "OUTSIDE",
 ]
+
+// La API devuelve "CANCELED" (una L) y una variante por cliente. Mantenemos
+// "CANCELLED" por robustez aunque no se observe en datos.
+const CANCELLED_STATES = ["CANCELED", "CANCELED_BY_CLIENT", "CANCELLED"]
 
 export async function searchOrders(params: SearchOrdersParams = {}) {
   const {
@@ -242,7 +249,7 @@ export async function searchOrders(params: SearchOrdersParams = {}) {
   }
 
   if (status === "finalized") where.status = "FINALIZED"
-  else if (status === "cancelled") where.status = "CANCELLED"
+  else if (status === "cancelled") where.status = { in: CANCELLED_STATES }
   else if (status === "in_progress")
     where.status = { in: IN_PROGRESS_STATES }
 
@@ -305,7 +312,7 @@ export async function getOrdersGlobalStats() {
       where: { ...baseWhere, status: "FINALIZED" },
     }),
     prisma.monchisOrderCache.count({
-      where: { ...baseWhere, status: "CANCELLED" },
+      where: { ...baseWhere, status: { in: CANCELLED_STATES } },
     }),
     prisma.monchisOrderCache.count({
       where: { ...baseWhere, hasAdminChange: true },

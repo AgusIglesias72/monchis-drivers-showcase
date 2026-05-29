@@ -1,6 +1,7 @@
 import "server-only"
 
 import { LIVE_PANEL_CONFIG } from "@/lib/config/live-panel.config"
+import { prisma } from "@/lib/prisma"
 import { enqueueOrderImports } from "@/lib/services/pedidos-import-queue.service"
 import { pyLocalIsoToRealIso } from "@/lib/utils/pedidos-time"
 import type {
@@ -305,13 +306,20 @@ function collectAllRequestIds(
 }
 
 // ----------------------------------------------------------------------------
-// Public API
+// Fetch + normalización compartida (consumida por el panel y por el cron de
+// captura). Hace las 4 llamadas a la API legacy, normaliza y ordena.
 // ----------------------------------------------------------------------------
 
-export async function fetchLivePanel(
-  options: { enqueue?: boolean } = {},
-): Promise<LivePanelPayload> {
-  const { enqueue = true } = options
+interface LiveData {
+  pending: LiveRequest[]
+  delayed: LiveRequest[]
+  active: LiveRequest[]
+  drivers: LiveDriver[]
+  zones: LiveZone[]
+  errors: { source: string; message: string }[]
+}
+
+async function collectLiveData(): Promise<LiveData> {
   const e = LIVE_PANEL_CONFIG.endpoints
 
   const [pendingRes, delayedRes, driversRes, zonesRes] = await Promise.all([
@@ -331,9 +339,7 @@ export async function fetchLivePanel(
   const drivers = driversRes.ok
     ? driversRes.data.filter((d) => !d.isMock).map(normalizeDriver)
     : []
-  const active = driversRes.ok
-    ? buildActiveFromDrivers(driversRes.data)
-    : []
+  const active = driversRes.ok ? buildActiveFromDrivers(driversRes.data) : []
   const zones = zonesRes.ok ? zonesRes.data.map(normalizeZone) : []
 
   // Orden estable: por timeStatus/isDelayed desc cuando aplica.
@@ -348,6 +354,20 @@ export async function fetchLivePanel(
     if (a.available !== b.available) return a.available ? -1 : 1
     return a.fullName.localeCompare(b.fullName, "es")
   })
+
+  return { pending, delayed, active, drivers, zones, errors }
+}
+
+// ----------------------------------------------------------------------------
+// Public API
+// ----------------------------------------------------------------------------
+
+export async function fetchLivePanel(
+  options: { enqueue?: boolean } = {},
+): Promise<LivePanelPayload> {
+  const { enqueue = true } = options
+  const { pending, delayed, active, drivers, zones, errors } =
+    await collectLiveData()
 
   let enqueued = 0
   if (enqueue) {
@@ -373,5 +393,83 @@ export async function fetchLivePanel(
     summary: buildSummary(pending, delayed, active, drivers, zones),
     errors,
     enqueued,
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Captura autónoma (cron). Independiente de que alguien tenga el panel abierto:
+// consulta los endpoints live server-side, encola los requestIds nuevos y deja
+// un snapshot en LiveCaptureRun para observabilidad/cobertura.
+// ----------------------------------------------------------------------------
+
+export interface CaptureLiveOrdersResult {
+  fetchedAt: string
+  pendingCount: number
+  delayedCount: number
+  activeCount: number
+  idsSeen: number
+  idsNewEnqueued: number
+  zonesTotalRequest: number
+  errors: { source: string; message: string }[]
+  allEndpointsFailed: boolean
+  durationMs: number
+}
+
+export async function captureLiveOrders(): Promise<CaptureLiveOrdersResult> {
+  const start = Date.now()
+  const { pending, delayed, active, drivers, zones, errors } =
+    await collectLiveData()
+
+  // Las 4 rutas fallaron → captura inútil (token vencido / API caída).
+  const allEndpointsFailed = errors.length >= 4
+
+  const ids = collectAllRequestIds(pending, delayed, drivers)
+  let idsNewEnqueued = 0
+  if (ids.length > 0) {
+    try {
+      const result = await enqueueOrderImports(ids)
+      idsNewEnqueued = result.inserted
+    } catch (err) {
+      console.error("[capture-live] enqueue error:", err)
+    }
+  }
+
+  const zonesTotalRequest = zones.reduce(
+    (sum, z) => sum + (z.totalRequest || 0),
+    0,
+  )
+
+  const fetchedAt = new Date().toISOString()
+  const durationMs = Date.now() - start
+
+  // Snapshot de cobertura. No rompemos la captura si el insert falla.
+  try {
+    await prisma.liveCaptureRun.create({
+      data: {
+        pendingCount: pending.length,
+        delayedCount: delayed.length,
+        activeCount: active.length,
+        idsSeen: ids.length,
+        idsNewEnqueued,
+        zonesTotalRequest,
+        errors: errors.length > 0 ? errors : undefined,
+        durationMs,
+      },
+    })
+  } catch (err) {
+    console.error("[capture-live] error guardando LiveCaptureRun:", err)
+  }
+
+  return {
+    fetchedAt,
+    pendingCount: pending.length,
+    delayedCount: delayed.length,
+    activeCount: active.length,
+    idsSeen: ids.length,
+    idsNewEnqueued,
+    zonesTotalRequest,
+    errors,
+    allEndpointsFailed,
+    durationMs,
   }
 }

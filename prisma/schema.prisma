@@ -1116,6 +1116,27 @@ model MonchisOrderImportQueue {
   @@map("monchis_order_import_queue")
 }
 
+// Snapshot por corrida del cron de captura autónoma de órdenes
+// (`/api/cron/collect-live-orders`, schedule `* * * * *`). Sirve para
+// observabilidad: detectar si la captura se cayó (lag), medir cobertura
+// (idsSeen vs zonesTotalRequest) y ver errores por endpoint. Retención corta
+// (se podan corridas viejas, ver LIVE_CAPTURE_CONFIG.retentionDays).
+model LiveCaptureRun {
+  id                Int      @id @default(autoincrement())
+  fetchedAt         DateTime @default(now()) @map("fetched_at")
+  pendingCount      Int      @default(0) @map("pending_count")
+  delayedCount      Int      @default(0) @map("delayed_count")
+  activeCount       Int      @default(0) @map("active_count")
+  idsSeen           Int      @default(0) @map("ids_seen") // distinct requestIds vistos
+  idsNewEnqueued    Int      @default(0) @map("ids_new_enqueued") // inserted esta corrida
+  zonesTotalRequest Int      @default(0) @map("zones_total_request") // referencia de cobertura
+  errors            Json? // [{ source, message }]
+  durationMs        Int      @default(0) @map("duration_ms")
+
+  @@index([fetchedAt])
+  @@map("live_capture_run")
+}
+
 // ==================== GESTIÓN ADMIN: PEDIDOS CACHE ====================
 
 // Cache de detalle de pedidos consultados desde la API externa de Monchis
