@@ -39,6 +39,8 @@ export interface SegmentDriver {
   hasConversation: boolean
 }
 
+export type EnabledFilter = "enabled" | "disabled" | "all"
+
 export interface DriverSegments {
   windowDays: number
   windowFromIso: string
@@ -48,6 +50,7 @@ export interface DriverSegments {
   // datos. Sirve para avisar en la UI si la asistencia viene atrasada.
   attendanceMaxDay: string | null
   errors: { zoneId: string; message: string }[]
+  enabledFilter: EnabledFilter
   conTurnos: SegmentDriver[]
   sinTurnos: SegmentDriver[]
   totals: {
@@ -124,7 +127,9 @@ function displayName(d: {
 
 export async function getDriverSegments(opts?: {
   fresh?: boolean
+  enabledFilter?: EnabledFilter
 }): Promise<DriverSegments> {
+  const enabledFilter: EnabledFilter = opts?.enabledFilter ?? "enabled"
   const { shifts, fetchedAt, errors } = await fetchAllZoneShifts({
     fresh: opts?.fresh ?? false,
   })
@@ -175,7 +180,10 @@ export async function getDriverSegments(opts?: {
   const [drivers, attendanceRows, attendanceMax, conversationRows] =
     await Promise.all([
     prisma.monchisDriverCache.findMany({
-      where: { enabled: true },
+      where:
+        enabledFilter === "all"
+          ? {}
+          : { enabled: enabledFilter === "enabled" },
       select: {
         driverId: true,
         fullName: true,
@@ -261,6 +269,7 @@ export async function getDriverSegments(opts?: {
     fetchedAt: fetchedAt.toISOString(),
     attendanceMaxDay: attendanceMax._max.day ?? null,
     errors,
+    enabledFilter,
     conTurnos,
     sinTurnos,
     totals: {

@@ -1833,6 +1833,7 @@ interface SegmentsDto {
   fetchedAt: string;
   attendanceMaxDay: string | null;
   errors: { zoneId: string; message: string }[];
+  enabledFilter: EnabledFilter;
   conTurnos: SegmentDriverDto[];
   sinTurnos: SegmentDriverDto[];
   totals: {
@@ -1846,6 +1847,7 @@ interface SegmentsDto {
 }
 
 type SegmentKey = 'con' | 'sin' | 'todos';
+type EnabledFilter = 'enabled' | 'disabled' | 'all';
 
 const PAGE_SIZE = 25;
 
@@ -1858,28 +1860,33 @@ function SegmentsView() {
   const [zoneFilter, setZoneFilter] = useState('all');
   const [dayFilter, setDayFilter] = useState('all');
   const [sinSort, setSinSort] = useState<'shifts30d' | 'name'>('shifts30d');
+  const [enabledFilter, setEnabledFilter] = useState<EnabledFilter>('enabled');
   const [excludeContacted, setExcludeContacted] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const [composerOpen, setComposerOpen] = useState(false);
 
-  const load = useCallback(async (fresh = false) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `/api/intercom/segments${fresh ? '?fresh=1' : ''}`,
-      );
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      setData(json as SegmentsDto);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (fresh = false) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams();
+        if (fresh) params.set('fresh', '1');
+        params.set('status', enabledFilter);
+        const res = await fetch(`/api/intercom/segments?${params.toString()}`);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        setData(json as SegmentsDto);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error desconocido');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [enabledFilter],
+  );
 
   useEffect(() => {
     load();
@@ -1963,13 +1970,22 @@ function SegmentsView() {
     return res;
   }, [list, query, excludeContacted]);
 
-  // Reset de página al cambiar de vista; reset de selección al cambiar segmento.
+  // Reset de página al cambiar de vista; reset de selección al cambiar segmento
+  // o estado (habilitados/deshabilitados son universos distintos).
   useEffect(() => {
     setPage(0);
-  }, [segment, query, zoneFilter, dayFilter, sinSort, excludeContacted]);
+  }, [
+    segment,
+    query,
+    zoneFilter,
+    dayFilter,
+    sinSort,
+    excludeContacted,
+    enabledFilter,
+  ]);
   useEffect(() => {
     setSelected(new Set());
-  }, [segment]);
+  }, [segment, enabledFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -2080,6 +2096,19 @@ function SegmentsView() {
             className="w-full h-9 pl-9 pr-3 rounded-md border bg-background text-sm outline-none focus:ring-2 focus:ring-ring/40"
           />
         </div>
+        <Select
+          value={enabledFilter}
+          onValueChange={(v) => setEnabledFilter(v as EnabledFilter)}
+        >
+          <SelectTrigger className="h-9 w-full sm:w-44">
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="enabled">Habilitados</SelectItem>
+            <SelectItem value="disabled">Deshabilitados</SelectItem>
+            <SelectItem value="all">Todos los estados</SelectItem>
+          </SelectContent>
+        </Select>
         {segment === 'con' && (
           <>
             <Select value={zoneFilter} onValueChange={setZoneFilter}>

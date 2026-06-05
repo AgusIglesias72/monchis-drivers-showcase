@@ -5,18 +5,29 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth';
-import { getDriverSegments } from '@/lib/services/intercom-segments.service';
+import {
+  getDriverSegments,
+  type EnabledFilter,
+} from '@/lib/services/intercom-segments.service';
 
 export const dynamic = 'force-dynamic';
+
+function parseEnabledFilter(value: string | null): EnabledFilter {
+  if (value === 'disabled' || value === 'all') return value;
+  return 'enabled';
+}
 
 export async function GET(req: NextRequest) {
   const guard = await requireAdminApi();
   if (!guard.ok) return guard.response;
 
   const fresh = req.nextUrl.searchParams.get('fresh') === '1';
+  const enabledFilter = parseEnabledFilter(
+    req.nextUrl.searchParams.get('status'),
+  );
 
   try {
-    const data = await getDriverSegments({ fresh });
+    const data = await getDriverSegments({ fresh, enabledFilter });
     return NextResponse.json(data);
   } catch (err) {
     return NextResponse.json(
