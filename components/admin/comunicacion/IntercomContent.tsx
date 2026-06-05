@@ -53,6 +53,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Sheet,
   SheetContent,
@@ -2227,7 +2228,7 @@ function SegmentsView() {
             </label>
             <div className="flex items-center gap-1">
               <span className="text-xs text-muted-foreground">Primeros:</span>
-              {[50, 100, 150, 200].map((n) => (
+              {[50, 100, 150, 200, 300, 400, 500].map((n) => (
                 <Button
                   key={n}
                   type="button"
@@ -2254,10 +2255,11 @@ function SegmentsView() {
         </div>
       )}
 
-      {loading && !data ? (
-        <div className="flex items-center justify-center py-16 text-sm text-muted-foreground gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Cargando segmentos…
+      {loading ? (
+        <div className="rounded-lg border divide-y max-h-[560px] overflow-hidden">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SegmentRowSkeleton key={i} />
+          ))}
         </div>
       ) : (
         <div className="rounded-lg border divide-y max-h-[560px] overflow-y-auto">
@@ -2351,6 +2353,21 @@ function SegmentTab({
         <span className="ml-1.5 text-xs text-muted-foreground">{count}</span>
       )}
     </button>
+  );
+}
+
+function SegmentRowSkeleton() {
+  return (
+    <div className="px-3 py-2.5">
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-4 w-4 rounded-sm" />
+        <div className="flex-1 space-y-1.5">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-3 w-56" />
+        </div>
+        <Skeleton className="h-5 w-16 rounded-full" />
+      </div>
+    </div>
   );
 }
 
