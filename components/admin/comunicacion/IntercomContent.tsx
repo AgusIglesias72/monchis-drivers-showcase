@@ -52,6 +52,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Sheet,
   SheetContent,
@@ -2096,19 +2097,32 @@ function SegmentsView() {
             className="w-full h-9 pl-9 pr-3 rounded-md border bg-background text-sm outline-none focus:ring-2 focus:ring-ring/40"
           />
         </div>
-        <Select
+        <RadioGroup
           value={enabledFilter}
           onValueChange={(v) => setEnabledFilter(v as EnabledFilter)}
+          className="flex items-center gap-4 h-9 px-3 rounded-md border bg-background"
         >
-          <SelectTrigger className="h-9 w-full sm:w-44">
-            <SelectValue placeholder="Estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="enabled">Habilitados</SelectItem>
-            <SelectItem value="disabled">Deshabilitados</SelectItem>
-            <SelectItem value="all">Todos los estados</SelectItem>
-          </SelectContent>
-        </Select>
+          {(
+            [
+              { value: 'enabled', label: 'Habilitados' },
+              { value: 'disabled', label: 'Deshabilitados' },
+              { value: 'all', label: 'Todos' },
+            ] as const
+          ).map((opt) => (
+            <label
+              key={opt.value}
+              htmlFor={`enabled-${opt.value}`}
+              className="flex items-center gap-1.5 text-sm cursor-pointer"
+            >
+              <RadioGroupItem
+                id={`enabled-${opt.value}`}
+                value={opt.value}
+                className="cursor-pointer"
+              />
+              {opt.label}
+            </label>
+          ))}
+        </RadioGroup>
         {segment === 'con' && (
           <>
             <Select value={zoneFilter} onValueChange={setZoneFilter}>
