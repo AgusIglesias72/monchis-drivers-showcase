@@ -18,8 +18,11 @@ interface StartJobRequest {
 
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requireAdminOrCron(request);
-    if (guard && !guard.ok) return guard.response;
+    // En desarrollo local permitimos llamar sin auth (sin Clerk ni CRON_SECRET).
+    if (process.env.NODE_ENV !== 'development') {
+      const guard = await requireAdminOrCron(request);
+      if (guard && !guard.ok) return guard.response;
+    }
 
     const body: StartJobRequest = await request.json();
     
