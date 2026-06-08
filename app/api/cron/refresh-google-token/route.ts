@@ -6,8 +6,14 @@ import {
   markRefreshTokenError,
   markRefreshTokenUsed,
 } from '@/lib/services/google-oauth-token.service'
-import { sendSlackMessage } from '@/lib/services/slack.service'
 
+// Heartbeat: fuerza un access_token refresh contra Drive y registra
+// last_used_at / last_error en `google_oauth_credential`. Con la app OAuth
+// publicada como Internal en GCP el refresh_token no caduca por edad; este
+// cron sirve para (1) mantenerlo "vivo" frente al límite de 6 meses sin uso
+// y (2) dejar rastro en DB si algún día Google lo revoca (admin lo borra,
+// rotación de credenciales, etc.). No manda alerta: la inspección es vía
+// `SELECT last_error, last_error_at, last_used_at FROM google_oauth_credential`.
 export async function GET(request: NextRequest) {
   try {
     const cronError = requireCronAuth(request)
@@ -22,7 +28,6 @@ export async function GET(request: NextRequest) {
     if (!refreshToken) {
       const msg =
         'No hay refresh_token en DB ni env. Correr `npm run auth:google` y reintentar.'
-      await sendSlackMessage(`:warning: *Google OAuth*: ${msg}`)
       return NextResponse.json(
         { success: false, error: msg, timestamp: new Date().toISOString() },
         { status: 500 },
@@ -37,7 +42,7 @@ export async function GET(request: NextRequest) {
     oauth2Client.setCredentials({ refresh_token: refreshToken })
 
     // Llamada simple a Drive — fuerza el refresh del access_token y, si el
-    // refresh_token está revocado/caducado, Google devuelve invalid_grant.
+    // refresh_token está revocado, Google devuelve invalid_grant.
     const drive = google.drive({ version: 'v3', auth: oauth2Client })
     await drive.files.list({ pageSize: 1, fields: 'files(id, name)' })
 
@@ -53,18 +58,6 @@ export async function GET(request: NextRequest) {
     const message = error?.message ?? 'unknown error'
     console.error('❌ [CRON] Error refreshing Google token:', message)
     await markRefreshTokenError(message)
-
-    // Si Google rechazó el refresh, avisamos a Slack para correr el script
-    // antes de que rompa subidas a Drive.
-    const isInvalidGrant =
-      message.includes('invalid_grant') ||
-      message.includes('Token has been expired or revoked')
-    const prefix = isInvalidGrant
-      ? ':rotating_light: *Google OAuth refresh token caducado/revocado*'
-      : ':warning: *Google OAuth*: fallo refrescando token'
-    await sendSlackMessage(
-      `${prefix}\n\`\`\`${message}\`\`\`\nCorrer \`npm run auth:google\` para rotar.`,
-    )
 
     return NextResponse.json(
       {
