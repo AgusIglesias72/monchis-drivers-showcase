@@ -9,6 +9,7 @@ import {
 import { buildHeatmap } from "@/lib/services/turnos-aggregate"
 import type {
   CellMetric,
+  ComparisonData,
   FlattenedShift,
   Metric,
 } from "@/lib/types/turnos.types"
@@ -18,6 +19,19 @@ interface Props {
   hours: readonly number[]
   metric: Metric
   onCellClick?: (zone: string, hour: number) => void
+  comparison?: ComparisonData | null
+  comparisonLoading?: boolean
+}
+
+function formatCompareValue(
+  c: { assigned: number; max: number } | undefined,
+  metric: Metric,
+): string {
+  if (!c) return "—"
+  if (metric === "occupancy") {
+    return c.max > 0 ? `${Math.round((c.assigned / c.max) * 100)}%` : "—"
+  }
+  return `${c.assigned}/${c.max}`
 }
 
 function cellBackground(metric: Metric, cell: CellMetric | null): string {
@@ -113,9 +127,20 @@ function LegendChip({ color, label }: { color: string; label: string }) {
   )
 }
 
-export function TurnosHeatmap({ shifts, hours, metric, onCellClick }: Props) {
+export function TurnosHeatmap({
+  shifts,
+  hours,
+  metric,
+  onCellClick,
+  comparison,
+  comparisonLoading = false,
+}: Props) {
   const slots = hours.slice(0, -1)
   const rows = buildHeatmap(shifts, hours, metric)
+  // Modo comparación activo → todas las celdas reservan dos líneas (con un
+  // "—" placeholder cuando no hay dato comparable o un skeleton mientras carga)
+  // para que la altura de fila sea uniforme y no quede padding fantasma.
+  const compareOn = !!comparison || comparisonLoading
 
   return (
     <div className="space-y-3 rounded-lg border bg-card p-4">
@@ -152,19 +177,37 @@ export function TurnosHeatmap({ shifts, hours, metric, onCellClick }: Props) {
                     {row.zone}
                   </td>
                   {row.cells.map((cell, idx) => {
+                    const hourLabel = slots[idx]
+                    const compareCell =
+                      comparison?.cells?.[row.zone]?.[hourLabel]
                     const bg = cellBackground(metric, cell)
-                    if (!cell) {
+                    if (!cell && !compareCell) {
                       return (
                         <td
                           key={idx}
                           className="border-b border-l border-l-border/30 px-2 py-2 text-center text-xs text-muted-foreground/40"
                         >
-                          —
+                          <div className="flex flex-col items-center justify-center leading-tight">
+                            <span>—</span>
+                            <span
+                              aria-hidden={!compareOn}
+                              className="mt-0.5 flex h-3 items-center justify-center leading-none"
+                            >
+                              {compareOn &&
+                                (comparisonLoading ? (
+                                  <span
+                                    aria-hidden
+                                    className="inline-block h-2 w-7 animate-pulse rounded bg-muted-foreground/20"
+                                  />
+                                ) : (
+                                  <span className="text-[10px]">—</span>
+                                ))}
+                            </span>
+                          </div>
                         </td>
                       )
                     }
-                    const hourLabel = slots[idx]
-                    const clickable = !!onCellClick
+                    const clickable = !!onCellClick && !!cell
                     return (
                       <td
                         key={idx}
@@ -175,20 +218,45 @@ export function TurnosHeatmap({ shifts, hours, metric, onCellClick }: Props) {
                             <button
                               type="button"
                               onClick={
-                                clickable
+                                clickable && onCellClick
                                   ? () => onCellClick(row.zone, hourLabel)
                                   : undefined
                               }
                               disabled={!clickable}
                               className={
-                                "w-full px-2 py-2 text-xs font-medium tabular-nums outline-none transition-[transform,box-shadow] " +
+                                "flex h-full w-full flex-col items-center justify-center px-2 py-2 text-xs font-medium tabular-nums outline-none transition-[transform,box-shadow] " +
                                 (clickable
-                                  ? "cursor-pointer hover:ring-2 hover:ring-foreground/40 focus-visible:ring-2 focus-visible:ring-foreground"
+                                  ? "cursor-pointer hover:ring-2 hover:ring-inset hover:ring-foreground/30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground"
                                   : "cursor-default")
                               }
                               style={{ backgroundColor: bg }}
                             >
-                              {cell.display}
+                              <span className="leading-tight">
+                                {cell ? cell.display : "—"}
+                              </span>
+                              <span
+                                aria-hidden={!compareOn}
+                                className="mt-0.5 flex h-3 items-center justify-center leading-none"
+                              >
+                                {compareOn &&
+                                  (comparisonLoading ? (
+                                    <span
+                                      aria-hidden
+                                      className="inline-block h-2 w-7 animate-pulse rounded bg-foreground/15"
+                                    />
+                                  ) : (
+                                    <span
+                                      className={
+                                        "text-[10px] font-normal tabular-nums " +
+                                        (compareCell
+                                          ? "text-zinc-900/55"
+                                          : "text-zinc-900/30")
+                                      }
+                                    >
+                                      {formatCompareValue(compareCell, metric)}
+                                    </span>
+                                  ))}
+                              </span>
                             </button>
                           </TooltipTrigger>
                           <TooltipContent>
@@ -196,11 +264,18 @@ export function TurnosHeatmap({ shifts, hours, metric, onCellClick }: Props) {
                               <div className="font-medium">
                                 {row.zone} · {hourLabel}–{hourLabel + 1} hs
                               </div>
-                              <div>{cell.display}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {cellTooltip(cell)}
-                              </div>
-                              {clickable && (
+                              {cell && <div>{cell.display}</div>}
+                              {cell && (
+                                <div className="text-xs text-muted-foreground">
+                                  {cellTooltip(cell)}
+                                </div>
+                              )}
+                              {compareCell && comparison && (
+                                <div className="text-xs text-muted-foreground">
+                                  {comparison.mode === "final" ? "Final" : "Run rate"} W-{comparison.weeksBack}: {formatCompareValue(compareCell, metric)}
+                                </div>
+                              )}
+                              {clickable && cell && (
                                 <div className="text-[10px] text-muted-foreground/70 pt-0.5">
                                   Click para ver turnos
                                 </div>
@@ -212,7 +287,33 @@ export function TurnosHeatmap({ shifts, hours, metric, onCellClick }: Props) {
                     )
                   })}
                   <td className="border-b border-l bg-muted/30 px-3 py-2 text-center text-xs font-semibold tabular-nums">
-                    {row.total.display}
+                    <div className="leading-tight">{row.total.display}</div>
+                    <div
+                      aria-hidden={!compareOn}
+                      className="mt-0.5 flex h-3 items-center justify-center leading-none"
+                    >
+                      {compareOn &&
+                        (comparisonLoading ? (
+                          <span
+                            aria-hidden
+                            className="inline-block h-2 w-9 animate-pulse rounded bg-muted-foreground/25"
+                          />
+                        ) : (
+                          <span
+                            className={
+                              "text-[10px] font-normal " +
+                              (comparison?.totalsByZone?.[row.zone]
+                                ? "text-muted-foreground/70"
+                                : "text-muted-foreground/40")
+                            }
+                          >
+                            {formatCompareValue(
+                              comparison?.totalsByZone?.[row.zone],
+                              metric,
+                            )}
+                          </span>
+                        ))}
+                    </div>
                   </td>
                 </tr>
               ))}

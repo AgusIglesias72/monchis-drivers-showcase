@@ -5,6 +5,8 @@ import { revalidatePath, revalidateTag } from "next/cache"
 
 import { TURNOS_CONFIG } from "@/lib/config/turnos.config"
 import { prisma } from "@/lib/prisma"
+import { getComparison } from "@/lib/services/turnos-comparison.service"
+import type { CompareMode, ComparisonData } from "@/lib/types/turnos.types"
 
 export interface RefreshResult {
   ok: boolean
@@ -241,4 +243,34 @@ export async function getDriversToReview(
     )
 
   return { ok: true, drivers, totalWeeks: WEEKS_BACK, weekDates }
+}
+
+// ---------------------------------------------------------------------------
+// Comparación con semanas anteriores: lee de los snapshots horarios y devuelve
+// las reservas equivalentes (modo Final o Run rate) para superponer en gris.
+// ---------------------------------------------------------------------------
+
+export interface LoadComparisonResult {
+  ok: boolean
+  data?: ComparisonData
+  error?: string
+}
+
+export async function loadComparison(params: {
+  mode: CompareMode
+  weeksBack: number
+  selectedDate: string
+}): Promise<LoadComparisonResult> {
+  const { userId } = await auth()
+  if (!userId) return { ok: false, error: "No autorizado" }
+
+  try {
+    const data = await getComparison(params)
+    return { ok: true, data }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error desconocido",
+    }
+  }
 }

@@ -84,3 +84,24 @@ export const METRIC_LABELS: Record<Metric, string> = {
   "active-shifts": "# Turnos activos",
   "person-hours": "Horas-persona / máx",
 }
+
+// ---------- Comparación con semanas anteriores ----------
+
+export type CompareMode = "final" | "runrate"
+
+export interface CompareCell {
+  assigned: number
+  max: number
+}
+
+export interface ComparisonData {
+  mode: CompareMode
+  weeksBack: number
+  comparisonDate: string // YYYY-MM-DD (día comparado)
+  capturedAtIso: string | null // foto usada como referencia (para etiqueta)
+  cells: Record<string, Record<number, CompareCell>> // zoneName → hour → cell
+  totalsByZone: Record<string, CompareCell> // para la columna "Total día" del heatmap
+  totals: { assigned: number; max: number } // KPIs
+  shiftCount: number
+  hasData: boolean
+}

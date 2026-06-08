@@ -1,70 +1,107 @@
 "use client"
 
-import { Activity, AlertCircle, Percent, Users } from "lucide-react"
+import { Fragment } from "react"
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import type { KpiSummary } from "@/lib/types/turnos.types"
+import type {
+  CompareMode,
+  ComparisonData,
+  KpiSummary,
+} from "@/lib/types/turnos.types"
 
 interface Props {
   kpis: KpiSummary
+  comparison?: ComparisonData | null
+  comparisonLoading?: boolean
+  compareMode?: CompareMode
+  compareWeeksBack?: number | null
 }
 
-export function TurnosKpis({ kpis }: Props) {
+export function TurnosKpis({
+  kpis,
+  comparison,
+  comparisonLoading = false,
+  compareMode = "final",
+  compareWeeksBack = null,
+}: Props) {
   const occupancyText =
     kpis.totalMax > 0 ? `${Math.round(kpis.occupancyPct * 100)}%` : "—"
 
-  const cards = [
+  // El label/comparable se derivan de los props del selector (no de la data),
+  // así renderizamos la línea de comparación apenas el user elige W — el valor
+  // sale como skeleton hasta que llega la respuesta.
+  const compareOn = compareWeeksBack !== null
+  const compareLabel = compareOn
+    ? `${compareMode === "final" ? "Final" : "Run rate"} W-${compareWeeksBack}`
+    : null
+
+  const compareOccupancy =
+    comparison && comparison.totals.max > 0
+      ? `${Math.round((comparison.totals.assigned / comparison.totals.max) * 100)}%`
+      : null
+
+  let compareLowZones = 0
+  if (comparison) {
+    for (const z of Object.values(comparison.totalsByZone)) {
+      if (z.max > 0 && z.assigned / z.max < 0.6) compareLowZones += 1
+    }
+  }
+
+  const stats: {
+    label: string
+    value: string
+    compare: string | null
+  }[] = [
     {
-      title: "Drivers asignados",
-      value: `${kpis.totalAssigned} / ${kpis.totalMax}`,
-      description: "Total del día (todas las zonas)",
-      icon: Users,
+      label: "Drivers",
+      value: `${kpis.totalAssigned}/${kpis.totalMax}`,
+      compare: comparison
+        ? `${comparison.totals.assigned}/${comparison.totals.max}`
+        : null,
     },
     {
-      title: "Ocupación promedio",
+      label: "Ocupación",
       value: occupancyText,
-      description: "Asignados / máximo",
-      icon: Percent,
+      compare: compareOccupancy,
     },
     {
-      title: "Turnos activos",
+      label: "Turnos",
       value: String(kpis.activeShifts),
-      description: "Filas devueltas por la API",
-      icon: Activity,
+      compare: comparison ? String(comparison.shiftCount) : null,
     },
     {
-      title: "Zonas con baja ocupación",
+      label: "Zonas baja",
       value: String(kpis.zonesWithLowOccupancy),
-      description: "< 60% asignados",
-      icon: AlertCircle,
+      compare: comparison ? String(compareLowZones) : null,
     },
   ]
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {cards.map((c) => {
-        const Icon = c.icon
-        return (
-          <Card key={c.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {c.title}
-              </CardTitle>
-              <Icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{c.value}</div>
-              <CardDescription className="mt-1">{c.description}</CardDescription>
-            </CardContent>
-          </Card>
-        )
-      })}
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 rounded-md border bg-card px-3 py-2 text-sm">
+      {stats.map((s, idx) => (
+        <Fragment key={s.label}>
+          {idx > 0 && (
+            <span aria-hidden className="text-muted-foreground/30">
+              ·
+            </span>
+          )}
+          <span className="inline-flex items-baseline gap-1">
+            <span className="font-semibold tabular-nums">{s.value}</span>
+            <span className="text-xs text-muted-foreground">{s.label}</span>
+            {compareOn &&
+              compareLabel &&
+              (comparisonLoading ? (
+                <span
+                  aria-hidden
+                  className="ml-1 inline-block h-3 w-20 animate-pulse rounded bg-muted-foreground/15 align-middle"
+                />
+              ) : (
+                <span className="ml-1 text-[11px] tabular-nums text-muted-foreground/60">
+                  ({compareLabel} {s.compare ?? "—"})
+                </span>
+              ))}
+          </span>
+        </Fragment>
+      ))}
     </div>
   )
 }

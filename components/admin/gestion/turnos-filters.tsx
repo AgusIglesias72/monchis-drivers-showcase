@@ -6,16 +6,14 @@ import { es } from "date-fns/locale"
 import { RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { METRIC_LABELS, type Metric } from "@/lib/types/turnos.types"
+import { type CompareMode, type Metric } from "@/lib/types/turnos.types"
 import { formatDatePill } from "@/lib/utils/turnos-dates"
 import { cn } from "@/lib/utils"
+
+const METRIC_OPTIONS: ReadonlyArray<{ value: Metric; label: string }> = [
+  { value: "drivers", label: "Drivers" },
+  { value: "occupancy", label: "Ocupación" },
+]
 
 interface Props {
   dates: string[]
@@ -26,6 +24,13 @@ interface Props {
   fetchedAtIso: string
   isRefreshing: boolean
   onRefresh: () => void
+  availableWeeks: number[]
+  compareWeeksBack: number | null
+  onCompareWeeksBackChange: (w: number | null) => void
+  compareMode: CompareMode
+  onCompareModeChange: (m: CompareMode) => void
+  comparisonLoading: boolean
+  runRateAllowed: boolean
 }
 
 export function TurnosFilters({
@@ -37,6 +42,13 @@ export function TurnosFilters({
   fetchedAtIso,
   isRefreshing,
   onRefresh,
+  availableWeeks,
+  compareWeeksBack,
+  onCompareWeeksBackChange,
+  compareMode,
+  onCompareModeChange,
+  comparisonLoading,
+  runRateAllowed,
 }: Props) {
   const fetchedAt = new Date(fetchedAtIso)
   const relativeFetched = formatDistanceToNow(fetchedAt, {
@@ -93,18 +105,26 @@ export function TurnosFilters({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted-foreground">Métrica</label>
-          <Select value={metric} onValueChange={(v) => onMetricChange(v as Metric)}>
-            <SelectTrigger className="w-full sm:w-[220px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.entries(METRIC_LABELS) as [Metric, string][]).map(([k, v]) => (
-                <SelectItem key={k} value={k}>
-                  {v}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="inline-flex h-9 items-center rounded-md border bg-background p-0.5">
+            {METRIC_OPTIONS.map(({ value, label }) => {
+              const on = metric === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onMetricChange(value)}
+                  className={cn(
+                    "rounded-sm px-2.5 py-1.5 text-xs font-medium transition-colors",
+                    on
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -119,6 +139,111 @@ export function TurnosFilters({
             {isRefreshing ? "Actualizando..." : "Actualizar"}
           </Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-md border bg-card p-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            Comparar con
+          </label>
+          <div className="inline-flex h-9 items-center rounded-md border bg-background p-0.5">
+            {(
+              [
+                { value: null as number | null, label: "Sin comp." },
+                { value: 1, label: "W-1" },
+                { value: 2, label: "W-2" },
+                { value: 3, label: "W-3" },
+                { value: 4, label: "W-4" },
+              ] as const
+            ).map((opt) => {
+              const disabled =
+                opt.value !== null && !availableWeeks.includes(opt.value)
+              const on = compareWeeksBack === opt.value
+              return (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => {
+                    if (!disabled) onCompareWeeksBackChange(opt.value)
+                  }}
+                  disabled={disabled}
+                  title={disabled ? "Aún sin datos suficientes" : undefined}
+                  className={cn(
+                    "rounded-sm px-2.5 py-1.5 text-xs font-medium tabular-nums transition-colors",
+                    on
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground",
+                    disabled &&
+                      "cursor-not-allowed opacity-40 hover:text-muted-foreground",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        {compareWeeksBack !== null && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              Modo
+            </label>
+            <div className="inline-flex h-9 items-center rounded-md border bg-background p-0.5">
+              <button
+                type="button"
+                onClick={() => onCompareModeChange("final")}
+                className={cn(
+                  "rounded-sm px-3 py-1.5 text-sm transition-colors",
+                  compareMode === "final"
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Final
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (runRateAllowed) onCompareModeChange("runrate")
+                }}
+                disabled={!runRateAllowed}
+                title={
+                  !runRateAllowed
+                    ? "Run rate aplica sólo para turnos a futuro"
+                    : undefined
+                }
+                className={cn(
+                  "rounded-sm px-3 py-1.5 text-sm transition-colors",
+                  compareMode === "runrate" && runRateAllowed
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground",
+                  !runRateAllowed &&
+                    "cursor-not-allowed opacity-40 hover:text-muted-foreground",
+                )}
+              >
+                Run rate
+              </button>
+            </div>
+          </div>
+        )}
+        {compareWeeksBack !== null && (
+          <div className="basis-full space-y-0.5 border-t border-border/40 pt-2 text-xs leading-snug text-muted-foreground">
+            <div>
+              <span className="font-medium text-foreground">Final</span>: cómo
+              quedó ese turno hace {compareWeeksBack} semana
+              {compareWeeksBack === 1 ? "" : "s"} (foto tomada al cerrar esa
+              hora, una hora después).
+            </div>
+            <div>
+              <span className="font-medium text-foreground">Run rate</span>:
+              cómo veníamos para ese turno hace {compareWeeksBack} semana
+              {compareWeeksBack === 1 ? "" : "s"} a esta misma hora.
+              {!runRateAllowed && (
+                <span className="italic"> Aplica sólo para turnos a futuro.</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

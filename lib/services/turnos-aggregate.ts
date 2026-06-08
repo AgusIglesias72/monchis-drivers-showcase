@@ -111,9 +111,6 @@ export function buildHeatmap(
   return zones.map((zone) => {
     const zoneShifts = shifts.filter((s) => s.zoneName === zone)
 
-    let dayAssigned = 0
-    let dayMax = 0
-    let dayShifts = 0
     let dayHasGuaranteed = false
     let dayHasPerOrder = false
 
@@ -126,22 +123,29 @@ export function buildHeatmap(
       const hasGuaranteed = covering.some((s) => s.paymentType === "guaranteed")
       const hasPerOrder = covering.some((s) => s.paymentType === "per-order")
 
-      dayAssigned += assigned
-      dayMax += max
-      dayShifts += covering.length
       if (hasGuaranteed) dayHasGuaranteed = true
       if (hasPerOrder) dayHasPerOrder = true
 
-      return cellMetric(
-        metric,
-        { assigned, max, shiftCount: covering.length, hasGuaranteed, hasPerOrder },
-      )
+      return cellMetric(metric, {
+        assigned,
+        max,
+        shiftCount: covering.length,
+        hasGuaranteed,
+        hasPerOrder,
+      })
     })
+
+    // Total del día = una vez por turno único (NO sumar por hora, que
+    // duplicaba la cuenta de un mismo turno por cada slot que cubría). Mismo
+    // criterio que computeKpis arriba.
+    const dayAssigned = zoneShifts.reduce((a, s) => a + s.driversAssigned, 0)
+    const dayMax = zoneShifts.reduce((a, s) => a + s.maxDrivers, 0)
+    const dayShiftCount = zoneShifts.length
 
     const total = cellMetric(metric, {
       assigned: dayAssigned,
       max: dayMax,
-      shiftCount: dayShifts,
+      shiftCount: dayShiftCount,
       hasGuaranteed: dayHasGuaranteed,
       hasPerOrder: dayHasPerOrder,
     })
