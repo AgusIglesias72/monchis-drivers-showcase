@@ -5,6 +5,7 @@ import { FormDocumentsStatus, WhatsAppMessageSource, WhatsAppMessageType } from 
 import { NextResponse } from 'next/server'
 import { after } from 'next/server'
 import { sendTemplateByKey } from '@/lib/services/whatsapp-messenger.service'
+import { resetMessageFrequency } from '@/lib/services/messaging-frequency.service'
 import { requireAdminApi } from '@/lib/auth'
 
 const POSTULACION_APROBADA_TEMPLATE_KEY = 'capacitaciones'
@@ -89,6 +90,16 @@ export async function PATCH(
       })
 
       if (lockResult.count === 1) {
+        // Conversión: reseteamos el backoff del funnel al aprobar para que el
+        // nudge SCHEDULE_CAPACITACION del cron caiga a 1 día y no arrastre los
+        // 30-90 días acumulados en etapas previas. Corre una sola vez (lock).
+        await resetMessageFrequency(updatedDriver.id).catch((err) => {
+          console.error('[DOC_APPROVE] resetMessageFrequency falló', {
+            driverId: updatedDriver.id,
+            err,
+          })
+        })
+
         const driverForNotify = updatedDriver
         after(async () => {
           try {

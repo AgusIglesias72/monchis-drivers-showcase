@@ -36,6 +36,8 @@ export interface BookingConfirmationData {
   instructions: string | null
   confirmationToken: string
   appBaseUrl: string
+  /** true si es una reprogramación (cambia el copy de "reservada" a "reagendada"). */
+  isReschedule?: boolean
 }
 
 export async function sendBookingConfirmation(data: BookingConfirmationData): Promise<void> {
@@ -63,7 +65,9 @@ export async function sendBookingConfirmation(data: BookingConfirmationData): Pr
       from: NOTIFICATIONS_CONFIG.from,
       to: [data.driverEmail],
       replyTo: NOTIFICATIONS_CONFIG.replyTo,
-      subject: `Tu capacitación ${data.ruleTitle} está confirmada`,
+      subject: data.isReschedule
+        ? `Tu capacitación ${data.ruleTitle} fue reagendada`
+        : `Tu capacitación ${data.ruleTitle} está confirmada`,
       html,
     })
   } catch (err) {
@@ -88,6 +92,8 @@ export interface BookingConfirmationWhatsAppData {
   meetingLink: string | null
   confirmationToken: string
   appBaseUrl: string
+  /** true si es una reprogramación (cambia el copy de "reservada" a "reagendada"). */
+  isReschedule?: boolean
 }
 
 /**
@@ -126,7 +132,9 @@ export async function sendBookingConfirmationWhatsApp(
   }
 
   const lines = [
-    `¡Buenas ${nombre}! Tu capacitación quedó reservada.`,
+    data.isReschedule
+      ? `¡Listo ${nombre}! Reagendamos tu capacitación.`
+      : `¡Buenas ${nombre}! Tu capacitación quedó reservada.`,
     '',
     `Cuándo: ${fecha}, de ${data.startTime} a ${data.endTime}`,
     dondeLine,
@@ -148,7 +156,7 @@ export async function sendBookingConfirmationWhatsApp(
       formDriverId: data.formDriverId,
       source: WhatsAppMessageSource.TRIGGER,
       metadata: {
-        flow: 'booking_confirmation',
+        flow: data.isReschedule ? 'booking_reschedule' : 'booking_confirmation',
         confirmationToken: data.confirmationToken,
         ruleTitle: data.ruleTitle,
       },
@@ -156,5 +164,52 @@ export async function sendBookingConfirmationWhatsApp(
   } catch (err) {
     // No relanzamos: la reserva ya quedó creada, el WhatsApp es best-effort.
     console.error('[onboarding-notifications] Failed to send WhatsApp confirmation:', err)
+  }
+}
+
+// ==================== WhatsApp: cancelación de reserva ====================
+
+export interface BookingCancellationWhatsAppData {
+  phoneNumber: string | null
+  driverFirstName: string | null
+  formDriverId: string
+  appBaseUrl: string
+}
+
+/**
+ * Avisa por WhatsApp que la reserva se canceló e invita a reagendar (best-effort).
+ * cancelBooking ya devolvió al driver a onboardingStatus=READY, así que el link a
+ * /capacitaciones lo deja re-reservar. Devuelve true si se envió (para que el
+ * caller registre el envío en el control de frecuencia y el cron no duplique).
+ */
+export async function sendBookingCancellationWhatsApp(
+  data: BookingCancellationWhatsAppData,
+): Promise<boolean> {
+  if (!data.phoneNumber) return false
+
+  const nombre = data.driverFirstName?.trim() || 'Hola'
+  const message = [
+    `Hola ${nombre}, cancelamos tu reserva de la capacitación de Monchis.`,
+    '',
+    'Cuando quieras podés elegir un nuevo día acá:',
+    `${data.appBaseUrl}/capacitaciones`,
+    '',
+    'Cualquier duda, respondé este mensaje.',
+  ].join('\n')
+
+  try {
+    const result = await messagesService.sendWhatsAppMessage({
+      phone: data.phoneNumber,
+      name: nombre,
+      type: WhatsAppMessageType.CAPACITACION_CHANGED,
+      customMessage: message,
+      formDriverId: data.formDriverId,
+      source: WhatsAppMessageSource.TRIGGER,
+      metadata: { flow: 'booking_cancellation' },
+    })
+    return result.success
+  } catch (err) {
+    console.error('[onboarding-notifications] Failed to send WhatsApp cancellation:', err)
+    return false
   }
 }

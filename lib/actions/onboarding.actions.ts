@@ -2,9 +2,13 @@
 'use server'
 
 import { auth } from '@clerk/nextjs/server'
+import { after } from 'next/server'
 import { onboardingService } from '@/lib/services/onboarding.service'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
+import { sendTemplateByKey } from '@/lib/services/whatsapp-messenger.service'
+import { recordMessageSent } from '@/lib/services/messaging-frequency.service'
+import { WhatsAppMessageSource, WhatsAppMessageType } from '@prisma/client'
 import type { 
   OnboardingEventStatus,
   OnboardingAttendeeStatus,
@@ -592,7 +596,7 @@ export async function markAttendeeNoShow(attendeeId: string) {
       throw new Error('No autorizado')
     }
 
-    const attendee = await onboardingService.markNoShow(attendeeId)
+    const attendee = await onboardingService.markNoShow(attendeeId, userId)
 
     // Log de auditoría
     await prisma.auditLog.create({
@@ -607,6 +611,42 @@ export async function markAttendeeNoShow(attendeeId: string) {
         metadata: { attendeeId }
       }
     })
+
+    // Re-enganche best-effort: avisamos por WhatsApp que no asistió y puede
+    // reagendar. markNoShow ya reseteó el backoff; registramos este envío con
+    // recordMessageSent para fijar el próximo noContactBefore y que el cron no
+    // duplique el mensaje el mismo día. Si el template está inactivo, se skipea
+    // sin romper la action.
+    const driver = attendee.formDriver
+    if (driver?.phoneNumber) {
+      after(async () => {
+        try {
+          const result = await sendTemplateByKey(
+            {
+              id: driver.id,
+              phoneNumber: driver.phoneNumber,
+              firstName: null,
+              lastName: null,
+              fullName: driver.fullName,
+            },
+            'capacitacion_no_show',
+            {
+              source: WhatsAppMessageSource.TRIGGER,
+              messageType: WhatsAppMessageType.CAPACITATION_NO_SHOW,
+              step: 'no_show_reenganche',
+            },
+          )
+          if (result.status === 'sent') {
+            await recordMessageSent(driver.id).catch(() => undefined)
+          }
+        } catch (err) {
+          console.error('[NO_SHOW] Error enviando re-enganche WhatsApp', {
+            driverId: driver.id,
+            error: err instanceof Error ? err.message : err,
+          })
+        }
+      })
+    }
 
     revalidatePath('/admin/onboarding')
     revalidatePath(`/admin/postulaciones/${attendee.formDriver.id}`)

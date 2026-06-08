@@ -85,6 +85,21 @@ Confirmanos tu asistencia respondiendo este mensaje. ¡Te esperamos!`,
     category: 'capacitacion',
     order: 5,
   },
+  {
+    key: 'capacitacion_no_show',
+    name: 'No asistió a la capacitación - reagendar',
+    description:
+      'Se dispara al marcar no-show. Invita al postulante a volver a elegir un día.',
+    content: `Hola {nombre},
+
+Vimos que no pudiste venir a tu capacitación de Monchis. ¡No pasa nada!
+
+Podés elegir un nuevo día acá: https://monchisdrivers.com/capacitaciones
+
+Te identificás con tu cédula y los últimos 4 dígitos de tu teléfono, y reservás el día que mejor te quede. Cualquier duda, respondé este mensaje.`,
+    category: 'capacitacion',
+    order: 6,
+  },
 ]
 
 // Keys que ya no usamos — se borran de la DB al correr con SEED_FORCE para

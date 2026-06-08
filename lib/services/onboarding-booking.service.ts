@@ -344,11 +344,18 @@ export async function cancelBooking(token: string, reason?: string): Promise<{ o
         version: { increment: 1 },
       },
     })
+    // Volvemos a READY (no CANCELLED): un onboardingStatus=CANCELLED dejaba al
+    // postulante fuera del re-enganche del cron (el resolver solo contacta
+    // null/NOT_READY/READY) → cancelar era un callejón sin salida. Reseteamos
+    // también el backoff para que el cron lo invite a reagendar pronto. El
+    // mensaje inmediato de cancelación lo manda la ruta (best-effort).
     await tx.formDriver.update({
       where: { id: attendee.formDriverId },
       data: {
-        onboardingStatus: 'CANCELLED',
+        onboardingStatus: 'READY',
         onboardingScheduledAt: null,
+        messagesSentCount: 0,
+        noContactBefore: null,
       },
     })
   })

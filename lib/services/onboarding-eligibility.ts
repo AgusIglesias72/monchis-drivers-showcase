@@ -42,6 +42,31 @@ const APPROVED_FORM_DRIVER_STATUSES = new Set<FormDriverStatus>([
   'ACTIVE',
 ])
 
+/**
+ * "Postulación aprobada" a efectos de agendar: cédula Y antecedentes tienen al
+ * menos un documento APPROVED. Equivale a los estados verde/azul del filtro
+ * "Pendiente de Agendar" del admin (el cert. tributario solo separa verde de
+ * azul, no condiciona el agendamiento).
+ *
+ * Sirve para el bypass del mensaje "te faltan documentos": un postulante con los
+ * core docs aprobados pero con el `documentsStatus` agregado en PENDING/IN_REVIEW
+ * (p.ej. tributario pendiente = azul) NO debe recibir el recordatorio de
+ * documentos — ya está listo para agendar.
+ */
+export function hasCoreDocsApproved(
+  documents: Array<{ documentType: string; status: string }>,
+): boolean {
+  const cedulaOk = documents.some(
+    (d) => d.documentType === 'CEDULA' && d.status === 'APPROVED',
+  )
+  const antecedentesOk = documents.some(
+    (d) =>
+      (d.documentType === 'CRIMINAL_RECORD' || d.documentType === 'ANTECEDENTES') &&
+      d.status === 'APPROVED',
+  )
+  return cedulaOk && antecedentesOk
+}
+
 export function checkEligibility(input: EligibilityInput): EligibilityResult {
   if (input.status === 'REJECTED') {
     return { isEligible: false, reason: 'Tu postulación fue rechazada' }

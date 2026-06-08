@@ -16,6 +16,7 @@ import {
   WhatsAppMessageType,
 } from '@prisma/client'
 import { sendTemplateByKey } from '@/lib/services/whatsapp-messenger.service'
+import { resetMessageFrequency } from '@/lib/services/messaging-frequency.service'
 
 const POSTULACION_APROBADA_TEMPLATE_KEY = 'capacitaciones'
 
@@ -101,6 +102,15 @@ export async function approveAllDocumentsForDriver(
   }
 
   result.notificationTriggered = true
+
+  // Conversión: al transicionar a APPROVED, reseteamos el reloj de backoff del
+  // funnel. Sin esto, el postulante llega a "aprobado, solo falta agendar"
+  // arrastrando el messagesSentCount de etapas previas (form, docs, pago) y el
+  // próximo nudge SCHEDULE_CAPACITACION del cron caería a 30-90 días en vez de a
+  // 1 día. El lock approvalNotifiedAt garantiza que esto corra una sola vez.
+  await resetMessageFrequency(driverId).catch((err) => {
+    console.error('[document-approval] resetMessageFrequency falló', { driverId, err })
+  })
 
   try {
     const sendResult = await sendTemplateByKey(

@@ -9,7 +9,9 @@
 //   - app/api/form/complete/route.ts
 //   - app/api/postulaciones/documents/[id]/approve/route.ts
 //   - app/api/cron/send-daily-reminders/route.ts
+//   - app/api/cron/send-session-reminders/route.ts
 //   - lib/actions/whatsapp-approval-trigger.actions.ts
+//   - lib/actions/onboarding.actions.ts (no-show)
 //   - lib/services/document-approval.service.ts
 
 export interface SystemTemplateKey {
@@ -29,7 +31,7 @@ export const SYSTEM_TEMPLATE_KEYS: SystemTemplateKey[] = [
   {
     key: 'capacitaciones',
     trigger: 'Documentos aprobados — agendar capacitación (autoagendamiento)',
-    source: 'API documents/approve + cron + acción manual',
+    source: 'API documents/approve + cron reengage-scheduling (Pendiente de Agendar) + acción manual',
   },
   {
     key: 'form_incomplete',
@@ -43,8 +45,13 @@ export const SYSTEM_TEMPLATE_KEYS: SystemTemplateKey[] = [
   },
   {
     key: 'capacitacion_reminder',
-    trigger: 'Cron: recordatorio de capacitación próxima',
-    source: 'Cron diario',
+    trigger: 'Cron: recordatorio de capacitación próxima (anclado a la fecha de la sesión)',
+    source: 'Cron send-session-reminders (horario)',
+  },
+  {
+    key: 'capacitacion_no_show',
+    trigger: 'El postulante no asistió a su capacitación — invitación a reagendar',
+    source: 'Acción markAttendeeNoShow (admin) + cron reengage-scheduling (No Asistieron)',
   },
 ]
 

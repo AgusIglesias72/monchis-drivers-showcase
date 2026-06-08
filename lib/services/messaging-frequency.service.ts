@@ -3,6 +3,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { addDays } from 'date-fns'
+import { hasCoreDocsApproved } from './onboarding-eligibility'
 
 // ==================== CONSTANTS ====================
 
@@ -149,83 +150,6 @@ export async function recordMessageSent(formDriverId: string): Promise<ContactRe
 }
 
 /**
- * Determina el concepto de mensaje a enviar según el estado actual del postulante.
- * Evalúa el estado del formulario, documentos, pago y capacitación.
- */
-export async function getMessageConcept(formDriverId: string): Promise<MessageConceptResult | null> {
-  const driver = await prisma.formDriver.findUnique({
-    where: { id: formDriverId },
-    select: {
-      status: true,
-      currentStep: true,
-      documentsStatus: true,
-      onboardingStatus: true,
-      equipmentPayments: {
-        select: { status: true },
-        orderBy: { createdAt: 'desc' as const },
-        take: 1,
-      },
-      onboardingAttendances: {
-        where: {
-          status: { in: ['INVITED', 'CONFIRMED', 'SCHEDULED'] },
-        },
-        select: { id: true },
-        take: 1,
-      },
-    },
-  })
-
-  if (!driver) return null
-
-  // 1. Si el formulario no está completado, mensaje según el paso
-  if (driver.status === 'IN_PROGRESS') {
-    switch (driver.currentStep) {
-      case 1:
-        return { concept: 'FORM_STEP_1', description: 'Completar datos personales' }
-      case 2:
-        return { concept: 'FORM_STEP_2', description: 'Completar datos de vehículo' }
-      case 3:
-        return { concept: 'FORM_STEP_3', description: 'Subir documentos requeridos' }
-      case 4:
-        return { concept: 'FORM_STEP_4', description: 'Completar paso final del formulario' }
-      default:
-        return { concept: 'FORM_INCOMPLETE', description: 'Completar formulario de postulación' }
-    }
-  }
-
-  // 2. Si el formulario está completado, evaluar documentos
-  if (driver.documentsStatus === 'CORRECTIONS') {
-    return { concept: 'DOCUMENTS_CORRECTIONS', description: 'Corregir documentos rechazados' }
-  }
-
-  if (driver.documentsStatus === 'PENDING' || driver.documentsStatus === 'IN_REVIEW') {
-    return { concept: 'DOCUMENTS_PENDING', description: 'Documentos en revisión' }
-  }
-
-  // 3. Si documentos están aprobados, evaluar pago
-  const latestPayment = driver.equipmentPayments[0]
-  if (latestPayment && latestPayment.status === 'PENDING') {
-    return { concept: 'PAYMENT_PENDING', description: 'Pago pendiente de verificación' }
-  }
-
-  // 4. Si todo está aprobado, evaluar capacitación
-  if (driver.onboardingStatus === 'SCHEDULED' || driver.onboardingAttendances.length > 0) {
-    return { concept: 'CAPACITACION_REMINDER', description: 'Recordatorio de capacitación agendada' }
-  }
-
-  if (
-    driver.onboardingStatus === null ||
-    driver.onboardingStatus === 'NOT_READY' ||
-    driver.onboardingStatus === 'READY'
-  ) {
-    return { concept: 'SCHEDULE_CAPACITACION', description: 'Agendar capacitación' }
-  }
-
-  // 5. Fallback
-  return { concept: 'GENERAL_FOLLOWUP', description: 'Seguimiento general' }
-}
-
-/**
  * Obtiene los postulantes elegibles para contactar según la frecuencia y estado.
  * Combina el check de noContactBefore con la evaluación del concepto de mensaje.
  *
@@ -281,6 +205,9 @@ export async function getEligibleDriversForContact(limit: number = 20): Promise<
         select: { status: true },
         orderBy: { createdAt: 'desc' },
         take: 1,
+      },
+      documents: {
+        select: { documentType: true, status: true },
       },
       onboardingAttendances: {
         where: {
@@ -341,6 +268,7 @@ function resolveMessageConceptFromData(driver: {
   onboardingStatus: string | null
   equipmentPayments: Array<{ status: string }>
   onboardingAttendances: Array<{ id: string }>
+  documents: Array<{ documentType: string; status: string }>
 }): MessageConceptResult | null {
   // 1. Formulario incompleto
   if (driver.status === 'IN_PROGRESS') {
@@ -358,34 +286,35 @@ function resolveMessageConceptFromData(driver: {
     }
   }
 
-  // 2. Documentos con correcciones
-  if (driver.documentsStatus === 'CORRECTIONS') {
-    return { concept: 'DOCUMENTS_CORRECTIONS', description: 'Corregir documentos rechazados' }
+  // 2. Si ya tiene una reserva activa, NO lo contactamos desde el cron diario:
+  // el recordatorio de la sesión lo manda send-session-reminders.
+  if (driver.onboardingAttendances.length > 0) {
+    return null
   }
 
-  if (driver.documentsStatus === 'PENDING' || driver.documentsStatus === 'IN_REVIEW') {
-    return { concept: 'DOCUMENTS_PENDING', description: 'Documentos en revisión' }
+  // 3. Documentos: SOLO si los core docs (cédula + antecedentes) NO están
+  // aprobados. Si ya están aprobados (verde/azul = "postulación aprobada"), se
+  // bypassea el mensaje de documentos aunque el documentsStatus agregado siga en
+  // PENDING/IN_REVIEW (p.ej. tributario pendiente). A esos los agenda el cron
+  // reengage-scheduling.
+  const coreApproved = hasCoreDocsApproved(driver.documents)
+  if (!coreApproved) {
+    if (driver.documentsStatus === 'CORRECTIONS') {
+      return { concept: 'DOCUMENTS_CORRECTIONS', description: 'Corregir documentos rechazados' }
+    }
+    if (driver.documentsStatus === 'PENDING' || driver.documentsStatus === 'IN_REVIEW') {
+      return { concept: 'DOCUMENTS_PENDING', description: 'Documentos en revisión' }
+    }
   }
 
-  // 3. Pago pendiente
+  // 4. Pago pendiente (paso real aunque los docs estén aprobados).
   const latestPayment = driver.equipmentPayments[0]
   if (latestPayment && latestPayment.status === 'PENDING') {
     return { concept: 'PAYMENT_PENDING', description: 'Pago pendiente de verificación' }
   }
 
-  // 4. Capacitación
-  if (driver.onboardingAttendances.length > 0) {
-    return { concept: 'CAPACITACION_REMINDER', description: 'Recordatorio de capacitación agendada' }
-  }
-
-  if (
-    driver.onboardingStatus === null ||
-    driver.onboardingStatus === 'NOT_READY' ||
-    driver.onboardingStatus === 'READY'
-  ) {
-    return { concept: 'SCHEDULE_CAPACITACION', description: 'Agendar capacitación' }
-  }
-
+  // 5. Agendamiento: lo maneja el cron reengage-scheduling (segmentos "Pendiente
+  // de Agendar" y "No Asistieron"), cada 30 min, no este cron diario.
   return null
 }
 

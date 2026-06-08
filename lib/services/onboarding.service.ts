@@ -763,8 +763,53 @@ class OnboardingService {
   /**
    * Marca un asistente como no show
    */
-  async markNoShow(attendeeId: string) {
-    return await this.updateAttendeeStatus(attendeeId, 'NO_SHOW')
+  /**
+   * Marca un asistente como no-show y lo re-habilita para volver a agendar.
+   *
+   * Antes esto solo cambiaba el status del attendee; el FormDriver quedaba
+   * clavado en onboardingStatus=SCHEDULED, lo que rompía el re-enganche: el cron
+   * de recordatorios nunca volvía a clasificarlo como "necesita agendar". Ahora:
+   *  - status=NO_SHOW + markedNoShowAt/markedNoShowBy (auditoría que antes faltaba)
+   *  - onboardingStatus → NO_SHOW y onboardingScheduledAt → null (queda en el
+   *    bucket "No Asistieron" del admin; el attendee NO_SHOW alimenta el banner
+   *    recentNoShow del portal y el cron reengage-scheduling para re-engancharlo)
+   *  - reset del backoff (messagesSentCount=0, noContactBefore=null) para que el
+   *    cron lo contacte pronto. El mensaje "no viniste, reagendá" lo dispara la
+   *    action (best-effort), ver markAttendeeNoShow.
+   *
+   * Puede volver a reservar: createBooking excluye NO_SHOW de la guarda anti
+   * doble-booking, y al reservar onboardingStatus pasa de nuevo a SCHEDULED.
+   * No tocamos currentCapacity: el evento ya pasó, su cupo no se reutiliza.
+   */
+  async markNoShow(attendeeId: string, markedBy?: string) {
+    return await prisma.$transaction(async (tx) => {
+      const attendee = await tx.onboardingAttendee.update({
+        where: { id: attendeeId },
+        data: {
+          status: 'NO_SHOW',
+          markedNoShowAt: new Date(),
+          markedNoShowBy: markedBy ?? null,
+        },
+        include: {
+          event: {
+            select: { id: true, title: true, scheduledDate: true, startTime: true, location: true },
+          },
+          formDriver: { select: { id: true, fullName: true, phoneNumber: true, email: true } },
+        },
+      })
+
+      await tx.formDriver.update({
+        where: { id: attendee.formDriverId },
+        data: {
+          onboardingStatus: 'NO_SHOW',
+          onboardingScheduledAt: null,
+          messagesSentCount: 0,
+          noContactBefore: null,
+        },
+      })
+
+      return attendee
+    })
   }
 
   /**
