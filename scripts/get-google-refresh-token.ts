@@ -5,6 +5,51 @@ import { parse } from 'url';
 import open from 'open'; // npm install open
 import 'dotenv/config';
 
+// URL del endpoint que persiste el token en la DB (prod por defecto, o
+// override con TOKEN_PUBLISH_URL para apuntar a dev/staging). Si está vacío,
+// no publica y solo imprime el token.
+const PUBLISH_URL =
+  process.env.TOKEN_PUBLISH_URL ||
+  'https://admin.monchis-drivers.com/api/admin/google-oauth/refresh-token';
+const CRON_SECRET = process.env.CRON_SECRET;
+
+async function publishTokenToServer(refreshToken: string): Promise<void> {
+  if (!CRON_SECRET) {
+    console.log(
+      '⚠️  CRON_SECRET no está en .env — el token NO se publicó al servidor.',
+    );
+    console.log('   Pegalo a mano en `.env` de cada entorno, o configurá CRON_SECRET.\n');
+    return;
+  }
+  try {
+    console.log(`\n📡 Publicando token a ${PUBLISH_URL} ...`);
+    const res = await fetch(PUBLISH_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${CRON_SECRET}`,
+      },
+      body: JSON.stringify({
+        refreshToken,
+        rotatedBy: `script:${process.env.USER || 'unknown'}`,
+      }),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      console.error(`❌ Servidor respondió ${res.status}: ${text}`);
+      console.log('   Vas a tener que pegarlo a mano en `.env`.\n');
+      return;
+    }
+    console.log('✅ Token publicado en DB — todos los entornos lo van a usar.');
+  } catch (err) {
+    console.error(
+      '❌ Error publicando token:',
+      err instanceof Error ? err.message : err,
+    );
+    console.log('   Vas a tener que pegarlo a mano en `.env`.\n');
+  }
+}
+
 const PORT = 3000;
 const REDIRECT_URI = `http://localhost:${PORT}/oauth/callback`;
 
@@ -106,15 +151,24 @@ async function getRefreshToken() {
 
           console.log('\n✅ Tokens obtenidos exitosamente!\n');
           console.log('='.repeat(80));
-          console.log('📋 AGREGA ESTA LÍNEA A TU .env:');
+          console.log('📋 NUEVO REFRESH TOKEN:');
           console.log('='.repeat(80));
           console.log(`\nGOOGLE_OAUTH_REFRESH_TOKEN="${tokens.refresh_token}"\n`);
           console.log('='.repeat(80));
+
+          // Publicar a producción automáticamente (si está configurado).
+          // El endpoint guarda el token en DB y todos los entornos lo leen
+          // desde ahí — así ya no hace falta editar `.env` en Vercel/Railway.
+          await publishTokenToServer(tokens.refresh_token);
+
           console.log('\n💡 Información adicional:\n');
           console.log(`Token Type: ${tokens.token_type}`);
           console.log(`Scopes: Drive + Gmail`);
-          console.log(`\n✨ El refresh token NO expira\n`);
-          
+          console.log(
+            `\nℹ️  Modo Testing en GCP: el token caduca a los ~7 días.\n` +
+            `   El cron /api/cron/refresh-google-token mandará Slack cuando empiece a fallar.\n`
+          );
+
           server.close();
           process.exit(0);
         } catch (error: any) {

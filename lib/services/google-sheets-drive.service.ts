@@ -4,6 +4,7 @@
 import { google } from 'googleapis';
 import * as fs from 'fs';
 import { Readable } from 'stream';
+import { getRefreshToken } from './google-oauth-token.service';
 
 export interface ExternalDriver {
   nombre: string;
@@ -75,23 +76,37 @@ export async function getExternalDrivers(
 // GOOGLE DRIVE - OAUTH
 // ============================================================================
 
-let cachedOAuthClient: any = null;
+// Cache del cliente OAuth atado al refresh_token con el que fue creado.
+// Si el token rota (vía /api/admin/google-oauth/refresh-token), el helper
+// de tokens devuelve uno nuevo y acá lo detectamos para recrear el cliente.
+let cachedOAuthClient: { client: any; token: string } | null = null;
 
 /**
  * Obtiene cliente OAuth para Google Drive
  * Usa el token guardado en la base de datos o variables de entorno
  */
 async function getDriveAuth() {
-  if (cachedOAuthClient) {
-    return cachedOAuthClient;
-  }
 
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN; // Nuevo!
+  // El token vive en DB (`google_oauth_credential`) con fallback a env.
+  // Ver lib/services/google-oauth-token.service.ts.
+  const refreshToken = await getRefreshToken();
 
   if (!clientId || !clientSecret) {
     throw new Error('Falta GOOGLE_OAUTH_CLIENT_ID o GOOGLE_OAUTH_CLIENT_SECRET en .env');
+  }
+
+  if (!refreshToken) {
+    throw new Error(
+      'Falta refresh token de Google. ' +
+      'Ejecutá `npm run auth:google` para regenerarlo (se publica solo a la DB).'
+    );
+  }
+
+  // Reutilizamos el cliente sólo si fue creado con el token actual.
+  if (cachedOAuthClient && cachedOAuthClient.token === refreshToken) {
+    return cachedOAuthClient.client;
   }
 
   const oauth2Client = new google.auth.OAuth2(
@@ -100,21 +115,13 @@ async function getDriveAuth() {
     'http://localhost:3000' // No se usa en producción
   );
 
-  if (refreshToken) {
-    // Si tenemos refresh token, usarlo directamente
-    oauth2Client.setCredentials({
-      refresh_token: refreshToken,
-    });
-    
-    // El cliente auto-refrescará el access token cuando sea necesario
-    cachedOAuthClient = oauth2Client;
-    return oauth2Client;
-  }
+  oauth2Client.setCredentials({
+    refresh_token: refreshToken,
+  });
 
-  throw new Error(
-    'Falta GOOGLE_OAUTH_REFRESH_TOKEN en .env. ' +
-    'Ejecuta: npm run auth:google para obtener el token'
-  );
+  // El cliente auto-refrescará el access token cuando sea necesario.
+  cachedOAuthClient = { client: oauth2Client, token: refreshToken };
+  return oauth2Client;
 }
 
 /**

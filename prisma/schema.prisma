@@ -1261,6 +1261,22 @@ model TurnosShiftEvent {
   @@map("turnos_shift_event")
 }
 
+// Refresh token vigente de Google OAuth (singleton: id = "default").
+// Persistido en DB para que `scripts/get-google-refresh-token.ts` lo suba
+// una sola vez y todos los entornos lo lean sin editar `.env` por entorno.
+// Ver `lib/services/google-oauth-token.service.ts` para el resolver.
+model GoogleOAuthCredential {
+  id           String    @id @default("default")
+  refreshToken String    @map("refresh_token")
+  rotatedAt    DateTime  @default(now()) @map("rotated_at")
+  lastUsedAt   DateTime? @map("last_used_at")
+  lastError    String?   @map("last_error")
+  lastErrorAt  DateTime? @map("last_error_at")
+  rotatedBy    String?   @map("rotated_by")
+
+  @@map("google_oauth_credential")
+}
+
 // ==================== ENUMS ====================
 
 enum JobType {

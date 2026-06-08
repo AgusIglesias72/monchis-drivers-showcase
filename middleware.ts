@@ -22,6 +22,10 @@ const isPublicRoute = createRouteMatcher([
   '/api/reports/process-all(.*)',
   '/api/reports/upload-only(.*)',
   '/api/bonuses(.*)',
+  // Endpoint de rotación de refresh_token: se llama desde el script local
+  // con Bearer CRON_SECRET. La auth se valida en el handler vía
+  // requireAdminOrCron (acepta admin Clerk O Bearer).
+  '/api/admin/google-oauth(.*)',
 ])
 
 export default clerkMiddleware(async (auth, req) => {
