@@ -15,6 +15,7 @@ import {
   type StateStyle,
   styleForHistory,
 } from "@/lib/services/pedidos-states"
+import { formatAdminChangedState } from "@/lib/utils/pedidos-format"
 import { parseOrderInstant } from "@/lib/utils/pedidos-time"
 import { cn } from "@/lib/utils"
 import type { RawHistoryEntry } from "@/lib/types/pedidos.types"
@@ -125,7 +126,9 @@ export function PedidoTimeline({
               isHistory &&
               step.entry.request_state === "PENDING" &&
               (step.entry.drivers_by_id || []).length === 0
-            const adminChanged = isHistory ? step.entry.admin_changed_state : null
+            const adminChanged = isHistory
+              ? formatAdminChangedState(step.entry.admin_changed_state)
+              : null
             const lat = isHistory ? step.entry.latitude : null
             const lng = isHistory ? step.entry.longitude : null
             const rawState = isHistory ? step.entry.request_state : step.rawState
@@ -217,7 +220,7 @@ export function PedidoTimeline({
                   {adminChanged && (
                     <div className="mt-1 inline-flex items-center gap-1 rounded bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-fuchsia-900">
                       <ShieldCheck className="h-3 w-3" />
-                      Cambio admin
+                      Cambio admin{adminChanged !== "sí" ? ` · ${adminChanged}` : ""}
                     </div>
                   )}
 

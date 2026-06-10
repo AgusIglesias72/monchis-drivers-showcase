@@ -4,6 +4,7 @@ import type {
   RawHistoryEntry,
   RawOrder,
 } from "@/lib/types/pedidos.types"
+import { formatAdminChangedState } from "@/lib/utils/pedidos-format"
 import { parseApiInstant } from "@/lib/utils/pedidos-time"
 
 const ts = parseApiInstant
@@ -154,7 +155,7 @@ export function buildMapPoints(order: RawOrder): MapPoint[] {
       driverNames: h.drivers_by_name || [],
       index: idx + 1,
       hasDriver: (h.drivers_by_id || []).length > 0,
-      adminChangedState: h.admin_changed_state ?? null,
+      adminChangedState: formatAdminChangedState(h.admin_changed_state),
       prevDate: idx > 0 ? histories[idx - 1].date : null,
     })
   })

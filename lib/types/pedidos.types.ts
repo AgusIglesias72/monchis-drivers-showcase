@@ -8,6 +8,12 @@ export type RequestState =
   | "CANCELLED"
   | string
 
+// admin_changed_state llega como objeto {admin: email, reason, admin_id} en
+// los datos reales (el string suelto no se observó nunca, pero lo toleramos).
+export type RawAdminChangedState =
+  | string
+  | { admin?: string | null; reason?: string | null; admin_id?: string | null }
+
 export interface RawHistoryEntry {
   date: string
   request_state: RequestState
@@ -15,7 +21,7 @@ export interface RawHistoryEntry {
   longitude: number | null
   drivers_by_id?: string[]
   drivers_by_name?: string[]
-  admin_changed_state?: string | null
+  admin_changed_state?: RawAdminChangedState | null
 }
 
 export interface RawLocation {
