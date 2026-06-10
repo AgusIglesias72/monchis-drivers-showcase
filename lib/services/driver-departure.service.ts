@@ -415,8 +415,12 @@ function formatDwell(seconds: number): string {
 
 // Mensaje mrkdwn con los eventos de la corrida: quién se fue de dónde sin
 // marcar qué, con link al pedido para actuar en el momento.
+// Los links del admin van al dominio vercel.app (pedido del usuario), no a
+// NEXT_PUBLIC_APP_URL que es el dominio público de landing/emails/WhatsApp.
+const ADMIN_LINKS_BASE_URL = "https://driversmonchis.vercel.app"
+
 function buildDepartureSlackMessage(events: DepartureEventDraft[]): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.monchisdrivers.com"
+  const appUrl = ADMIN_LINKS_BASE_URL
   const lines = events.map((e) => {
     const order = e.externalOrderId ? `#${e.externalOrderId}` : `…${e.requestId.slice(-6)}`
     const detail =
