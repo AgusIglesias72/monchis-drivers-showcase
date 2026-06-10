@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation"
 import Image from "next/image"
 import { useUser, useClerk } from "@clerk/nextjs"
 import {
+  AlertTriangle,
   LayoutDashboard,
   UserPlus,
   Users,
@@ -112,6 +113,11 @@ const menuItems = [
         title: "Pedidos",
         url: "/admin/gestion/pedidos",
         icon: ShoppingBag,
+      },
+      {
+        title: "Anomalías",
+        url: "/admin/gestion/anomalias",
+        icon: AlertTriangle,
       },
       {
         title: "Drivers",

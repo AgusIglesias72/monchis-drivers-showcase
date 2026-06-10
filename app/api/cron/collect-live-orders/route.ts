@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/auth"
 import { LIVE_CAPTURE_CONFIG } from "@/lib/config/live-capture.config"
 import { prisma } from "@/lib/prisma"
+import { pruneDepartureData } from "@/lib/services/driver-departure.service"
 import { captureLiveOrders } from "@/lib/services/live-panel.service"
 import { sendSlackMessage } from "@/lib/services/slack.service"
 
@@ -38,6 +39,7 @@ export async function GET(request: NextRequest) {
   console.log(
     `✅ [CRON collect-live-orders] seen=${result.idsSeen} new=${result.idsNewEnqueued} ` +
       `pending=${result.pendingCount} delayed=${result.delayedCount} active=${result.activeCount} ` +
+      `tracked=${result.departures.tracked} departureEvents=${result.departures.eventsCreated} ` +
       `errors=${result.errors.length} (${result.durationMs}ms)`,
   )
 
@@ -53,6 +55,7 @@ export async function GET(request: NextRequest) {
 
   // Poda horaria (al minuto 0) para no acumular snapshots indefinidamente.
   let pruned = 0
+  let prunedDepartures = { samples: 0, events: 0, tracking: 0 }
   if (new Date().getUTCMinutes() === 0) {
     const cutoff = new Date(
       Date.now() - LIVE_CAPTURE_CONFIG.retentionDays * 24 * 60 * 60 * 1000,
@@ -61,12 +64,18 @@ export async function GET(request: NextRequest) {
       where: { fetchedAt: { lt: cutoff } },
     })
     pruned = del.count
+    try {
+      prunedDepartures = await pruneDepartureData()
+    } catch (err) {
+      console.error("[collect-live-orders] prune departures error:", err)
+    }
   }
 
   return NextResponse.json({
     success: !result.allEndpointsFailed,
     ...result,
     pruned,
+    prunedDepartures,
     timestamp: new Date().toISOString(),
   })
 }

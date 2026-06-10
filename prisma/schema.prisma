@@ -1137,6 +1137,97 @@ model LiveCaptureRun {
   @@map("live_capture_run")
 }
 
+// ==================== GESTIÓN ADMIN: DETECCIÓN DE SALIDAS SIN ACCIÓN ====================
+
+// Muestra por minuto de la posición del driver vs origin/destination de cada
+// orden activa con driver, tomada en el cron `collect-live-orders`. Solo para
+// debug/tuning de umbrales de detección (distribución real de distancias).
+// Retención corta (DEPARTURE_DETECTION_CONFIG.sampleRetentionDays).
+model LiveOrderSample {
+  id            Int      @id @default(autoincrement())
+  fetchedAt     DateTime @default(now()) @map("fetched_at")
+  requestId     String   @map("request_id")
+  driverId      String   @map("driver_id")
+  state         String // ACCEPTED | WAITING_ORDER | DELIVERY | OUTSIDE
+  driverLat     Float?   @map("driver_lat")
+  driverLng     Float?   @map("driver_lng")
+  distOriginM   Int?     @map("dist_origin_m")
+  distDestM     Int?     @map("dist_dest_m")
+  positionStale Boolean  @default(false) @map("position_stale") // GPS null o congelado
+
+  @@index([requestId, fetchedAt])
+  @@index([fetchedAt])
+  @@map("live_order_sample")
+}
+
+// Estado de la máquina de proximidad por orden activa (1 fila por requestId).
+// El cron la reescribe completa cada corrida (es el único escritor); cuando la
+// orden desaparece del feed activo la fila queda huérfana y la poda horaria la
+// borra (lastSeenAt < now - trackingStaleMs).
+model LiveOrderTracking {
+  requestId       String  @id @map("request_id")
+  driverId        String  @map("driver_id")
+  externalOrderId String? @map("external_order_id")
+  driverName      String? @map("driver_name")
+  branchName      String? @map("branch_name") // origin.name
+  destAddress     String? @map("dest_address") // destination.address
+  zoneName        String? @map("zone_name")
+
+  lastState     String    @map("last_state")
+  lastSeenAt    DateTime  @map("last_seen_at")
+  lastDriverLat Float?    @map("last_driver_lat")
+  lastDriverLng Float?    @map("last_driver_lng")
+
+  // Lado origin (comercio): se evalúa mientras la orden está en ACCEPTED/WAITING_ORDER.
+  originNearStreak      Int       @default(0) @map("origin_near_streak")
+  originFarStreak       Int       @default(0) @map("origin_far_streak")
+  originArrivedAt       DateTime? @map("origin_arrived_at")
+  originLeftCandidateAt DateTime? @map("origin_left_candidate_at")
+  originEventEmitted    Boolean   @default(false) @map("origin_event_emitted")
+  originResolved        Boolean   @default(false) @map("origin_resolved") // transicionó a DELIVERY+ a tiempo
+
+  // Lado destination (cliente): se evalúa mientras la orden está en DELIVERY/OUTSIDE.
+  destNearStreak      Int       @default(0) @map("dest_near_streak")
+  destFarStreak       Int       @default(0) @map("dest_far_streak")
+  destArrivedAt       DateTime? @map("dest_arrived_at")
+  destLeftCandidateAt DateTime? @map("dest_left_candidate_at")
+  destEventEmitted    Boolean   @default(false) @map("dest_event_emitted")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([lastSeenAt])
+  @@map("live_order_tracking")
+}
+
+// Evento detectado: el driver llegó a un lugar y se fue sin marcar la acción
+// esperada (salió del comercio sin marcar DELIVERY / se fue del cliente sin
+// marcar FINALIZED). Único por (requestId, type). Se muestra en
+// /admin/gestion/anomalias. Retención eventRetentionDays.
+model DriverDepartureEvent {
+  id                   Int      @id @default(autoincrement())
+  type                 String // LEFT_ORIGIN_WITHOUT_DELIVERY | LEFT_DESTINATION_WITHOUT_FINALIZE
+  requestId            String   @map("request_id")
+  externalOrderId      String?  @map("external_order_id")
+  driverId             String   @map("driver_id")
+  driverName           String?  @map("driver_name")
+  branchName           String?  @map("branch_name")
+  placeName            String?  @map("place_name") // comercio o dirección del cliente según type
+  zoneName             String?  @map("zone_name")
+  stateAtEvent         String   @map("state_at_event")
+  arrivedAt            DateTime @map("arrived_at")
+  leftAt               DateTime @map("left_at") // primera muestra fuera de leaveRadius
+  detectedAt           DateTime @default(now()) @map("detected_at") // confirmación (streak completo)
+  dwellSeconds         Int      @map("dwell_seconds") // leftAt - arrivedAt
+  distanceAtDetectionM Int      @map("distance_at_detection_m")
+  otherPlaceDistanceM  Int?     @map("other_place_distance_m") // dist al otro punto (contexto comercio≈cliente)
+
+  @@unique([requestId, type])
+  @@index([detectedAt])
+  @@index([driverId])
+  @@index([type, detectedAt])
+  @@map("driver_departure_event")
+}
+
 // ==================== GESTIÓN ADMIN: PEDIDOS CACHE ====================
 
 // Cache de detalle de pedidos consultados desde la API externa de Monchis

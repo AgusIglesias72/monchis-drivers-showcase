@@ -2,6 +2,7 @@ import "server-only"
 
 import { LIVE_PANEL_CONFIG } from "@/lib/config/live-panel.config"
 import { prisma } from "@/lib/prisma"
+import { detectDriverDepartures } from "@/lib/services/driver-departure.service"
 import { enqueueOrderImports } from "@/lib/services/pedidos-import-queue.service"
 import { pyLocalIsoToRealIso } from "@/lib/utils/pedidos-time"
 import type {
@@ -410,6 +411,7 @@ export interface CaptureLiveOrdersResult {
   idsSeen: number
   idsNewEnqueued: number
   zonesTotalRequest: number
+  departures: { tracked: number; samples: number; eventsCreated: number }
   errors: { source: string; message: string }[]
   allEndpointsFailed: boolean
   durationMs: number
@@ -432,6 +434,17 @@ export async function captureLiveOrders(): Promise<CaptureLiveOrdersResult> {
     } catch (err) {
       console.error("[capture-live] enqueue error:", err)
     }
+  }
+
+  // Detección de salidas sin acción (driver se va sin marcar estado).
+  // Fail-safe: si falla, la captura sigue. Solo corre acá (cadencia 1/min del
+  // cron); fetchLivePanel() NO la llama para no acelerar los streaks cuando
+  // alguien tiene el panel abierto.
+  let departures = { tracked: 0, samples: 0, eventsCreated: 0 }
+  try {
+    departures = await detectDriverDepartures(active, drivers)
+  } catch (err) {
+    console.error("[capture-live] departure detection error:", err)
   }
 
   const zonesTotalRequest = zones.reduce(
@@ -468,6 +481,7 @@ export async function captureLiveOrders(): Promise<CaptureLiveOrdersResult> {
     idsSeen: ids.length,
     idsNewEnqueued,
     zonesTotalRequest,
+    departures,
     errors,
     allEndpointsFailed,
     durationMs,
