@@ -2,6 +2,7 @@ import "server-only"
 
 import { DEPARTURE_DETECTION_CONFIG } from "@/lib/config/departure-detection.config"
 import { prisma } from "@/lib/prisma"
+import { sendSlackMessage } from "@/lib/services/slack.service"
 import { haversineMeters } from "@/lib/utils/geo"
 import type { LiveDriver, LiveRequest } from "@/lib/types/live-panel.types"
 
@@ -387,10 +388,54 @@ export async function detectDriverDepartures(
             .map((e) => `${e.type} req=${e.requestId} driver=${e.driverName}`)
             .join("; "),
       )
+      // Aviso a Slack para operar en el momento (llamar al driver, etc.).
+      // Fire-and-forget: si Slack falla, la detección igual quedó persistida.
+      try {
+        await sendSlackMessage(buildDepartureSlackMessage(events))
+      } catch (err) {
+        console.error("[departure-detection] slack error:", err)
+      }
     }
   }
 
   return { tracked: nextRows.length, samples: samples.length, eventsCreated }
+}
+
+function formatDwell(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const m = Math.round(seconds / 60)
+  if (m < 60) return `${m}m`
+  return `${Math.floor(m / 60)}h ${m % 60}m`
+}
+
+// Mensaje mrkdwn con los eventos de la corrida: quién se fue de dónde sin
+// marcar qué, con link al pedido para actuar en el momento.
+function buildDepartureSlackMessage(events: DepartureEventDraft[]): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.monchisdrivers.com"
+  const lines = events.map((e) => {
+    const order = e.externalOrderId ? `#${e.externalOrderId}` : `…${e.requestId.slice(-6)}`
+    const detail =
+      e.type === "LEFT_ORIGIN_WITHOUT_DELIVERY"
+        ? `salió de *${e.branchName ?? "comercio"}* sin marcar *En camino*`
+        : `se fue del cliente (${e.placeName ?? "s/d"}) sin marcar *Entregado*`
+    const near =
+      e.otherPlaceDistanceM !== null && e.otherPlaceDistanceM < CFG.leaveRadiusM
+        ? e.type === "LEFT_ORIGIN_WITHOUT_DELIVERY"
+          ? ` (cliente a ${e.otherPlaceDistanceM}m)`
+          : ` (comercio a ${e.otherPlaceDistanceM}m)`
+        : ""
+    return (
+      `• *${e.driverName ?? e.driverId}* ${detail} — ` +
+      `pedido <${appUrl}/admin/gestion/pedidos/${e.requestId}|${order}>` +
+      ` · estuvo ${formatDwell(e.dwellSeconds)} · a ${e.distanceAtDetectionM}m${near}` +
+      (e.zoneName ? ` · ${e.zoneName}` : "")
+    )
+  })
+  return (
+    `🛵 *Salida sin acción detectada* (${events.length})\n` +
+    lines.join("\n") +
+    `\n<${appUrl}/admin/gestion/anomalias|Ver todas las anomalías>`
+  )
 }
 
 // Poda (llamada en el bloque horario del cron, junto a la de LiveCaptureRun).
