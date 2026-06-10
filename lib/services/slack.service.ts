@@ -1,7 +1,8 @@
 import "server-only"
 
-// Notificaciones a Slack vía Incoming Webhook. Una sola URL por ahora
-// (SLACK_WEBHOOK_URL apunta al canal destino). El texto usa mrkdwn de Slack.
+// Notificaciones a Slack vía Incoming Webhook. SLACK_WEBHOOK_URL es el canal
+// default; un caller puede pasar otra URL de webhook (otro canal) por
+// parámetro. El texto usa mrkdwn de Slack.
 const WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || ""
 
 export interface SlackResult {
@@ -9,12 +10,16 @@ export interface SlackResult {
   error?: string
 }
 
-export async function sendSlackMessage(text: string): Promise<SlackResult> {
-  if (!WEBHOOK_URL) {
+export async function sendSlackMessage(
+  text: string,
+  webhookUrl?: string,
+): Promise<SlackResult> {
+  const target = webhookUrl || WEBHOOK_URL
+  if (!target) {
     return { ok: false, error: "SLACK_WEBHOOK_URL no configurado" }
   }
   try {
-    const res = await fetch(WEBHOOK_URL, {
+    const res = await fetch(target, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),

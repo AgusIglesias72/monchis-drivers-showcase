@@ -389,9 +389,14 @@ export async function detectDriverDepartures(
             .join("; "),
       )
       // Aviso a Slack para operar en el momento (llamar al driver, etc.).
-      // Fire-and-forget: si Slack falla, la detección igual quedó persistida.
+      // Va al canal de SLACK_WEBHOOK_ANOMALIAS_URL si está configurado;
+      // si no, cae al canal default (SLACK_WEBHOOK_URL). Fire-and-forget:
+      // si Slack falla, la detección igual quedó persistida.
       try {
-        await sendSlackMessage(buildDepartureSlackMessage(events))
+        await sendSlackMessage(
+          buildDepartureSlackMessage(events),
+          process.env.SLACK_WEBHOOK_ANOMALIAS_URL,
+        )
       } catch (err) {
         console.error("[departure-detection] slack error:", err)
       }
