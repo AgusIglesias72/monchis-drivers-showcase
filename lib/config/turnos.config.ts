@@ -20,6 +20,8 @@ export const TURNOS_ZONE_IDS = [
   "5ffda05415f492000810dd52",
   "67ee7bd3eadac7d84ab73b7c",
   "6243265a4e0dce0009b2353f",
+  "6a2965fa91a91ef8d2218bfb", // San Lorenzo (split de Fdo/San Lorenzo)
+  "6a296adbb3d14bbb342567ae", // Fdo de la Mora (split de Fdo/San Lorenzo)
   "67b3dc2b3d48d4f3e322f189", // Encarnación
   "67db00e442f00c678d2faf48", // Kennedy Encarnación
 ] as const
