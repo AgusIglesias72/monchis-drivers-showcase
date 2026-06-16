@@ -15,12 +15,27 @@ export function uniqueDates(shifts: FlattenedShift[]): string[] {
 // agrupadas al cierre).
 const ZONES_AT_END = ["Encarnación", "Kennedy Encarnación"]
 
+// Pares que ops quiere ver juntos aunque el alfabético los separe: el split de
+// "Fdo/San Lorenzo" debe quedar contiguo (Fdo de la Mora seguido de San Lorenzo).
+// { anchor: zona que mantiene su lugar alfabético, follow: zona que se pega detrás }
+const ADJACENT_PAIRS = [{ anchor: "Fdo de la Mora", follow: "San Lorenzo" }]
+
 export function uniqueZones(shifts: FlattenedShift[]): string[] {
   const all = Array.from(new Set(shifts.map((s) => s.zoneName)))
   const pinned = ZONES_AT_END.filter((z) => all.includes(z))
   const rest = all
     .filter((z) => !ZONES_AT_END.includes(z))
     .sort((a, b) => a.localeCompare(b, "es"))
+
+  // Reubicar cada `follow` justo detrás de su `anchor` (si ambos están presentes).
+  for (const { anchor, follow } of ADJACENT_PAIRS) {
+    const anchorIdx = rest.indexOf(anchor)
+    const followIdx = rest.indexOf(follow)
+    if (anchorIdx === -1 || followIdx === -1) continue
+    rest.splice(followIdx, 1)
+    rest.splice(rest.indexOf(anchor) + 1, 0, follow)
+  }
+
   return [...rest, ...pinned]
 }
 
