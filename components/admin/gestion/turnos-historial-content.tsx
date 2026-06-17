@@ -22,7 +22,6 @@ import { TURNOS_HOURS } from "@/lib/config/turnos.config"
 import {
   computeKpis,
   coversSlot,
-  hourlyAggregates,
   shiftsForDate,
   uniqueDates,
 } from "@/lib/services/turnos-aggregate"
@@ -196,10 +195,6 @@ export function TurnosHistorialContent({ snapshots, initialDetail }: Props) {
     [relevantShifts, effectiveShiftDay],
   )
   const kpis = useMemo(() => computeKpis(dayShifts), [dayShifts])
-  const hourly = useMemo(
-    () => hourlyAggregates(dayShifts, TURNOS_HOURS),
-    [dayShifts],
-  )
   const drawerShifts = useMemo(() => {
     if (!drawerCell) return []
     return dayShifts.filter(
@@ -360,7 +355,7 @@ export function TurnosHistorialContent({ snapshots, initialDetail }: Props) {
               metric={metric}
               onCellClick={(zone, hour) => setDrawerCell({ zone, hour })}
             />
-            <TurnosHourlyChart data={hourly} />
+            <TurnosHourlyChart shifts={dayShifts} hours={TURNOS_HOURS} />
           </>
         )}
 
