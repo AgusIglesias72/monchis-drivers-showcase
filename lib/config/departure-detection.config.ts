@@ -6,14 +6,18 @@
 
 export const DEPARTURE_DETECTION_CONFIG = {
   // "Llegó" = dist <= arriveRadiusM por >= arriveStreak muestras consecutivas.
-  // 150m absorbe ruido GPS urbano (10-50m) + geocoding impreciso del comercio.
-  arriveRadiusM: 150,
+  // 50m exige que el driver realmente haya estado EN el comercio (no solo pasar
+  // cerca / a media cuadra). Trade-off: con geocoding impreciso del comercio o
+  // GPS ruidoso (>50m) puede no registrar la llegada → no flaguea (falso
+  // negativo). Decisión de producto: preferimos no avisar de más.
+  arriveRadiusM: 50,
   // "Se fue" = dist >= leaveRadiusM por >= leaveStreak muestras consecutivas.
-  // La banda muerta 150→350m evita oscilación por jitter de GPS estacionado.
-  // A ~20 km/h de moto, 350m ≈ 1 min de viaje: salida inequívoca.
-  leaveRadiusM: 350,
-  // Con cadencia 1/min, streak 2 ≈ 2 min de evidencia. Mata falsos positivos
-  // de pasadas por la puerta a costa de ~2 min de latencia de detección.
+  // La banda muerta 50→300m evita oscilación por jitter de GPS estacionado.
+  // Solo se evalúa después de confirmar la llegada (≤50m), así que cruzar 300m
+  // es una salida inequívoca del lugar donde el driver estuvo.
+  leaveRadiusM: 300,
+  // Con cadencia 1/min, streak 2 ≈ 1 min de permanencia / evidencia de salida.
+  // "Permaneció al menos un minuto y luego se fue."
   arriveStreak: 2,
   leaveStreak: 2,
   // Estados en los que se evalúa cada lugar. origin = comercio (la acción
