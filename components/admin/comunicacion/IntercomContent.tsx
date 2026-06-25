@@ -957,6 +957,88 @@ function ChatComposer({
 
 // ==================== RICH EDITOR (contentEditable WYSIWYG) ====================
 
+// Shortcodes estilo Slack/GitHub → emoji Unicode. El texto de las comunicaciones
+// se suele copiar desde Slack, donde los emojis viajan como ":wave:". Sin esto
+// quedarían literales en el Messenger del driver. Mapa curado (no exhaustivo);
+// los no mapeados quedan tal cual.
+const EMOJI_SHORTCODES: Record<string, string> = {
+  wave: '👋',
+  rocket: '🚀',
+  moneybag: '💰',
+  money_with_wings: '💸',
+  dollar: '💵',
+  date: '📅',
+  calendar: '📆',
+  telephone_receiver: '📞',
+  phone: '☎️',
+  calling: '📲',
+  iphone: '📱',
+  email: '📧',
+  envelope: '✉️',
+  tada: '🎉',
+  sparkles: '✨',
+  fire: '🔥',
+  star: '⭐',
+  star2: '🌟',
+  bulb: '💡',
+  gift: '🎁',
+  warning: '⚠️',
+  rotating_light: '🚨',
+  bell: '🔔',
+  loudspeaker: '📢',
+  mega: '📣',
+  white_check_mark: '✅',
+  heavy_check_mark: '✔️',
+  x: '❌',
+  '100': '💯',
+  point_right: '👉',
+  point_down: '👇',
+  point_up: '☝️',
+  pushpin: '📌',
+  memo: '📝',
+  package: '📦',
+  car: '🚗',
+  motorcycle: '🏍️',
+  scooter: '🛵',
+  chart_with_upwards_trend: '📈',
+  trophy: '🏆',
+  crown: '👑',
+  gem: '💎',
+  key: '🔑',
+  handshake: '🤝',
+  muscle: '💪',
+  clap: '👏',
+  raised_hands: '🙌',
+  pray: '🙏',
+  ok_hand: '👌',
+  '+1': '👍',
+  thumbsup: '👍',
+  '-1': '👎',
+  thumbsdown: '👎',
+  heart: '❤️',
+  eyes: '👀',
+  smile: '😄',
+  smiley: '😃',
+  grinning: '😀',
+  blush: '😊',
+  wink: '😉',
+  joy: '😂',
+  sweat_smile: '😅',
+  heart_eyes: '😍',
+  sunglasses: '😎',
+  thinking_face: '🤔',
+  hugging_face: '🤗',
+  slightly_smiling_face: '🙂',
+};
+
+// Reemplaza todos los ":shortcode:" reconocidos por su emoji.
+function replaceEmojiShortcodes(text: string): string {
+  return text.replace(/:([a-z0-9_+-]+):/gi, (match, code) => {
+    const emoji = EMOJI_SHORTCODES[String(code).toLowerCase()];
+    return emoji ?? match;
+  });
+}
+
 function RichEditor({
   value,
   onChange,
@@ -1032,10 +1114,11 @@ function RichEditor({
     }
   }
 
-  // Pegado: forzamos plain text para no traer estilos raros del clipboard.
+  // Pegado: forzamos plain text para no traer estilos raros del clipboard y
+  // convertimos shortcodes (:wave:) a emoji, que es como suele venir de Slack.
   function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
     e.preventDefault();
-    const text = e.clipboardData.getData('text/plain');
+    const text = replaceEmojiShortcodes(e.clipboardData.getData('text/plain'));
     document.execCommand('insertText', false, text);
     emitChange();
   }
