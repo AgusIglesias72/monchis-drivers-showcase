@@ -85,6 +85,7 @@ import {
   ChevronRight,
   RefreshCw,
   MapPin,
+  ClipboardList,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -1821,6 +1822,7 @@ interface SegmentDriverDto {
   primaryZone: string | null;
   linked: boolean;
   intercomContactId: string | null;
+  intercomExternalId: string | null;
   shiftCount: number;
   shifts: SegmentShiftDto[];
   workedLastWeekDays: number;
@@ -2033,6 +2035,64 @@ function SegmentsView() {
     [selectableIds],
   );
 
+  // Selección por pegado de IDs (CSV / lista). Matchea cada token contra el
+  // universo cargado por intercomContactId y, como fallback, por driverId. Solo
+  // marca a los vinculados (los únicos que pueden recibir). Suma a la selección
+  // actual (no la reemplaza) y devuelve el resumen para mostrar feedback.
+  const applyPastedIds = useCallback(
+    (raw: string) => {
+      // Ignoramos encabezados típicos de CSV exportado (p.ej. "User ID").
+      const HEADER_TOKENS = new Set([
+        'user',
+        'id',
+        'userid',
+        'driverid',
+        'external_id',
+        'externalid',
+      ]);
+      const tokens = [
+        ...new Set(
+          raw
+            .split(/[\s,;]+/)
+            .map((t) => t.trim().replace(/^["']+|["']+$/g, ''))
+            .filter((t) => t && !HEADER_TOKENS.has(t.toLowerCase())),
+        ),
+      ];
+      // El CSV de churns trae el "User ID" numérico de Monchis = intercomExternalId.
+      // Igual aceptamos intercomContactId (hex) y driverId (ObjectId) como fallback.
+      const lookup = new Map<string, SegmentDriverDto>();
+      if (data) {
+        for (const d of [...data.conTurnos, ...data.sinTurnos]) {
+          lookup.set(d.driverId, d);
+          if (d.intercomExternalId) lookup.set(d.intercomExternalId, d);
+          if (d.intercomContactId) lookup.set(d.intercomContactId, d);
+        }
+      }
+      const matchedIds = new Set<string>();
+      const notFound: string[] = [];
+      const notLinked: string[] = [];
+      for (const tok of tokens) {
+        const d = lookup.get(tok);
+        if (!d) {
+          notFound.push(tok);
+        } else if (!d.linked || !d.intercomContactId) {
+          notLinked.push(tok);
+        } else {
+          matchedIds.add(d.driverId);
+        }
+      }
+      if (matchedIds.size > 0)
+        setSelected((prev) => new Set([...prev, ...matchedIds]));
+      return {
+        matched: matchedIds.size,
+        notFound,
+        notLinked,
+        total: tokens.length,
+      };
+    },
+    [data],
+  );
+
   const selectedDrivers = useMemo<SegmentDriverDto[]>(() => {
     if (!data || selected.size === 0) return [];
     const byId = new Map(
@@ -2242,6 +2302,7 @@ function SegmentsView() {
                 </Button>
               ))}
             </div>
+            <PasteIdsButton onApply={applyPastedIds} />
           </div>
           {selected.size > 0 && (
             <button
@@ -2323,6 +2384,103 @@ function SegmentsView() {
         }}
       />
     </section>
+  );
+}
+
+type PasteResult = {
+  matched: number;
+  notFound: string[];
+  notLinked: string[];
+  total: number;
+};
+
+function PasteIdsButton({
+  onApply,
+}: {
+  onApply: (raw: string) => PasteResult;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [result, setResult] = useState<PasteResult | null>(null);
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setResult(null);
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 px-2 text-xs"
+        >
+          <ClipboardList className="h-3.5 w-3.5" />
+          Pegar IDs
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 space-y-2">
+        <div>
+          <p className="text-sm font-medium">Seleccionar por ID</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Pegá los User ID (columna del CSV de churns), uno por línea o
+            separados por coma. Se marcan los vinculados del universo cargado y
+            se suman a la selección actual.
+          </p>
+        </div>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={5}
+          placeholder={'User ID\n3693715\n6270491'}
+          className="w-full resize-y rounded-md border bg-background p-2 font-mono text-xs outline-none focus:ring-2 focus:ring-ring/40"
+        />
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setText('');
+              setResult(null);
+            }}
+            className="cursor-pointer text-xs text-muted-foreground hover:text-foreground"
+          >
+            Limpiar
+          </button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8"
+            disabled={!text.trim()}
+            onClick={() => setResult(onApply(text))}
+          >
+            Seleccionar
+          </Button>
+        </div>
+        {result && (
+          <div className="space-y-1 rounded-md border bg-muted/40 p-2 text-xs">
+            <div className="flex items-center gap-1.5 text-foreground">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              {result.matched} agregado{result.matched === 1 ? '' : 's'} a la
+              selección
+            </div>
+            {result.notLinked.length > 0 && (
+              <div className="text-amber-600">
+                {result.notLinked.length} sin vincular en Intercom (omitidos)
+              </div>
+            )}
+            {result.notFound.length > 0 && (
+              <div className="text-muted-foreground">
+                {result.notFound.length} no encontrado
+                {result.notFound.length === 1 ? '' : 's'} en el universo cargado
+              </div>
+            )}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
 

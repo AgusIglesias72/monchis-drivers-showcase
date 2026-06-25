@@ -26,6 +26,9 @@ export interface SegmentDriver {
   primaryZone: string | null
   linked: boolean
   intercomContactId: string | null
+  // external_id legacy que Intercom tiene cargado (= User ID numérico de
+  // Monchis). Sirve para matchear listas/CSV de User IDs contra el driver.
+  intercomExternalId: string | null
   shiftCount: number
   shifts: SegmentShift[]
   // Días distintos con asistencia registrada en los últimos 7 días. Relevante
@@ -192,6 +195,7 @@ export async function getDriverSegments(opts?: {
         phone: true,
         primaryZone30d: true,
         intercomContactId: true,
+        intercomExternalId: true,
         sessions30d: true,
       },
       orderBy: { fullName: "asc" },
@@ -233,6 +237,7 @@ export async function getDriverSegments(opts?: {
       primaryZone: d.primaryZone30d,
       linked,
       intercomContactId: d.intercomContactId,
+      intercomExternalId: d.intercomExternalId,
       workedLastWeekDays: workedDays.get(d.driverId) ?? 0,
       shiftsLast30d: d.sessions30d,
       hasConversation: driversWithConversation.has(d.driverId),
