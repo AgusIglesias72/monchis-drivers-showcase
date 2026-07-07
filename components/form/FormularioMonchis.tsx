@@ -84,6 +84,7 @@ const FormularioMonchis: React.FC = () => {
     cedulaPhotoUrl: '',
     licensePhotoUrl: '',
     vehiclePhotoUrl: '',
+    vehicleDocsConfirmed: false,
     taxCompliancePhotoUrl: '',
     emergencyName: '',
     emergencyRelationship: '',
@@ -281,7 +282,8 @@ const FormularioMonchis: React.FC = () => {
         return {
           cedulaPhotoUrl: formData.cedulaPhotoUrl,
           licensePhotoUrl: formData.licensePhotoUrl,
-          vehiclePhotoUrl: formData.vehiclePhotoUrl
+          vehiclePhotoUrl: formData.vehiclePhotoUrl,
+          vehicleDocsConfirmed: formData.vehicleDocsConfirmed
         };
       case 5:
         return {
@@ -396,6 +398,10 @@ const validateCurrentStep = (): boolean => {
       }
       if (!formData.licensePhotoUrl || formData.licensePhotoUrl.trim() === '') {
         toast.error('Por favor sube tu Certificado de Antecedentes Policiales para continuar');
+        return false;
+      }
+      if (!formData.vehicleDocsConfirmed) {
+        toast.error('Confirmá que contás con la documentación del vehículo al día para continuar');
         return false;
       }
       break;

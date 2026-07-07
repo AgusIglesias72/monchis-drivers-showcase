@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -705,6 +706,22 @@ export const getFormSteps = (formData: any, handleInputChange: any, handleFileUp
             uploadingFiles={uploadingFiles['licensePhotoUrl'] || []}
             required={true}
           />
+
+          {/* Declaración obligatoria: documentación del vehículo al día */}
+          <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <Checkbox
+              id="vehicleDocsConfirmed"
+              checked={!!formData.vehicleDocsConfirmed}
+              onCheckedChange={(checked) => handleInputChange('vehicleDocsConfirmed', checked === true)}
+              className="mt-0.5"
+            />
+            <Label htmlFor="vehicleDocsConfirmed" className="block text-sm font-normal leading-snug cursor-pointer">
+              Confirmo que cuento con toda la documentación del vehículo al día <span style={{ color: MONCHIS_RED }}>*</span>
+              <span className="block text-xs text-gray-500 mt-1">
+                Esta documentación se va a verificar en la capacitación.
+              </span>
+            </Label>
+          </div>
         </div>
       )
     },
