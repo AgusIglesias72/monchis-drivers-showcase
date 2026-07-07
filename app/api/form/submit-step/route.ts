@@ -42,7 +42,9 @@ const Step3Schema = z.object({
 
 // Step 4 no actualiza FormDriver — los uploads van por otro endpoint —
 // pero validamos el shape igual.
-const Step4Schema = z.object({}).strict().passthrough();
+const Step4Schema = z.object({
+  vehicleDocsConfirmed: z.boolean().optional(),
+}).strict().passthrough();
 
 const Step5Schema = z.object({
   experience: z.string().max(2000).optional().nullable(),
