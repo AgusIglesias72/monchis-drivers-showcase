@@ -42,13 +42,13 @@ function formatElapsed(minutes: number | null): string {
 }
 
 const STATE_BADGE: Record<string, string> = {
-  PENDING: "bg-slate-100 text-slate-800",
-  ACCEPTED: "bg-amber-100 text-amber-800",
+  PENDING: "bg-muted text-muted-foreground",
+  ACCEPTED: "bg-warning-soft text-warning",
   ASSIGNED: "bg-fuchsia-100 text-fuchsia-800",
   ASSIGNED_DELIVERY: "bg-fuchsia-100 text-fuchsia-800",
   ASSIGNED_PICKUP: "bg-fuchsia-100 text-fuchsia-800",
   WAITING_ORDER: "bg-sky-100 text-sky-800",
-  DELIVERY: "bg-blue-100 text-blue-800",
+  DELIVERY: "bg-info-soft text-info",
   OUTSIDE: "bg-cyan-100 text-cyan-800",
 }
 
@@ -98,10 +98,10 @@ function DriverDetail({
   onRequestClick: (id: string) => void
 }) {
   const status = driver.hasActive
-    ? { label: "Ocupado", classes: "bg-blue-100 text-blue-900" }
+    ? { label: "Ocupado", classes: "bg-info-soft text-info" }
     : driver.available
-      ? { label: "Libre", classes: "bg-emerald-100 text-emerald-900" }
-      : { label: "No disponible", classes: "bg-slate-100 text-slate-700" }
+      ? { label: "Libre", classes: "bg-success-soft text-success" }
+      : { label: "No disponible", classes: "bg-muted text-muted-foreground" }
 
   return (
     <>

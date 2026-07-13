@@ -321,15 +321,15 @@ function KpiCard({
 }) {
   const valueColor =
     tone === 'warn'
-      ? 'text-amber-600 dark:text-amber-500'
+      ? 'text-warning'
       : tone === 'ok'
-      ? 'text-emerald-600 dark:text-emerald-500'
+      ? 'text-success'
       : 'text-foreground'
   const barColor =
     tone === 'warn'
-      ? 'bg-amber-500'
+      ? 'bg-warning'
       : tone === 'ok'
-      ? 'bg-emerald-500'
+      ? 'bg-success'
       : 'bg-foreground/70'
   const pct =
     progress && progress.total > 0
@@ -432,7 +432,7 @@ function TemplateRow({
         <span
           className={cn(
             'mt-1.5 inline-flex h-2 w-2 rounded-full shrink-0',
-            template.isActive ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+            template.isActive ? 'bg-success' : 'bg-muted-foreground/40',
           )}
           aria-label={template.isActive ? 'Activa' : 'Inactiva'}
         />
@@ -445,7 +445,7 @@ function TemplateRow({
               <TooltipProvider delayDuration={150}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 text-[10px] font-medium border border-blue-200 dark:border-blue-900">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-info-soft text-info px-1.5 py-0.5 text-[10px] font-medium border border-info">
                       <ShieldCheck className="h-3 w-3" />
                       Sistema
                     </span>
@@ -483,7 +483,7 @@ function TemplateRow({
             {!template.isActive && (
               <>
                 <span className="text-muted-foreground/40">·</span>
-                <span className="text-amber-600 dark:text-amber-500">inactiva</span>
+                <span className="text-warning">inactiva</span>
               </>
             )}
           </div>
@@ -575,7 +575,7 @@ function TemplateRow({
               disabled={busy === 'toggle'}
               className={
                 template.isActive
-                  ? 'bg-amber-600 hover:bg-amber-700'
+                  ? 'bg-warning hover:bg-warning'
                   : undefined
               }
             >

@@ -26,7 +26,7 @@ export function DriversGrowthChart({ data }: { data: DriversGrowthTrend[] }) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-blue-500" />
+            <TrendingUp className="h-5 w-5 text-info" />
             Crecimiento de drivers
           </CardTitle>
           <CardDescription>

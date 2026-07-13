@@ -77,7 +77,7 @@ export function RejectButton({
             variant="outline"
             size={size}
             onClick={handleClick}
-            className="gap-2 border-green-600 text-green-600 hover:bg-green-50 hover:text-green-700"
+            className="gap-2 border-success text-success hover:bg-success-soft hover:text-success"
           >
             <CheckCircle className="h-4 w-4" />
             Habilitar
@@ -103,7 +103,7 @@ export function RejectButton({
                 <AlertDialogAction 
                   onClick={confirmAction}
                   disabled={isProcessing}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-success hover:bg-success"
                 >
                   {isProcessing ? 'Habilitando...' : 'Habilitar Postulación'}
                 </AlertDialogAction>
@@ -146,7 +146,7 @@ export function RejectButton({
               <AlertDialogAction 
                 onClick={confirmAction}
                 disabled={isProcessing}
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-destructive hover:bg-destructive"
               >
                 {isProcessing ? 'Rechazando...' : 'Rechazar Postulación'}
               </AlertDialogAction>
@@ -192,7 +192,7 @@ export function RejectButton({
               <AlertDialogAction 
                 onClick={confirmAction}
                 disabled={isProcessing}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-success hover:bg-success"
               >
                 {isProcessing ? 'Habilitando...' : 'Habilitar Postulación'}
               </AlertDialogAction>
@@ -236,7 +236,7 @@ export function RejectButton({
             <AlertDialogAction 
               onClick={confirmAction}
               disabled={isProcessing}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive"
             >
               {isProcessing ? 'Rechazando...' : 'Rechazar Postulación'}
             </AlertDialogAction>

@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCronAuth } from '@/lib/auth'
 import { sendSessionReminders } from '@/lib/services/session-reminders.service'
+import { whatsappBotService } from '@/lib/services/whatsapp-bot.service'
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now()
@@ -20,6 +21,14 @@ export async function GET(request: NextRequest) {
   if (cronError) return cronError
 
   try {
+    // Circuit breaker: si el bot no está conectado, no enviamos (evita marcar
+    // "enviado" recordatorios que no se entregan).
+    const status = await whatsappBotService.getStatus()
+    if (!status.connected) {
+      console.warn('[SESSION REMINDERS] abortado: bot desconectado', { status: status.status })
+      return NextResponse.json({ success: false, skipped: true, reason: 'whatsapp bot desconectado', botStatus: status.status })
+    }
+
     const limit = Math.max(1, parseInt(process.env.SESSION_REMINDER_LIMIT || '40', 10))
     const stats = await sendSessionReminders(limit)
 

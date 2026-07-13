@@ -392,23 +392,23 @@ export function AddDriversSectionClient({
 
   const getDocsStatusBadge = (status: string) => {
     if (!status) return (
-      <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
+      <Badge variant="outline" className="text-xs h-5 bg-muted text-muted-foreground border-border">
         Sin documentos
       </Badge>
     )
     
     const config: Record<string, { label: string; className: string }> = {
-      APPROVED: { label: 'Aprobados', className: 'bg-green-50 text-green-700 border-green-200' },
-      PENDING: { label: 'Pendiente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-      IN_REVIEW: { label: 'En Revisión', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-      CORRECTIONS: { label: 'Correcciones', className: 'bg-orange-50 text-orange-700 border-orange-200' },
-      INCOMPLETE: { label: 'Incompleto', className: 'bg-gray-50 text-gray-700 border-gray-200' },
-      REJECTED: { label: 'Rechazado', className: 'bg-red-50 text-red-700 border-red-200' },
+      APPROVED: { label: 'Aprobados', className: 'bg-success-soft text-success border-success' },
+      PENDING: { label: 'Pendiente', className: 'bg-warning-soft text-warning border-warning' },
+      IN_REVIEW: { label: 'En Revisión', className: 'bg-info-soft text-info border-info' },
+      CORRECTIONS: { label: 'Correcciones', className: 'bg-warning-soft text-warning border-warning' },
+      INCOMPLETE: { label: 'Incompleto', className: 'bg-muted text-muted-foreground border-border' },
+      REJECTED: { label: 'Rechazado', className: 'bg-danger-soft text-destructive border-destructive' },
     }
     
     const statusConfig = config[status]
     if (!statusConfig) return (
-      <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
+      <Badge variant="outline" className="text-xs h-5 bg-muted text-muted-foreground border-border">
         {status}
       </Badge>
     )
@@ -422,26 +422,26 @@ export function AddDriversSectionClient({
 
   const getApplicationStatusBadge = (status: string) => {
     if (!status) return (
-      <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
+      <Badge variant="outline" className="text-xs h-5 bg-muted text-muted-foreground border-border">
         Sin estado
       </Badge>
     )
     
     const config: Record<string, { label: string; className: string }> = {
-      PENDING: { label: 'Pendiente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-      UNDER_REVIEW: { label: 'En Revisión', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-      APPROVED: { label: 'Aprobado', className: 'bg-green-50 text-green-700 border-green-200' },
-      REJECTED: { label: 'Rechazado', className: 'bg-red-50 text-red-700 border-red-200' },
-      IN_PROGRESS: { label: 'En Progreso', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+      PENDING: { label: 'Pendiente', className: 'bg-warning-soft text-warning border-warning' },
+      UNDER_REVIEW: { label: 'En Revisión', className: 'bg-info-soft text-info border-info' },
+      APPROVED: { label: 'Aprobado', className: 'bg-success-soft text-success border-success' },
+      REJECTED: { label: 'Rechazado', className: 'bg-danger-soft text-destructive border-destructive' },
+      IN_PROGRESS: { label: 'En Progreso', className: 'bg-info-soft text-info border-info' },
       SUBMITTED: { label: 'Enviado', className: 'bg-purple-50 text-purple-700 border-purple-200' },
-      ACTIVE: { label: 'Activo', className: 'bg-green-50 text-green-700 border-green-200' },
-      COMPLETED: { label: 'Completado', className: 'bg-green-50 text-green-700 border-green-200' },
-      INACTIVE: { label: 'Inactivo', className: 'bg-gray-50 text-gray-700 border-gray-200' },
+      ACTIVE: { label: 'Activo', className: 'bg-success-soft text-success border-success' },
+      COMPLETED: { label: 'Completado', className: 'bg-success-soft text-success border-success' },
+      INACTIVE: { label: 'Inactivo', className: 'bg-muted text-muted-foreground border-border' },
     }
     
     const statusConfig = config[status]
     if (!statusConfig) return (
-      <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
+      <Badge variant="outline" className="text-xs h-5 bg-muted text-muted-foreground border-border">
         {status}
       </Badge>
     )
@@ -455,22 +455,22 @@ export function AddDriversSectionClient({
 
   const getOnboardingStatusBadge = (status: string | null) => {
     if (!status) return (
-      <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
+      <Badge variant="outline" className="text-xs h-5 bg-muted text-muted-foreground border-border">
         Sin onboarding
       </Badge>
     )
     
     const config: Record<string, { label: string; className: string }> = {
-      SCHEDULED: { label: 'Programado', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-      IN_PROGRESS: { label: 'En Curso', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-      COMPLETED: { label: 'Completado', className: 'bg-green-50 text-green-700 border-green-200' },
-      CANCELLED: { label: 'Cancelado', className: 'bg-red-50 text-red-700 border-red-200' },
-      NO_SHOW: { label: 'No Asistió', className: 'bg-orange-50 text-orange-700 border-orange-200' },
+      SCHEDULED: { label: 'Programado', className: 'bg-info-soft text-info border-info' },
+      IN_PROGRESS: { label: 'En Curso', className: 'bg-warning-soft text-warning border-warning' },
+      COMPLETED: { label: 'Completado', className: 'bg-success-soft text-success border-success' },
+      CANCELLED: { label: 'Cancelado', className: 'bg-danger-soft text-destructive border-destructive' },
+      NO_SHOW: { label: 'No Asistió', className: 'bg-warning-soft text-warning border-warning' },
     }
     
     const statusConfig = config[status]
     if (!statusConfig) return (
-      <Badge variant="outline" className="text-xs h-5 bg-gray-50 text-gray-700 border-gray-200">
+      <Badge variant="outline" className="text-xs h-5 bg-muted text-muted-foreground border-border">
         {status}
       </Badge>
     )
@@ -546,7 +546,7 @@ export function AddDriversSectionClient({
               className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
                 ${activeQuickFilter === 'all'
-                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  ? 'bg-card border-border shadow-sm font-medium text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -560,7 +560,7 @@ export function AddDriversSectionClient({
               className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
                 ${activeQuickFilter === 'pending-schedule'
-                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  ? 'bg-card border-border shadow-sm font-medium text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -574,7 +574,7 @@ export function AddDriversSectionClient({
               className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
                 ${activeQuickFilter === 'docs-approved'
-                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  ? 'bg-card border-border shadow-sm font-medium text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -588,7 +588,7 @@ export function AddDriversSectionClient({
               className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
                 ${activeQuickFilter === 'ready-to-schedule'
-                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  ? 'bg-card border-border shadow-sm font-medium text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -602,7 +602,7 @@ export function AddDriversSectionClient({
               className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg border border-b-0 transition-all text-xs
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
                 ${activeQuickFilter === 'no-onboarding'
-                  ? 'bg-white border-gray-200 shadow-sm font-medium text-foreground relative z-10'
+                  ? 'bg-card border-border shadow-sm font-medium text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -741,7 +741,7 @@ export function AddDriversSectionClient({
                   <div 
                     key={driver.id}
                     className={`grid grid-cols-[auto_1fr_140px_140px_140px_120px_80px] gap-4 px-4 py-3 hover:bg-muted/30 transition-colors ${
-                      isSelected ? 'bg-blue-50' : ''
+                      isSelected ? 'bg-info-soft' : ''
                     } ${!driver.canBeSelected ? 'opacity-50' : ''}`}
                   >
                     <div className="flex items-center gap-3">
@@ -756,14 +756,14 @@ export function AddDriversSectionClient({
                         <div className="flex items-center gap-2 mt-0.5">
                           <p className="text-xs text-muted-foreground truncate">{driver.phoneNumber}</p>
                           {driver.isAssignedToOtherEvent && (
-                            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                            <Badge variant="outline" className="text-xs bg-warning-soft text-warning border-warning">
                               <Calendar className="h-3 w-3 mr-1" />
                               Asignado
                             </Badge>
                           )}
                         </div>
                         {driver.disabledReason && (
-                          <p className="text-xs text-red-600 mt-1">{driver.disabledReason}</p>
+                          <p className="text-xs text-destructive mt-1">{driver.disabledReason}</p>
                         )}
                       </div>
                     </div>

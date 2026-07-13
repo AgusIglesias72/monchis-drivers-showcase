@@ -45,6 +45,16 @@ type Highlight =
   | null
 type FilterKey = PedidoFilter
 
+// Match de búsqueda libre por ID externo, ID interno, comercio o driver.
+// Exportado para que el panel filtre el mapa con el mismo criterio que la lista.
+export function requestMatchesQuery(r: LiveRequest, rawQuery: string): boolean {
+  const q = rawQuery.trim().toLowerCase()
+  if (!q) return true
+  return [r.externalOrderId, r.requestId, r.origin?.name, r.driverName]
+    .filter(Boolean)
+    .some((v) => v!.toLowerCase().includes(q))
+}
+
 interface FilterDef {
   key: FilterKey
   label: string
@@ -72,8 +82,8 @@ const FILTERS: FilterDef[] = [
     key: "PENDING",
     label: "Buscando driver",
     icon: Search,
-    bg: "bg-amber-100/60 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300",
-    bgActive: "bg-amber-500 text-white hover:bg-amber-600",
+    bg: "bg-warning-soft/60 hover:bg-warning-soft text-warning",
+    bgActive: "bg-warning text-warning-foreground hover:bg-warning/90",
   },
   {
     key: "ACCEPTED",
@@ -93,8 +103,8 @@ const FILTERS: FilterDef[] = [
     key: "DELIVERY",
     label: "En camino",
     icon: Bike,
-    bg: "bg-blue-100/60 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300",
-    bgActive: "bg-blue-600 text-white hover:bg-blue-700",
+    bg: "bg-info-soft/60 hover:bg-info-soft text-info",
+    bgActive: "bg-info text-info-foreground hover:bg-info/90",
   },
   {
     key: "OUTSIDE",
@@ -272,6 +282,8 @@ export function PedidosTab({
   onHighlight,
   filter,
   onFilterChange,
+  query: queryProp,
+  onQueryChange,
 }: {
   pending: LiveRequest[]
   delayed: LiveRequest[]
@@ -280,9 +292,16 @@ export function PedidosTab({
   onHighlight: (h: Highlight) => void
   filter: FilterKey
   onFilterChange: (f: FilterKey) => void
+  // Búsqueda controlada por el padre (para filtrar también el mapa). Si no se
+  // pasa, cae a estado interno (la tab funciona standalone igual).
+  query?: string
+  onQueryChange?: (q: string) => void
 }) {
   const [viewMode, setViewMode] = useState<PedidosViewMode>("cards")
   const [cardStyle, setCardStyle] = useState<CardStyle>("default")
+  const [internalQuery, setInternalQuery] = useState("")
+  const query = queryProp ?? internalQuery
+  const setQuery = onQueryChange ?? setInternalQuery
 
   // Dedup por requestId — la API legacy a veces devuelve el mismo pedido en
   // `pending` y en `active` (race entre polls). Preferimos la versión de
@@ -335,6 +354,10 @@ export function PedidosTab({
     } else {
       result = allRequests.filter((r) => r.state === filter)
     }
+    // Búsqueda libre por ID externo, ID interno, comercio o driver.
+    if (query.trim()) {
+      result = result.filter((r) => requestMatchesQuery(r, query))
+    }
     // Ordenamos por antigüedad en el estado actual (asc por timestamp =
     // los que llevan más tiempo aparecen primero, que es lo que requiere
     // atención operativa).
@@ -347,7 +370,7 @@ export function PedidosTab({
         : Number.POSITIVE_INFINITY
       return ta - tb
     })
-  }, [allRequests, filter, delayedSet])
+  }, [allRequests, filter, delayedSet, query])
 
   return (
     <div>
@@ -387,6 +410,16 @@ export function PedidosTab({
           })}
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar pedido, comercio o driver…"
+              className="h-8 w-52 rounded-md border bg-background pl-7 pr-2 text-xs outline-none focus:ring-1 focus:ring-foreground/30"
+            />
+          </div>
           {viewMode === "cards" && (
             <CardStyleToggle value={cardStyle} onChange={setCardStyle} />
           )}
@@ -397,9 +430,11 @@ export function PedidosTab({
       {filtered.length === 0 ? (
         <EmptyState
           message={
-            filter === "all"
-              ? "No hay pedidos en el sistema"
-              : "No hay pedidos en este estado"
+            query.trim()
+              ? `Sin resultados para "${query.trim()}"`
+              : filter === "all"
+                ? "No hay pedidos en el sistema"
+                : "No hay pedidos en este estado"
           }
         />
       ) : viewMode === "cards" ? (
@@ -523,10 +558,10 @@ interface CardCommonProps {
 }
 
 const STATE_BADGE_CLASS: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300",
+  PENDING: "bg-warning-soft text-warning",
   ACCEPTED: "bg-violet-100 text-violet-900 dark:bg-violet-900/30 dark:text-violet-300",
   WAITING_ORDER: "bg-sky-100 text-sky-900 dark:bg-sky-900/30 dark:text-sky-300",
-  DELIVERY: "bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300",
+  DELIVERY: "bg-info-soft text-info",
   OUTSIDE: "bg-cyan-100 text-cyan-900 dark:bg-cyan-900/30 dark:text-cyan-300",
   ASSIGNED: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
   ASSIGNED_DELIVERY: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
@@ -534,10 +569,10 @@ const STATE_BADGE_CLASS: Record<string, string> = {
 }
 
 const STATE_BAR_CLASS: Record<string, string> = {
-  PENDING: "bg-amber-400",
+  PENDING: "bg-warning",
   ACCEPTED: "bg-violet-500",
   WAITING_ORDER: "bg-sky-500",
-  DELIVERY: "bg-blue-600",
+  DELIVERY: "bg-info",
   OUTSIDE: "bg-cyan-600",
   ASSIGNED: "bg-fuchsia-500",
   ASSIGNED_DELIVERY: "bg-fuchsia-500",
@@ -548,20 +583,20 @@ const TIME_TONE_BG: Record<
   "fresh" | "warm" | "hot" | "critical",
   string
 > = {
-  fresh: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  warm: "bg-amber-50 text-amber-800 ring-amber-200",
-  hot: "bg-orange-50 text-orange-800 ring-orange-200",
-  critical: "bg-red-50 text-red-800 ring-red-300",
+  fresh: "bg-success-soft text-success ring-success",
+  warm: "bg-warning-soft text-warning ring-warning",
+  hot: "bg-warning-soft text-warning ring-warning",
+  critical: "bg-danger-soft text-destructive ring-destructive",
 }
 
 const TIME_TONE_SOLID: Record<
   "fresh" | "warm" | "hot" | "critical",
   string
 > = {
-  fresh: "bg-emerald-500 text-white",
-  warm: "bg-amber-500 text-white",
-  hot: "bg-orange-500 text-white",
-  critical: "bg-red-500 text-white",
+  fresh: "bg-success text-success-foreground",
+  warm: "bg-warning text-warning-foreground",
+  hot: "bg-warning text-warning-foreground",
+  critical: "bg-destructive text-destructive-foreground",
 }
 
 function useCardMetrics(r: LiveRequest) {
@@ -580,7 +615,7 @@ function useCardMetrics(r: LiveRequest) {
 
 function DemoradoChip() {
   return (
-    <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+    <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
       <Timer className="h-2.5 w-2.5" />
       Demorado
     </span>
@@ -640,7 +675,7 @@ function DriverZoneLine({ r }: { r: LiveRequest }) {
 
 function PedidoCardSideBar({ r, isDelayed, isHighlighted, onClick }: CardCommonProps) {
   const { stateMin, stateTone, stateBadgeClass, stateBarClass } = useCardMetrics(r)
-  const barColorClass = isDelayed ? "bg-red-500" : stateBarClass
+  const barColorClass = isDelayed ? "bg-destructive" : stateBarClass
   const timeClass = TIME_TONE_BG[stateTone]
   return (
     <div
@@ -711,7 +746,7 @@ function PedidoCardHeroTime({ r, isDelayed, isHighlighted, onClick }: CardCommon
       }}
       className={`group cursor-pointer rounded-md border bg-card p-2.5 transition hover:shadow-md ${
         isHighlighted ? "ring-2 ring-foreground/30" : ""
-      } ${isDelayed ? "border-red-300" : ""}`}
+      } ${isDelayed ? "border-destructive" : ""}`}
     >
       <div className="flex items-stretch gap-2.5">
         <div
@@ -822,18 +857,18 @@ function PedidoCard({
 
   const stateToneCard =
     stateTone === "critical"
-      ? "border-red-300 bg-red-50/40 dark:border-red-900 dark:bg-red-950/20"
+      ? "border-destructive bg-danger-soft/40"
       : stateTone === "hot"
-        ? "border-orange-300 bg-orange-50/40 dark:border-orange-900 dark:bg-orange-950/20"
+        ? "border-warning bg-warning-soft/40"
         : stateTone === "warm"
-          ? "border-amber-200 bg-amber-50/30 dark:border-amber-900 dark:bg-amber-950/20"
+          ? "border-warning bg-warning-soft/30"
           : ""
 
   const stateBadgeColor: Record<string, string> = {
-    PENDING: "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300",
+    PENDING: "bg-warning-soft text-warning",
     ACCEPTED: "bg-violet-100 text-violet-900 dark:bg-violet-900/30 dark:text-violet-300",
     WAITING_ORDER: "bg-sky-100 text-sky-900 dark:bg-sky-900/30 dark:text-sky-300",
-    DELIVERY: "bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300",
+    DELIVERY: "bg-info-soft text-info",
     OUTSIDE: "bg-cyan-100 text-cyan-900 dark:bg-cyan-900/30 dark:text-cyan-300",
     ASSIGNED: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
     ASSIGNED_DELIVERY: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
@@ -845,12 +880,12 @@ function PedidoCard({
 
   const stateBadgeBig =
     stateTone === "critical"
-      ? "bg-red-500 text-white"
+      ? "bg-destructive text-destructive-foreground"
       : stateTone === "hot"
-        ? "bg-orange-500 text-white"
+        ? "bg-warning text-warning-foreground"
         : stateTone === "warm"
-          ? "bg-amber-500 text-white"
-          : "bg-emerald-500 text-white"
+          ? "bg-warning text-warning-foreground"
+          : "bg-success text-success-foreground"
 
   return (
     <div
@@ -880,7 +915,7 @@ function PedidoCard({
             {stateLabel(r.state)}
           </span>
           {isDelayed && (
-            <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+            <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
               <Timer className="h-2.5 w-2.5" />
               Demorado
             </span>
@@ -901,7 +936,7 @@ function PedidoCard({
       <div className="space-y-2 p-3">
         {/* Comercio */}
         <div className="flex items-start gap-1.5">
-          <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-400" />
+          <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
           <span className="text-[13px] font-semibold leading-tight break-words">
             {r.origin?.name || "Comercio sin nombre"}
           </span>
@@ -1054,7 +1089,7 @@ function PedidosTable({
                         {stateLabel(r.state)}
                       </span>
                       {isDelayed && (
-                        <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                        <span className="inline-flex items-center gap-0.5 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
                           <Timer className="h-2.5 w-2.5" />
                           Demorado
                         </span>
@@ -1120,7 +1155,7 @@ function PedidosTable({
                     <td colSpan={9} className="px-4 py-3">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <ExpandedField
-                          icon={<Building2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />}
+                          icon={<Building2 className="h-3 w-3 text-success" />}
                           label="Comercio"
                         >
                           <div className="text-[12px] font-medium">
@@ -1133,7 +1168,7 @@ function PedidosTable({
                           )}
                         </ExpandedField>
                         <ExpandedField
-                          icon={<MapPin className="h-3 w-3 text-red-700 dark:text-red-400" />}
+                          icon={<MapPin className="h-3 w-3 text-destructive" />}
                           label="Destino"
                         >
                           <div className="text-[12px] font-medium">
@@ -1183,7 +1218,7 @@ function PedidosTable({
                               target="_blank"
                               rel="noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="mt-1 inline-flex items-center gap-1 rounded-md border bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400"
+                              className="mt-1 inline-flex items-center gap-1 rounded-md border bg-success-soft px-2 py-1 text-[11px] font-medium text-success hover:bg-success-soft"
                             >
                               <Phone className="h-3 w-3" />
                               WhatsApp driver
@@ -1234,13 +1269,13 @@ function ExpandedField({
 
 const STATE_BADGE_TABLE: Record<string, string> = {
   PENDING:
-    "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300",
+    "bg-warning-soft text-warning",
   ACCEPTED:
     "bg-violet-100 text-violet-900 dark:bg-violet-900/30 dark:text-violet-300",
   WAITING_ORDER:
     "bg-sky-100 text-sky-900 dark:bg-sky-900/30 dark:text-sky-300",
   DELIVERY:
-    "bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300",
+    "bg-info-soft text-info",
   OUTSIDE: "bg-cyan-100 text-cyan-900 dark:bg-cyan-900/30 dark:text-cyan-300",
   ASSIGNED:
     "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
@@ -1254,10 +1289,10 @@ const TONE_BADGE: Record<
   ReturnType<typeof bucketTone>,
   string
 > = {
-  fresh: "bg-emerald-500 text-white",
-  warm: "bg-amber-500 text-white",
-  hot: "bg-orange-500 text-white",
-  critical: "bg-red-500 text-white",
+  fresh: "bg-success text-success-foreground",
+  warm: "bg-warning text-warning-foreground",
+  hot: "bg-warning text-warning-foreground",
+  critical: "bg-destructive text-destructive-foreground",
 }
 
 // ============================================================================
@@ -1331,12 +1366,12 @@ export function DriversTab({
     {
       key: "libres",
       label: "Libres",
-      tone: "bg-emerald-100/60 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300",
+      tone: "bg-success-soft/60 hover:bg-success-soft text-success",
     },
     {
       key: "ocupados",
       label: "Ocupados",
-      tone: "bg-blue-100/60 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300",
+      tone: "bg-info-soft/60 hover:bg-info-soft text-info",
     },
     {
       key: "no_disponibles",
@@ -1401,12 +1436,12 @@ export function DriversTab({
                   <span>{zoneName}</span>
                   <div className="flex flex-wrap items-center gap-1 normal-case tracking-normal">
                     {busy.length > 0 && (
-                      <span className="rounded bg-blue-100 px-1 py-px text-[9px] font-bold text-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+                      <span className="rounded bg-info-soft px-1 py-px text-[9px] font-bold text-info">
                         {busy.length} con pedido{busy.length === 1 ? "" : "s"}
                       </span>
                     )}
                     {free.length > 0 && (
-                      <span className="rounded bg-emerald-100 px-1 py-px text-[9px] font-bold text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
+                      <span className="rounded bg-success-soft px-1 py-px text-[9px] font-bold text-success">
                         {free.length} libre{free.length === 1 ? "" : "s"}
                       </span>
                     )}
@@ -1495,9 +1530,9 @@ function DriverCard({
       ? "Libre"
       : "No disponible"
   const statusToneClass = d.hasActive
-    ? "text-blue-700 dark:text-blue-400"
+    ? "text-info"
     : d.available
-      ? "text-emerald-700 dark:text-emerald-400"
+      ? "text-success"
       : "text-muted-foreground"
 
   return (
@@ -1534,12 +1569,12 @@ function DriverCard({
           <BikeIcon className="h-4 w-4 text-white" />
         </div>
         {d.hasActive && (
-          <span className="absolute -bottom-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-card bg-blue-600 px-1 text-[9px] font-bold text-white">
+          <span className="absolute -bottom-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-card bg-info px-1 text-[9px] font-bold text-info-foreground">
             {d.activeRequestIds.length}
           </span>
         )}
         {d.pendingRequestIds.length > 0 && (
-          <span className="absolute -top-1 -right-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-card bg-amber-500 px-0.5 text-[8px] font-bold text-white">
+          <span className="absolute -top-1 -right-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-card bg-warning px-0.5 text-[8px] font-bold text-warning-foreground">
             {d.pendingRequestIds.length}
           </span>
         )}
@@ -1611,10 +1646,10 @@ function EmptyState({ message }: { message: string }) {
 // ============================================================================
 
 const ORDER_STATE_BADGE: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-900",
+  PENDING: "bg-warning-soft text-warning",
   ACCEPTED: "bg-violet-100 text-violet-900",
   WAITING_ORDER: "bg-sky-100 text-sky-900",
-  DELIVERY: "bg-blue-100 text-blue-900",
+  DELIVERY: "bg-info-soft text-info",
   OUTSIDE: "bg-cyan-100 text-cyan-900",
   ASSIGNED: "bg-fuchsia-100 text-fuchsia-900",
   ASSIGNED_DELIVERY: "bg-fuchsia-100 text-fuchsia-900",

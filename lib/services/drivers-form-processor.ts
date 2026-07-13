@@ -4,6 +4,7 @@ import { google } from 'googleapis';
 import { FormDriverStatus, OnboardingStatus } from '@prisma/client';
 import { differenceInDays, parse, isValid } from 'date-fns';
 import { prisma } from '@/lib/prisma';
+import { assignDriverSlug } from '@/lib/services/postulacion.service';
 
 // Mapeo de nombres de columnas - basado en los headers reales del sheet
 const COLUMN_MAPPINGS = {
@@ -576,8 +577,9 @@ export class DriverFormProcessor {
             startedAt: formData.timestamp || new Date()
           }
         });
+        await assignDriverSlug(driver.id, driver.fullName).catch(() => {});
       }
-      
+
       console.log(`✅ Driver ${driver.id} guardado/actualizado`);
       
       // Procesar todos los documentos usando el DocumentProcessor

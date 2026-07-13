@@ -70,15 +70,15 @@ export function LiveDriversLoad({ drivers }: Props) {
           <Pill
             value={buckets.libres}
             label="Libres"
-            dot="bg-emerald-500"
-            valueClass="text-emerald-700 dark:text-emerald-400"
+            dot="bg-success"
+            valueClass="text-success"
             title="Drivers conectados, disponibles y sin pedido vigente"
           />
           <Pill
             value={buckets.one}
             label="Con 1"
-            dot="bg-blue-500"
-            valueClass="text-blue-700 dark:text-blue-400"
+            dot="bg-info"
+            valueClass="text-info"
             title="Drivers llevando 1 pedido"
           />
           <Pill
@@ -112,9 +112,9 @@ export function LiveDriversLoad({ drivers }: Props) {
         <Segment
           value={buckets.libres}
           total={denom}
-          className="bg-emerald-500"
+          className="bg-success"
         />
-        <Segment value={buckets.one} total={denom} className="bg-blue-500" />
+        <Segment value={buckets.one} total={denom} className="bg-info" />
         <Segment
           value={buckets.two}
           total={denom}

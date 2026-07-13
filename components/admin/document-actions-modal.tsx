@@ -113,10 +113,10 @@ export function DocumentActionsModal({
 
   const getStatusBadge = (status: string) => {
     const config = {
-      PENDING: { label: 'Pendiente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-      IN_REVIEW: { label: 'En Revisión', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-      APPROVED: { label: 'Aprobado', className: 'bg-green-50 text-green-700 border-green-200' },
-      REJECTED: { label: 'Rechazado', className: 'bg-red-50 text-red-700 border-red-200' },
+      PENDING: { label: 'Pendiente', className: 'bg-warning-soft text-warning border-warning' },
+      IN_REVIEW: { label: 'En Revisión', className: 'bg-info-soft text-info border-info' },
+      APPROVED: { label: 'Aprobado', className: 'bg-success-soft text-success border-success' },
+      REJECTED: { label: 'Rechazado', className: 'bg-danger-soft text-destructive border-destructive' },
     }
     const { label, className } = config[status as keyof typeof config] || config.PENDING
     return <Badge variant="outline" className={className}>{label}</Badge>
@@ -130,7 +130,7 @@ export function DocumentActionsModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-green-700">
+            <DialogTitle className="flex items-center gap-2 text-success">
               <CheckCircle className="h-5 w-5" />
               Aprobar documento
             </DialogTitle>
@@ -157,7 +157,7 @@ export function DocumentActionsModal({
             </Button>
             <Button
               onClick={handleConfirmApprove}
-              className="bg-green-600 hover:bg-green-700 cursor-pointer"
+              className="bg-success hover:bg-success cursor-pointer"
               disabled={isLoading || isProcessing}
             >
               {isProcessing ? (
@@ -194,7 +194,7 @@ export function DocumentActionsModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-700">
+            <DialogTitle className="flex items-center gap-2 text-destructive">
               <XCircle className="h-5 w-5" />
               Rechazar documento
             </DialogTitle>
@@ -224,7 +224,7 @@ export function DocumentActionsModal({
                       onClick={() => handleQuickReject(reason)}
                       className={`w-full justify-start text-left cursor-pointer ${
                         rejectionReason === reason
-                          ? 'bg-red-600 hover:bg-red-700'
+                          ? 'bg-destructive hover:bg-destructive'
                           : 'hover:bg-muted'
                       }`}
                       disabled={isLoading || isProcessing}
@@ -238,7 +238,7 @@ export function DocumentActionsModal({
 
             <div className="space-y-2">
               <Label htmlFor="rejection-reason" className="text-sm font-medium">
-                {isCriminalRecord ? 'O escribe un motivo personalizado' : 'Motivo del rechazo'} <span className="text-red-500">*</span>
+                {isCriminalRecord ? 'O escribe un motivo personalizado' : 'Motivo del rechazo'} <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 id="rejection-reason"
@@ -342,11 +342,11 @@ export function DocumentActionsModal({
 
           {/* Mostrar razón de rechazo anterior si existe */}
           {document.status === 'REJECTED' && document.rejectionReason && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-xs font-semibold text-red-700 mb-1">
+            <div className="p-3 bg-danger-soft border border-destructive rounded-lg">
+              <p className="text-xs font-semibold text-destructive mb-1">
                 Motivo de rechazo anterior:
               </p>
-              <p className="text-sm text-red-600">{document.rejectionReason}</p>
+              <p className="text-sm text-destructive">{document.rejectionReason}</p>
             </div>
           )}
 
@@ -355,7 +355,7 @@ export function DocumentActionsModal({
             <div className="grid grid-cols-2 gap-3 pt-2">
               <Button
                 onClick={() => setShowApproveConfirm(true)}
-                className="gap-2 bg-green-600 hover:bg-green-700 cursor-pointer"
+                className="gap-2 bg-success hover:bg-success cursor-pointer"
                 disabled={isLoading || isProcessing}
               >
                 <CheckCircle className="h-4 w-4" />

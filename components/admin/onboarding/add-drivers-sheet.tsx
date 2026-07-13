@@ -292,19 +292,19 @@ export function AddDriversSheet({
                             {/* Badges */}
                             <div className="flex items-center gap-1.5">
                               {docsApproved ? (
-                                <Badge variant="outline" className="text-xs h-5 bg-green-50 text-green-700 border-green-200 gap-1">
+                                <Badge variant="outline" className="text-xs h-5 bg-success-soft text-success border-success gap-1">
                                   <CheckCircle className="h-3 w-3" />
                                   Docs
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="text-xs h-5 bg-amber-50 text-amber-700 border-amber-200 gap-1">
+                                <Badge variant="outline" className="text-xs h-5 bg-warning-soft text-warning border-warning gap-1">
                                   <AlertTriangle className="h-3 w-3" />
                                   Pendiente
                                 </Badge>
                               )}
 
                               {hasOnboarding && (
-                                <Badge variant="outline" className="text-xs h-5 bg-blue-50 text-blue-700 border-blue-200">
+                                <Badge variant="outline" className="text-xs h-5 bg-info-soft text-info border-info">
                                   OB
                                 </Badge>
                               )}

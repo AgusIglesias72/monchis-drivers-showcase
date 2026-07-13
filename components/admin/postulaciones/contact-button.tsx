@@ -205,7 +205,7 @@ export function ContactButton({
       <>
         {isPending && (
           <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-white rounded-lg p-6 shadow-xl flex flex-col items-center gap-3">
+            <div className="bg-card rounded-lg p-6 shadow-xl flex flex-col items-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm font-medium">Actualizando datos...</p>
             </div>
@@ -255,7 +255,7 @@ export function ContactButton({
       <>
         {isPending && (
           <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-white rounded-lg p-6 shadow-xl flex flex-col items-center gap-3">
+            <div className="bg-card rounded-lg p-6 shadow-xl flex flex-col items-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm font-medium">Actualizando datos...</p>
             </div>
@@ -288,7 +288,7 @@ export function ContactButton({
     <>
       {isPending && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 shadow-xl flex flex-col items-center gap-3">
+          <div className="bg-card rounded-lg p-6 shadow-xl flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm font-medium">Actualizando datos...</p>
           </div>
@@ -308,7 +308,7 @@ export function ContactButton({
                     className={`h-8 w-8 p-0 rounded-full ${config.bg} ${config.text} ${config.hoverBg}`}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <MessageCircle className="h-4 w-4" />
+                    <WhatsAppIcon className="h-4 w-4" />
                   </Button>
                   {showApprovalBadge && approvalNotifiedAt && (
                     <ApprovalNotifiedBadge sentAt={approvalNotifiedAt} />

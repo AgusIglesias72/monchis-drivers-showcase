@@ -26,7 +26,7 @@ export function AbandonosRanked({
       <div className="flex items-start justify-between gap-3 p-4 pb-3">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <TrendingDown className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+            <TrendingDown className="h-3.5 w-3.5 text-destructive" />
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Abandonos por paso
             </h3>
@@ -36,7 +36,7 @@ export function AbandonosRanked({
           </p>
         </div>
         <div className="text-right">
-          <div className="text-3xl font-semibold tabular-nums text-rose-600 dark:text-rose-400 leading-none">
+          <div className="text-3xl font-semibold tabular-nums text-destructive leading-none">
             {totalAbandonos.toLocaleString("es-PY")}
           </div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">
@@ -65,14 +65,14 @@ export function AbandonosRanked({
                   className={cn(
                     "flex items-center gap-2 rounded-md p-2",
                     isWorst &&
-                      "bg-rose-500/8 ring-1 ring-rose-500/20"
+                      "bg-danger-soft ring-1 ring-destructive/20"
                   )}
                 >
                   <span
                     className={cn(
                       "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold tabular-nums",
                       isWorst
-                        ? "bg-rose-500 text-white"
+                        ? "bg-destructive text-white"
                         : "bg-muted text-muted-foreground"
                     )}
                   >
@@ -87,7 +87,7 @@ export function AbandonosRanked({
                         className={cn(
                           "text-xs font-semibold tabular-nums shrink-0",
                           isWorst
-                            ? "text-rose-600 dark:text-rose-400"
+                            ? "text-destructive"
                             : "text-foreground"
                         )}
                       >
@@ -106,8 +106,8 @@ export function AbandonosRanked({
                         className={cn(
                           "h-full rounded-full",
                           isWorst
-                            ? "bg-rose-500"
-                            : "bg-rose-400/60"
+                            ? "bg-destructive"
+                            : "bg-destructive/60"
                         )}
                       />
                     </div>

@@ -129,66 +129,65 @@ export async function GET(request: NextRequest) {
     }
 
     // ============================================================================
-    // 4. OBTENER TOTAL DE REGISTROS (para paginación)
+    // 4+5. TOTAL Y PÁGINA EN PARALELO
     // ============================================================================
-    const totalCount = await prisma.formDriver.count({ where });
-    const totalPages = Math.ceil(totalCount / pageSize);
-    const hasNextPage = page < totalPages;
-    const hasPreviousPage = page > 1;
-
-    // ============================================================================
-    // 5. CONSULTAR POSTULACIONES CON PAGINACIÓN
-    // ============================================================================
-    const postulaciones = await prisma.formDriver.findMany({
-      where,
-      include: {
-        documents: {
-          select: {
-            id: true,
-            documentType: true,
-            blobUrl: true,
-            status: true,
-            rejectionReason: true,
-            uploadedAt: true,
+    const [totalCount, postulaciones] = await Promise.all([
+      prisma.formDriver.count({ where }),
+      prisma.formDriver.findMany({
+        where,
+        include: {
+          documents: {
+            select: {
+              id: true,
+              documentType: true,
+              blobUrl: true,
+              status: true,
+              rejectionReason: true,
+              uploadedAt: true,
+            },
           },
-        },
-        equipmentPayments: {
-          select: {
-            id: true,
-            paymentMethod: true,
-            amount: true,
-            paymentNumber: true,
-            invoiceNumber: true,
-            status: true,
-            paymentProofUrl: true,
-            createdAt: true,
+          equipmentPayments: {
+            select: {
+              id: true,
+              paymentMethod: true,
+              amount: true,
+              paymentNumber: true,
+              invoiceNumber: true,
+              status: true,
+              paymentProofUrl: true,
+              createdAt: true,
+            },
           },
-        },
-        financialService: {
-          select: {
-            id: true,
-            interestedInConto: true,
-            taxComplianceUrl: true,
+          financialService: {
+            select: {
+              id: true,
+              interestedInConto: true,
+              taxComplianceUrl: true,
+            },
           },
-        },
-        onboardingAttendances: {
-          include: {
-            event: {
-              select: {
-                id: true,
-                scheduledDate: true,
-                location: true,
+          onboardingAttendances: {
+            include: {
+              event: {
+                select: {
+                  id: true,
+                  scheduledDate: true,
+                  location: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: {
-        startedAt: 'desc',
-      },
-      skip,
-      take: pageSize,
-    });
+        orderBy: {
+          startedAt: 'desc',
+        },
+        skip,
+        take: pageSize,
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const hasNextPage = page < totalPages;
+    const hasPreviousPage = page > 1;
 
     // ============================================================================
     // 6. TRANSFORMAR DATOS A FORMATO LIMPIO
@@ -295,6 +294,7 @@ export async function GET(request: NextRequest) {
 
         // ===== ESTADO DEL FORMULARIO =====
         status: p.status,
+        archivedAt: p.archivedAt?.toISOString() || null,
         currentStep: p.currentStep,
         completedSteps: p.completedSteps || [],
         documentsStatus: p.documentsStatus,

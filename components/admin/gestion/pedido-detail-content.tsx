@@ -42,11 +42,11 @@ interface Props {
 function statusBadgeClass(status: string | undefined): string {
   switch (status) {
     case "FINALIZED":
-      return "bg-emerald-100 text-emerald-900 hover:bg-emerald-100"
+      return "bg-success-soft text-success hover:bg-success-soft"
     case "CANCELLED":
-      return "bg-red-100 text-red-900 hover:bg-red-100"
+      return "bg-danger-soft text-destructive hover:bg-danger-soft"
     default:
-      return "bg-blue-100 text-blue-900 hover:bg-blue-100"
+      return "bg-info-soft text-info hover:bg-info-soft"
   }
 }
 

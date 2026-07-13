@@ -385,7 +385,7 @@ function PointInfo({
             {isOrigin ? "Comercio" : "Cliente"}
           </span>
         </div>
-        <div className="px-2.5 py-1.5 text-xs text-gray-900 font-medium leading-tight">
+        <div className="px-2.5 py-1.5 text-xs text-foreground font-medium leading-tight">
           {point.label}
         </div>
       </div>
@@ -414,14 +414,14 @@ function PointInfo({
             Oferta {offerNumber ? `#${offerNumber}` : ""}
           </span>
         </div>
-        <div className="px-2.5 py-1.5 text-xs text-gray-700 leading-tight">
+        <div className="px-2.5 py-1.5 text-xs text-muted-foreground leading-tight">
           {lastDriver ? (
             <span className="inline-flex items-start gap-1.5">
-              <User className="h-3 w-3 text-gray-400 mt-0.5 shrink-0" />
+              <User className="h-3 w-3 text-ink-subtle mt-0.5 shrink-0" />
               {lastDriver}
             </span>
           ) : (
-            <span className="text-gray-400">Sin driver</span>
+            <span className="text-ink-subtle">Sin driver</span>
           )}
         </div>
       </div>
@@ -446,14 +446,14 @@ function PointInfo({
         <span className="text-xs font-semibold">{friendlyLabel}</span>
       </div>
 
-      <div className="px-2.5 py-1.5 space-y-1 text-xs text-gray-700">
+      <div className="px-2.5 py-1.5 space-y-1 text-xs text-muted-foreground">
         <div className="flex items-center gap-1.5">
-          <Clock className="h-3 w-3 text-gray-400" />
+          <Clock className="h-3 w-3 text-ink-subtle" />
           <span className="font-medium tabular-nums">
             {parsedDate ? format(parsedDate, "HH:mm", { locale: es }) : "—"}
           </span>
           {delta && (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-gray-700">
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
               {delta}
             </span>
           )}
@@ -461,7 +461,7 @@ function PointInfo({
 
         {lastDriver && (
           <div className="flex items-start gap-1.5">
-            <User className="h-3 w-3 text-gray-400 mt-0.5 shrink-0" />
+            <User className="h-3 w-3 text-ink-subtle mt-0.5 shrink-0" />
             <span className="leading-tight">{lastDriver}</span>
           </div>
         )}

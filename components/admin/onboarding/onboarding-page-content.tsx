@@ -108,10 +108,10 @@ const ATTENDEE_STATUS_LABEL: Record<string, string> = {
 const ATTENDEE_STATUS_BADGE: Record<string, string> = {
   INVITED: 'bg-muted text-muted-foreground',
   CONFIRMED: 'bg-info-soft text-info',
-  ATTENDED: 'bg-green-100 text-green-700',
-  SCHEDULED: 'bg-blue-100 text-blue-700',
-  NO_SHOW: 'bg-amber-100 text-amber-700',
-  CANCELLED: 'bg-red-100 text-red-700',
+  ATTENDED: 'bg-success-soft text-success',
+  SCHEDULED: 'bg-info-soft text-info',
+  NO_SHOW: 'bg-warning-soft text-warning',
+  CANCELLED: 'bg-danger-soft text-destructive',
   RESCHEDULED: 'bg-purple-100 text-purple-700',
 }
 
@@ -457,27 +457,27 @@ export function OnboardingPageContent({
     
     const config: Record<OnboardingEventStatus | 'PAST', { className: string; icon: React.ReactNode; label: string }> = {
       DRAFT: { 
-        className: 'bg-gray-100 text-gray-800 border-gray-200',
+        className: 'bg-muted text-foreground border-border',
         icon: <Edit className="h-3 w-3" />,
         label: getEventStatusLabel('DRAFT')
       },
       SCHEDULED: { 
-        className: 'bg-blue-100 text-blue-800 border-blue-200',
+        className: 'bg-info-soft text-info border-info',
         icon: <Calendar className="h-3 w-3" />,
         label: getEventStatusLabel('SCHEDULED')
       },
       IN_PROGRESS: { 
-        className: 'bg-amber-100 text-amber-800 border-amber-200',
+        className: 'bg-warning-soft text-warning border-warning',
         icon: <Clock className="h-3 w-3" />,
         label: getEventStatusLabel('IN_PROGRESS')
       },
       COMPLETED: { 
-        className: 'bg-green-100 text-green-800 border-green-200',
+        className: 'bg-success-soft text-success border-success',
         icon: <CheckCircle className="h-3 w-3" />,
         label: getEventStatusLabel('COMPLETED')
       },
       CANCELLED: { 
-        className: 'bg-red-100 text-red-800 border-red-200',
+        className: 'bg-danger-soft text-destructive border-destructive',
         icon: <XCircle className="h-3 w-3" />,
         label: getEventStatusLabel('CANCELLED')
       },
@@ -487,7 +487,7 @@ export function OnboardingPageContent({
         label: getEventStatusLabel('POSTPONED')
       },
       PAST: {
-        className: 'bg-gray-100 text-gray-600 border-gray-300',
+        className: 'bg-muted text-muted-foreground border-border',
         icon: <History className="h-3 w-3" />,
         label: 'Pasado'
       },
@@ -557,13 +557,13 @@ export function OnboardingPageContent({
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3 }}
           >
-            <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
+            <Card className="bg-info-soft border-info/30">
               <CardContent>
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                      <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                      <Calendar className="h-5 w-5 text-info" />
+                      <h3 className="text-lg font-semibold text-foreground">
                         Próximo Evento
                       </h3>
                     </div>

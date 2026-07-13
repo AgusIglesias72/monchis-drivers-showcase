@@ -35,6 +35,14 @@ const nextConfig: NextConfig = {
         source: '/:path*',
         headers: securityHeaders,
       },
+      // Las rutas /design/screens/* se embeben en iframes dentro de /design,
+      // mismo origen → SAMEORIGIN en lugar de DENY.
+      {
+        source: '/design/screens/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        ],
+      },
     ];
   },
 

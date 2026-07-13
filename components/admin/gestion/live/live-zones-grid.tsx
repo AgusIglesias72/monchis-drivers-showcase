@@ -17,9 +17,9 @@ interface Props {
 }
 
 const WARN_DOT: Record<LiveZone["warningKpi"], string> = {
-  default: "bg-emerald-500",
-  yellow: "bg-amber-500",
-  red: "bg-red-500",
+  default: "bg-success",
+  yellow: "bg-warning",
+  red: "bg-destructive",
 }
 
 const WARN_LABEL: Record<LiveZone["warningKpi"], string> = {
@@ -36,25 +36,25 @@ const STATUS_PRIORITY: Record<LiveZone["warningKpi"], number> = {
 
 function statusToneClass(kpi: LiveZone["warningKpi"]) {
   return kpi === "red"
-    ? "text-red-700 dark:text-red-400"
+    ? "text-destructive"
     : kpi === "yellow"
-      ? "text-amber-700 dark:text-amber-400"
-      : "text-emerald-700 dark:text-emerald-400"
+      ? "text-warning"
+      : "text-success"
 }
 
 function barFillClass(kpi: LiveZone["warningDriversConnections"]) {
   return kpi === "red"
-    ? "bg-red-500"
+    ? "bg-destructive"
     : kpi === "yellow"
-      ? "bg-amber-500"
-      : "bg-emerald-500"
+      ? "bg-warning"
+      : "bg-success"
 }
 
 function borderToneClass(kpi: LiveZone["warningKpi"]) {
   return kpi === "red"
-    ? "border-red-300 dark:border-red-900"
+    ? "border-destructive"
     : kpi === "yellow"
-      ? "border-amber-300 dark:border-amber-900"
+      ? "border-warning"
       : ""
 }
 
@@ -242,7 +242,7 @@ function CompactStat({
     tone === "danger"
       ? "text-destructive"
       : tone === "warning"
-        ? "text-amber-700 dark:text-amber-400"
+        ? "text-warning"
         : "text-foreground"
   return (
     <span
@@ -276,7 +276,7 @@ function ZoneListRow({
 
   const sdClass =
     z.orderWithoutDriver > 0
-      ? "text-amber-700 dark:text-amber-400"
+      ? "text-warning"
       : "text-muted-foreground"
   const demClass =
     z.requestsDelayed > 0 ? "text-destructive" : "text-muted-foreground"

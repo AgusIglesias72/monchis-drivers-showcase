@@ -51,9 +51,9 @@ export function StatusBadges({
       <Badge 
         variant="outline" 
         className={`gap-1.5 ${
-          isCompleted 
-            ? 'bg-green-50 text-green-700 border-green-200' 
-            : 'bg-gray-50 text-gray-500 border-gray-200'
+          isCompleted
+            ? 'bg-success-soft text-success border-success'
+            : 'bg-muted text-muted-foreground border-border'
         }`}
       >
         <CheckCircle className="h-3.5 w-3.5" />
@@ -64,9 +64,9 @@ export function StatusBadges({
       <Badge 
         variant="outline" 
         className={`gap-1.5 ${
-          isPaymentVerified 
-            ? 'bg-green-50 text-green-700 border-green-200' 
-            : 'bg-gray-50 text-gray-500 border-gray-200'
+          isPaymentVerified
+            ? 'bg-success-soft text-success border-success'
+            : 'bg-muted text-muted-foreground border-border'
         }`}
       >
         <CheckCircle className="h-3.5 w-3.5" />
@@ -77,9 +77,9 @@ export function StatusBadges({
       <Badge 
         variant="outline" 
         className={`gap-1.5 ${
-          isOnboardingConfirmed 
-            ? 'bg-blue-50 text-blue-700 border-blue-200' 
-            : 'bg-gray-50 text-gray-500 border-gray-200'
+          isOnboardingConfirmed
+            ? 'bg-info-soft text-info border-info'
+            : 'bg-muted text-muted-foreground border-border'
         }`}
       >
         <CheckCircle className="h-3.5 w-3.5" />
@@ -161,20 +161,20 @@ export function PaymentSection({
   }
 
   const statusConfig = {
-    PENDING: { 
-      label: 'Pendiente', 
-      className: 'bg-amber-50 text-amber-700 border-amber-200',
-      icon: Clock 
+    PENDING: {
+      label: 'Pendiente',
+      className: 'bg-warning-soft text-warning border-warning',
+      icon: Clock
     },
-    VERIFIED: { 
-      label: 'Verificado', 
-      className: 'bg-green-50 text-green-700 border-green-200',
-      icon: CheckCircle 
+    VERIFIED: {
+      label: 'Verificado',
+      className: 'bg-success-soft text-success border-success',
+      icon: CheckCircle
     },
-    REJECTED: { 
-      label: 'Rechazado', 
-      className: 'bg-red-50 text-red-700 border-red-200',
-      icon: XCircle 
+    REJECTED: {
+      label: 'Rechazado',
+      className: 'bg-danger-soft text-destructive border-destructive',
+      icon: XCircle
     },
   }
   
@@ -377,8 +377,8 @@ export function PaymentSection({
       
       {payment.rejectionReason && (
         <div className="pt-3 border-t space-y-1.5">
-          <label className="text-xs font-medium text-red-600 block">Motivo de Rechazo</label>
-          <p className="text-xs text-red-700 bg-red-50 p-2.5 rounded-md border border-red-100">
+          <label className="text-xs font-medium text-destructive block">Motivo de Rechazo</label>
+          <p className="text-xs text-destructive bg-danger-soft p-2.5 rounded-md border border-destructive">
             {payment.rejectionReason}
           </p>
         </div>
@@ -448,25 +448,25 @@ export function OnboardingSection({
       className: 'bg-purple-50 text-purple-700 border-purple-200',
       icon: CalendarIcon 
     },
-    CONFIRMED: { 
-      label: 'Confirmado', 
-      className: 'bg-blue-50 text-blue-700 border-blue-200',
-      icon: CheckCircle 
+    CONFIRMED: {
+      label: 'Confirmado',
+      className: 'bg-info-soft text-info border-info',
+      icon: CheckCircle
     },
-    ATTENDED: { 
-      label: 'Asistió', 
-      className: 'bg-green-50 text-green-700 border-green-200',
-      icon: CheckCircle 
+    ATTENDED: {
+      label: 'Asistió',
+      className: 'bg-success-soft text-success border-success',
+      icon: CheckCircle
     },
-    NO_SHOW: { 
-      label: 'No Asistió', 
-      className: 'bg-red-50 text-red-700 border-red-200',
-      icon: XCircle 
+    NO_SHOW: {
+      label: 'No Asistió',
+      className: 'bg-danger-soft text-destructive border-destructive',
+      icon: XCircle
     },
-    CANCELLED: { 
-      label: 'Cancelado', 
-      className: 'bg-gray-50 text-gray-700 border-gray-200',
-      icon: XCircle 
+    CANCELLED: {
+      label: 'Cancelado',
+      className: 'bg-muted text-foreground border-border',
+      icon: XCircle
     },
   }
 

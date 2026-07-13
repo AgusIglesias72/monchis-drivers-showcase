@@ -1,29 +1,45 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group"
 import { format, subDays } from "date-fns"
 import { es } from "date-fns/locale"
 import type { DateRange } from "react-day-picker"
-import { ArrowRight, CalendarDays, X } from "lucide-react"
+import {
+  ArrowRight,
+  Bike,
+  CalendarDays,
+  ChevronRight,
+  Clock,
+  Download,
+  MapPin,
+  Navigation,
+  Package,
+  Ruler,
+  Store,
+  X,
+} from "lucide-react"
+import { toast } from "sonner"
 
-import { AdminHeader } from "@/components/admin/admin-header"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
-import { Card, CardContent } from "@/components/ui/card"
+import { Switch } from "@/components/ui/switch"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { formatDistance } from "@/lib/utils/geo"
 import { cn } from "@/lib/utils"
 
@@ -65,14 +81,19 @@ const TYPE_OPTIONS = [
 ]
 
 // Acción que el driver omitió, en los mismos labels que usa el resto del panel.
-const TYPE_DESCRIPTION: Record<string, { action: string; place: string }> = {
+const TYPE_DESCRIPTION: Record<
+  string,
+  { action: string; place: string; icon: typeof Store }
+> = {
   LEFT_ORIGIN_WITHOUT_DELIVERY: {
     action: "Salió del comercio sin marcar En camino",
     place: "Comercio",
+    icon: Store,
   },
   LEFT_DESTINATION_WITHOUT_FINALIZE: {
     action: "Se fue del cliente sin marcar Entregado",
     place: "Cliente",
+    icon: Navigation,
   },
 }
 
@@ -88,9 +109,68 @@ const STATUS_LABEL: Record<string, string> = {
   PENDING: "Buscando driver",
 }
 
+// Tono semántico de cada estado de negocio → mismo color en toda la app.
+function statusTone(status: string | null): string {
+  switch (status) {
+    case "FINALIZED":
+      return "bg-success-soft text-success"
+    case "CANCELED":
+    case "CANCELLED":
+    case "CANCELED_BY_CLIENT":
+      return "bg-danger-soft text-destructive"
+    case "DELIVERY":
+    case "ACCEPTED":
+      return "bg-info-soft text-info"
+    case "OUTSIDE":
+    case "WAITING_ORDER":
+    case "PENDING":
+      return "bg-warning-soft text-warning"
+    default:
+      return "bg-muted text-muted-foreground"
+  }
+}
+
 function statusLabel(status: string | null): string {
   if (!status) return "—"
   return STATUS_LABEL[status] || status
+}
+
+function StatusPill({ status }: { status: string | null }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+        statusTone(status),
+      )}
+    >
+      {statusLabel(status)}
+    </span>
+  )
+}
+
+// Chip neutro para métricas (mono) o etiquetas.
+function Chip({
+  children,
+  mono,
+  icon: Icon,
+}: {
+  children: React.ReactNode
+  mono?: boolean
+  icon?: typeof Clock
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px]",
+        mono
+          ? "font-[family-name:var(--font-mono)] text-foreground"
+          : "text-muted-foreground",
+      )}
+    >
+      {Icon && <Icon className="size-3 text-ink-subtle" />}
+      {children}
+    </span>
+  )
 }
 
 // ¿La orden avanzó después del evento? (marcado tardío: la señal sigue siendo
@@ -113,9 +193,6 @@ function formatDuration(seconds: number | null): string {
   return `${h}h ${m % 60}m`
 }
 
-// detectedAt/leftAt son timestamps UTC reales generados por nuestro cron →
-// formateamos directo en la TZ del browser (a diferencia de los timestamps
-// PY-mislabeled de la API de pedidos).
 function formatEventDate(iso: string): { strong: string; weak: string } {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return { strong: iso, weak: "" }
@@ -123,6 +200,12 @@ function formatEventDate(iso: string): { strong: string; weak: string } {
     strong: format(d, "dd MMM", { locale: es }),
     weak: format(d, "HH:mm", { locale: es }),
   }
+}
+
+function formatFullDate(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  return format(d, "dd MMM yyyy, HH:mm", { locale: es })
 }
 
 function parseYmd(s: string): Date | undefined {
@@ -161,9 +244,18 @@ export function AnomaliasContent({ rows, total, page, pageSize, filters }: Props
     return from || to ? { from, to } : undefined
   })
   const [datePopoverOpen, setDatePopoverOpen] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [hideResolved, setHideResolved] = useState(false)
+  const [selected, setSelected] = useState<EventRow | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const hasFilters = !!(filters.from || filters.to) || filters.type !== "all"
+
+  const visibleRows = useMemo(
+    () => (hideResolved ? rows.filter((r) => !markedLater(r)) : rows),
+    [rows, hideResolved],
+  )
+  const hiddenCount = rows.length - visibleRows.length
 
   const updateParams = (updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -184,8 +276,6 @@ export function AnomaliasContent({ rows, total, page, pageSize, filters }: Props
     })
   }
 
-  // Aplica un rango completo (from+to) a la URL y cierra el popover.
-  // Para selección parcial (sólo from), no navegamos — solo pintamos en el state local.
   const commitDateRange = (range: DateRange | undefined) => {
     setDateRange(range)
     updateParams({
@@ -199,8 +289,6 @@ export function AnomaliasContent({ rows, total, page, pageSize, filters }: Props
     range: DateRange | undefined,
     triggerDate: Date | undefined,
   ) => {
-    // Si ya había un rango completo y el usuario clickeó otro día, no extendemos
-    // el rango (default de react-day-picker) — reseteamos como nueva selección.
     if (dateRange?.from && dateRange?.to && triggerDate) {
       setDateRange({ from: triggerDate, to: undefined })
       return
@@ -214,15 +302,41 @@ export function AnomaliasContent({ rows, total, page, pageSize, filters }: Props
   const handleDatePopoverOpenChange = (open: boolean) => {
     setDatePopoverOpen(open)
     if (!open) {
-      // Si cierra sin completar (sólo from), descartamos la selección parcial
-      // y volvemos al state representado por la URL.
       if (dateRange?.from && !dateRange?.to) {
         const urlFrom = parseYmd(filters.from)
         const urlTo = parseYmd(filters.to)
-        setDateRange(
-          urlFrom || urlTo ? { from: urlFrom, to: urlTo } : undefined,
-        )
+        setDateRange(urlFrom || urlTo ? { from: urlFrom, to: urlTo } : undefined)
       }
+    }
+  }
+
+  const handleExport = async () => {
+    setIsExporting(true)
+    try {
+      const res = await fetch("/api/admin/gestion/anomalias/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: filters.type === "all" ? null : filters.type,
+          from: filters.from || null,
+          to: filters.to || null,
+        }),
+      })
+      if (!res.ok) throw new Error("export failed")
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `anomalias_${new Date().toISOString().split("T")[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success("Exportación completada")
+    } catch {
+      toast.error("No se pudo exportar. Intentá de nuevo.")
+    } finally {
+      setIsExporting(false)
     }
   }
 
@@ -235,330 +349,444 @@ export function AnomaliasContent({ rows, total, page, pageSize, filters }: Props
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <AdminHeader
-        breadcrumbs={[
-          { label: "Gestión Admin" },
-          { label: "Anomalías", href: "/admin/gestion/anomalias" },
-        ]}
-      />
+    <div className="w-full space-y-6 p-4 sm:p-6 lg:p-8">
+      {/* Encabezado */}
+      <div>
+        <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-[var(--ls-tight)] sm:text-3xl">
+          Anomalías
+        </h1>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground sm:text-base">
+          Drivers que se fueron de un lugar sin marcar el cambio de estado del
+          pedido. Detección automática por posición (cron cada minuto).
+        </p>
+      </div>
 
-      <div className="w-full p-4 sm:p-6 lg:p-8 space-y-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Anomalías</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-            Drivers que se fueron de un lugar sin marcar el cambio de estado del
-            pedido. Detección automática por posición (cron cada minuto).
-          </p>
+      {/* Barra de filtros */}
+      <div className="rounded-[var(--radius-xl)] border border-border bg-card p-3 shadow-[var(--shadow-soft)] sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+          {/* Rango de fechas */}
+          <Popover open={datePopoverOpen} onOpenChange={handleDatePopoverOpenChange}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "h-9 min-w-[200px] justify-start gap-2 font-normal",
+                  !dateRange?.from && !dateRange?.to && "text-muted-foreground",
+                )}
+              >
+                <CalendarDays className="size-4 shrink-0" />
+                <span className="truncate">
+                  {formatRangeLabel(dateRange?.from, dateRange?.to)}
+                </span>
+                {(dateRange?.from || dateRange?.to) && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      commitDateRange(undefined)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        commitDateRange(undefined)
+                      }
+                    }}
+                    aria-label="Limpiar rango"
+                    className="ml-auto text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="flex w-auto flex-col p-0 sm:flex-row">
+              <div className="flex min-w-[140px] flex-row flex-wrap gap-1 border-b p-2 sm:flex-col sm:border-b-0 sm:border-r">
+                {[
+                  { label: "Hoy", days: "today" as const },
+                  { label: "Últimos 7", days: 7 },
+                  { label: "Últimos 14", days: 14 },
+                  { label: "Últimos 30", days: 30 },
+                  { label: "Últimos 90", days: 90 },
+                ].map((p) => (
+                  <Button
+                    key={p.label}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 justify-start text-xs sm:w-full"
+                    onClick={() => applyPreset(p.days)}
+                  >
+                    {p.label}
+                  </Button>
+                ))}
+              </div>
+              <Calendar
+                mode="range"
+                min={1}
+                selected={dateRange}
+                onSelect={handleCalendarSelect}
+                numberOfMonths={2}
+                defaultMonth={dateRange?.from}
+                locale={es}
+                showOutsideDays={false}
+              />
+            </PopoverContent>
+          </Popover>
+
+          {/* Tipo — segmented control STUDIO (activo = brand, nunca negro) */}
+          <RadioGroupPrimitive.Root
+            value={filters.type}
+            onValueChange={(v) => updateParams({ type: v === "all" ? null : v })}
+            className="inline-flex items-center gap-1 rounded-full bg-muted p-1"
+          >
+            {TYPE_OPTIONS.map((opt) => {
+              const isSelected = filters.type === opt.value
+              return (
+                <RadioGroupPrimitive.Item
+                  key={opt.value}
+                  value={opt.value}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+                    isSelected
+                      ? "bg-card text-primary shadow-[var(--shadow-soft)]"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {opt.label}
+                </RadioGroupPrimitive.Item>
+              )
+            })}
+          </RadioGroupPrimitive.Root>
+
+          {/* Toggle: ocultar resueltos */}
+          <label className="flex cursor-pointer select-none items-center gap-2 text-xs text-muted-foreground">
+            <Switch checked={hideResolved} onCheckedChange={setHideResolved} />
+            Ocultar resueltos
+          </label>
+
+          <div className="flex items-center gap-2 lg:ml-auto">
+            {hasFilters && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={handleClearAll}
+                disabled={isPending}
+              >
+                Limpiar
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleExport}
+              disabled={isExporting || total === 0}
+              className="h-9 gap-2"
+            >
+              <Download className="size-4" />
+              {isExporting ? "Exportando..." : "Exportar Excel"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Conteo */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold">
+          {total.toLocaleString("es-AR")} eventos
+          {hasFilters && (
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              con los filtros activos
+            </span>
+          )}
+          {hideResolved && hiddenCount > 0 && (
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              · {hiddenCount} resueltos ocultos
+            </span>
+          )}
+        </h2>
+        {isPending && (
+          <span className="text-xs text-muted-foreground">Aplicando...</span>
+        )}
+      </div>
+
+      {/* Lista de cards */}
+      {visibleRows.length === 0 ? (
+        <div className="rounded-[var(--radius-lg)] border border-dashed border-border bg-card/40 p-10 text-center text-sm text-muted-foreground">
+          {hasFilters || hideResolved
+            ? "Sin eventos con los filtros aplicados."
+            : "Todavía no hay eventos detectados. La detección corre cada minuto sobre los pedidos activos."}
+        </div>
+      ) : (
+        <div className="grid gap-2.5">
+          {visibleRows.map((r) => (
+            <EventCard key={r.id} row={r} onOpen={() => setSelected(r)} />
+          ))}
+        </div>
+      )}
+
+      {/* Paginación */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between rounded-[var(--radius-lg)] border border-border bg-card px-4 py-2.5 text-xs text-muted-foreground shadow-[var(--shadow-soft)]">
+          <span>
+            Página {page} de {totalPages} · {total.toLocaleString("es-AR")}{" "}
+            resultados
+          </span>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page <= 1 || isPending}
+              onClick={() => updateParams({ page: String(page - 1) })}
+            >
+              Anterior
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page >= totalPages || isPending}
+              onClick={() => updateParams({ page: String(page + 1) })}
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Drawer de detalle */}
+      <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+        <SheetContent
+          side="right"
+          className="w-full gap-0 p-0 sm:max-w-md"
+        >
+          {selected && <EventDetail row={selected} />}
+        </SheetContent>
+      </Sheet>
+    </div>
+  )
+}
+
+function EventCard({ row, onOpen }: { row: EventRow; onOpen: () => void }) {
+  const desc = TYPE_DESCRIPTION[row.type] ?? {
+    action: row.type,
+    place: "—",
+    icon: MapPin,
+  }
+  const Icon = desc.icon
+  const date = formatEventDate(row.leftAt)
+  const later = markedLater(row)
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group w-full rounded-[var(--radius-lg)] border border-border bg-card p-3.5 text-left shadow-[var(--shadow-soft)] transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-[var(--shadow-1)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/30 sm:p-4"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-primary">
+          <Icon className="size-5" />
         </div>
 
-        {/* Filtros */}
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-              {/* Date range picker */}
-              <Popover
-                open={datePopoverOpen}
-                onOpenChange={handleDatePopoverOpenChange}
-              >
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className={cn(
-                      "h-9 gap-2 font-normal min-w-[200px] justify-start",
-                      !dateRange?.from &&
-                        !dateRange?.to &&
-                        "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarDays className="h-4 w-4 shrink-0" />
-                    <span className="truncate">
-                      {formatRangeLabel(dateRange?.from, dateRange?.to)}
-                    </span>
-                    {(dateRange?.from || dateRange?.to) && (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          commitDateRange(undefined)
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            commitDateRange(undefined)
-                          }
-                        }}
-                        aria-label="Limpiar rango"
-                        className="ml-auto text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  align="start"
-                  className="w-auto p-0 flex flex-col sm:flex-row"
-                >
-                  <div className="flex flex-row sm:flex-col gap-1 border-b sm:border-b-0 sm:border-r p-2 min-w-[140px] flex-wrap">
-                    {[
-                      { label: "Hoy", days: "today" as const },
-                      { label: "Últimos 7", days: 7 },
-                      { label: "Últimos 14", days: 14 },
-                      { label: "Últimos 30", days: 30 },
-                      { label: "Últimos 90", days: 90 },
-                    ].map((p) => (
-                      <Button
-                        key={p.label}
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="justify-start h-8 text-xs sm:w-full"
-                        onClick={() => applyPreset(p.days)}
-                      >
-                        {p.label}
-                      </Button>
-                    ))}
-                  </div>
-                  <Calendar
-                    mode="range"
-                    min={1}
-                    selected={dateRange}
-                    onSelect={handleCalendarSelect}
-                    numberOfMonths={2}
-                    defaultMonth={dateRange?.from}
-                    locale={es}
-                    showOutsideDays={false}
-                  />
-                </PopoverContent>
-              </Popover>
-
-              {/* Tipo pills */}
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Tipo
-                </span>
-                <RadioGroupPrimitive.Root
-                  value={filters.type}
-                  onValueChange={(v) =>
-                    updateParams({ type: v === "all" ? null : v })
-                  }
-                  className="flex flex-wrap gap-1"
-                >
-                  {TYPE_OPTIONS.map((opt) => {
-                    const isSelected = filters.type === opt.value
-                    return (
-                      <RadioGroupPrimitive.Item
-                        key={opt.value}
-                        value={opt.value}
-                        className={cn(
-                          "rounded-md border px-2.5 py-1 text-xs transition-colors outline-none",
-                          "hover:bg-accent hover:text-accent-foreground",
-                          "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-                          isSelected
-                            ? "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background"
-                            : "border-border bg-background text-foreground",
-                        )}
-                      >
-                        {opt.label}
-                      </RadioGroupPrimitive.Item>
-                    )
-                  })}
-                </RadioGroupPrimitive.Root>
-              </div>
-
-              {hasFilters && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleClearAll}
-                  disabled={isPending}
-                  className="lg:ml-auto"
-                >
-                  Limpiar
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Tabla */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold">
-              {total.toLocaleString("es-AR")} eventos
-              {hasFilters && (
-                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  con los filtros activos
-                </span>
-              )}
-            </h2>
-            {isPending && (
-              <span className="text-xs text-muted-foreground">Aplicando...</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold leading-tight">{desc.action}</span>
+            {later && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                marcó después
+              </span>
             )}
           </div>
+          <div className="mt-0.5 truncate text-xs text-muted-foreground">
+            estaba en {statusLabel(row.stateAtEvent)}
+            {row.driverName ? ` · ${row.driverName}` : ""}
+            {row.placeName ? ` · ${row.placeName}` : ""}
+          </div>
 
-          {rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              {hasFilters
-                ? "Sin eventos con los filtros aplicados."
-                : "Todavía no hay eventos detectados. La detección corre cada minuto sobre los pedidos activos."}
-            </div>
-          ) : (
-            <TooltipProvider delayDuration={150}>
-              <div className="rounded-lg border bg-card overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr className="text-left">
-                        <th className="px-4 py-2 font-medium">Momento</th>
-                        <th className="px-4 py-2 font-medium">Acción omitida</th>
-                        <th className="px-4 py-2 font-medium">Pedido</th>
-                        <th className="px-4 py-2 font-medium">Driver</th>
-                        <th className="px-4 py-2 font-medium">Lugar</th>
-                        <th className="px-4 py-2 font-medium">Tiempo en el lugar</th>
-                        <th className="px-4 py-2 font-medium">Distancia</th>
-                        <th className="px-4 py-2 font-medium">Estado actual</th>
-                        <th className="px-4 py-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((r) => (
-                        <EventRowItem key={r.id} row={r} />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between border-t bg-muted/30 px-4 py-2 text-xs">
-                    <span>
-                      Página {page} de {totalPages} · {total.toLocaleString("es-AR")}{" "}
-                      resultados
-                    </span>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={page <= 1 || isPending}
-                        onClick={() => updateParams({ page: String(page - 1) })}
-                      >
-                        Anterior
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={page >= totalPages || isPending}
-                        onClick={() => updateParams({ page: String(page + 1) })}
-                      >
-                        Siguiente
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </TooltipProvider>
-          )}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <StatusPill status={row.currentStatus} />
+            <Chip mono icon={Clock}>
+              {formatDuration(row.dwellSeconds)}
+            </Chip>
+            <Chip mono icon={Ruler}>
+              {formatDistance(row.distanceAtDetectionM)}
+            </Chip>
+            {row.externalOrderId && (
+              <Chip mono icon={Package}>
+                #{row.externalOrderId}
+              </Chip>
+            )}
+            {row.zoneName && <Chip>{row.zoneName}</Chip>}
+          </div>
         </div>
+
+        <div className="flex shrink-0 flex-col items-end gap-0.5">
+          <span className="font-[family-name:var(--font-mono)] text-xs font-medium">
+            {date.strong}
+          </span>
+          <span className="font-[family-name:var(--font-mono)] text-[10px] text-muted-foreground">
+            {date.weak}
+          </span>
+          <ChevronRight className="mt-1 size-4 text-ink-subtle transition-colors group-hover:text-primary" />
+        </div>
+      </div>
+    </button>
+  )
+}
+
+function DetailRow({
+  label,
+  children,
+  mono,
+}: {
+  label: string
+  children: React.ReactNode
+  mono?: boolean
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-1.5">
+      <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
+      <span
+        className={cn(
+          "text-right text-sm",
+          mono && "font-[family-name:var(--font-mono)]",
+        )}
+      >
+        {children}
+      </span>
+    </div>
+  )
+}
+
+function DetailSection({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-[var(--ls-label)] text-ink-subtle">
+        {title}
+      </h3>
+      <div className="divide-y divide-border rounded-[var(--radius-md)] border border-border bg-surface-3/40 px-3">
+        {children}
       </div>
     </div>
   )
 }
 
-function EventRowItem({ row }: { row: EventRow }) {
-  const desc = TYPE_DESCRIPTION[row.type] ?? { action: row.type, place: "—" }
-  // leftAt = cuándo se fue realmente (primera muestra lejos); detectedAt es la
-  // confirmación unos minutos después.
-  const date = formatEventDate(row.leftAt)
+function EventDetail({ row }: { row: EventRow }) {
+  const desc = TYPE_DESCRIPTION[row.type] ?? {
+    action: row.type,
+    place: "—",
+    icon: MapPin,
+  }
+  const Icon = desc.icon
   const later = markedLater(row)
 
   return (
-    <tr className="border-t hover:bg-muted/30">
-      <td className="px-4 py-2.5">
-        <div className="font-medium tabular-nums">{date.strong}</div>
-        <div className="text-[10px] text-muted-foreground tabular-nums">
-          {date.weak}
-        </div>
-      </td>
-
-      <td className="px-4 py-2.5">
-        <div className="leading-tight max-w-[240px]">{desc.action}</div>
-        <div className="text-[10px] text-muted-foreground">
-          estaba en {statusLabel(row.stateAtEvent)}
-        </div>
-      </td>
-
-      <td className="px-4 py-2.5">
-        <div className="font-medium leading-tight">
-          {row.externalOrderId ? `#${row.externalOrderId}` : "—"}
-        </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="text-[10px] text-muted-foreground/70 font-mono cursor-default">
-              …{row.requestId.slice(-6)}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            <span className="font-mono text-[11px]">{row.requestId}</span>
-          </TooltipContent>
-        </Tooltip>
-      </td>
-
-      <td className="px-4 py-2.5">
-        <div className="truncate max-w-[160px]">{row.driverName || "—"}</div>
-        {row.zoneName && (
-          <div className="text-[10px] text-muted-foreground truncate max-w-[160px]">
-            {row.zoneName}
+    <div className="flex h-full flex-col">
+      <SheetHeader className="border-b border-border">
+        <div className="flex items-center gap-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand-soft text-primary">
+            <Icon className="size-5" />
           </div>
-        )}
-      </td>
-
-      <td className="px-4 py-2.5">
-        <div className="truncate max-w-[180px]">{row.placeName || "—"}</div>
-        <div className="text-[10px] text-muted-foreground">{desc.place}</div>
-      </td>
-
-      <td className="px-4 py-2.5">
-        <span className="text-xs tabular-nums">
-          {formatDuration(row.dwellSeconds)}
-        </span>
-      </td>
-
-      <td className="px-4 py-2.5">
-        <div className="text-xs tabular-nums">
-          {formatDistance(row.distanceAtDetectionM)}
-        </div>
-        {row.otherPlaceDistanceM !== null && row.otherPlaceDistanceM < 350 && (
-          <div className="text-[10px] text-muted-foreground">
-            {row.type === "LEFT_ORIGIN_WITHOUT_DELIVERY"
-              ? "cliente"
-              : "comercio"}{" "}
-            a {formatDistance(row.otherPlaceDistanceM)}
+          <div className="min-w-0">
+            <SheetTitle className="text-base leading-tight">{desc.action}</SheetTitle>
+            <SheetDescription className="font-[family-name:var(--font-mono)] text-xs">
+              Evento #{row.id} · detección por GPS
+            </SheetDescription>
           </div>
-        )}
-      </td>
+        </div>
+      </SheetHeader>
 
-      <td className="px-4 py-2.5">
-        <div className="text-xs">{statusLabel(row.currentStatus)}</div>
-        {later && (
-          <div className="text-[10px] text-muted-foreground">marcó después</div>
-        )}
-      </td>
+      <ScrollArea className="flex-1">
+        <div className="space-y-5 p-4">
+          <DetailSection title="Estado">
+            <DetailRow label="Al irse">
+              <StatusPill status={row.stateAtEvent} />
+            </DetailRow>
+            <DetailRow label="Actual">
+              <span className="inline-flex items-center gap-2">
+                <StatusPill status={row.currentStatus} />
+                {later && (
+                  <span className="text-[10px] text-muted-foreground">
+                    marcó después
+                  </span>
+                )}
+              </span>
+            </DetailRow>
+          </DetailSection>
 
-      <td className="px-4 py-2.5">
-        <Link
-          href={`/admin/gestion/pedidos/${row.requestId}`}
-          className="inline-flex items-center gap-1 text-primary hover:underline whitespace-nowrap"
-        >
-          Ver
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      </td>
-    </tr>
+          <DetailSection title="Driver">
+            <DetailRow label="Nombre">
+              <span className="inline-flex items-center gap-1.5">
+                <Bike className="size-3.5 text-ink-subtle" />
+                {row.driverName || "—"}
+              </span>
+            </DetailRow>
+            <DetailRow label="Zona">{row.zoneName || "—"}</DetailRow>
+          </DetailSection>
+
+          <DetailSection title="Pedido">
+            <DetailRow label="N° pedido" mono>
+              {row.externalOrderId ? `#${row.externalOrderId}` : "—"}
+            </DetailRow>
+            <DetailRow label="Request ID" mono>
+              <span className="break-all text-xs">{row.requestId}</span>
+            </DetailRow>
+            <DetailRow label="Lugar">
+              {row.placeName || "—"}
+              <span className="ml-1 text-xs text-muted-foreground">
+                ({desc.place})
+              </span>
+            </DetailRow>
+          </DetailSection>
+
+          <DetailSection title="Señal GPS">
+            <DetailRow label="Tiempo en el lugar" mono>
+              {formatDuration(row.dwellSeconds)}
+            </DetailRow>
+            <DetailRow label="Distancia al irse" mono>
+              {formatDistance(row.distanceAtDetectionM)}
+            </DetailRow>
+            {row.otherPlaceDistanceM !== null &&
+              row.otherPlaceDistanceM < 350 && (
+                <DetailRow
+                  label={
+                    row.type === "LEFT_ORIGIN_WITHOUT_DELIVERY"
+                      ? "Distancia al cliente"
+                      : "Distancia al comercio"
+                  }
+                  mono
+                >
+                  {formatDistance(row.otherPlaceDistanceM)}
+                </DetailRow>
+              )}
+            <DetailRow label="Se fue" mono>
+              {formatFullDate(row.leftAt)}
+            </DetailRow>
+            <DetailRow label="Detectado" mono>
+              {formatFullDate(row.detectedAt)}
+            </DetailRow>
+          </DetailSection>
+        </div>
+      </ScrollArea>
+
+      <SheetFooter className="border-t border-border">
+        <Button asChild className="w-full">
+          <Link href={`/admin/gestion/pedidos/${row.requestId}`}>
+            Ver pedido completo
+            <ArrowRight className="size-4" />
+          </Link>
+        </Button>
+      </SheetFooter>
+    </div>
   )
 }

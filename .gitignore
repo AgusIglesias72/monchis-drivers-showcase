@@ -75,3 +75,8 @@ next-env.d.ts
 *.xls
 *.csv
 !public/**/*.csv
+
+# playwright e2e
+/test-results/
+/playwright-report/
+/e2e/.auth/

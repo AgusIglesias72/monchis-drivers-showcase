@@ -2,16 +2,7 @@
 
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts"
 
-const data = [
-  { name: "Ene", total: 12 },
-  { name: "Feb", total: 18 },
-  { name: "Mar", total: 24 },
-  { name: "Abr", total: 15 },
-  { name: "May", total: 28 },
-  { name: "Jun", total: 32 },
-]
-
-export function Overview() {
+export function Overview({ data }: { data: { name: string; total: number }[] }) {
   return (
     <ResponsiveContainer width="100%" height={350}>
       <BarChart data={data}>

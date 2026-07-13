@@ -22,6 +22,7 @@ export interface BonusProcessConfig {
   keepBrowserOpen?: boolean;
   startFromExtra?: string; // Nombre del extra desde donde retomar (salta los anteriores)
   skipSheetUpload?: boolean; // Salta descarga de Excel y upload a Sheet (usa el sheet existente)
+  stores?: string[]; // Bono puntual por sucursal: si viene, solo se procesan los pedidos cuyo storeName "contiene" alguno de estos (normalizado: ignora mayúsculas, apóstrofes y separadores). Vacío/undefined = todas.
   loginUrl?: string;
   ordersReportUrl?: string;
   extrasListUrl?: string;
@@ -114,6 +115,9 @@ class BonusProcessor {
   private context?: BrowserContext;
   private page?: Page;
   private usingSharedSession = false;
+  // Label de sucursal para el nombre del extra cuando el bono es por sucursal
+  // (config.stores). Se setea al inicio de process() y se usa en generateExtraName.
+  private storeBonusLabel: string | null = null;
 
   // ========== INITIALIZATION ==========
 
@@ -638,7 +642,9 @@ class BonusProcessor {
       maximumFractionDigits: 0,
     });
 
-    return `${day}/${month} (${orderCount}) - ${formattedAmount} Gs`;
+    const base = `${day}/${month} (${orderCount}) - ${formattedAmount} Gs`;
+    // Bono por sucursal: prefijamos el nombre del extra con la sucursal.
+    return this.storeBonusLabel ? `${this.storeBonusLabel} - ${base}` : base;
   }
 
   // ========== VALIDATE DUPLICATES ==========
@@ -1678,6 +1684,13 @@ class BonusProcessor {
       password = process.env.APP_PASSWORD!,
     } = config;
 
+    // Bono por sucursal → el nombre del extra lleva la sucursal como prefijo.
+    // Reseteamos siempre (es singleton) para no arrastrar el label de un run previo.
+    this.storeBonusLabel =
+      config.stores && config.stores.length > 0
+        ? config.stores.join(' + ')
+        : null;
+
     console.log('\n🎯 ============ INICIANDO PROCESO DE BONOS ============');
     console.log(`   📅 Fecha: ${bonusDate}`);
     console.log(`   🏃 Modo: ${executionMode}`);
@@ -1701,6 +1714,30 @@ class BonusProcessor {
 
         // 4. Parsear Excel
         orders = parseOrdersExcel(excelBuffer);
+
+        // 4.1 Bono puntual por sucursal: si config.stores viene, filtramos los
+        // pedidos a esas sucursales. Match por "contiene" normalizado (ignora
+        // mayúsculas, apóstrofes y separadores) para tolerar variaciones del
+        // nombre del comercio en el Excel: "McDonald's - Fortis" matchea con
+        // "McDonalds Fortis". Lo hacemos ANTES de subir al sheet y de computar,
+        // así todo el flujo (sheet, preview, extras) queda acotado a la sucursal.
+        if (config.stores && config.stores.length > 0) {
+          const norm = (s: string) =>
+            s
+              .toLowerCase()
+              .replace(/['']/g, '')
+              .replace(/[^a-z0-9]+/g, ' ')
+              .trim();
+          const needles = config.stores.map(norm).filter(Boolean);
+          const before = orders.length;
+          orders = orders.filter((o) => {
+            const hay = norm(o.storeName ?? '');
+            return needles.some((n) => hay.includes(n));
+          });
+          console.log(
+            `🏪 Filtro por sucursal (${config.stores.join(', ')}): ${orders.length}/${before} pedidos coinciden`,
+          );
+        }
 
         // 4.5 Subir pedidos al Google Sheet (para referencia y auditoría)
         await this.uploadOrdersToSheet(orders, bonusDate, process.env.BONUS_RULES_SHEET_ID!);

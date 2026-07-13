@@ -66,24 +66,24 @@ export function KpiStrip({
       value: formatNumber(total),
       hint: "en el rango",
       Icon: Users,
-      accent: "text-blue-600 dark:text-blue-400",
-      iconBg: "bg-blue-500/10",
+      accent: "text-info",
+      iconBg: "bg-info-soft",
     },
     {
       label: "Completadas",
       value: formatNumber(completadas),
       hint: `${tasaCompletadas}% conversion`,
       Icon: CheckCircle2,
-      accent: "text-emerald-600 dark:text-emerald-400",
-      iconBg: "bg-emerald-500/10",
+      accent: "text-success",
+      iconBg: "bg-success-soft",
     },
     {
       label: "En curso",
       value: formatNumber(onboardingStats.inProgressDrivers || 0),
       hint: "agendados",
       Icon: Clock,
-      accent: "text-indigo-600 dark:text-indigo-400",
-      iconBg: "bg-indigo-500/10",
+      accent: "text-info",
+      iconBg: "bg-info-soft",
     },
     {
       label: "Asistencias",
@@ -98,8 +98,8 @@ export function KpiStrip({
       value: formatNumber(asistenciasProgramadasVsRealizadas.noAsistieron || 0),
       hint: "del período",
       Icon: UserX,
-      accent: "text-rose-600 dark:text-rose-400",
-      iconBg: "bg-rose-500/10",
+      accent: "text-destructive",
+      iconBg: "bg-danger-soft",
     },
     {
       label: "Docs pendientes",
@@ -108,11 +108,11 @@ export function KpiStrip({
       Icon: FileWarning,
       accent:
         mainStats.pendingDocs > 0
-          ? "text-amber-600 dark:text-amber-400"
+          ? "text-warning"
           : "text-muted-foreground",
       iconBg:
         mainStats.pendingDocs > 0
-          ? "bg-amber-500/10"
+          ? "bg-warning-soft"
           : "bg-muted",
       alert: mainStats.pendingDocs > 0,
     },
@@ -130,7 +130,7 @@ export function KpiStrip({
             transition={{ delay: i * 0.04, duration: 0.25 }}
             className={cn(
               "relative rounded-lg border bg-card p-3 transition-colors",
-              item.alert && "ring-1 ring-amber-500/30 border-amber-500/40"
+              item.alert && "ring-1 ring-warning border-warning"
             )}
           >
             <div className="flex items-start justify-between gap-1">

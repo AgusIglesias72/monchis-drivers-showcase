@@ -1,0 +1,10 @@
+// Gráficos STUDIO (recharts) con paleta Monchis brand-harmonizada.
+export * from "./palette"
+export * from "./chart-tooltip"
+export * from "./chart-card"
+export * from "./bar-chart"
+export * from "./line-chart"
+export * from "./area-chart"
+export * from "./donut-chart"
+export * from "./sparkline"
+export * from "./funnel-chart"

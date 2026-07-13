@@ -47,27 +47,27 @@ const MODALITY_BADGE_CLASS: Record<OnboardingModality, string> = {
 
 const STATUS_BADGE: Record<string, { className: string; icon: React.ReactNode; label: string }> = {
   DRAFT: {
-    className: 'bg-gray-100 text-gray-800 border-gray-200',
+    className: 'bg-muted text-foreground border-border',
     icon: <Edit className="h-3 w-3" />,
     label: getEventStatusLabel('DRAFT' as any),
   },
   SCHEDULED: {
-    className: 'bg-blue-100 text-blue-800 border-blue-200',
+    className: 'bg-info-soft text-info border-info',
     icon: <Calendar className="h-3 w-3" />,
     label: getEventStatusLabel('SCHEDULED' as any),
   },
   IN_PROGRESS: {
-    className: 'bg-amber-100 text-amber-800 border-amber-200',
+    className: 'bg-warning-soft text-warning border-warning',
     icon: <Clock className="h-3 w-3" />,
     label: getEventStatusLabel('IN_PROGRESS' as any),
   },
   COMPLETED: {
-    className: 'bg-green-100 text-green-800 border-green-200',
+    className: 'bg-success-soft text-success border-success',
     icon: <CheckCircle className="h-3 w-3" />,
     label: getEventStatusLabel('COMPLETED' as any),
   },
   CANCELLED: {
-    className: 'bg-red-100 text-red-800 border-red-200',
+    className: 'bg-danger-soft text-destructive border-destructive',
     icon: <XCircle className="h-3 w-3" />,
     label: getEventStatusLabel('CANCELLED' as any),
   },
@@ -77,7 +77,7 @@ const STATUS_BADGE: Record<string, { className: string; icon: React.ReactNode; l
     label: getEventStatusLabel('POSTPONED' as any),
   },
   PAST: {
-    className: 'bg-gray-100 text-gray-600 border-gray-300',
+    className: 'bg-muted text-muted-foreground border-border',
     icon: <History className="h-3 w-3" />,
     label: 'Pasado',
   },
@@ -292,7 +292,7 @@ export function OnboardingEventContent({
           <div
             role="tablist"
             aria-label="Secciones del evento"
-            className="flex items-end gap-1 overflow-x-auto pb-0 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full"
+            className="flex items-end gap-1 overflow-x-auto pb-0 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-secondary [&::-webkit-scrollbar-thumb]:rounded-full"
           >
             {([
               { key: 'attendees', label: 'Participantes', icon: List, count: event.attendees.length },

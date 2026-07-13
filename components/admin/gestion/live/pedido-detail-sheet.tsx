@@ -21,6 +21,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import type {
+  LiveBreadcrumb,
   LiveDriver,
   LiveRequest,
 } from "@/lib/types/live-panel.types"
@@ -29,6 +30,7 @@ interface Props {
   pedido: LiveRequest | null
   driver: LiveDriver | null
   delayedSet: Set<string>
+  breadcrumb?: LiveBreadcrumb | null
   onClose: () => void
 }
 
@@ -106,10 +108,10 @@ function paymentLabel(p: string | null): string {
 }
 
 const STATE_BADGE: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300",
+  PENDING: "bg-warning-soft text-warning",
   ACCEPTED: "bg-violet-100 text-violet-900 dark:bg-violet-900/30 dark:text-violet-300",
   WAITING_ORDER: "bg-sky-100 text-sky-900 dark:bg-sky-900/30 dark:text-sky-300",
-  DELIVERY: "bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300",
+  DELIVERY: "bg-info-soft text-info",
   OUTSIDE: "bg-cyan-100 text-cyan-900 dark:bg-cyan-900/30 dark:text-cyan-300",
   ASSIGNED: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
   ASSIGNED_DELIVERY: "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
@@ -120,16 +122,17 @@ const TONE_BIG: Record<
   ReturnType<typeof bucketTone>,
   string
 > = {
-  fresh: "bg-emerald-500 text-white",
-  warm: "bg-amber-500 text-white",
-  hot: "bg-orange-500 text-white",
-  critical: "bg-red-500 text-white",
+  fresh: "bg-success text-white",
+  warm: "bg-warning text-white",
+  hot: "bg-warning text-white",
+  critical: "bg-destructive text-white",
 }
 
 export function PedidoDetailSheet({
   pedido,
   driver,
   delayedSet,
+  breadcrumb,
   onClose,
 }: Props) {
   const isOpen = pedido !== null
@@ -144,6 +147,9 @@ export function PedidoDetailSheet({
             pedido={pedido}
             driver={driver}
             isDelayed={pedido.isDelayed || delayedSet.has(pedido.requestId)}
+            breadcrumb={
+              breadcrumb?.requestId === pedido.requestId ? breadcrumb : null
+            }
           />
         ) : null}
       </SheetContent>
@@ -155,10 +161,12 @@ function PedidoDetail({
   pedido: r,
   driver,
   isDelayed,
+  breadcrumb,
 }: {
   pedido: LiveRequest
   driver: LiveDriver | null
   isDelayed: boolean
+  breadcrumb: LiveBreadcrumb | null
 }) {
   const stateMin = elapsedMinutesSince(r.currentStateSince || r.createdAt)
   const totalMin = elapsedMinutesSince(r.confirmedAt || r.createdAt)
@@ -226,7 +234,9 @@ function PedidoDetail({
         {/* Mapa: vista simple del tramo actual del driver */}
         <div>
           <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Tramo actual
+            {breadcrumb && breadcrumb.points.length >= 2
+              ? "Recorrido del driver"
+              : "Tramo actual"}
           </h3>
           <PedidoSheetMap
             state={r.state}
@@ -234,6 +244,11 @@ function PedidoDetail({
             driverName={driver?.fullName ?? r.driverName ?? null}
             origin={r.origin}
             destination={r.destination}
+            trail={
+              breadcrumb
+                ? breadcrumb.points.map((p) => ({ lat: p.lat, lng: p.lng }))
+                : null
+            }
           />
         </div>
 
@@ -242,7 +257,7 @@ function PedidoDetail({
           {r.driverName ? (
             <div className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500 text-sm font-bold text-white">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-info text-sm font-bold text-white">
                   {r.driverName
                     .split(" ")
                     .filter(Boolean)
@@ -272,7 +287,7 @@ function PedidoDetail({
                   href={`https://wa.me/${r.driverPhone.replace(/\D/g, "")}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md border bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400"
+                  className="inline-flex items-center gap-1 rounded-md border bg-success-soft px-2.5 py-1.5 text-xs font-medium text-success hover:bg-success/15"
                 >
                   <Phone className="h-3 w-3" />
                   WhatsApp
@@ -280,7 +295,7 @@ function PedidoDetail({
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-2 rounded-lg border border-dashed bg-amber-50/40 p-3 text-sm text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+            <div className="flex items-center gap-2 rounded-lg border border-dashed bg-warning-soft p-3 text-sm text-warning">
               <Search className="h-4 w-4" />
               Sin driver asignado
             </div>
@@ -290,7 +305,7 @@ function PedidoDetail({
         {/* Comercio (origen) */}
         <Section
           title="Comercio"
-          icon={<Building2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />}
+          icon={<Building2 className="h-3 w-3 text-success" />}
         >
           <div className="space-y-1 rounded-lg border bg-card p-3 text-sm">
             <div className="font-semibold">{r.origin?.name || "—"}</div>
@@ -310,7 +325,7 @@ function PedidoDetail({
         {/* Cliente (destino) */}
         <Section
           title="Cliente"
-          icon={<MapPin className="h-3 w-3 text-red-700 dark:text-red-400" />}
+          icon={<MapPin className="h-3 w-3 text-destructive" />}
         >
           <div className="space-y-1 rounded-lg border bg-card p-3 text-sm">
             <div className="font-semibold">{r.destination?.name || "—"}</div>

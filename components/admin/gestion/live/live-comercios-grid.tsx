@@ -138,14 +138,14 @@ const STATE_CHIPS: Record<string, StateChip> = {
   PENDING: {
     label: "Buscando",
     icon: Search,
-    bg: "bg-slate-100",
-    text: "text-slate-700",
+    bg: "bg-muted",
+    text: "text-muted-foreground",
   },
   ACCEPTED: {
     label: "Aceptado",
     icon: Handshake,
-    bg: "bg-amber-100",
-    text: "text-amber-800",
+    bg: "bg-warning-soft",
+    text: "text-warning",
   },
   ASSIGNED: {
     label: "Asignado",
@@ -174,8 +174,8 @@ const STATE_CHIPS: Record<string, StateChip> = {
   DELIVERY: {
     label: "En camino",
     icon: Bike,
-    bg: "bg-blue-100",
-    text: "text-blue-800",
+    bg: "bg-info-soft",
+    text: "text-info",
   },
   OUTSIDE: {
     label: "Afuera",
@@ -216,9 +216,9 @@ const AGE_TONE_TEXT: Record<
   string
 > = {
   fresh: "text-muted-foreground",
-  warm: "text-amber-700",
-  hot: "text-orange-700",
-  critical: "text-red-700 font-semibold",
+  warm: "text-warning",
+  hot: "text-warning",
+  critical: "text-destructive font-semibold",
 }
 
 function sortCommerces(commerces: LiveCommerce[], mode: SortMode): LiveCommerce[] {
@@ -538,7 +538,7 @@ function CommerceCard({
         (focused
           ? "border-foreground bg-foreground/[0.03] ring-2 ring-foreground/30"
           : commerce.hasAlert
-            ? "border-red-200 bg-red-50/40 hover:bg-red-50"
+            ? "border-destructive/30 bg-danger-soft/40 hover:bg-danger-soft/70"
             : "border-border hover:bg-muted/30")
       }
     >
@@ -549,7 +549,7 @@ function CommerceCard({
             {commerce.hasAlert && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
                 </TooltipTrigger>
                 <TooltipContent>
                   <div className="space-y-0.5 text-xs">
@@ -852,7 +852,7 @@ function CommercesTable({
                   focused
                     ? "bg-foreground/[0.05]"
                     : c.hasAlert
-                      ? "bg-red-50/40 hover:bg-red-50"
+                      ? "bg-danger-soft/40 hover:bg-danger-soft/70"
                       : "hover:bg-muted/40"
                 }`}
               >
@@ -861,7 +861,7 @@ function CommercesTable({
                     {c.hasAlert && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-600" />
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" />
                         </TooltipTrigger>
                         <TooltipContent>
                           <div className="space-y-0.5 text-xs">

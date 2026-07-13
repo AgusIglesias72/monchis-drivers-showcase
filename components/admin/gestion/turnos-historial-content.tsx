@@ -411,14 +411,14 @@ export function TurnosHistorialContent({ snapshots, initialDetail }: Props) {
                     {(d.joined.length > 0 || d.left.length > 0) && (
                       <div className="mt-0.5 text-xs text-muted-foreground">
                         {d.joined.length > 0 && (
-                          <span className="text-emerald-700">
+                          <span className="text-success">
                             altas:{" "}
                             {d.joined.map((j) => j.driverName || j.driverId).join(", ")}
                           </span>
                         )}
                         {d.joined.length > 0 && d.left.length > 0 && " · "}
                         {d.left.length > 0 && (
-                          <span className="text-rose-700">
+                          <span className="text-destructive">
                             bajas:{" "}
                             {d.left.map((l) => l.driverName || l.driverId).join(", ")}
                           </span>
@@ -428,11 +428,11 @@ export function TurnosHistorialContent({ snapshots, initialDetail }: Props) {
                   </div>
                   <span className="shrink-0 text-sm font-medium tabular-nums">
                     {d.joined.length > 0 && (
-                      <span className="text-emerald-700">+{d.joined.length}</span>
+                      <span className="text-success">+{d.joined.length}</span>
                     )}
                     {d.joined.length > 0 && d.left.length > 0 && " / "}
                     {d.left.length > 0 && (
-                      <span className="text-rose-700">−{d.left.length}</span>
+                      <span className="text-destructive">−{d.left.length}</span>
                     )}
                   </span>
                 </li>

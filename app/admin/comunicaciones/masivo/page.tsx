@@ -680,8 +680,8 @@ telefono,nombre,empresa,codigo
               <Card>
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-lg bg-blue-500/10">
-                      <Sparkles className="h-5 w-5 text-blue-600" />
+                    <div className="p-2.5 rounded-lg bg-info/10">
+                      <Sparkles className="h-5 w-5 text-info" />
                     </div>
                     <div>
                       <CardTitle className="text-lg">Mensaje</CardTitle>
@@ -805,7 +805,7 @@ Ejemplo: Hola {nombre}, tu código es {codigo}."
                             </div>
                           ) : imageFile ? (
                             <div className="flex items-center gap-2 text-sm">
-                              <CheckCircle2 className="h-5 w-5 text-green-600" />
+                              <CheckCircle2 className="h-5 w-5 text-success" />
                               {imageFile.name}
                             </div>
                           ) : (
@@ -857,8 +857,8 @@ Ejemplo: Hola {nombre}, tu código es {codigo}."
               <Card>
                 <CardHeader className="pb-4">
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-lg bg-orange-500/10">
-                      <Users className="h-5 w-5 text-orange-600" />
+                    <div className="p-2.5 rounded-lg bg-warning/10">
+                      <Users className="h-5 w-5 text-warning" />
                     </div>
                     <div>
                       <CardTitle className="text-lg">Configuración</CardTitle>
@@ -870,7 +870,7 @@ Ejemplo: Hola {nombre}, tu código es {codigo}."
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-start gap-2 rounded-md border bg-muted/30 p-3">
-                    <div className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                    <div className="h-2 w-2 rounded-full bg-success mt-1.5 shrink-0" />
                     <div className="space-y-0.5">
                       <p className="text-sm font-medium">Bot WhatsApp</p>
                       <p className="text-xs text-muted-foreground">
@@ -975,7 +975,7 @@ Ejemplo: Hola {nombre}, tu código es {codigo}."
                             <ImageIcon className="h-4 w-4 text-muted-foreground" />
                             <span className="text-sm font-medium">Con imagen</span>
                           </div>
-                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          <CheckCircle2 className="h-4 w-4 text-success" />
                         </div>
                       )}
 
@@ -1001,9 +1001,9 @@ Ejemplo: Hola {nombre}, tu código es {codigo}."
                       </p>
                     </div>
 
-                    <Alert className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
-                      <Info className="h-4 w-4 text-blue-600" />
-                      <AlertDescription className="text-xs text-blue-900 dark:text-blue-100">
+                    <Alert className="border-info bg-info-soft">
+                      <Info className="h-4 w-4 text-info" />
+                      <AlertDescription className="text-xs text-info">
                         Revisa el mensaje y haz clic en &quot;Enviar Mensajes&quot;
                       </AlertDescription>
                     </Alert>
@@ -1013,10 +1013,10 @@ Ejemplo: Hola {nombre}, tu código es {codigo}."
 
               {/* Resultados */}
               {sendResult && (
-                <Card className="border-green-200 dark:border-green-800">
+                <Card className="border-success">
                   <CardHeader className="pb-4">
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      <CheckCircle2 className="h-5 w-5 text-success" />
                       Resultados
                     </CardTitle>
                   </CardHeader>
@@ -1035,15 +1035,15 @@ Ejemplo: Hola {nombre}, tu código es {codigo}."
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="border rounded-lg p-4 space-y-1 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
-                        <p className="text-2xl font-bold text-green-600">
+                      <div className="border rounded-lg p-4 space-y-1 bg-success-soft border-success">
+                        <p className="text-2xl font-bold text-success">
                           {sendResult.summary.successful}
                         </p>
                         <p className="text-xs text-muted-foreground">Exitosos</p>
                       </div>
 
-                      <div className="border rounded-lg p-4 space-y-1 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800">
-                        <p className="text-2xl font-bold text-red-600">
+                      <div className="border rounded-lg p-4 space-y-1 bg-danger-soft border-destructive">
+                        <p className="text-2xl font-bold text-destructive">
                           {sendResult.summary.failed}
                         </p>
                         <p className="text-xs text-muted-foreground">Fallidos</p>

@@ -21,6 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import {
   Popover,
+  PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
@@ -86,6 +87,7 @@ import {
   RefreshCw,
   MapPin,
   ClipboardList,
+  FileUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -285,7 +287,7 @@ function StatusBadge() {
         loading
           ? 'text-muted-foreground border-border'
           : ok
-            ? 'text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30'
+            ? 'text-success border-success bg-success-soft'
             : 'text-destructive border-destructive/30 bg-destructive/10',
       )}
     >
@@ -295,7 +297,7 @@ function StatusBadge() {
         <span
           className={cn(
             'size-2 rounded-full',
-            ok ? 'bg-emerald-500' : 'bg-destructive',
+            ok ? 'bg-success' : 'bg-destructive',
           )}
         />
       )}
@@ -642,7 +644,7 @@ function ChatBody({
       )}
 
       {result.status === 'success' && (
-        <div className="flex items-center justify-center gap-1.5 pt-2 text-xs text-emerald-700 dark:text-emerald-400">
+        <div className="flex items-center justify-center gap-1.5 pt-2 text-xs text-success">
           <CheckCircle2 className="h-3.5 w-3.5" />
           {result.message}
           {result.conversationId && (
@@ -2386,6 +2388,7 @@ function SegmentsView() {
               ))}
             </div>
             <PasteIdsButton onApply={applyPastedIds} />
+            <UploadCsvButton onApply={applyPastedIds} />
           </div>
           {selected.size > 0 && (
             <button
@@ -2542,27 +2545,107 @@ function PasteIdsButton({
             Seleccionar
           </Button>
         </div>
-        {result && (
-          <div className="space-y-1 rounded-md border bg-muted/40 p-2 text-xs">
-            <div className="flex items-center gap-1.5 text-foreground">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-              {result.matched} agregado{result.matched === 1 ? '' : 's'} a la
-              selección
-            </div>
-            {result.notLinked.length > 0 && (
-              <div className="text-amber-600">
-                {result.notLinked.length} sin vincular en Intercom (omitidos)
-              </div>
-            )}
-            {result.notFound.length > 0 && (
-              <div className="text-muted-foreground">
-                {result.notFound.length} no encontrado
-                {result.notFound.length === 1 ? '' : 's'} en el universo cargado
-              </div>
-            )}
-          </div>
-        )}
+        {result && <PasteSummary result={result} />}
       </PopoverContent>
+    </Popover>
+  );
+}
+
+function PasteSummary({ result }: { result: PasteResult }) {
+  return (
+    <div className="space-y-1 rounded-md border bg-muted/40 p-2 text-xs">
+      <div className="flex items-center gap-1.5 text-foreground">
+        <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+        {result.matched} agregado{result.matched === 1 ? '' : 's'} a la
+        selección
+      </div>
+      {result.notLinked.length > 0 && (
+        <div className="text-warning">
+          {result.notLinked.length} sin vincular en Intercom (omitidos)
+        </div>
+      )}
+      {result.notFound.length > 0 && (
+        <div className="text-muted-foreground">
+          {result.notFound.length} no encontrado
+          {result.notFound.length === 1 ? '' : 's'} en el universo cargado
+        </div>
+      )}
+    </div>
+  );
+}
+
+// CSV multi-columna: si hay encabezado con una columna de ID reconocible, se
+// extrae solo esa columna; si no, se pasa el texto entero (el matcher tolera
+// tokens que no son IDs, solo suman "no encontrados").
+function extractIdsFromCsv(text: string): string {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return text;
+  const splitRow = (l: string) =>
+    l.split(/[,;\t]/).map((c) => c.trim().replace(/^["']+|["']+$/g, ''));
+  const header = splitRow(lines[0]);
+  if (header.length < 2) return text;
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+  const ID_HEADERS = ['userid', 'id', 'externalid', 'driverid'];
+  const idx = header.findIndex((h) => ID_HEADERS.includes(norm(h)));
+  if (idx === -1) return text;
+  return lines
+    .slice(1)
+    .map((l) => splitRow(l)[idx] ?? '')
+    .filter(Boolean)
+    .join('\n');
+}
+
+function UploadCsvButton({
+  onApply,
+}: {
+  onApply: (raw: string) => PasteResult;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const [result, setResult] = useState<PasteResult | null>(null);
+
+  async function handleFile(file: File) {
+    const text = await file.text();
+    setFileName(file.name);
+    setResult(onApply(extractIdsFromCsv(text)));
+    setOpen(true);
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverAnchor asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 px-2 text-xs"
+          onClick={() => inputRef.current?.click()}
+        >
+          <FileUp className="h-3.5 w-3.5" />
+          Subir CSV
+        </Button>
+      </PopoverAnchor>
+      <PopoverContent align="start" className="w-80 space-y-2">
+        <div>
+          <p className="text-sm font-medium">Seleccionar por CSV</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {fileName}
+          </p>
+        </div>
+        {result && <PasteSummary result={result} />}
+      </PopoverContent>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".csv,.txt"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void handleFile(f);
+          e.target.value = '';
+        }}
+      />
     </Popover>
   );
 }
@@ -2674,7 +2757,7 @@ function SegmentRow({
         {driver.hasConversation && (
           <Badge
             variant="outline"
-            className="gap-1 border-sky-200 bg-sky-50 text-sky-700 text-[11px] font-medium flex-shrink-0"
+            className="gap-1 border-info bg-info-soft text-info text-[11px] font-medium flex-shrink-0"
           >
             <MessageSquare className="h-3 w-3" />
             Chat iniciado
@@ -2683,7 +2766,7 @@ function SegmentRow({
         {driver.linked ? (
           <Badge
             variant="outline"
-            className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-medium flex-shrink-0"
+            className="gap-1 border-success bg-success-soft text-success text-[11px] font-medium flex-shrink-0"
           >
             <IntercomIcon className="h-3 w-3" />
             En Intercom
@@ -2749,6 +2832,10 @@ interface BroadcastResponse {
   results: { driverId: string; status: 'sent' | 'failed'; error?: string }[];
 }
 
+// Por debajo del MAX_RECIPIENTS (300) del route; el "sin límite" lo da el
+// chunking secuencial del cliente.
+const BROADCAST_CHUNK_SIZE = 150;
+
 function BroadcastSheet({
   open,
   onOpenChange,
@@ -2771,6 +2858,12 @@ function BroadcastSheet({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState<{
+    batch: number;
+    batches: number;
+    sent: number;
+    total: number;
+  } | null>(null);
   const [result, setResult] = useState<BroadcastResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
@@ -2880,41 +2973,111 @@ function BroadcastSheet({
     !sending &&
     !needsTag;
 
-  async function handleSend() {
-    if (!senderId || !hasContent) return;
+  // Sin límite de destinatarios: el cliente parte la selección en tandas por
+  // debajo del MAX_RECIPIENTS del route (el envío server-side es secuencial
+  // dentro del request y está acotado por el maxDuration de Vercel).
+  async function runSend(driverIds: string[]) {
+    if (!senderId || !hasContent || driverIds.length === 0) return;
     setSending(true);
     setError(null);
     setResult(null);
+
+    const batches: string[][] = [];
+    for (let i = 0; i < driverIds.length; i += BROADCAST_CHUNK_SIZE) {
+      batches.push(driverIds.slice(i, i + BROADCAST_CHUNK_SIZE));
+    }
+
+    const combined: BroadcastResponse = {
+      total: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+    };
+    let anyOk = false;
+    let firstError: string | null = null;
+
     try {
-      const res = await fetch('/api/intercom/broadcast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          driverIds: recipients.map((r) => r.driverId),
-          senderAdminId: senderId,
-          assigneeAdminId: assigneeId === NO_ASSIGNEE ? null : assigneeId,
-          subject,
-          body,
-          attachmentUrls: attachments.map((a) => a.url),
-          tagId: tagId || null,
-          closeAfter,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json.error ?? `Error ${res.status}`);
+      for (let b = 0; b < batches.length; b++) {
+        setProgress({
+          batch: b + 1,
+          batches: batches.length,
+          sent: combined.sent,
+          total: driverIds.length,
+        });
+        try {
+          const res = await fetch('/api/intercom/broadcast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              driverIds: batches[b],
+              senderAdminId: senderId,
+              assigneeAdminId: assigneeId === NO_ASSIGNEE ? null : assigneeId,
+              subject,
+              body,
+              attachmentUrls: attachments.map((a) => a.url),
+              tagId: tagId || null,
+              closeAfter,
+            }),
+          });
+          const json = await res.json();
+          if (!res.ok) {
+            const msg: string = json.error ?? `Error ${res.status}`;
+            firstError ??= msg;
+            combined.total += batches[b].length;
+            combined.failed += batches[b].length;
+            combined.results.push(
+              ...batches[b].map((driverId) => ({
+                driverId,
+                status: 'failed' as const,
+                error: msg,
+              })),
+            );
+          } else {
+            anyOk = true;
+            const r = json as BroadcastResponse;
+            combined.total += r.total;
+            combined.sent += r.sent;
+            combined.failed += r.failed;
+            combined.skipped += r.skipped;
+            combined.results.push(...r.results);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Error desconocido';
+          firstError ??= msg;
+          combined.total += batches[b].length;
+          combined.failed += batches[b].length;
+          combined.results.push(
+            ...batches[b].map((driverId) => ({
+              driverId,
+              status: 'failed' as const,
+              error: msg,
+            })),
+          );
+        }
+      }
+
+      if (!anyOk) {
+        setError(firstError ?? 'Error desconocido');
       } else {
-        setResult(json as BroadcastResponse);
-        setSubject('');
-        setBody('');
-        setAttachments([]);
+        setResult(combined);
+        // Si hubo fallidos se conserva el mensaje para poder reintentar
+        // solo esos destinatarios.
+        if (combined.failed === 0) {
+          setSubject('');
+          setBody('');
+          setAttachments([]);
+        }
         onSent();
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setSending(false);
+      setProgress(null);
     }
+  }
+
+  function handleSend() {
+    void runSend(recipients.map((r) => r.driverId));
   }
 
   return (
@@ -2932,7 +3095,7 @@ function BroadcastSheet({
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           {result ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+              <div className="flex items-center gap-2 text-sm font-medium text-success">
                 <CheckCircle2 className="h-5 w-5" />
                 Difusión enviada
               </div>
@@ -3147,9 +3310,38 @@ function BroadcastSheet({
           )}
         </div>
 
-        <SheetFooter className="px-5 py-4 border-t flex-row justify-end gap-2">
+        <SheetFooter className="px-5 py-4 border-t flex-row items-center justify-end gap-2">
+          {sending && progress && progress.batches > 1 && (
+            <span className="mr-auto text-xs tabular-nums text-muted-foreground">
+              Tanda {progress.batch}/{progress.batches} · {progress.sent}/
+              {progress.total} enviados
+            </span>
+          )}
           {result ? (
-            <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
+            <>
+              {result.failed > 0 && (
+                <Button
+                  variant="outline"
+                  disabled={sending}
+                  className="gap-2"
+                  onClick={() =>
+                    void runSend(
+                      result.results
+                        .filter((r) => r.status === 'failed')
+                        .map((r) => r.driverId),
+                    )
+                  }
+                >
+                  {sending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  Reintentar fallidos ({result.failed})
+                </Button>
+              )}
+              <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
+            </>
           ) : (
             <>
               <Button
@@ -3189,7 +3381,7 @@ function ResultStat({
       <div
         className={cn(
           'text-lg font-semibold tabular-nums',
-          tone === 'ok' && 'text-emerald-700',
+          tone === 'ok' && 'text-success',
           tone === 'err' && value > 0 && 'text-destructive',
           tone === 'mut' && 'text-muted-foreground',
         )}
@@ -3222,8 +3414,8 @@ function ComingSoonSection() {
           description="Cargar un CSV con drivers y mandar el mismo mensaje (o uno con variables) a todos. Pendiente formato del CSV."
         />
         <ComingSoonCard
-          icon={<Zap className="h-5 w-5 text-amber-600" />}
-          iconBg="bg-amber-500/10"
+          icon={<Zap className="h-5 w-5 text-warning" />}
+          iconBg="bg-warning/10"
           title="Triggers automáticos"
           description="Eventos del sistema (turno asignado, pedido rechazado, etc.) que disparan mensajes 1-1 sin intervención manual."
         />

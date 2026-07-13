@@ -105,8 +105,8 @@ export function DriverOrdersByDayChart({ data }: Props) {
           {total > 0 ? (
             <>
               Total: <strong className="text-foreground">{total}</strong> ·{" "}
-              <span className="text-emerald-700">{totalAccepted} aceptados</span> ·{" "}
-              <span className="text-amber-700">{totalNotTaken} no tomados</span>
+              <span className="text-success">{totalAccepted} aceptados</span> ·{" "}
+              <span className="text-warning">{totalNotTaken} no tomados</span>
             </>
           ) : (
             "Sin pedidos en el periodo."

@@ -41,6 +41,10 @@
       "schedule": "*/30 12-22 * * *"
     },
     {
+      "path": "/api/cron/check-bot-connection",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/cron/collect-live-orders",
       "schedule": "* * * * *"
     },
