@@ -2,14 +2,13 @@
 
 import dynamic from "next/dynamic"
 import { Loader2 } from "lucide-react"
-import { useLoadScript } from "@react-google-maps/api"
 
 import type { MapPoint } from "@/lib/types/pedidos.types"
 
 const Internal = dynamic(() => import("./pedido-map-internal"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[420px] items-center justify-center rounded-lg border bg-muted/20">
+    <div className="flex h-[440px] items-center justify-center bg-muted/20">
       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
     </div>
   ),
@@ -17,46 +16,11 @@ const Internal = dynamic(() => import("./pedido-map-internal"), {
 
 interface Props {
   points: MapPoint[]
-  apiKey: string
   focusedHistoryIdx?: number | null
   onMarkerClick?: (historyIdx: number) => void
 }
 
-export function PedidoMap({
-  points,
-  apiKey,
-  focusedHistoryIdx,
-  onMarkerClick,
-}: Props) {
-  const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: apiKey,
-  })
-
-  if (!apiKey) {
-    return (
-      <div className="flex h-[420px] items-center justify-center rounded-lg border bg-muted/20 text-sm text-muted-foreground p-4 text-center">
-        Falta <code className="mx-1 font-mono">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> en
-        .env para mostrar el mapa.
-      </div>
-    )
-  }
-
-  if (loadError) {
-    return (
-      <div className="flex h-[420px] items-center justify-center rounded-lg border bg-muted/20 text-sm text-destructive">
-        Error cargando Google Maps
-      </div>
-    )
-  }
-
-  if (!isLoaded) {
-    return (
-      <div className="flex h-[420px] items-center justify-center rounded-lg border bg-muted/20">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
+export function PedidoMap({ points, focusedHistoryIdx, onMarkerClick }: Props) {
   return (
     <div className="pedido-map-wrapper overflow-hidden rounded-lg border">
       <Internal

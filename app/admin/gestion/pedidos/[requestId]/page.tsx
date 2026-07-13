@@ -68,7 +68,6 @@ export default async function PedidoDetailPage({ params }: PageProps) {
       source={source}
       fetchedAtIso={fetchedAtIso}
       attendance={attendance}
-      googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}
     />
   )
 }

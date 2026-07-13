@@ -35,7 +35,6 @@ interface Props {
   source?: "api" | "cache"
   fetchedAtIso?: string
   attendance?: AttendanceFetchResult | null
-  googleMapsApiKey?: string
   error?: string
 }
 
@@ -56,7 +55,6 @@ export function PedidoDetailContent({
   source,
   fetchedAtIso,
   attendance,
-  googleMapsApiKey,
   error,
 }: Props) {
   const router = useRouter()
@@ -204,7 +202,6 @@ export function PedidoDetailContent({
           <div className="space-y-6 lg:col-span-2">
             <PedidoMap
               points={mapPoints}
-              apiKey={googleMapsApiKey || ""}
               focusedHistoryIdx={focusedHistoryIdx}
               onMarkerClick={setFocusedHistoryIdx}
             />
