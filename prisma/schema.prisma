@@ -1423,6 +1423,30 @@ model TurnosShiftEvent {
   @@map("turnos_shift_event")
 }
 
+// Recordatorio pre-turno enviado por Intercom (cron `/api/cron/turno-reminders`,
+// cada 15 min, ventana 15-30 min antes del arranque). El unique de
+// (shiftId, driverId) es la garantía de idempotencia: "1 mensaje por persona
+// por turno" aunque el cron se solape o corra dos veces sobre la misma ventana.
+model TurnoReminderSent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  shiftId  String @map("shift_id")
+  driverId String @map("driver_id")
+  dateIso  String @map("date_iso")
+  fromHour Float? @map("from_hour")
+  zoneId   String @map("zone_id")
+  zoneName String @map("zone_name")
+
+  status                 String  // 'sent' | 'failed' | 'skipped_no_contact'
+  intercomConversationId String? @map("intercom_conversation_id")
+  errorMessage           String? @map("error_message")
+
+  @@unique([shiftId, driverId])
+  @@index([dateIso])
+  @@map("turno_reminder_sent")
+}
+
 // Refresh token vigente de Google OAuth (singleton: id = "default").
 // Persistido en DB para que `scripts/get-google-refresh-token.ts` lo suba
 // una sola vez y todos los entornos lo lean sin editar `.env` por entorno.
