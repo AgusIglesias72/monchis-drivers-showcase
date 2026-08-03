@@ -33,6 +33,7 @@ export type NoShowAlert = {
 
 export type StuckDocAlert = {
   driverId: string
+  driverSlug: string | null
   driverName: string | null
   docType: string
   pendingSince: string // ISO
@@ -331,6 +332,7 @@ export async function getStuckDocAlerts(
       formDriver: {
         select: {
           id: true,
+          slug: true,
           fullName: true,
           firstName: true,
           lastName: true,
@@ -352,6 +354,7 @@ export async function getStuckDocAlerts(
     )
     return {
       driverId: r.formDriver.id,
+      driverSlug: r.formDriver.slug,
       driverName,
       docType: String(r.documentType),
       pendingSince: r.uploadedAt.toISOString(),

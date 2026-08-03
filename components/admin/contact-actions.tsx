@@ -132,7 +132,7 @@ export function ContactActions({ phoneNumber, email, name }: ContactActionsProps
           <DropdownMenuItem onClick={() => copyToClipboard(phoneNumber, 'phone')}>
             {copiedPhone ? (
               <>
-                <Check className="h-4 w-4 mr-2 text-green-600" />
+                <Check className="h-4 w-4 mr-2 text-success" />
                 Teléfono copiado
               </>
             ) : (
@@ -145,7 +145,7 @@ export function ContactActions({ phoneNumber, email, name }: ContactActionsProps
           <DropdownMenuItem onClick={() => copyToClipboard(email, 'email')}>
             {copiedEmail ? (
               <>
-                <Check className="h-4 w-4 mr-2 text-green-600" />
+                <Check className="h-4 w-4 mr-2 text-success" />
                 Email copiado
               </>
             ) : (

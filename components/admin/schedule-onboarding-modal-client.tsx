@@ -195,12 +195,12 @@ export function ScheduleOnboardingModalClient({
                               {occupiedSlots}{totalSlots ? ` / ${totalSlots}` : ''}
                             </span>
                             {availableSlots !== null && availableSlots > 0 && (
-                              <span className="text-green-600 ml-1">
+                              <span className="text-success ml-1">
                                 ({availableSlots} {availableSlots === 1 ? 'libre' : 'libres'})
                               </span>
                             )}
                             {isFull && (
-                              <span className="text-red-600 ml-1 font-medium">
+                              <span className="text-destructive ml-1 font-medium">
                                 (Lleno)
                               </span>
                             )}

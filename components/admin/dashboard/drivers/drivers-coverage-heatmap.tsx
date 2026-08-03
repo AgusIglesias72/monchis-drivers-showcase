@@ -33,8 +33,8 @@ function occupancyColor(occupancy: number, max: number): string {
 }
 
 function textColor(occupancy: number, max: number): string {
-  if (max === 0) return "text-slate-400"
-  return occupancy >= 0.6 ? "text-slate-900" : "text-slate-700"
+  if (max === 0) return "text-ink-subtle"
+  return occupancy >= 0.6 ? "text-foreground" : "text-muted-foreground"
 }
 
 export function DriversCoverageHeatmap({
@@ -63,7 +63,7 @@ export function DriversCoverageHeatmap({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-orange-500" />
+            <MapPin className="h-5 w-5 text-warning" />
             Cobertura zona × hora
           </CardTitle>
           <CardDescription>
@@ -84,7 +84,7 @@ export function DriversCoverageHeatmap({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-orange-500" />
+            <MapPin className="h-5 w-5 text-warning" />
             Cobertura zona × hora
           </CardTitle>
           <CardDescription>
@@ -202,7 +202,7 @@ function LegendChip({ color, label }: { color: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1">
       <span
-        className="inline-block h-3 w-3 rounded-sm border border-slate-200"
+        className="inline-block h-3 w-3 rounded-sm border border-border"
         style={{ backgroundColor: color }}
       />
       {label}

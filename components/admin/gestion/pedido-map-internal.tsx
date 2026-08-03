@@ -1,15 +1,21 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import {
-  GoogleMap,
-  InfoWindowF,
-  MarkerF,
-  PolylineF,
-} from "@react-google-maps/api"
+import "leaflet/dist/leaflet.css"
+
+import { useEffect, useMemo, useRef } from "react"
+import L from "leaflet"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { Clock, MapPin, ShieldCheck, User } from "lucide-react"
+import {
+  MapContainer,
+  Marker,
+  Polyline,
+  Popup,
+  TileLayer,
+  Tooltip,
+  useMap,
+} from "react-leaflet"
 
 import {
   styleForState,
@@ -17,23 +23,6 @@ import {
 } from "@/lib/services/pedidos-states"
 import type { MapPoint } from "@/lib/types/pedidos.types"
 import { parseOrderInstant } from "@/lib/utils/pedidos-time"
-
-const containerStyle = { width: "100%", height: "440px" }
-
-const mapOptions: google.maps.MapOptions = {
-  disableDefaultUI: false,
-  zoomControl: true,
-  mapTypeControl: false,
-  streetViewControl: false,
-  fullscreenControl: true,
-  gestureHandling: "greedy",
-  // Ocultar POIs (supermercados, shoppings, etc.) y transit para reducir ruido
-  // visual. Dejamos roads/labels para identificar calles y barrios.
-  styles: [
-    { featureType: "poi", stylers: [{ visibility: "off" }] },
-    { featureType: "transit", stylers: [{ visibility: "off" }] },
-  ],
-}
 
 interface Props {
   points: MapPoint[]
@@ -97,7 +86,7 @@ function styleForPoint(p: MapPoint): StateStyle | null {
 }
 
 // Genera un SVG circular de 30×30 con el icono al centro y opcional badge
-// arriba-derecha. Devuelto como data URL para `google.maps.Icon.url`.
+// arriba-derecha. Devuelto como data URL para `L.icon`.
 function buildIconUrl(look: MarkerLook): string {
   const icon = ICON_SVG[look.iconKey]
   // Círculo cx=15 cy=15 r=13. Icono lucide es 24×24 → scale 0.5 = 12px,
@@ -120,37 +109,14 @@ function buildIconUrl(look: MarkerLook): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 
-function iconFor(p: MapPoint, offerNumber?: number): google.maps.Icon {
-  return {
-    url: buildIconUrl(lookFor(p, offerNumber)),
-    scaledSize: new google.maps.Size(30, 30),
-    anchor: new google.maps.Point(15, 15),
-  }
-}
-
-// Si el marker está en el cuarto superior del viewport, abajo del marker queda
-// más espacio; mostrar el InfoWindow debajo. Si no, encima (default).
-// Asumimos altura del InfoWindow ~120px; cuando no hay bounds devolvemos arriba.
-const INFO_ABOVE = new google.maps.Size(0, -16)
-function pickInfoOffset(
-  map: google.maps.Map | null,
-  point: { lat: number; lng: number },
-  _idx: number,
-): google.maps.Size {
-  if (!map) return INFO_ABOVE
-  const bounds = map.getBounds()
-  if (!bounds) return INFO_ABOVE
-  const ne = bounds.getNorthEast()
-  const sw = bounds.getSouthWest()
-  const latRange = ne.lat() - sw.lat()
-  if (latRange <= 0) return INFO_ABOVE
-  // 0 = top of viewport, 1 = bottom
-  const fromTop = (ne.lat() - point.lat) / latRange
-  if (fromTop < 0.25) {
-    // marker arriba → tooltip abajo
-    return new google.maps.Size(0, 36)
-  }
-  return INFO_ABOVE
+function iconFor(p: MapPoint, offerNumber?: number): L.Icon {
+  return L.icon({
+    iconUrl: buildIconUrl(lookFor(p, offerNumber)),
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15],
+    tooltipAnchor: [0, -16],
+  })
 }
 
 // z-index prioridad para markers superpuestos. ACCEPTED es la marca clave
@@ -189,14 +155,52 @@ function diffStr(prev: string, curr: string): string | null {
   return `+${h}h ${m % 60}m`
 }
 
+const DASHED = { weight: 3, dashArray: "6 6" }
+
+// Fit a todos los puntos al cargar / cambiar set.
+function FitToPoints({ points }: { points: MapPoint[] }) {
+  const map = useMap()
+  useEffect(() => {
+    if (points.length === 0) return
+    const bounds = L.latLngBounds(
+      points.map((p) => [p.lat, p.lng] as [number, number]),
+    )
+    map.fitBounds(bounds, { padding: [64, 64], maxZoom: 16 })
+  }, [points, map])
+  return null
+}
+
+// Pan + zoom + popup cuando el timeline pide foco en un evento.
+function FocusOnHistory({
+  points,
+  focusedHistoryIdx,
+  markerRefs,
+}: {
+  points: MapPoint[]
+  focusedHistoryIdx?: number | null
+  markerRefs: React.RefObject<Map<number, L.Marker>>
+}) {
+  const map = useMap()
+  useEffect(() => {
+    if (focusedHistoryIdx == null) return
+    const idx = points.findIndex(
+      (p) => p.kind === "history" && p.index === focusedHistoryIdx + 1,
+    )
+    if (idx < 0) return
+    const target = points[idx]
+    const zoom = Math.max(map.getZoom() ?? 14, 16)
+    map.setView([target.lat, target.lng], zoom, { animate: true })
+    markerRefs.current?.get(idx)?.openPopup()
+  }, [focusedHistoryIdx, points, map, markerRefs])
+  return null
+}
+
 export default function PedidoMapInternal({
   points,
   focusedHistoryIdx,
   onMarkerClick,
 }: Props) {
-  const mapRef = useRef<google.maps.Map | null>(null)
-  const [activeIdx, setActiveIdx] = useState<number | null>(null)
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+  const markerRefs = useRef(new Map<number, L.Marker>())
 
   // Numeración de ofertas: 1, 2, 3... contando solo PENDINGs en orden cronológico.
   const offerNumbers = useMemo(() => {
@@ -210,6 +214,11 @@ export default function PedidoMapInternal({
     })
     return m
   }, [points])
+
+  const icons = useMemo(
+    () => points.map((p, idx) => iconFor(p, offerNumbers.get(idx))),
+    [points, offerNumbers],
+  )
 
   // El driver acepta en el primer ACCEPTED del history. La línea va de ahí
   // al comercio (origen), y luego del comercio al cliente (destino).
@@ -227,44 +236,21 @@ export default function PedidoMapInternal({
     [points],
   )
 
-  const polylineAcceptToOrigin = useMemo(() => {
+  const polylineAcceptToOrigin = useMemo<[number, number][] | null>(() => {
     if (!acceptedPoint || !originPoint) return null
     return [
-      { lat: acceptedPoint.lat, lng: acceptedPoint.lng },
-      { lat: originPoint.lat, lng: originPoint.lng },
+      [acceptedPoint.lat, acceptedPoint.lng],
+      [originPoint.lat, originPoint.lng],
     ]
   }, [acceptedPoint, originPoint])
 
-  const polylineOriginToDestination = useMemo(() => {
+  const polylineOriginToDestination = useMemo<[number, number][] | null>(() => {
     if (!originPoint || !destinationPoint) return null
     return [
-      { lat: originPoint.lat, lng: originPoint.lng },
-      { lat: destinationPoint.lat, lng: destinationPoint.lng },
+      [originPoint.lat, originPoint.lng],
+      [destinationPoint.lat, destinationPoint.lng],
     ]
   }, [originPoint, destinationPoint])
-
-  // Fit a todos los puntos al cargar / cambiar set.
-  useEffect(() => {
-    if (!mapRef.current || points.length === 0) return
-    const bounds = new google.maps.LatLngBounds()
-    points.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lng }))
-    mapRef.current.fitBounds(bounds, 64)
-  }, [points])
-
-  // Pan + zoom cuando el timeline pide foco en un evento.
-  useEffect(() => {
-    if (focusedHistoryIdx == null || !mapRef.current) return
-    const target = points.find(
-      (p) => p.kind === "history" && p.index === focusedHistoryIdx + 1,
-    )
-    if (!target) return
-    const idx = points.indexOf(target)
-    setActiveIdx(idx)
-    mapRef.current.panTo({ lat: target.lat, lng: target.lng })
-    if ((mapRef.current.getZoom() ?? 14) < 16) {
-      mapRef.current.setZoom(16)
-    }
-  }, [focusedHistoryIdx, points])
 
   if (points.length === 0) {
     return (
@@ -274,94 +260,65 @@ export default function PedidoMapInternal({
     )
   }
 
-  const center = { lat: points[0].lat, lng: points[0].lng }
-
   return (
-    <GoogleMap
-      mapContainerStyle={containerStyle}
-      center={center}
+    <MapContainer
+      center={[points[0].lat, points[0].lng]}
       zoom={14}
-      options={mapOptions}
-      onLoad={(m) => {
-        mapRef.current = m
-      }}
+      style={{ height: 440, width: "100%" }}
     >
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+
       {polylineAcceptToOrigin && (
-        <PolylineF
-          path={polylineAcceptToOrigin}
-          options={{
-            strokeColor: "#3b82f6",
-            strokeOpacity: 0.7,
-            strokeWeight: 3,
-            geodesic: true,
-            icons: [
-              {
-                icon: { path: "M 0,-1 0,1", strokeOpacity: 1, scale: 3 },
-                offset: "0",
-                repeat: "12px",
-              },
-            ],
-          }}
+        <Polyline
+          positions={polylineAcceptToOrigin}
+          pathOptions={{ ...DASHED, color: "#3b82f6", opacity: 0.7 }}
         />
       )}
       {polylineOriginToDestination && (
-        <PolylineF
-          path={polylineOriginToDestination}
-          options={{
-            strokeColor: "#10b981",
-            strokeOpacity: 0.6,
-            strokeWeight: 3,
-            geodesic: true,
-            icons: [
-              {
-                icon: { path: "M 0,-1 0,1", strokeOpacity: 1, scale: 3 },
-                offset: "0",
-                repeat: "12px",
-              },
-            ],
-          }}
+        <Polyline
+          positions={polylineOriginToDestination}
+          pathOptions={{ ...DASHED, color: "#10b981", opacity: 0.6 }}
         />
       )}
 
-      {points.map((p, idx) => {
-        const showInfo = activeIdx === idx || (activeIdx === null && hoveredIdx === idx)
-        return (
-          <MarkerF
-            key={`${p.kind}-${idx}`}
-            position={{ lat: p.lat, lng: p.lng }}
-            icon={iconFor(p, offerNumbers.get(idx))}
-            onClick={() => {
-              setActiveIdx(idx)
+      {points.map((p, idx) => (
+        <Marker
+          key={`${p.kind}-${idx}`}
+          position={[p.lat, p.lng]}
+          icon={icons[idx]}
+          zIndexOffset={zIndexFor(p)}
+          ref={(m) => {
+            if (m) markerRefs.current.set(idx, m)
+            else markerRefs.current.delete(idx)
+          }}
+          eventHandlers={{
+            click: (e) => {
+              ;(e.target as L.Marker).closeTooltip()
               if (p.kind === "history" && p.index !== undefined && onMarkerClick) {
                 onMarkerClick(p.index - 1)
               }
-            }}
-            onMouseOver={() => setHoveredIdx(idx)}
-            onMouseOut={() => setHoveredIdx((prev) => (prev === idx ? null : prev))}
-            zIndex={zIndexFor(p)}
-          >
-            {showInfo && (
-              <InfoWindowF
-                position={{ lat: p.lat, lng: p.lng }}
-                onCloseClick={() => {
-                  setActiveIdx(null)
-                  setHoveredIdx(null)
-                }}
-                options={{
-                  // Flip arriba/abajo según la posición del marker. Si el
-                  // marker está cerca del top del viewport (cuarto superior),
-                  // mostramos el tooltip debajo; si no, encima (default).
-                  pixelOffset: pickInfoOffset(mapRef.current, p, idx),
-                  disableAutoPan: activeIdx !== idx,
-                }}
-              >
-                <PointInfo point={p} offerNumber={offerNumbers.get(idx)} />
-              </InfoWindowF>
-            )}
-          </MarkerF>
-        )
-      })}
-    </GoogleMap>
+            },
+          }}
+        >
+          <Tooltip direction="top">
+            <PointInfo point={p} offerNumber={offerNumbers.get(idx)} />
+          </Tooltip>
+          <Popup closeButton={false} maxWidth={320}>
+            <PointInfo point={p} offerNumber={offerNumbers.get(idx)} />
+          </Popup>
+        </Marker>
+      ))}
+
+      <FitToPoints points={points} />
+      <FocusOnHistory
+        points={points}
+        focusedHistoryIdx={focusedHistoryIdx}
+        markerRefs={markerRefs}
+      />
+    </MapContainer>
   )
 }
 
@@ -385,7 +342,7 @@ function PointInfo({
             {isOrigin ? "Comercio" : "Cliente"}
           </span>
         </div>
-        <div className="px-2.5 py-1.5 text-xs text-gray-900 font-medium leading-tight">
+        <div className="px-2.5 py-1.5 text-xs text-foreground font-medium leading-tight whitespace-normal">
           {point.label}
         </div>
       </div>
@@ -414,14 +371,14 @@ function PointInfo({
             Oferta {offerNumber ? `#${offerNumber}` : ""}
           </span>
         </div>
-        <div className="px-2.5 py-1.5 text-xs text-gray-700 leading-tight">
+        <div className="px-2.5 py-1.5 text-xs text-muted-foreground leading-tight whitespace-normal">
           {lastDriver ? (
             <span className="inline-flex items-start gap-1.5">
-              <User className="h-3 w-3 text-gray-400 mt-0.5 shrink-0" />
+              <User className="h-3 w-3 text-ink-subtle mt-0.5 shrink-0" />
               {lastDriver}
             </span>
           ) : (
-            <span className="text-gray-400">Sin driver</span>
+            <span className="text-ink-subtle">Sin driver</span>
           )}
         </div>
       </div>
@@ -446,22 +403,22 @@ function PointInfo({
         <span className="text-xs font-semibold">{friendlyLabel}</span>
       </div>
 
-      <div className="px-2.5 py-1.5 space-y-1 text-xs text-gray-700">
+      <div className="px-2.5 py-1.5 space-y-1 text-xs text-muted-foreground">
         <div className="flex items-center gap-1.5">
-          <Clock className="h-3 w-3 text-gray-400" />
+          <Clock className="h-3 w-3 text-ink-subtle" />
           <span className="font-medium tabular-nums">
             {parsedDate ? format(parsedDate, "HH:mm", { locale: es }) : "—"}
           </span>
           {delta && (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-gray-700">
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
               {delta}
             </span>
           )}
         </div>
 
         {lastDriver && (
-          <div className="flex items-start gap-1.5">
-            <User className="h-3 w-3 text-gray-400 mt-0.5 shrink-0" />
+          <div className="flex items-start gap-1.5 whitespace-normal">
+            <User className="h-3 w-3 text-ink-subtle mt-0.5 shrink-0" />
             <span className="leading-tight">{lastDriver}</span>
           </div>
         )}

@@ -55,19 +55,19 @@ export function LiveKpis({ summary }: Props) {
           item.tone === "danger"
             ? "border-destructive/40 bg-destructive/5"
             : item.tone === "warning"
-              ? "border-amber-300/50 bg-amber-50/40 dark:bg-amber-950/20"
+              ? "border-warning/40 bg-warning/5"
               : "bg-card"
         const valueClass =
           item.tone === "danger"
             ? "text-destructive"
             : item.tone === "warning"
-              ? "text-amber-700 dark:text-amber-400"
+              ? "text-warning"
               : ""
         const iconBg =
           item.tone === "danger"
             ? "bg-destructive/10 text-destructive"
             : item.tone === "warning"
-              ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+              ? "bg-warning/10 text-warning"
               : "bg-muted text-muted-foreground"
         return (
           <div

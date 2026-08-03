@@ -344,7 +344,7 @@ function Kpi({
   prevValue?: number
   tone?: 'default' | 'ok' | 'warn'
 }) {
-  const valueColor = tone === 'warn' ? 'text-amber-600 dark:text-amber-500' : 'text-foreground'
+  const valueColor = tone === 'warn' ? 'text-warning' : 'text-foreground'
   return (
     <div>
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground/80 font-medium">
@@ -377,9 +377,9 @@ function DeltaBadge({
     delta.direction === 'up' ? TrendingUp : delta.direction === 'down' ? TrendingDown : Minus
   const color =
     delta.direction === 'up'
-      ? 'text-emerald-600 dark:text-emerald-500'
+      ? 'text-success'
       : delta.direction === 'down'
-      ? 'text-red-600 dark:text-red-500'
+      ? 'text-destructive'
       : 'text-muted-foreground'
   const text =
     delta.pct === null
@@ -400,7 +400,7 @@ function MessageRow({ msg }: { msg: RecentMessage }) {
   const time = format(new Date(msg.sentAt), 'HH:mm', { locale: es })
   const templateKey = (msg.metadata as any)?.templateKey as string | undefined
   const displayName = msg.formDriver?.fullName || msg.recipientName || 'Sin nombre'
-  const driverHref = msg.formDriver?.id ? `/admin/postulaciones/${msg.formDriver.id}` : null
+  const driverHref = msg.formDriver?.id ? `/admin/postulaciones/${(msg.formDriver as any).slug ?? msg.formDriver.id}` : null
 
   return (
     <li className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 py-3 text-sm">
@@ -427,7 +427,7 @@ function MessageRow({ msg }: { msg: RecentMessage }) {
 
 function StatusDot({ tone, label }: { tone: 'ok' | 'pending' | 'bad'; label: string }) {
   const color =
-    tone === 'ok' ? 'bg-emerald-500' : tone === 'bad' ? 'bg-red-500' : 'bg-amber-500'
+    tone === 'ok' ? 'bg-success' : tone === 'bad' ? 'bg-destructive' : 'bg-warning'
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
       <span className={`h-1.5 w-1.5 rounded-full ${color}`} aria-hidden />

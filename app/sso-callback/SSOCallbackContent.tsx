@@ -4,9 +4,7 @@
 import { useEffect } from 'react'
 import { useClerk } from '@clerk/nextjs'
 import Image from 'next/image'
-import { Loader2 } from 'lucide-react'
-
-const MONCHIS_RED = '#e7243f'
+import { Spinner } from '@/components/ds'
 
 export default function SSOCallback() {
   const { handleRedirectCallback } = useClerk()
@@ -24,36 +22,27 @@ export default function SSOCallback() {
   }, [handleRedirectCallback])
 
   return (
-    <div 
-      className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ backgroundColor: MONCHIS_RED }}
+    <div
+      className="flex min-h-screen items-center justify-center text-white"
+      style={{
+        backgroundImage:
+          "linear-gradient(150deg, #B00E2C 0%, #E52050 50%, #7A0820 100%)",
+      }}
     >
-      {/* Efectos de fondo */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-      </div>
-
-      <div className="text-center relative z-10">
-        <div className="mb-8">
-          <Image 
-            src="/monchis-logo-white.png" 
-            alt="Monchis" 
-            width={200} 
-            height={60}
-            className="h-16 w-auto mx-auto"
-            priority
-          />
-        </div>
-        <div className="relative w-16 h-16 mx-auto mb-6">
-          <Loader2 className="w-16 h-16 text-white animate-spin" />
-        </div>
-        <h2 className="text-2xl font-bold text-white mb-2">
-          Completando el inicio de sesión...
+      <div className="flex flex-col items-center text-center">
+        <Image
+          src="/monchis-logo-white.png"
+          alt="Monchis"
+          width={160}
+          height={48}
+          className="mb-8 h-12 w-auto"
+          priority
+        />
+        <Spinner size="lg" className="mb-6 text-white" />
+        <h2 className="font-[family-name:var(--font-display)] text-xl font-bold">
+          Completando el inicio de sesión…
         </h2>
-        <p className="text-white/80">
-          Por favor espera un momento
-        </p>
+        <p className="mt-1.5 text-sm text-white/70">Por favor esperá un momento</p>
       </div>
     </div>
   )

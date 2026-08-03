@@ -76,12 +76,12 @@ export function NoShowList({ alerts }: { alerts: NoShowAlert[] }) {
 
 function EmptyState() {
   return (
-    <div className="rounded-md border border-dashed border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-900/60 p-6 text-center">
-      <CheckCircle2 className="h-7 w-7 mx-auto text-emerald-600 dark:text-emerald-400" />
-      <p className="mt-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+    <div className="rounded-md border border-dashed border-success bg-success-soft p-6 text-center">
+      <CheckCircle2 className="h-7 w-7 mx-auto text-success" />
+      <p className="mt-2 text-sm font-medium text-success">
         Sin no-shows en este rango
       </p>
-      <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80 mt-1">
+      <p className="text-xs text-success mt-1">
         Todos los postulantes citados asistieron
       </p>
     </div>

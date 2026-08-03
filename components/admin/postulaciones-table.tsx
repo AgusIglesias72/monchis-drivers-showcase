@@ -166,7 +166,7 @@ export function PostulacionesTable({
           {/* Switch Mock/Real */}
           <div className="flex items-center gap-3 bg-muted rounded-lg p-2">
             <div className="flex items-center gap-2">
-              <TestTube className={`h-4 w-4 ${useMockData ? 'text-amber-600' : 'text-muted-foreground'}`} />
+              <TestTube className={`h-4 w-4 ${useMockData ? 'text-warning' : 'text-muted-foreground'}`} />
               <span className={`text-sm font-medium ${useMockData ? 'text-foreground' : 'text-muted-foreground'}`}>
                 Mock
               </span>
@@ -175,18 +175,18 @@ export function PostulacionesTable({
             <button
               onClick={() => setUseMockData(!useMockData)}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                useMockData ? 'bg-amber-500' : 'bg-green-500'
+                useMockData ? 'bg-warning' : 'bg-success'
               }`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                className={`inline-block h-4 w-4 transform rounded-full bg-card transition-transform ${
                   useMockData ? 'translate-x-1' : 'translate-x-6'
                 }`}
               />
             </button>
             
             <div className="flex items-center gap-2">
-              <Database className={`h-4 w-4 ${!useMockData ? 'text-green-600' : 'text-muted-foreground'}`} />
+              <Database className={`h-4 w-4 ${!useMockData ? 'text-success' : 'text-muted-foreground'}`} />
               <span className={`text-sm font-medium ${!useMockData ? 'text-foreground' : 'text-muted-foreground'}`}>
                 Real
               </span>
@@ -196,9 +196,9 @@ export function PostulacionesTable({
 
         {/* Badge de modo desarrollo */}
         {useMockData && (
-          <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5 mb-4">
-            <TestTube className="h-3.5 w-3.5 text-amber-600" />
-            <span className="text-xs font-medium text-amber-900">
+          <div className="inline-flex items-center gap-2 bg-warning-soft border border-warning rounded-md px-3 py-1.5 mb-4">
+            <TestTube className="h-3.5 w-3.5 text-warning" />
+            <span className="text-xs font-medium text-warning">
               Modo desarrollo: Mostrando datos de prueba
             </span>
           </div>
@@ -340,7 +340,7 @@ export function PostulacionesTable({
                       variant="ghost"
                       size="sm"
                       className="gap-1"
-                      onClick={() => router.push(`/admin/postulaciones/${postulacion.id}`)}
+                      onClick={() => router.push(`/admin/postulaciones/${postulacion.slug ?? postulacion.id}`)}
                     >
                       <Eye className="h-4 w-4" />
                       Ver
@@ -371,22 +371,22 @@ function StatusBadge({ status }: { status: string }) {
     COMPLETED: {
       label: 'Completada',
       variant: 'default' as const,
-      className: 'bg-green-100 text-green-800 hover:bg-green-100'
+      className: 'bg-success-soft text-success hover:bg-success-soft'
     },
     IN_PROGRESS: {
       label: 'En Progreso',
       variant: 'secondary' as const,
-      className: 'bg-amber-100 text-amber-800 hover:bg-amber-100'
+      className: 'bg-warning-soft text-warning hover:bg-warning-soft'
     },
     ABANDONED: {
       label: 'Abandonada',
       variant: 'destructive' as const,
-      className: 'bg-red-100 text-red-800 hover:bg-red-100'
+      className: 'bg-danger-soft text-destructive hover:bg-danger-soft'
     },
     SUBMITTED: {
       label: 'Enviada',
       variant: 'outline' as const,
-      className: 'bg-blue-100 text-blue-800 hover:bg-blue-100'
+      className: 'bg-info-soft text-info hover:bg-info-soft'
     }
   }
 

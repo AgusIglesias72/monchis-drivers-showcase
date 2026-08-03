@@ -285,7 +285,7 @@ function SystemPromptCard({
               className="font-mono text-xs leading-relaxed"
               spellCheck={false}
             />
-            <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
+            <div className="flex items-start gap-2 rounded-md border border-warning bg-warning-soft p-2.5 text-xs text-warning">
               <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
               <div>
                 Cambios al prompt afectan a TODAS las corridas siguientes. Si rompés el formato JSON esperado, el

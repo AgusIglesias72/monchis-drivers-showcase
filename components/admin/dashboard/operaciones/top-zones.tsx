@@ -27,7 +27,7 @@ export function OperacionesTopZones({ data }: TopZonesProps) {
       <Card className="h-full">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <MapPin className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+            <MapPin className="h-4 w-4 text-muted-foreground" />
             Top sucursales (7d)
           </CardTitle>
           <CardDescription>
@@ -67,7 +67,7 @@ export function OperacionesTopZones({ data }: TopZonesProps) {
                         initial={{ width: 0 }}
                         animate={{ width: `${pct}%` }}
                         transition={{ delay: 0.25 + i * 0.04, duration: 0.5 }}
-                        className="h-full rounded-full bg-slate-500 dark:bg-slate-300"
+                        className="h-full rounded-full bg-foreground"
                       />
                     </div>
                   </li>

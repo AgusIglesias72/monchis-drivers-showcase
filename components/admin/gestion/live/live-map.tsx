@@ -4,6 +4,7 @@ import dynamic from "next/dynamic"
 import { Loader2 } from "lucide-react"
 
 import type {
+  LiveBreadcrumb,
   LiveDriver,
   LiveRequest,
   LiveRoute,
@@ -31,6 +32,7 @@ interface Props {
   ) => void
   activeRoute: LiveRoute | null
   routeLoading: boolean
+  breadcrumb: LiveBreadcrumb | null
 }
 
 export function LiveMap(props: Props) {
@@ -51,6 +53,7 @@ export function LiveMap(props: Props) {
         <Legend color="#9ca3af" label="No disponible" />
         <Legend color="#f59e0b" label="Sin driver" shape="pin" />
         <Legend color="#ef4444" label="Demorado" shape="pin" />
+        <Legend color="#6366f1" label="Recorrido del driver" shape="line" />
       </div>
     </div>
   )
@@ -63,8 +66,19 @@ function Legend({
 }: {
   color: string
   label: string
-  shape?: "dot" | "pin"
+  shape?: "dot" | "pin" | "line"
 }) {
+  if (shape === "line") {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span
+          className="inline-block h-0.5 w-4 rounded-full"
+          style={{ backgroundColor: color }}
+        />
+        {label}
+      </span>
+    )
+  }
   return (
     <span className="inline-flex items-center gap-1">
       <span

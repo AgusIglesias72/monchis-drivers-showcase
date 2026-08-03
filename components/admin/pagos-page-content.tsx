@@ -202,14 +202,14 @@ export function PagosPageContent({ pagos, stats }: PagosPageContentProps) {
     switch (status) {
       case 'VERIFIED':
         return (
-          <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+          <Badge variant="default" className="bg-success hover:bg-success">
             <CheckCircle2 className="h-3 w-3 mr-1" />
             Verificado
           </Badge>
         )
       case 'PENDING':
         return (
-          <Badge variant="default" className="bg-yellow-500 hover:bg-yellow-600">
+          <Badge variant="default" className="bg-warning hover:bg-warning">
             <Clock className="h-3 w-3 mr-1" />
             Pendiente
           </Badge>
@@ -223,7 +223,7 @@ export function PagosPageContent({ pagos, stats }: PagosPageContentProps) {
         )
       case 'PARTIAL':
         return (
-          <Badge variant="default" className="bg-blue-500 hover:bg-blue-600">
+          <Badge variant="default" className="bg-info hover:bg-info">
             <AlertCircle className="h-3 w-3 mr-1" />
             Parcial
           </Badge>
@@ -312,7 +312,7 @@ export function PagosPageContent({ pagos, stats }: PagosPageContentProps) {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Verificados</CardTitle>
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <CheckCircle2 className="h-4 w-4 text-success" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.verified}</div>
@@ -325,7 +325,7 @@ export function PagosPageContent({ pagos, stats }: PagosPageContentProps) {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-              <Clock className="h-4 w-4 text-yellow-500" />
+              <Clock className="h-4 w-4 text-warning" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.pending}</div>
@@ -439,7 +439,7 @@ export function PagosPageContent({ pagos, stats }: PagosPageContentProps) {
                               href={pago.paymentProofUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
+                              className="inline-flex items-center gap-1 text-info hover:text-info text-sm"
                               onClick={(e) => e.stopPropagation()}
                             >
                               Ver
@@ -584,7 +584,7 @@ export function PagosPageContent({ pagos, stats }: PagosPageContentProps) {
                         href={selectedPago.paymentProofUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-blue-600 hover:text-blue-800 mt-2"
+                        className="flex items-center gap-2 text-info hover:text-info mt-2"
                       >
                         <ExternalLink className="h-4 w-4" />
                         Ver comprobante

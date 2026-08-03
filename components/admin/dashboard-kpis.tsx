@@ -24,12 +24,12 @@ export function DashboardKPIs({ stats }: { stats: DashboardStats }) {
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {/* Documentos en Revisión Manual - MÁS CRÍTICO */}
       <Link href="/admin/adquisicion/documentos?status=MANUAL_REVIEW">
-        <Card className="cursor-pointer hover:border-orange-500 transition-colors">
+        <Card className="cursor-pointer hover:border-warning transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Revisión Manual
             </CardTitle>
-            <FileWarning className="h-4 w-4 text-orange-500" />
+            <FileWarning className="h-4 w-4 text-warning" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.manualReviewDocs}</div>
@@ -45,12 +45,12 @@ export function DashboardKPIs({ stats }: { stats: DashboardStats }) {
 
       {/* Documentos Pendientes de Procesar */}
       <Link href="/admin/adquisicion/documentos?status=PENDING">
-        <Card className="cursor-pointer hover:border-blue-500 transition-colors">
+        <Card className="cursor-pointer hover:border-info transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Pendientes de Procesar
             </CardTitle>
-            <FileText className="h-4 w-4 text-blue-500" />
+            <FileText className="h-4 w-4 text-info" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.pendingDocs}</div>
@@ -66,12 +66,12 @@ export function DashboardKPIs({ stats }: { stats: DashboardStats }) {
 
       {/* Documentos Rechazados */}
       <Link href="/admin/adquisicion/documentos?status=REJECTED">
-        <Card className="cursor-pointer hover:border-red-500 transition-colors">
+        <Card className="cursor-pointer hover:border-destructive transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Rechazados
             </CardTitle>
-            <FileX className="h-4 w-4 text-red-500" />
+            <FileX className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.rejectedDocs}</div>
@@ -87,12 +87,12 @@ export function DashboardKPIs({ stats }: { stats: DashboardStats }) {
 
       {/* Postulantes Nuevos */}
       <Link href="/admin/adquisicion/postulantes">
-        <Card className="cursor-pointer hover:border-green-500 transition-colors">
+        <Card className="cursor-pointer hover:border-success transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Nuevos (7 días)
             </CardTitle>
-            <UserPlus className="h-4 w-4 text-green-500" />
+            <UserPlus className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.newDrivers}</div>

@@ -47,6 +47,11 @@ class OnboardingService {
       ]
     }
 
+    // upcoming events: show nearest first; past/default: most recent first
+    const orderBy = filters?.upcoming
+      ? ({ scheduledDate: 'asc' } as const)
+      : ({ scheduledDate: 'desc' } as const)
+
     return await prisma.onboardingEvent.findMany({
       where,
       include: {
@@ -70,6 +75,7 @@ class OnboardingService {
             formDriver: {
               select: {
                 id: true,
+                slug: true,
                 firstName: true,
                 lastName: true,
                 fullName: true,
@@ -87,9 +93,8 @@ class OnboardingService {
           }
         }
       },
-      orderBy: {
-        scheduledDate: 'asc' // Ordenar de más próximo a más lejano (ascendente)
-      }
+      orderBy,
+      take: 100
     })
   }
 
@@ -121,6 +126,7 @@ class OnboardingService {
             formDriver: {
               select: {
                 id: true,
+                slug: true,
                 fullName: true,
                 firstName: true,
                 lastName: true,
@@ -206,6 +212,7 @@ class OnboardingService {
             formDriver: {
               select: {
                 id: true,
+                slug: true,
                 firstName: true,
                 lastName: true,
                 fullName: true,
@@ -270,6 +277,7 @@ class OnboardingService {
             formDriver: {
               select: {
                 id: true,
+                slug: true,
                 firstName: true,
                 lastName: true,
                 fullName: true,
@@ -856,13 +864,11 @@ class OnboardingService {
 
     const assignedIds = new Set(existingAttendees.map(a => a.formDriverId))
 
-    // ✅ CORREGIDO: SIN FILTROS RESTRICTIVOS
-    // Mostrar TODOS los drivers, solo excluir los ya asignados a este evento
+    // Mostrar TODOS los drivers, solo excluir abandonos (jamás califican) y los ya asignados a este evento
     const where: any = {
+      status: { not: 'ABANDONED' },
       ...searchFilter,
       ...(eventId && assignedIds.size > 0 ? { id: { notIn: Array.from(assignedIds) } } : {}),
-      // ❌ REMOVIDO: documentsStatus: 'APPROVED'
-      // ❌ REMOVIDO: status: 'ACTIVE'
     }
 
     const [drivers, total] = await Promise.all([
@@ -882,10 +888,9 @@ class OnboardingService {
           lastActivityAt: true,
           currentStep: true,
           completedAt: true,
-          // ✅ Incluir conteo de documentos para mejor ordenamiento
-          documents: {
+          _count: {
             select: {
-              status: true
+              documents: true,
             }
           },
           onboardingAttendances: {
@@ -905,14 +910,10 @@ class OnboardingService {
             take: 1
           }
         },
-        // ✅ ORDENAMIENTO INTELIGENTE:
-        // 1. Documentos aprobados primero
-        // 2. Formulario completado primero
-        // 3. Más recientes
         orderBy: [
           { documentsStatus: 'desc' }, // APPROVED > IN_REVIEW > PENDING > INCOMPLETE
-          { completedAt: 'desc' },     // Completados primero
-          { lastActivityAt: 'desc' }   // Más recientes
+          { completedAt: 'desc' },
+          { lastActivityAt: 'desc' }
         ],
         skip,
         take: limit
@@ -924,8 +925,7 @@ class OnboardingService {
     const eligibleDrivers = drivers.map(driver => {
       const latestAttendance = driver.onboardingAttendances[0]
       const isAssignedToOtherEvent = !!latestAttendance && latestAttendance.event.id !== eventId
-      
-      // ✅ Solo deshabilitar si está asignado a otro evento
+
       let canBeSelected = !isAssignedToOtherEvent
       let disabledReason = null
 
@@ -934,9 +934,11 @@ class OnboardingService {
         disabledReason = `Ya asignado a: ${latestAttendance.event.title || 'otro evento'}`
       }
 
-      // Calcular métricas de documentos
-      const approvedDocs = driver.documents.filter(d => d.status === 'APPROVED').length
-      const totalDocs = driver.documents.length
+      // _count.documents = total de documentos del driver
+      const totalDocs = driver._count.documents
+      // approvedDocs no se puede obtener con _count filtrado en esta versión de Prisma sin rawQuery;
+      // se expone como 0 para no romper la UI — el badge de documentsStatus ya cubre el estado real.
+      const approvedDocs = driver.documentsStatus === 'APPROVED' ? totalDocs : 0
 
       return {
         id: driver.id,

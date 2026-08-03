@@ -116,12 +116,12 @@ export function PedidoKpis({ kpis, offersCount }: Props) {
             />
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex flex-col gap-0.5 rounded-md bg-amber-50 px-3 py-1.5 cursor-default ring-1 ring-amber-200">
-                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-amber-800">
+                <div className="flex flex-col gap-0.5 rounded-md bg-warning-soft px-3 py-1.5 cursor-default ring-1 ring-warning">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-warning">
                     <Users className="h-3 w-3" />
                     <span>Drivers ofertados</span>
                   </div>
-                  <div className="text-base font-bold tabular-nums leading-none text-amber-900">
+                  <div className="text-base font-bold tabular-nums leading-none text-warning">
                     {offersCount}
                   </div>
                 </div>

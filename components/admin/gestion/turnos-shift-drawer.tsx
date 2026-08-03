@@ -66,8 +66,8 @@ function paymentLabel(t: FlattenedShift["paymentType"]): {
   className: string
 } {
   if (t === "guaranteed")
-    return { label: "Garantizado", className: "bg-emerald-100 text-emerald-900 hover:bg-emerald-100" }
-  return { label: "Por pedido", className: "bg-orange-100 text-orange-900 hover:bg-orange-100" }
+    return { label: "Garantizado", className: "bg-success-soft text-success hover:bg-success-soft" }
+  return { label: "Por pedido", className: "bg-warning-soft text-warning hover:bg-warning-soft" }
 }
 
 interface ReviewState {
@@ -370,16 +370,16 @@ function ReviewSection({
   }, [review.drivers, dayShiftsByDriverId])
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-2">
+    <div className="rounded-lg border border-warning bg-warning-soft/40 p-3 space-y-2">
       <div className="flex items-center gap-1.5">
-        <AlertCircle className="h-4 w-4 text-amber-700" />
-        <h3 className="text-sm font-semibold text-amber-900">
+        <AlertCircle className="h-4 w-4 text-warning" />
+        <h3 className="text-sm font-semibold text-warning">
           Drivers a revisar
         </h3>
         {review.status === "ready" && review.drivers.length > 0 && (
           <Badge
             variant="secondary"
-            className="bg-amber-100 text-amber-900 hover:bg-amber-100 text-[10px]"
+            className="bg-warning-soft text-warning hover:bg-warning-soft text-[10px]"
           >
             {review.drivers.length}
           </Badge>
@@ -419,9 +419,9 @@ function ReviewSection({
             <AccordionItem
               key={d.driverId}
               value={d.driverId}
-              className="border-amber-200/60"
+              className="border-warning/60"
             >
-              <AccordionTrigger className="py-2 px-1 hover:no-underline hover:bg-amber-100/40 rounded">
+              <AccordionTrigger className="py-2 px-1 hover:no-underline hover:bg-warning-soft/40 rounded">
                 <div className="flex flex-col gap-1 flex-1 min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <UserRound className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -437,14 +437,14 @@ function ReviewSection({
                   </div>
                   <div className="flex items-center gap-1 flex-wrap pl-5">
                     {todayShifts.length === 0 ? (
-                      <span className="inline-flex items-center rounded border border-rose-200 bg-rose-50 px-1.5 py-0 text-[10px] text-rose-800">
+                      <span className="inline-flex items-center rounded border border-destructive bg-danger-soft px-1.5 py-0 text-[10px] text-destructive">
                         Sin turno
                       </span>
                     ) : (
                       todayShifts.map((s) => (
                         <span
                           key={s.shiftId}
-                          className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[10px] text-emerald-900"
+                          className="inline-flex items-center rounded border border-success bg-success-soft px-1.5 py-0 text-[10px] text-success"
                           title={`Hoy en ${s.zoneName} ${formatHourDecimal(s.fromHour)}–${formatHourDecimal(s.toHour)}`}
                         >
                           {formatHourCompact(s.fromHour)}-

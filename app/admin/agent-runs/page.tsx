@@ -26,7 +26,7 @@ export default async function AgentRunsPage({ searchParams }: PageProps) {
     prisma.agentRun.findMany({
       include: {
         formDriver: {
-          select: { id: true, fullName: true, firstName: true, lastName: true, cedula: true },
+          select: { id: true, slug: true, fullName: true, firstName: true, lastName: true, cedula: true },
         },
         actions: {
           select: { id: true, tool: true, input: true, reasoning: true, status: true },
@@ -102,21 +102,21 @@ export default async function AgentRunsPage({ searchParams }: PageProps) {
             <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
               Coincide
             </p>
-            <p className="text-3xl font-bold text-green-700">{matches}</p>
+            <p className="text-3xl font-bold text-success">{matches}</p>
             <p className="text-xs text-muted-foreground mt-1">admin de acuerdo</p>
           </Card>
           <Card className="p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
               Parcial
             </p>
-            <p className="text-3xl font-bold text-amber-700">{partial}</p>
+            <p className="text-3xl font-bold text-warning">{partial}</p>
             <p className="text-xs text-muted-foreground mt-1">mixto</p>
           </Card>
           <Card className="p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
               No coincide
             </p>
-            <p className="text-3xl font-bold text-red-700">{doesNotMatch}</p>
+            <p className="text-3xl font-bold text-destructive">{doesNotMatch}</p>
             <p className="text-xs text-muted-foreground mt-1">errores del agente</p>
           </Card>
         </div>
@@ -174,7 +174,7 @@ export default async function AgentRunsPage({ searchParams }: PageProps) {
                           </td>
                           <td className="px-4 py-2">
                             <Link
-                              href={`/admin/postulaciones/${driver.id}`}
+                              href={`/admin/postulaciones/${driver.slug ?? driver.id}`}
                               className="text-sm font-medium hover:underline"
                             >
                               {name}
@@ -186,7 +186,7 @@ export default async function AgentRunsPage({ searchParams }: PageProps) {
                               variant="outline"
                               className={
                                 run.mode === 'DRY_RUN'
-                                  ? 'border-slate-300 text-slate-600'
+                                  ? 'border-border text-muted-foreground'
                                   : 'border-purple-300 text-purple-700'
                               }
                             >
@@ -277,19 +277,19 @@ function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; cls: string; Icon: any }> = {
     PENDING: {
       label: 'Pendiente',
-      cls: 'bg-slate-50 text-slate-700 border-slate-200',
+      cls: 'bg-muted text-muted-foreground border-border',
       Icon: Loader2,
     },
-    RUNNING: { label: 'Corriendo', cls: 'bg-blue-50 text-blue-700 border-blue-200', Icon: Loader2 },
+    RUNNING: { label: 'Corriendo', cls: 'bg-info-soft text-info border-info', Icon: Loader2 },
     COMPLETED: {
       label: 'Completada',
-      cls: 'bg-green-50 text-green-700 border-green-200',
+      cls: 'bg-success-soft text-success border-success',
       Icon: CheckCircle2,
     },
-    FAILED: { label: 'Falló', cls: 'bg-red-50 text-red-700 border-red-200', Icon: XCircle },
+    FAILED: { label: 'Falló', cls: 'bg-danger-soft text-destructive border-destructive', Icon: XCircle },
     NEEDS_REVIEW: {
       label: 'Revisión',
-      cls: 'bg-amber-50 text-amber-700 border-amber-200',
+      cls: 'bg-warning-soft text-warning border-warning',
       Icon: AlertTriangle,
     },
   }
@@ -306,9 +306,9 @@ function StatusBadge({ status }: { status: string }) {
 function DecisionBadge({ decision }: { decision: string | null }) {
   if (!decision) return <span className="text-xs text-muted-foreground">—</span>
   const config: Record<string, { label: string; cls: string }> = {
-    APPROVED: { label: 'APROBADA', cls: 'bg-green-50 text-green-700 border-green-200' },
-    NEEDS_REVIEW: { label: 'REVISIÓN', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-    REJECTED: { label: 'RECHAZADA', cls: 'bg-red-50 text-red-700 border-red-200' },
+    APPROVED: { label: 'APROBADA', cls: 'bg-success-soft text-success border-success' },
+    NEEDS_REVIEW: { label: 'REVISIÓN', cls: 'bg-warning-soft text-warning border-warning' },
+    REJECTED: { label: 'RECHAZADA', cls: 'bg-danger-soft text-destructive border-destructive' },
   }
   const c = config[decision] ?? { label: decision, cls: '' }
   return (
@@ -322,7 +322,7 @@ function FeedbackBadge({ feedback }: { feedback: string | null }) {
   if (!feedback) return <span className="text-xs text-muted-foreground italic">—</span>
   if (feedback === 'MATCHES') {
     return (
-      <Badge variant="outline" className="gap-1 bg-green-50 text-green-800 border-green-300">
+      <Badge variant="outline" className="gap-1 bg-success-soft text-success border-success">
         <CheckCircle2 className="h-3 w-3" />
         Coincide
       </Badge>
@@ -330,14 +330,14 @@ function FeedbackBadge({ feedback }: { feedback: string | null }) {
   }
   if (feedback === 'DOES_NOT_MATCH') {
     return (
-      <Badge variant="outline" className="gap-1 bg-red-50 text-red-800 border-red-300">
+      <Badge variant="outline" className="gap-1 bg-danger-soft text-destructive border-destructive">
         <XCircle className="h-3 w-3" />
         No coincide
       </Badge>
     )
   }
   return (
-    <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-800 border-amber-300">
+    <Badge variant="outline" className="gap-1 bg-warning-soft text-warning border-warning">
       <AlertTriangle className="h-3 w-3" />
       Parcial
     </Badge>

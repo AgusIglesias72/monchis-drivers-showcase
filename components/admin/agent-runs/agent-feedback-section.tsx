@@ -133,7 +133,7 @@ export function AgentFeedbackSection({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs text-red-600 hover:text-red-700"
+              className="h-7 text-xs text-destructive hover:text-destructive"
               onClick={clearFeedback}
               disabled={isSaving}
             >
@@ -163,8 +163,8 @@ export function AgentFeedbackSection({
           onClick={() => setSelected('MATCHES')}
           icon={<CheckCircle2 className="h-4 w-4" />}
           label="Sí, coincide"
-          baseClass="bg-green-50/60 border-green-200 text-green-700 hover:bg-green-100 hover:border-green-400 hover:text-green-800"
-          selectedClass="bg-green-100 border-green-500 text-green-900 ring-2 ring-green-400 ring-offset-1"
+          baseClass="bg-success-soft border-success/30 text-success hover:bg-success/15 hover:border-success/50 hover:text-success"
+          selectedClass="bg-success/15 border-success text-success ring-2 ring-success/50 ring-offset-1"
         />
         <FeedbackOption
           value="PARTIAL"
@@ -172,8 +172,8 @@ export function AgentFeedbackSection({
           onClick={() => setSelected('PARTIAL')}
           icon={<AlertTriangle className="h-4 w-4" />}
           label="Parcial"
-          baseClass="bg-amber-50/60 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-400 hover:text-amber-800"
-          selectedClass="bg-amber-100 border-amber-500 text-amber-900 ring-2 ring-amber-400 ring-offset-1"
+          baseClass="bg-warning-soft border-warning/30 text-warning hover:bg-warning/15 hover:border-warning/50 hover:text-warning"
+          selectedClass="bg-warning/15 border-warning text-warning ring-2 ring-warning/50 ring-offset-1"
         />
         <FeedbackOption
           value="DOES_NOT_MATCH"
@@ -181,8 +181,8 @@ export function AgentFeedbackSection({
           onClick={() => setSelected('DOES_NOT_MATCH')}
           icon={<XCircle className="h-4 w-4" />}
           label="No coincide"
-          baseClass="bg-red-50/60 border-red-200 text-red-700 hover:bg-red-100 hover:border-red-400 hover:text-red-800"
-          selectedClass="bg-red-100 border-red-500 text-red-900 ring-2 ring-red-400 ring-offset-1"
+          baseClass="bg-danger-soft border-danger/30 text-danger hover:bg-danger/15 hover:border-danger/50 hover:text-danger"
+          selectedClass="bg-danger/15 border-danger text-danger ring-2 ring-danger/50 ring-offset-1"
         />
       </div>
 
@@ -253,7 +253,7 @@ function FeedbackOption({
 function FeedbackBadge({ feedback }: { feedback: AgentFeedbackValue }) {
   if (feedback === 'MATCHES') {
     return (
-      <Badge variant="outline" className="gap-1 bg-green-50 text-green-800 border-green-300">
+      <Badge variant="outline" className="gap-1 bg-success-soft text-success border-success/40">
         <CheckCircle2 className="h-3 w-3" />
         Coincide
       </Badge>
@@ -261,14 +261,14 @@ function FeedbackBadge({ feedback }: { feedback: AgentFeedbackValue }) {
   }
   if (feedback === 'DOES_NOT_MATCH') {
     return (
-      <Badge variant="outline" className="gap-1 bg-red-50 text-red-800 border-red-300">
+      <Badge variant="outline" className="gap-1 bg-danger-soft text-danger border-danger/40">
         <XCircle className="h-3 w-3" />
         No coincide
       </Badge>
     )
   }
   return (
-    <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-800 border-amber-300">
+    <Badge variant="outline" className="gap-1 bg-warning-soft text-warning border-warning/40">
       <AlertTriangle className="h-3 w-3" />
       Parcial
     </Badge>

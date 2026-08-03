@@ -85,11 +85,11 @@ export function AttendeesTable({
   const getStatusBadge = (status: OnboardingAttendeeWithRelations['status']) => {
     const colorClass = getAttendeeStatusColor(status)
     const colorMap: Record<string, string> = {
-      gray: 'bg-gray-100 text-gray-800 border-gray-200',
-      blue: 'bg-blue-100 text-blue-800 border-blue-200',
-      green: 'bg-green-100 text-green-800 border-green-200',
-      red: 'bg-red-100 text-red-800 border-red-200',
-      orange: 'bg-orange-100 text-orange-800 border-orange-200',
+      gray: 'bg-muted text-foreground border-border',
+      blue: 'bg-info-soft text-info border-info',
+      green: 'bg-success-soft text-success border-success',
+      red: 'bg-danger-soft text-destructive border-destructive',
+      orange: 'bg-warning-soft text-warning border-warning',
       purple: 'bg-purple-100 text-purple-800 border-purple-200',
     }
 
@@ -197,7 +197,7 @@ export function AttendeesTable({
                               })
                             }}
                           >
-                            <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                            <CheckCircle className="mr-2 h-4 w-4 text-success" />
                             Check-in
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -210,7 +210,7 @@ export function AttendeesTable({
                               })
                             }}
                           >
-                            <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                            <XCircle className="mr-2 h-4 w-4 text-destructive" />
                             Marcar No Show
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -220,7 +220,7 @@ export function AttendeesTable({
                       {attendee.status === 'INVITED' && (
                         <>
                           <DropdownMenuItem onClick={() => onConfirm(attendee.id)}>
-                            <CheckCircle className="mr-2 h-4 w-4 text-blue-600" />
+                            <CheckCircle className="mr-2 h-4 w-4 text-info" />
                             Confirmar Manualmente
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />

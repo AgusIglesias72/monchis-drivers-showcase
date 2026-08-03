@@ -73,9 +73,10 @@ export function PersonalInfoCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-4">
-        <div className="space-y-4">
+        <div className="grid gap-x-8 gap-y-4 items-start lg:grid-cols-2">
           {/* Identificación */}
           <div className="space-y-2">
+            <h5 className="text-xs font-semibold text-muted-foreground">IDENTIFICACIÓN</h5>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Nombre Completo</Label>
               {isEditing ? (
@@ -152,7 +153,7 @@ export function PersonalInfoCard({
           </div>
 
           {/* Contacto */}
-          <div className="space-y-2 pt-3 border-t">
+          <div className="space-y-2">
             <h5 className="text-xs font-semibold text-muted-foreground">CONTACTO</h5>
             
             <div className="grid grid-cols-2 gap-3">
@@ -188,7 +189,7 @@ export function PersonalInfoCard({
           </div>
 
           {/* Ubicación */}
-          <div className="space-y-2 pt-3 border-t">
+          <div className="space-y-2">
             <h5 className="text-xs font-semibold text-muted-foreground">UBICACIÓN</h5>
             
             {isEditing ? (
@@ -226,7 +227,7 @@ export function PersonalInfoCard({
           </div>
 
           {/* Vehículo */}
-          <div className="space-y-2 pt-3 border-t">
+          <div className="space-y-2">
             <h5 className="text-xs font-semibold text-muted-foreground">VEHÍCULO</h5>
             
             {postulacion.hasVehicle ? (
@@ -286,7 +287,7 @@ export function PersonalInfoCard({
 
           {/* Contacto de Emergencia */}
           {postulacion.emergencyName && (
-            <div className="space-y-2 pt-3 border-t">
+            <div className="space-y-2">
               <h5 className="text-xs font-semibold text-muted-foreground">CONTACTO DE EMERGENCIA</h5>
               
               {isEditing ? (
@@ -328,7 +329,7 @@ export function PersonalInfoCard({
 
           {/* Información Adicional */}
           {(postulacion.experience || postulacion.availability || postulacion.whenCanStart) && (
-            <div className="space-y-2 pt-3 border-t">
+            <div className="space-y-2">
               <h5 className="text-xs font-semibold text-muted-foreground">INFORMACIÓN ADICIONAL</h5>
 
               {isEditing ? (
@@ -381,7 +382,7 @@ export function PersonalInfoCard({
 
           {/* Cómo se enteró / Referido */}
           {(postulacion.howHeardAboutUs || postulacion.referredBy) && (
-            <div className="space-y-2 pt-3 border-t">
+            <div className="space-y-2">
               <h5 className="text-xs font-semibold text-muted-foreground">ORIGEN</h5>
 
               {isEditing ? (
@@ -417,7 +418,7 @@ export function PersonalInfoCard({
                   )}
                   {postulacion.referredBy && (
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="gap-1.5 text-xs font-normal border-green-200 bg-green-50 text-green-700">
+                      <Badge variant="outline" className="gap-1.5 text-xs font-normal border-success bg-success-soft text-success">
                         <UserPlus className="h-3 w-3" />
                         Referido por: {postulacion.referredBy}
                       </Badge>

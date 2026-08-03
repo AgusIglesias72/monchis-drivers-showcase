@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from "react"
 import L from "leaflet"
 import { Phone, Timer } from "lucide-react"
 import {
+  CircleMarker,
   MapContainer,
   Marker,
   Polygon,
@@ -18,6 +19,7 @@ import {
 
 import { LIVE_PANEL_CONFIG } from "@/lib/config/live-panel.config"
 import type {
+  LiveBreadcrumb,
   LiveDriver,
   LiveRequest,
   LiveRoute,
@@ -36,6 +38,7 @@ interface Props {
   ) => void
   activeRoute: LiveRoute | null
   routeLoading: boolean
+  breadcrumb: LiveBreadcrumb | null
 }
 
 interface CommerceGroup {
@@ -129,10 +132,10 @@ function stateLabel(state: string | null): string {
 }
 
 const STATE_BADGE_BG: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-900",
+  PENDING: "bg-warning-soft text-warning",
   ACCEPTED: "bg-violet-100 text-violet-900",
   WAITING_ORDER: "bg-sky-100 text-sky-900",
-  DELIVERY: "bg-blue-100 text-blue-900",
+  DELIVERY: "bg-info-soft text-info",
   OUTSIDE: "bg-cyan-100 text-cyan-900",
   ASSIGNED: "bg-fuchsia-100 text-fuchsia-900",
   ASSIGNED_DELIVERY: "bg-fuchsia-100 text-fuchsia-900",
@@ -140,10 +143,10 @@ const STATE_BADGE_BG: Record<string, string> = {
 }
 
 const TONE_CLASS: Record<ReturnType<typeof bucketTone>, string> = {
-  fresh: "bg-emerald-500 text-white",
-  warm: "bg-amber-500 text-white",
-  hot: "bg-orange-500 text-white",
-  critical: "bg-red-500 text-white",
+  fresh: "bg-success text-white",
+  warm: "bg-warning text-white",
+  hot: "bg-warning text-white",
+  critical: "bg-destructive text-white",
 }
 
 // ============================================================================
@@ -351,6 +354,7 @@ function HighlightFocus({
   delayed,
   active,
   activeRoute,
+  breadcrumb,
 }: Props) {
   const map = useMap()
   useEffect(() => {
@@ -363,21 +367,22 @@ function HighlightFocus({
     } else if (highlight.kind === "driver") {
       const d = drivers.find((x) => x.driverId === highlight.id)
       if (!d?.position) return
-      // Si tenemos ruta cargada para alguno de sus pedidos vigentes, encuadramos
-      // todo (posición del driver + comercio + cliente + history).
+      // Encuadramos todo lo que tengamos: posición del driver + comercio +
+      // cliente + history + rastro. El rastro se incluye aunque route-detail
+      // haya fallado (es un caso común: ver cache-the-failure en el panel).
+      const pts: [number, number][] = [[d.position.lat, d.position.lng]]
       if (activeRoute) {
-        const pts: [number, number][] = [
-          [d.position.lat, d.position.lng],
-        ]
         if (activeRoute.origin)
           pts.push([activeRoute.origin.lat, activeRoute.origin.lng])
         if (activeRoute.destination)
           pts.push([activeRoute.destination.lat, activeRoute.destination.lng])
         for (const h of activeRoute.history) pts.push([h.lat, h.lng])
-        if (pts.length >= 2) {
-          map.fitBounds(pts as L.LatLngBoundsLiteral, { padding: [50, 50] })
-          return
-        }
+      }
+      if (breadcrumb && d.activeRequestIds.includes(breadcrumb.requestId))
+        for (const p of breadcrumb.points) pts.push([p.lat, p.lng])
+      if (pts.length >= 2) {
+        map.fitBounds(pts as L.LatLngBoundsLiteral, { padding: [50, 50] })
+        return
       }
       map.setView([d.position.lat, d.position.lng], 14)
     } else if (highlight.kind === "commerce") {
@@ -414,17 +419,21 @@ function HighlightFocus({
         map.setView(pts[0], 15)
       }
     } else if (highlight.kind === "request") {
+      // Encuadre con todo lo disponible para el pedido: ruta (si cargó) + rastro
+      // (aunque route-detail haya fallado) + origen como fallback.
+      const pts: [number, number][] = []
       if (activeRoute && activeRoute.requestId === highlight.id) {
-        const pts: [number, number][] = []
         if (activeRoute.origin)
           pts.push([activeRoute.origin.lat, activeRoute.origin.lng])
         if (activeRoute.destination)
           pts.push([activeRoute.destination.lat, activeRoute.destination.lng])
         for (const h of activeRoute.history) pts.push([h.lat, h.lng])
-        if (pts.length >= 2) {
-          map.fitBounds(pts as L.LatLngBoundsLiteral, { padding: [50, 50] })
-          return
-        }
+      }
+      if (breadcrumb?.requestId === highlight.id)
+        for (const p of breadcrumb.points) pts.push([p.lat, p.lng])
+      if (pts.length >= 2) {
+        map.fitBounds(pts as L.LatLngBoundsLiteral, { padding: [50, 50] })
+        return
       }
       const r =
         pending.find((x) => x.requestId === highlight.id) ||
@@ -432,7 +441,7 @@ function HighlightFocus({
         active.find((x) => x.requestId === highlight.id)
       if (r?.origin) map.setView([r.origin.lat, r.origin.lng], 15)
     }
-  }, [highlight, zones, drivers, pending, delayed, active, activeRoute, map])
+  }, [highlight, zones, drivers, pending, delayed, active, activeRoute, breadcrumb, map])
   return null
 }
 
@@ -450,7 +459,14 @@ export default function LiveMapInternal(props: Props) {
     highlight,
     onHighlight,
     activeRoute,
+    breadcrumb,
   } = props
+
+  // Polilínea del recorrido real del driver (rastro fino minuto a minuto).
+  const breadcrumbLine = useMemo<[number, number][] | null>(() => {
+    if (!breadcrumb || breadcrumb.points.length < 2) return null
+    return breadcrumb.points.map((p) => [p.lat, p.lng])
+  }, [breadcrumb])
 
   const mapRef = useRef<L.Map | null>(null)
 
@@ -660,6 +676,48 @@ export default function LiveMapInternal(props: Props) {
         )
       })}
 
+      {/* Recorrido real del driver (rastro fino minuto a minuto). Va debajo de
+          la ruta y los end-points para no taparlos. */}
+      {breadcrumbLine && (
+        <Polyline
+          positions={breadcrumbLine}
+          pathOptions={{
+            color: "#6366f1",
+            weight: 3,
+            opacity: 0.85,
+          }}
+        />
+      )}
+      {breadcrumb?.points.map((p, i) => {
+        const isLast = i === breadcrumb.points.length - 1
+        return (
+          <CircleMarker
+            key={`${p.at}-${i}`}
+            center={[p.lat, p.lng]}
+            radius={isLast ? 5 : 3}
+            pathOptions={{
+              color: "#ffffff",
+              weight: 1.5,
+              fillColor: isLast ? "#4338ca" : "#6366f1",
+              fillOpacity: 1,
+            }}
+          >
+            <Tooltip>
+              <div className="text-xs">
+                <div className="font-semibold text-info">
+                  {new Date(p.at).toLocaleTimeString("es-AR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  {isLast ? " · última" : ""}
+                </div>
+                <div>{stateLabel(p.state)}</div>
+              </div>
+            </Tooltip>
+          </CircleMarker>
+        )
+      })}
+
       {/* Ruta del pedido seleccionado */}
       {routePolyline && (
         <Polyline
@@ -679,7 +737,7 @@ export default function LiveMapInternal(props: Props) {
         >
           <Tooltip>
             <div className="text-xs">
-              <div className="font-semibold text-emerald-700">Comercio</div>
+              <div className="font-semibold text-success">Comercio</div>
               <div>{activeRoute.origin.name}</div>
             </div>
           </Tooltip>
@@ -692,7 +750,7 @@ export default function LiveMapInternal(props: Props) {
         >
           <Tooltip>
             <div className="text-xs">
-              <div className="font-semibold text-red-700">Destino</div>
+              <div className="font-semibold text-destructive">Destino</div>
               <div>{activeRoute.destination.name}</div>
             </div>
           </Tooltip>
@@ -759,12 +817,12 @@ function CommercePopup({
 
       <div className="flex flex-wrap items-center gap-1">
         {preDeliveryCount > 0 && (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
+          <span className="rounded bg-warning-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-warning">
             {preDeliveryCount} en comercio
           </span>
         )}
         {inDeliveryCount > 0 && (
-          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900">
+          <span className="rounded bg-info-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-info">
             {inDeliveryCount} en camino
           </span>
         )}
@@ -801,23 +859,23 @@ function ZonePopup({ zone }: { zone: LiveZone }) {
         : "OK"
   const statusToneClass =
     zone.warningKpi === "red"
-      ? "text-red-700 dark:text-red-400"
+      ? "text-destructive"
       : zone.warningKpi === "yellow"
-        ? "text-amber-700 dark:text-amber-400"
-        : "text-emerald-700 dark:text-emerald-400"
+        ? "text-warning"
+        : "text-success"
   const statusDotClass =
     zone.warningKpi === "red"
-      ? "bg-red-500"
+      ? "bg-destructive"
       : zone.warningKpi === "yellow"
-        ? "bg-amber-500"
-        : "bg-emerald-500"
+        ? "bg-warning"
+        : "bg-success"
 
   const barFillClass =
     zone.warningDriversConnections === "red"
-      ? "bg-red-500"
+      ? "bg-destructive"
       : zone.warningDriversConnections === "yellow"
-        ? "bg-amber-500"
-        : "bg-emerald-500"
+        ? "bg-warning"
+        : "bg-success"
 
   return (
     <div style={{ minWidth: 220, maxWidth: 280 }}>
@@ -887,9 +945,9 @@ function ZoneStat({
 }) {
   const valueClass =
     tone === "danger"
-      ? "text-red-600 dark:text-red-400"
+      ? "text-destructive"
       : tone === "warning"
-        ? "text-amber-700 dark:text-amber-400"
+        ? "text-warning"
         : "text-foreground"
   return (
     <div className="flex flex-col items-center justify-center text-center">
@@ -938,9 +996,9 @@ function DriverPopup({
       ? "Libre"
       : "No disponible"
   const statusToneClass = driver.hasActive
-    ? "text-blue-700 dark:text-blue-400"
+    ? "text-info"
     : driver.available
-      ? "text-emerald-700 dark:text-emerald-400"
+      ? "text-success"
       : "text-muted-foreground"
 
   return (
@@ -974,7 +1032,7 @@ function DriverPopup({
             target="_blank"
             rel="noreferrer"
             title="WhatsApp"
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border bg-success-soft text-success hover:bg-success-soft"
           >
             <Phone className="h-3 w-3" />
           </a>
@@ -996,7 +1054,7 @@ function DriverPopup({
       ) : null}
 
       {driver.pendingRequestIds.length > 0 && (
-        <div className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+        <div className="rounded bg-warning-soft px-1.5 py-0.5 text-[9px] font-medium text-warning">
           +{driver.pendingRequestIds.length} oferta
           {driver.pendingRequestIds.length === 1 ? "" : "s"} sin aceptar
         </div>
@@ -1031,7 +1089,7 @@ function CommerceOrderRow({
       onClick={onClick}
       className={`flex w-full items-center gap-1.5 rounded border bg-card px-2 py-1.5 text-left transition hover:bg-muted/40 ${
         dimPost && !isPre ? "opacity-60" : ""
-      } ${isDelayed ? "border-l-2 border-l-red-500" : ""}`}
+      } ${isDelayed ? "border-l-2 border-l-destructive" : ""}`}
     >
       <span className="shrink-0 font-mono text-[11px] font-bold tabular-nums">
         #{r.externalOrderId || "?"}
@@ -1042,7 +1100,7 @@ function CommerceOrderRow({
         {stateLabel(r.state)}
       </span>
       {isDelayed && (
-        <Timer className="h-3 w-3 shrink-0 text-red-600" />
+        <Timer className="h-3 w-3 shrink-0 text-destructive" />
       )}
       <span
         className={`ml-auto inline-flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${toneBadge}`}

@@ -152,7 +152,7 @@ export function PedidoTimeline({
                 className={cn(
                   "flex gap-4 min-h-[3.25rem] rounded-md -mx-2 px-2 py-1 transition-colors",
                   canFocus && "cursor-pointer hover:bg-muted/40",
-                  isFocused && "bg-amber-50 ring-1 ring-amber-200",
+                  isFocused && "bg-warning-soft ring-1 ring-warning",
                 )}
                 onClick={
                   canFocus && onSelect && historyIdx != null
@@ -231,7 +231,7 @@ export function PedidoTimeline({
                         {lastDriver}
                       </span>
                     ) : noDriver ? (
-                      <span className="inline-flex items-center gap-1 text-amber-700">
+                      <span className="inline-flex items-center gap-1 text-warning">
                         <UserMinus className="h-3 w-3" />
                         Sin driver asignado
                       </span>

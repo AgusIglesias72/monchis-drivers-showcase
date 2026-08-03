@@ -156,27 +156,27 @@ export function ActiveJobCard({ jobId, onClose }: ActiveJobCardProps) {
 
         {/* Resultado */}
         {result && (
-          <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 p-3">
-            <p className="font-semibold text-green-900 dark:text-green-100 flex items-center gap-1.5 text-xs">
+          <div className="rounded-lg bg-success-soft border border-success p-3">
+            <p className="font-semibold text-success flex items-center gap-1.5 text-xs">
               <CheckCircle className="h-4 w-4" />
               Completado Exitosamente
             </p>
             <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-              <div className="text-center p-2 rounded bg-green-100 dark:bg-green-900/30">
-                <p className="text-green-600 dark:text-green-400 font-bold text-lg">{result.successful}</p>
-                <p className="text-green-700 dark:text-green-300 text-[10px]">Exitosos</p>
+              <div className="text-center p-2 rounded bg-success-soft">
+                <p className="text-success font-bold text-lg">{result.successful}</p>
+                <p className="text-success text-[10px]">Exitosos</p>
               </div>
-              <div className="text-center p-2 rounded bg-red-100 dark:bg-red-900/30">
-                <p className="text-red-600 dark:text-red-400 font-bold text-lg">{result.failed}</p>
-                <p className="text-red-700 dark:text-red-300 text-[10px]">Fallidos</p>
+              <div className="text-center p-2 rounded bg-danger-soft">
+                <p className="text-destructive font-bold text-lg">{result.failed}</p>
+                <p className="text-destructive text-[10px]">Fallidos</p>
               </div>
-              <div className="text-center p-2 rounded bg-blue-100 dark:bg-blue-900/30">
-                <p className="text-blue-600 dark:text-blue-400 font-bold text-lg">{result.total}</p>
-                <p className="text-blue-700 dark:text-blue-300 text-[10px]">Total</p>
+              <div className="text-center p-2 rounded bg-info-soft">
+                <p className="text-info font-bold text-lg">{result.total}</p>
+                <p className="text-info text-[10px]">Total</p>
               </div>
             </div>
             {(result.jsFolder || result.mgFolder) && (
-              <div className="mt-2 space-y-1 text-[10px] text-green-700 dark:text-green-300">
+              <div className="mt-2 space-y-1 text-[10px] text-success">
                 {result.jsFolder && <p>📁 JS: {result.jsFolder}</p>}
                 {result.mgFolder && <p>📁 M&G: {result.mgFolder}</p>}
               </div>
@@ -237,8 +237,8 @@ export function ActiveJobCard({ jobId, onClose }: ActiveJobCardProps) {
 
         {/* Mensaje según estado */}
         {status === 'PROCESSING' && !isFinished && (
-          <div className="text-center py-2 px-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900">
-            <p className="text-[10px] text-blue-700 dark:text-blue-300">
+          <div className="text-center py-2 px-3 rounded-lg bg-info-soft border border-info">
+            <p className="text-[10px] text-info">
               💡 El proceso continúa en segundo plano. Puedes cerrar esta página.
             </p>
           </div>

@@ -60,7 +60,7 @@ export function OperacionesHourlyChart({ data }: HourlyChartProps) {
       <Card className="h-full">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Clock className="h-4 w-4 text-amber-600" />
+            <Clock className="h-4 w-4 text-warning" />
             Distribución por hora
           </CardTitle>
           <CardDescription>

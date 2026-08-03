@@ -330,7 +330,7 @@ export function PedidosImportContent({ initialQueueStats }: Props) {
                 {text && (
                   <div className="flex flex-wrap items-center gap-4 text-xs">
                     <span className="inline-flex items-center gap-1.5">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                       <strong className="tabular-nums">
                         {parsed.valid.length.toLocaleString("es-AR")}
                       </strong>
@@ -338,7 +338,7 @@ export function PedidosImportContent({ initialQueueStats }: Props) {
                     </span>
                     {parsed.invalid.length > 0 && (
                       <span className="inline-flex items-center gap-1.5">
-                        <XCircle className="h-3.5 w-3.5 text-rose-600" />
+                        <XCircle className="h-3.5 w-3.5 text-destructive" />
                         <strong className="tabular-nums">
                           {parsed.invalid.length.toLocaleString("es-AR")}
                         </strong>
@@ -376,10 +376,10 @@ export function PedidosImportContent({ initialQueueStats }: Props) {
         {enqueueResult && (
           <Alert
             className={
-              enqueueResult.ok ? "border-emerald-200 bg-emerald-50/50" : ""
+              enqueueResult.ok ? "border-success bg-success-soft" : ""
             }
           >
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <CheckCircle2 className="h-4 w-4 text-success" />
             <AlertTitle>Encolados</AlertTitle>
             <AlertDescription>
               <div className="text-xs space-y-0.5 mt-1">
@@ -487,21 +487,21 @@ function QueueProgress({
         <div className="h-3 w-full rounded-full bg-muted overflow-hidden flex">
           {stats.done > 0 && (
             <div
-              className="bg-emerald-500"
+              className="bg-success"
               style={{ width: `${(stats.done / stats.total) * 100}%` }}
               title={`${stats.done} procesados ok`}
             />
           )}
           {stats.notFound > 0 && (
             <div
-              className="bg-amber-400"
+              className="bg-warning"
               style={{ width: `${(stats.notFound / stats.total) * 100}%` }}
               title={`${stats.notFound} no encontrados`}
             />
           )}
           {stats.failed > 0 && (
             <div
-              className="bg-rose-500"
+              className="bg-destructive"
               style={{ width: `${(stats.failed / stats.total) * 100}%` }}
               title={`${stats.failed} con error`}
             />
@@ -542,8 +542,8 @@ function QueueProgress({
         </div>
 
         {stats.pending > 200 && (
-          <Alert className="border-blue-200 bg-blue-50/50">
-            <AlertTriangle className="h-4 w-4 text-blue-600" />
+          <Alert className="border-info bg-info-soft">
+            <AlertTriangle className="h-4 w-4 text-info" />
             <AlertDescription className="text-xs">
               Con {stats.pending.toLocaleString("es-AR")} pendientes a 200/lote cada
               5 min, faltan aprox{" "}
@@ -584,11 +584,11 @@ function StatPill({
 }) {
   const colors =
     variant === "emerald"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+      ? "border-success bg-success-soft text-success"
       : variant === "amber"
-        ? "border-amber-200 bg-amber-50 text-amber-900"
+        ? "border-warning bg-warning-soft text-warning"
         : variant === "rose"
-          ? "border-rose-200 bg-rose-50 text-rose-900"
+          ? "border-destructive bg-danger-soft text-destructive"
           : "border-border bg-muted/30"
 
   return (

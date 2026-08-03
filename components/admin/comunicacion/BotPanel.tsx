@@ -158,10 +158,10 @@ function BotPanelConnected({
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
         </span>
-        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+        <span className="text-sm font-medium text-success">
           Conectado
         </span>
       </div>
@@ -195,7 +195,7 @@ function BotPanelConnected({
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                <AlertTriangle className="h-5 w-5 text-warning" />
                 ¿Reiniciar sesión del bot?
               </AlertDialogTitle>
               <AlertDialogDescription>
@@ -227,8 +227,8 @@ function BotPanelQrReady({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full bg-amber-500" />
-        <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+        <span className="h-2 w-2 rounded-full bg-warning" />
+        <span className="text-sm font-medium text-warning">
           Esperando escaneo
         </span>
       </div>
@@ -293,8 +293,8 @@ function BotPanelOffline({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full bg-red-500" />
-        <span className="text-sm font-medium text-red-700 dark:text-red-400">
+        <span className="h-2 w-2 rounded-full bg-destructive" />
+        <span className="text-sm font-medium text-destructive">
           Sin conexión
         </span>
       </div>

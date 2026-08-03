@@ -427,10 +427,10 @@ function BotStatusBadge({ state }: { state: BotState }) {
   }
   if (state === 'connected') {
     return (
-      <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+      <div className="inline-flex items-center gap-2 rounded-full border border-success/30 bg-success-soft px-3 py-1.5 text-xs font-medium text-success">
         <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
         </span>
         Bot conectado
       </div>
@@ -439,9 +439,9 @@ function BotStatusBadge({ state }: { state: BotState }) {
   return (
     <Link
       href="/admin/comunicaciones"
-      className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-50 dark:bg-red-950/30 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 hover:underline"
+      className="inline-flex items-center gap-2 rounded-full border border-destructive/30 bg-danger-soft px-3 py-1.5 text-xs font-medium text-destructive hover:underline"
     >
-      <span className="h-2 w-2 rounded-full bg-red-500" />
+      <span className="h-2 w-2 rounded-full bg-destructive" />
       Bot desconectado · conectar
     </Link>
   )
@@ -563,7 +563,7 @@ function PhoneMockup({
 
           {justSent && (
             <div className="flex justify-center pt-2">
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600/90 px-2.5 py-1 text-[10px] font-medium text-white shadow">
+              <span className="inline-flex items-center gap-1 rounded-full bg-success/90 px-2.5 py-1 text-[10px] font-medium text-white shadow">
                 <CheckCheck className="h-3 w-3" />
                 Enviado de verdad al destinatario
               </span>

@@ -130,6 +130,39 @@ export async function sendTemplateByKey(
       templateKey,
       error: sendResp.error,
     });
+    // Persistir el FAILED para tener trazabilidad (antes se descartaba → los
+    // fallos eran invisibles en la DB). No cuenta como uso del template.
+    try {
+      await prisma.whatsAppMessage.create({
+        data: {
+          recipientPhone: formattedPhone,
+          recipientName: driver.fullName || driver.firstName || 'Postulante',
+          chatId: `${formattedPhone}@c.us`,
+          messageType: options.messageType ?? WhatsAppMessageType.CUSTOM,
+          step: options.step,
+          message,
+          messageLength: message.length,
+          status: WhatsAppMessageStatus.FAILED,
+          errorMessage: sendResp.error,
+          formDriverId: driver.id,
+          botId: WHATSAPP_BOT_ID,
+          source: options.source ?? WhatsAppMessageSource.TRIGGER,
+          sentBy: options.sentBy,
+          metadata: buildMetadata({
+            channel: 'whatsapp-bot',
+            templateKey,
+            variables,
+            extra: options.metadata,
+          }),
+        },
+      });
+    } catch (err) {
+      console.error('[WHATSAPP_MSG] persist FAILED record falló', {
+        driverId: driver.id,
+        templateKey,
+        error: err instanceof Error ? err.message : err,
+      });
+    }
     return {
       status: 'failed',
       reason: sendResp.error,

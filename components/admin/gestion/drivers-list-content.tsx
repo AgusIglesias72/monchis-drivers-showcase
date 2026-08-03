@@ -12,21 +12,29 @@ import {
   ArrowUp,
   Bike,
   CalendarDays,
-  ChevronDown,
+  Check,
   ChevronRight,
+  Clock,
   IdCard,
   Mail,
+  Package,
   Phone,
   Search,
   ShieldCheck,
   X,
 } from "lucide-react"
 
-import { AdminHeader } from "@/components/admin/admin-header"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
 interface DriverRow {
@@ -92,6 +100,72 @@ const SORT_DEFAULT_ORDER: Record<string, "asc" | "desc"> = {
   name: "asc",
 }
 
+function displayNameOf(d: DriverRow): string {
+  return (
+    d.fullName ||
+    `${d.firstName || ""} ${d.lastName || ""}`.trim() ||
+    "—"
+  )
+}
+
+function initialsOf(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) || "—"
+}
+
+function acceptedPct(d: DriverRow): number {
+  if (!d.ordersCount30d) return 0
+  return d.acceptedOrders30d / d.ordersCount30d
+}
+
+function pctTone(pct: number): string {
+  return pct >= 0.7 ? "text-success" : pct >= 0.4 ? "text-warning" : "text-destructive"
+}
+
+// Chip neutro para métricas (mono) o etiquetas.
+function Chip({
+  children,
+  mono,
+  icon: Icon,
+  tone,
+}: {
+  children: React.ReactNode
+  mono?: boolean
+  icon?: typeof Clock
+  tone?: string
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px]",
+        mono ? "font-[family-name:var(--font-mono)]" : "",
+        tone ?? (mono ? "text-foreground" : "text-muted-foreground"),
+      )}
+    >
+      {Icon && <Icon className="size-3 text-ink-subtle" />}
+      {children}
+    </span>
+  )
+}
+
+function StatusPill({ enabled }: { enabled: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+        enabled ? "bg-success-soft text-success" : "bg-muted text-muted-foreground",
+      )}
+    >
+      {enabled ? "Habilitado" : "Deshabilitado"}
+    </span>
+  )
+}
+
 export function DriversListContent({
   drivers,
   total,
@@ -113,7 +187,7 @@ export function DriversListContent({
   const [inputValue, setInputValue] = useState(query)
   const [createdFromInput, setCreatedFromInput] = useState(createdFrom)
   const [createdToInput, setCreatedToInput] = useState(createdTo)
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [selected, setSelected] = useState<DriverRow | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
@@ -142,30 +216,12 @@ export function DriversListContent({
 
   const handleSortClick = (value: string) => {
     if (value === sort) {
-      // Mismo campo: invertir dirección
       const next = order === "desc" ? "asc" : "desc"
-      // Si la dirección invertida coincide con el default, omitimos el param
       const defaultOrder = SORT_DEFAULT_ORDER[value]
       updateParams({ sort: value, order: next === defaultOrder ? null : next })
     } else {
-      // Otro campo: usamos su dirección default y limpiamos `order` de la URL
       updateParams({ sort: value, order: null })
     }
-  }
-
-  const flipOrder = () => {
-    const next = order === "desc" ? "asc" : "desc"
-    const defaultOrder = SORT_DEFAULT_ORDER[sort]
-    updateParams({ order: next === defaultOrder ? null : next })
-  }
-
-  const toggleExpanded = (driverId: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(driverId)) next.delete(driverId)
-      else next.add(driverId)
-      return next
-    })
   }
 
   const lastSync = lastSyncAtIso
@@ -173,515 +229,450 @@ export function DriversListContent({
     : null
 
   return (
-    <div className="min-h-screen bg-background">
-      <AdminHeader
-        breadcrumbs={[
-          { label: "Gestión Admin" },
-          { label: "Drivers", href: "/admin/gestion/drivers" },
-        ]}
-      />
-
-      <div className="w-full p-4 sm:p-6 lg:p-8 space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Drivers</h1>
-            <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-              Catálogo completo de drivers de Monchis. Click en uno para ver su
-              actividad y procesar sus últimos N días.
-            </p>
+    <div className="w-full space-y-6 p-4 sm:p-6 lg:p-8">
+      {/* Encabezado */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-[var(--ls-tight)] sm:text-3xl">
+            Drivers
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground sm:text-base">
+            Catálogo completo de drivers de Monchis. Click en uno para ver su
+            actividad de los últimos 30 días.
+          </p>
+        </div>
+        {lastSync && (
+          <div className="font-[family-name:var(--font-mono)] text-xs text-muted-foreground">
+            Sync {lastSync}
           </div>
-          {lastSync && (
-            <div className="text-xs text-muted-foreground">
-              Sync de drivers {lastSync}
-            </div>
-          )}
-        </div>
+        )}
+      </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <KpiPill label="Total" value={enabledCount + disabledCount} />
-          <KpiPill label="Habilitados" value={enabledCount} variant="emerald" />
-          <KpiPill label="Deshabilitados" value={disabledCount} variant="rose" />
-        </div>
+      {/* KPIs */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <KpiCard label="Total" value={enabledCount + disabledCount} />
+        <KpiCard label="Habilitados" value={enabledCount} tone="success" />
+        <KpiCard label="Deshabilitados" value={disabledCount} tone="danger" />
+      </div>
 
-        <Card>
-          <CardContent className="p-4 space-y-4">
-            <form onSubmit={handleSearch} className="space-y-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="flex-1">
-                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
-                    Buscar
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      placeholder="Nombre, cédula, teléfono o email"
-                      className="pl-8"
-                    />
-                    {inputValue && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setInputValue("")
-                          updateParams({ q: null })
-                        }}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
-                    Driver desde
-                  </label>
-                  <Input
-                    type="date"
-                    value={createdFromInput}
-                    onChange={(e) => setCreatedFromInput(e.target.value)}
-                    className="w-[150px]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
-                    Hasta
-                  </label>
-                  <Input
-                    type="date"
-                    value={createdToInput}
-                    onChange={(e) => setCreatedToInput(e.target.value)}
-                    className="w-[150px]"
-                  />
-                </div>
-
-                <Button type="submit" disabled={isPending}>
-                  Aplicar
-                </Button>
-                {hasDateFilter && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      setCreatedFromInput("")
-                      setCreatedToInput("")
-                      updateParams({ createdFrom: null, createdTo: null })
-                    }}
-                    disabled={isPending}
-                  >
-                    Limpiar fechas
-                  </Button>
-                )}
-              </div>
-            </form>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground block">
-                Estado
-              </label>
-              <RadioGroupPrimitive.Root
-                value={enabledFilter}
-                onValueChange={(v) =>
-                  updateParams({ enabled: v === "all" ? null : v })
-                }
-                className="flex flex-wrap gap-2"
-              >
-                {FILTER_OPTIONS.map((opt) => {
-                  const isSelected = enabledFilter === opt.value
-                  return (
-                    <RadioGroupPrimitive.Item
-                      key={opt.value}
-                      value={opt.value}
-                      className={cn(
-                        "rounded-md border px-3.5 py-1.5 text-sm transition-colors outline-none",
-                        "hover:bg-accent hover:text-accent-foreground",
-                        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                        isSelected
-                          ? "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background"
-                          : "border-border bg-background text-foreground",
-                      )}
-                    >
-                      {opt.label}
-                    </RadioGroupPrimitive.Item>
-                  )
-                })}
-              </RadioGroupPrimitive.Root>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground block">
-                Ordenar por
-              </label>
-              <div className="flex flex-wrap items-center gap-2">
-                {SORT_OPTIONS.map((opt) => {
-                  const isSelected = sort === opt.value
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => handleSortClick(opt.value)}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-md border px-3.5 py-1.5 text-sm transition-colors outline-none",
-                        "hover:bg-accent hover:text-accent-foreground",
-                        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                        isSelected
-                          ? "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background"
-                          : "border-border bg-background text-foreground",
-                      )}
-                    >
-                      {opt.label}
-                      {isSelected &&
-                        (order === "desc" ? (
-                          <ArrowDown className="h-3.5 w-3.5" />
-                        ) : (
-                          <ArrowUp className="h-3.5 w-3.5" />
-                        ))}
-                    </button>
-                  )
-                })}
-                <Button
+      {/* Filtros */}
+      <div className="space-y-4 rounded-[var(--radius-xl)] border border-border bg-card p-4 shadow-[var(--shadow-soft)]">
+        <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-[var(--ls-label)] text-muted-foreground">
+              Buscar
+            </label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
+              <Input
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder="Nombre, cédula, teléfono o email"
+                className="pl-8"
+              />
+              {inputValue && (
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={flipOrder}
-                  disabled={isPending}
-                  className="ml-1 gap-1.5"
-                  title={order === "desc" ? "Mayor a menor" : "Menor a mayor"}
+                  onClick={() => {
+                    setInputValue("")
+                    updateParams({ q: null })
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                  {order === "desc" ? (
-                    <>
-                      <ArrowDown className="h-3.5 w-3.5" />
-                      Mayor a menor
-                    </>
-                  ) : (
-                    <>
-                      <ArrowUp className="h-3.5 w-3.5" />
-                      Menor a mayor
-                    </>
-                  )}
-                </Button>
-              </div>
+                  <X className="size-3.5" />
+                </button>
+              )}
             </div>
-          </CardContent>
-        </Card>
-
-        <div className="rounded-lg border bg-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr className="text-left">
-                  <th className="px-2 py-2 w-10"></th>
-                  <th className="px-4 py-2 font-medium">Nombre</th>
-                  <th className="px-4 py-2 font-medium">Cédula</th>
-                  <th className="px-4 py-2 font-medium">Teléfono</th>
-                  <th className="px-4 py-2 font-medium">Pedidos 30d</th>
-                  <th className="px-4 py-2 font-medium">Aceptación</th>
-                  <th className="px-4 py-2 font-medium">Estado</th>
-                  <th className="px-4 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {drivers.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="px-4 py-8 text-center text-sm text-muted-foreground"
-                    >
-                      Sin resultados.
-                    </td>
-                  </tr>
-                ) : (
-                  drivers.map((d) => {
-                    const isExpanded = expanded.has(d.driverId)
-                    const displayName =
-                      d.fullName ||
-                      `${d.firstName || ""} ${d.lastName || ""}`.trim() ||
-                      "—"
-                    return (
-                      <DriverRowFragment
-                        key={d.driverId}
-                        driver={d}
-                        displayName={displayName}
-                        isExpanded={isExpanded}
-                        onToggle={() => toggleExpanded(d.driverId)}
-                      />
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t bg-muted/30 px-4 py-2 text-xs">
-              <span>
-                Página {page} de {totalPages} · {total} resultados
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={page <= 1 || isPending}
-                  onClick={() => updateParams({ page: String(page - 1) })}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={page >= totalPages || isPending}
-                  onClick={() => updateParams({ page: String(page + 1) })}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-[var(--ls-label)] text-muted-foreground">
+              Driver desde
+            </label>
+            <Input
+              type="date"
+              value={createdFromInput}
+              onChange={(e) => setCreatedFromInput(e.target.value)}
+              className="w-[150px]"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-medium uppercase tracking-[var(--ls-label)] text-muted-foreground">
+              Hasta
+            </label>
+            <Input
+              type="date"
+              value={createdToInput}
+              onChange={(e) => setCreatedToInput(e.target.value)}
+              className="w-[150px]"
+            />
+          </div>
+
+          <Button type="submit" disabled={isPending}>
+            Aplicar
+          </Button>
+          {hasDateFilter && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setCreatedFromInput("")
+                setCreatedToInput("")
+                updateParams({ createdFrom: null, createdTo: null })
+              }}
+              disabled={isPending}
+            >
+              Limpiar fechas
+            </Button>
           )}
+        </form>
+
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+          {/* Estado — segmented STUDIO */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-[var(--ls-label)] text-muted-foreground">
+              Estado
+            </span>
+            <RadioGroupPrimitive.Root
+              value={enabledFilter}
+              onValueChange={(v) => updateParams({ enabled: v === "all" ? null : v })}
+              className="inline-flex items-center gap-1 rounded-full bg-muted p-1"
+            >
+              {FILTER_OPTIONS.map((opt) => {
+                const isSelected = enabledFilter === opt.value
+                return (
+                  <RadioGroupPrimitive.Item
+                    key={opt.value}
+                    value={opt.value}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+                      isSelected
+                        ? "bg-card text-primary shadow-[var(--shadow-soft)]"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {opt.label}
+                  </RadioGroupPrimitive.Item>
+                )
+              })}
+            </RadioGroupPrimitive.Root>
+          </div>
+
+          {/* Orden — pills STUDIO con dirección */}
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+            <span className="text-[11px] font-medium uppercase tracking-[var(--ls-label)] text-muted-foreground">
+              Ordenar
+            </span>
+            <div className="inline-flex flex-wrap items-center gap-1 rounded-full bg-muted p-1">
+              {SORT_OPTIONS.map((opt) => {
+                const isSelected = sort === opt.value
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleSortClick(opt.value)}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+                      isSelected
+                        ? "bg-card text-primary shadow-[var(--shadow-soft)]"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {opt.label}
+                    {isSelected &&
+                      (order === "desc" ? (
+                        <ArrowDown className="size-3" />
+                      ) : (
+                        <ArrowUp className="size-3" />
+                      ))}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* Conteo */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold">
+          {total.toLocaleString("es-AR")} drivers
+        </h2>
+        {isPending && (
+          <span className="text-xs text-muted-foreground">Aplicando...</span>
+        )}
+      </div>
+
+      {/* Lista de cards */}
+      {drivers.length === 0 ? (
+        <div className="rounded-[var(--radius-lg)] border border-dashed border-border bg-card/40 p-10 text-center text-sm text-muted-foreground">
+          Sin resultados con la búsqueda/filtros aplicados.
+        </div>
+      ) : (
+        <div className="grid gap-2.5">
+          {drivers.map((d) => (
+            <DriverCard key={d.driverId} driver={d} onOpen={() => setSelected(d)} />
+          ))}
+        </div>
+      )}
+
+      {/* Paginación */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between rounded-[var(--radius-lg)] border border-border bg-card px-4 py-2.5 text-xs text-muted-foreground shadow-[var(--shadow-soft)]">
+          <span>
+            Página {page} de {totalPages} · {total.toLocaleString("es-AR")}{" "}
+            resultados
+          </span>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page <= 1 || isPending}
+              onClick={() => updateParams({ page: String(page - 1) })}
+            >
+              Anterior
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page >= totalPages || isPending}
+              onClick={() => updateParams({ page: String(page + 1) })}
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Drawer de detalle */}
+      <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+        <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md">
+          {selected && <DriverDetail driver={selected} />}
+        </SheetContent>
+      </Sheet>
+    </div>
+  )
+}
+
+function DriverCard({ driver: d, onOpen }: { driver: DriverRow; onOpen: () => void }) {
+  const name = displayNameOf(d)
+  const pct = acceptedPct(d)
+  const hasStats = d.attendanceLastProcessedAt !== null
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group w-full rounded-[var(--radius-lg)] border border-border bg-card p-3.5 text-left shadow-[var(--shadow-soft)] transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-[var(--shadow-1)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/30 sm:p-4"
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft font-[family-name:var(--font-display)] text-sm font-bold text-primary">
+          {initialsOf(name)}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate font-semibold leading-tight">{name}</span>
+            <StatusPill enabled={d.enabled} />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {hasStats ? (
+              <>
+                <Chip mono icon={Package}>
+                  {d.ordersCount30d} ped
+                </Chip>
+                {d.ordersCount30d > 0 && (
+                  <Chip mono icon={Check} tone={pctTone(pct)}>
+                    {Math.round(pct * 100)}% acept
+                  </Chip>
+                )}
+                {d.hoursWorked30d > 0 && (
+                  <Chip mono icon={Clock}>
+                    {Math.round(d.hoursWorked30d)}h
+                  </Chip>
+                )}
+              </>
+            ) : (
+              <span className="text-[11px] text-ink-subtle">Sin actividad procesada</span>
+            )}
+            {d.primaryZone30d && <Chip>{d.primaryZone30d}</Chip>}
+            {d.phone && (
+              <Chip mono icon={Phone}>
+                {d.phone}
+              </Chip>
+            )}
+          </div>
+        </div>
+
+        <ChevronRight className="size-4 shrink-0 text-ink-subtle transition-colors group-hover:text-primary" />
+      </div>
+    </button>
+  )
+}
+
+function DriverDetail({ driver: d }: { driver: DriverRow }) {
+  const name = displayNameOf(d)
+  const pct = acceptedPct(d)
+  const hasStats = d.attendanceLastProcessedAt !== null
+
+  return (
+    <div className="flex h-full flex-col">
+      <SheetHeader className="border-b border-border">
+        <div className="flex items-center gap-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand-soft font-[family-name:var(--font-display)] text-base font-bold text-primary">
+            {initialsOf(name)}
+          </div>
+          <div className="min-w-0">
+            <SheetTitle className="flex items-center gap-2 text-base leading-tight">
+              <span className="truncate">{name}</span>
+            </SheetTitle>
+            <SheetDescription className="font-[family-name:var(--font-mono)] text-xs">
+              {d.driverId}
+            </SheetDescription>
+          </div>
+          <div className="ml-auto">
+            <StatusPill enabled={d.enabled} />
+          </div>
+        </div>
+      </SheetHeader>
+
+      <ScrollArea className="flex-1">
+        <div className="space-y-5 p-4">
+          <Section title="Datos personales">
+            <Field icon={<IdCard className="size-3.5" />} label="Cédula" mono>
+              {d.documentNumber || "—"}
+            </Field>
+            <Field icon={<Phone className="size-3.5" />} label="Teléfono">
+              {d.phone ? (
+                <a href={`tel:${d.phone}`} className="text-primary hover:underline">
+                  {d.phone}
+                </a>
+              ) : (
+                "—"
+              )}
+            </Field>
+            <Field icon={<Mail className="size-3.5" />} label="Email">
+              {d.email ? (
+                <a
+                  href={`mailto:${d.email}`}
+                  className="truncate text-primary hover:underline"
+                >
+                  {d.email}
+                </a>
+              ) : (
+                "—"
+              )}
+            </Field>
+            <Field icon={<CalendarDays className="size-3.5" />} label="Update remoto">
+              {d.updatedAtRemote
+                ? format(parseISO(d.updatedAtRemote), "d MMM yyyy", { locale: es })
+                : "—"}
+            </Field>
+            <Field icon={<ShieldCheck className="size-3.5" />} label="Estado">
+              {d.enabled ? (
+                <span className="font-medium text-success">Habilitado</span>
+              ) : (
+                <span className="text-muted-foreground">Deshabilitado</span>
+              )}
+            </Field>
+          </Section>
+
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[var(--ls-label)] text-ink-subtle">
+                Performance · últimos 30 días
+              </h3>
+              {d.attendanceLastProcessedAt && (
+                <span className="text-[10px] text-muted-foreground">
+                  {formatDistanceToNow(parseISO(d.attendanceLastProcessedAt), {
+                    addSuffix: true,
+                    locale: es,
+                  })}
+                </span>
+              )}
+            </div>
+            {!hasStats ? (
+              <div className="rounded-[var(--radius-md)] border border-dashed border-border bg-surface-3/40 px-3 py-3 text-xs text-muted-foreground">
+                Aún no procesamos actividad para este driver. El cron horario lo
+                va a tomar en su próxima rotación.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5">
+                <StatCell label="Pedidos" value={d.ordersCount30d} />
+                <StatCell
+                  label="Aceptación"
+                  value={d.ordersCount30d > 0 ? `${Math.round(pct * 100)}%` : "—"}
+                  sub={`${d.acceptedOrders30d}/${d.ordersCount30d}`}
+                  tone={d.ordersCount30d > 0 ? pctTone(pct) : undefined}
+                />
+                <StatCell
+                  label="Sesiones"
+                  value={d.sessions30d}
+                  sub={`${d.daysWithActivity30d} días activos`}
+                />
+                <StatCell
+                  label="Horas"
+                  value={d.hoursWorked30d > 0 ? `${Math.round(d.hoursWorked30d)}h` : "—"}
+                />
+                <StatCell label="Zona principal" value={d.primaryZone30d || "—"} />
+                <StatCell label="Turno principal" value={d.primaryTurn30d || "—"} />
+              </div>
+            )}
+          </div>
+        </div>
+      </ScrollArea>
+
+      <SheetFooter className="border-t border-border">
+        <Button asChild className="w-full">
+          <Link href={`/admin/gestion/drivers/${d.driverId}`}>
+            Ver actividad y procesar
+            <ArrowRight className="size-4" />
+          </Link>
+        </Button>
+      </SheetFooter>
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-[var(--ls-label)] text-ink-subtle">
+        {title}
+      </h3>
+      <div className="divide-y divide-border rounded-[var(--radius-md)] border border-border bg-surface-3/40 px-3">
+        {children}
       </div>
     </div>
   )
 }
 
-function acceptedPct(d: DriverRow): number {
-  if (!d.ordersCount30d) return 0
-  return d.acceptedOrders30d / d.ordersCount30d
-}
-
-function DriverRowFragment({
-  driver: d,
-  displayName,
-  isExpanded,
-  onToggle,
+function Field({
+  icon,
+  label,
+  children,
+  mono,
 }: {
-  driver: DriverRow
-  displayName: string
-  isExpanded: boolean
-  onToggle: () => void
+  icon: React.ReactNode
+  label: string
+  children: React.ReactNode
+  mono?: boolean
 }) {
-  const pct = acceptedPct(d)
-  const hasStats = d.attendanceLastProcessedAt !== null
-
   return (
-    <>
-      <tr
+    <div className="flex items-center justify-between gap-4 py-1.5">
+      <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="text-ink-subtle">{icon}</span>
+        {label}
+      </span>
+      <span
         className={cn(
-          "border-t cursor-pointer hover:bg-muted/30",
-          isExpanded && "bg-muted/30",
+          "truncate text-right text-sm",
+          mono && "font-[family-name:var(--font-mono)]",
         )}
-        onClick={onToggle}
       >
-        <td className="px-2 py-2.5 w-10">
-          <button
-            type="button"
-            aria-label={isExpanded ? "Colapsar" : "Expandir"}
-            className="text-muted-foreground hover:text-foreground"
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggle()
-            }}
-          >
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </button>
-        </td>
-        <td className="px-4 py-2.5">
-          <div className="font-medium">{displayName}</div>
-          <div className="text-[10px] text-muted-foreground font-mono">
-            {d.driverId}
-          </div>
-        </td>
-        <td className="px-4 py-2.5 tabular-nums">{d.documentNumber || "—"}</td>
-        <td className="px-4 py-2.5">{d.phone || "—"}</td>
-        <td className="px-4 py-2.5 tabular-nums">
-          {hasStats ? (
-            d.ordersCount30d
-          ) : (
-            <span className="text-xs text-muted-foreground">—</span>
-          )}
-        </td>
-        <td className="px-4 py-2.5 tabular-nums">
-          {hasStats && d.ordersCount30d > 0 ? (
-            <span
-              className={cn(
-                "font-medium",
-                pct >= 0.7
-                  ? "text-emerald-700"
-                  : pct >= 0.4
-                    ? "text-amber-700"
-                    : "text-rose-700",
-              )}
-            >
-              {Math.round(pct * 100)}%
-            </span>
-          ) : (
-            <span className="text-xs text-muted-foreground">—</span>
-          )}
-        </td>
-        <td className="px-4 py-2.5">
-          {d.enabled ? (
-            <Badge
-              variant="secondary"
-              className="bg-emerald-100 text-emerald-900 hover:bg-emerald-100"
-            >
-              Habilitado
-            </Badge>
-          ) : (
-            <Badge
-              variant="secondary"
-              className="bg-muted text-muted-foreground hover:bg-muted"
-            >
-              Deshabilitado
-            </Badge>
-          )}
-        </td>
-        <td className="px-4 py-2.5">
-          <Link
-            href={`/admin/gestion/drivers/${d.driverId}`}
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 text-primary hover:underline whitespace-nowrap"
-          >
-            Ver
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </td>
-      </tr>
-
-      {isExpanded && (
-        <tr className="border-t bg-muted/10">
-          <td colSpan={8} className="px-6 py-4 space-y-4">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                Datos personales
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <ExpandedField icon={<IdCard className="h-3.5 w-3.5" />} label="Cédula">
-                  <span className="tabular-nums">{d.documentNumber || "—"}</span>
-                </ExpandedField>
-                <ExpandedField icon={<Phone className="h-3.5 w-3.5" />} label="Teléfono">
-                  {d.phone ? (
-                    <a
-                      href={`tel:${d.phone}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-primary hover:underline"
-                    >
-                      {d.phone}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </ExpandedField>
-                <ExpandedField icon={<Mail className="h-3.5 w-3.5" />} label="Email">
-                  {d.email ? (
-                    <a
-                      href={`mailto:${d.email}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-primary hover:underline truncate inline-block max-w-full"
-                    >
-                      {d.email}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </ExpandedField>
-                <ExpandedField
-                  icon={<CalendarDays className="h-3.5 w-3.5" />}
-                  label="Update remoto"
-                >
-                  {d.updatedAtRemote
-                    ? format(parseISO(d.updatedAtRemote), "d MMM yyyy", { locale: es })
-                    : "—"}
-                </ExpandedField>
-                <ExpandedField
-                  icon={<ShieldCheck className="h-3.5 w-3.5" />}
-                  label="Estado"
-                >
-                  {d.enabled ? (
-                    <span className="text-emerald-700 font-medium">Habilitado</span>
-                  ) : (
-                    <span className="text-muted-foreground">Deshabilitado</span>
-                  )}
-                </ExpandedField>
-                <ExpandedField icon={<Bike className="h-3.5 w-3.5" />} label="ID Monchis">
-                  <span className="font-mono text-[10px] break-all">{d.driverId}</span>
-                </ExpandedField>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Performance últimos 30 días
-                </div>
-                {d.attendanceLastProcessedAt && (
-                  <div className="text-[10px] text-muted-foreground">
-                    Procesado{" "}
-                    {formatDistanceToNow(parseISO(d.attendanceLastProcessedAt), {
-                      addSuffix: true,
-                      locale: es,
-                    })}
-                  </div>
-                )}
-              </div>
-              {!hasStats ? (
-                <div className="rounded-md border border-dashed bg-muted/20 px-3 py-3 text-xs text-muted-foreground">
-                  Aún no procesamos actividad para este driver. El cron horario lo
-                  va a tomar en su próxima rotación, o podés procesarlo manualmente
-                  desde su detalle.
-                </div>
-              ) : (
-                <div className="grid gap-3 md:grid-cols-4">
-                  <StatCell label="Pedidos" value={d.ordersCount30d} />
-                  <StatCell
-                    label="Aceptación"
-                    value={
-                      d.ordersCount30d > 0 ? `${Math.round(pct * 100)}%` : "—"
-                    }
-                    sub={`${d.acceptedOrders30d}/${d.ordersCount30d}`}
-                  />
-                  <StatCell
-                    label="Sesiones"
-                    value={d.sessions30d}
-                    sub={`${d.daysWithActivity30d} días con actividad`}
-                  />
-                  <StatCell
-                    label="Horas"
-                    value={d.hoursWorked30d > 0 ? `${Math.round(d.hoursWorked30d)}h` : "—"}
-                  />
-                  <StatCell
-                    label="Zona principal"
-                    value={d.primaryZone30d || "—"}
-                    span2
-                  />
-                  <StatCell
-                    label="Turno principal"
-                    value={d.primaryTurn30d || "—"}
-                    span2
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end">
-              <Link
-                href={`/admin/gestion/drivers/${d.driverId}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Button size="sm" variant="default" className="gap-2">
-                  Ver actividad y procesar
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
+        {children}
+      </span>
+    </div>
   )
 }
 
@@ -689,28 +680,28 @@ function StatCell({
   label,
   value,
   sub,
-  span2,
+  tone,
 }: {
   label: string
   value: number | string
   sub?: string
-  span2?: boolean
+  tone?: string
 }) {
   return (
-    <div
-      className={cn(
-        "rounded-md border bg-card p-2.5 space-y-0.5",
-        span2 && "md:col-span-2",
-      )}
-    >
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+    <div className="rounded-[var(--radius-md)] border border-border bg-card p-2.5">
+      <div className="text-[10px] uppercase tracking-[var(--ls-label)] text-muted-foreground">
         {label}
       </div>
-      <div className="text-base font-semibold tabular-nums truncate">
+      <div
+        className={cn(
+          "truncate font-[family-name:var(--font-mono)] text-base font-semibold",
+          tone,
+        )}
+      >
         {value}
       </div>
       {sub && (
-        <div className="text-[10px] text-muted-foreground tabular-nums">
+        <div className="font-[family-name:var(--font-mono)] text-[10px] text-muted-foreground">
           {sub}
         </div>
       )}
@@ -718,48 +709,40 @@ function StatCell({
   )
 }
 
-function ExpandedField({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="rounded-md border bg-card p-2.5 space-y-1">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-        {icon}
-        {label}
-      </div>
-      <div className="text-sm font-medium truncate">{children}</div>
-    </div>
-  )
-}
-
-function KpiPill({
+function KpiCard({
   label,
   value,
-  variant,
+  tone,
 }: {
   label: string
   value: number
-  variant?: "emerald" | "rose"
+  tone?: "success" | "danger"
 }) {
-  const colors =
-    variant === "emerald"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-      : variant === "rose"
-        ? "border-rose-200 bg-rose-50 text-rose-900"
+  const toneCls =
+    tone === "success"
+      ? "border-success/40 bg-success-soft"
+      : tone === "danger"
+        ? "border-destructive/40 bg-danger-soft"
         : "border-border bg-card"
+  const valueTone =
+    tone === "success" ? "text-success" : tone === "danger" ? "text-destructive" : "text-foreground"
   return (
-    <div className={`rounded-lg border p-3 ${colors}`}>
-      <div className="text-[10px] uppercase tracking-wide font-medium opacity-70">
-        <Bike className="inline h-3 w-3 mr-1" />
+    <div
+      className={cn(
+        "rounded-[var(--radius-lg)] border p-3 shadow-[var(--shadow-soft)]",
+        toneCls,
+      )}
+    >
+      <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[var(--ls-label)] text-muted-foreground">
+        <Bike className="size-3" />
         {label}
       </div>
-      <div className="text-2xl font-bold tabular-nums mt-0.5">
+      <div
+        className={cn(
+          "mt-0.5 font-[family-name:var(--font-display)] text-2xl font-bold",
+          valueTone,
+        )}
+      >
         {value.toLocaleString("es-AR")}
       </div>
     </div>

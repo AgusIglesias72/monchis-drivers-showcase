@@ -67,7 +67,7 @@ export function WaiveRucButton({
           type="button"
           variant="outline"
           size="sm"
-          className="gap-1.5 border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+          className="gap-1.5 border-warning bg-warning-soft text-warning hover:bg-warning-soft"
           onClick={() => setShowDialog(true)}
         >
           <CheckCircle2 className="h-3.5 w-3.5" />
@@ -97,7 +97,7 @@ export function WaiveRucButton({
               <AlertDialogAction
                 disabled={isLoading}
                 onClick={toggle}
-                className="bg-amber-600 hover:bg-amber-700"
+                className="bg-warning hover:bg-warning"
               >
                 {isLoading ? 'Quitando…' : 'Quitar marca'}
               </AlertDialogAction>
@@ -114,7 +114,7 @@ export function WaiveRucButton({
         type="button"
         variant="outline"
         size="sm"
-        className="gap-1.5 border-gray-300 text-gray-700 hover:bg-gray-50"
+        className="gap-1.5 border-border text-muted-foreground hover:bg-muted"
         onClick={() => setShowDialog(true)}
       >
         <CircleSlash className="h-3.5 w-3.5" />
@@ -150,7 +150,7 @@ export function WaiveRucButton({
             <AlertDialogAction
               disabled={isLoading}
               onClick={toggle}
-              className="bg-amber-600 hover:bg-amber-700"
+              className="bg-warning hover:bg-warning"
             >
               {isLoading ? 'Marcando…' : 'Marcar'}
             </AlertDialogAction>

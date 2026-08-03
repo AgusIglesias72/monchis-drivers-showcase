@@ -246,7 +246,7 @@ export function TemplateFormSheet({ open, onOpenChange, template, onSuccess }: P
               <div className="space-y-1.5">
                 <Label htmlFor="t-key" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Identificador (key)
-                  {!isEdit && <span className="ml-1 text-red-500">*</span>}
+                  {!isEdit && <span className="ml-1 text-destructive">*</span>}
                 </Label>
                 <Input
                   id="t-key"
@@ -269,14 +269,14 @@ export function TemplateFormSheet({ open, onOpenChange, template, onSuccess }: P
                     : 'Minúsculas, números, guiones y guiones bajos. El código busca la plantilla por esta key.'}
                 </p>
                 {!isEdit && isSystemKey && systemInfo && (
-                  <div className="mt-2 rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs">
+                  <div className="mt-2 rounded-md border border-info bg-info-soft p-3 text-xs">
                     <div className="flex items-start gap-2">
-                      <ShieldCheck className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                      <ShieldCheck className="h-3.5 w-3.5 text-info mt-0.5 shrink-0" />
                       <div>
-                        <div className="font-medium text-blue-900 dark:text-blue-200">
+                        <div className="font-medium text-info">
                           Esta key la consume el sistema
                         </div>
-                        <div className="mt-0.5 text-blue-800/80 dark:text-blue-300/80">
+                        <div className="mt-0.5 text-info/80">
                           Se va a disparar cuando: {systemInfo.trigger}.
                         </div>
                       </div>
@@ -288,7 +288,7 @@ export function TemplateFormSheet({ open, onOpenChange, template, onSuccess }: P
               {/* Nombre */}
               <div className="space-y-1.5">
                 <Label htmlFor="t-name" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Nombre <span className="text-red-500">*</span>
+                  Nombre <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="t-name"
@@ -324,7 +324,7 @@ export function TemplateFormSheet({ open, onOpenChange, template, onSuccess }: P
                     htmlFor="t-content"
                     className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
                   >
-                    Contenido <span className="text-red-500">*</span>
+                    Contenido <span className="text-destructive">*</span>
                   </Label>
                   <span className="text-[10px] text-muted-foreground tabular-nums">
                     {formData.content.length} caracteres
@@ -359,7 +359,7 @@ export function TemplateFormSheet({ open, onOpenChange, template, onSuccess }: P
                 </div>
 
                 {unknownVariables.length > 0 && (
-                  <div className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-500">
+                  <div className="flex items-start gap-1.5 text-[11px] text-warning">
                     <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
                     <span>
                       Variables sin soporte: {unknownVariables.map(v => `{${v}}`).join(', ')}.

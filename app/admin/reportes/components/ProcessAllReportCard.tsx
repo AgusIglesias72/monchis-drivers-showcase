@@ -35,19 +35,19 @@ export function ProcessAllReportCard() {
         <CardContent>
           <div className="space-y-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+              <div className="h-1.5 w-1.5 rounded-full bg-info" />
               <span>Procesa reportes de pago por rango de fechas</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+              <div className="h-1.5 w-1.5 rounded-full bg-info" />
               <span>Sube datos a Google Sheets</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+              <div className="h-1.5 w-1.5 rounded-full bg-info" />
               <span>Procesa conductores externos (opcional)</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              <div className="h-1.5 w-1.5 rounded-full bg-success" />
               <span>Envía notificación por email al finalizar</span>
             </div>
           </div>

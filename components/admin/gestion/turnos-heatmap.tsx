@@ -249,8 +249,8 @@ export function TurnosHeatmap({
                                       className={
                                         "text-[10px] font-normal tabular-nums " +
                                         (compareCell
-                                          ? "text-zinc-900/55"
-                                          : "text-zinc-900/30")
+                                          ? "text-foreground/55"
+                                          : "text-foreground/30")
                                       }
                                     >
                                       {formatCompareValue(compareCell, metric)}

@@ -2,78 +2,64 @@
 
 import { PostulacionesPageContent } from "@/components/admin/postulaciones-page-content"
 import { prisma } from "@/lib/prisma"
+import { assignDriverSlug } from "@/lib/services/postulacion.service"
 import { Prisma } from "@prisma/client"
 import type { PostulacionFilters } from "@/types/postulacion-filters.types"
 import { RUC_FILTER_TO_DB, parseRucFilter } from "@/types/postulacion-filters.types"
-import { getActiveTemplates } from "@/lib/services/whatsapp-templates.service"
+import { unstable_cache } from 'next/cache'
 
-export const revalidate = 30
+export const revalidate = 0
 
 interface PageProps {
   searchParams: Promise<PostulacionFilters>
 }
 
-// ✅ HELPER: Calcular color de documentos
-type DocColorStatus = 'green' | 'blue' | 'yellow' | 'red' | 'gray'
-
-function calculateDocumentColorStatus(postulacion: any): DocColorStatus {
-  const documents = postulacion.documents || []
-
-  // Documentos de cédula
-  const cedulaDocs = documents.filter((doc: any) =>
-    doc.documentType === 'CEDULA'
-  )
-  
-  // Documentos de antecedentes
-  const antecedentesDocs = documents.filter((doc: any) =>
-    doc.documentType === 'CRIMINAL_RECORD' ||
-    doc.documentType === 'ANTECEDENTES'
-  )
-
-  // Certificado tributario
-  const taxDoc = documents.find((doc: any) => doc.documentType === 'TAX_COMPLIANCE')
-
-  // Verificar si existen
-  const hasCedulaDocs = cedulaDocs.length > 0
-  const hasAntecedentesDocs = antecedentesDocs.length > 0
-
-  // ⚪ GRIS: Documentos faltantes
-  if (!hasCedulaDocs || !hasAntecedentesDocs) {
-    return 'gray'
-  }
-
-  // Verificar si hay AL MENOS UNO aprobado en cada categoría
-  const hasCedulaApproved = cedulaDocs.some((doc: any) => doc.status === 'APPROVED')
-  const hasAntecedentesApproved = antecedentesDocs.some((doc: any) => doc.status === 'APPROVED')
-
-  // Si no hay aprobados en alguna categoría
-  if (!hasCedulaApproved || !hasAntecedentesApproved) {
-    // Verificar si hay rechazados SIN aprobados
-    const hasRejectedCedula = cedulaDocs.some((doc: any) => doc.status === 'REJECTED')
-    const hasRejectedAntecedentes = antecedentesDocs.some((doc: any) => doc.status === 'REJECTED')
-    
-    // 🔴 ROJO: Hay rechazados pero NO hay aprobados
-    if ((hasRejectedCedula && !hasCedulaApproved) || (hasRejectedAntecedentes && !hasAntecedentesApproved)) {
-      return 'red'
+// Select explícito: la tabla no necesita los Json pesados (rucApiRawResponse,
+// metadata) ni campos de gestión que solo usa el detalle.
+// Prisma resuelve cada relación anidada con una query secuencial adicional:
+// las relaciones se parten en dos selects que corren en paralelo (merge por id)
+// para acortar la cadena de roundtrips. notes/driverContacts solo se usan como
+// conteo → _count (se resuelve como JOIN en la query principal, costo cero).
+const POSTULACION_SELECT_MAIN: Prisma.FormDriverSelect = {
+  id: true,
+  slug: true,
+  fullName: true,
+  firstName: true,
+  lastName: true,
+  cedula: true,
+  phoneNumber: true,
+  email: true,
+  birthDate: true,
+  city: true,
+  department: true,
+  address: true,
+  hasVehicle: true,
+  vehicleBrand: true,
+  vehicleModel: true,
+  vehicleYear: true,
+  emergencyName: true,
+  emergencyPhone: true,
+  workZone: true,
+  status: true,
+  currentStep: true,
+  completedSteps: true,
+  assistedCompletion: true,
+  onboardingStatus: true,
+  rucStatus: true,
+  rucName: true,
+  rucInactiveWaived: true,
+  accessToken: true,
+  approvalNotifiedAt: true,
+  startedAt: true,
+  completedAt: true,
+  createdAt: true,
+  archivedAt: true,
+  _count: {
+    select: {
+      notes: true,
+      driverContacts: true,
     }
-    
-    // 🟡 AMARILLO: En revisión
-    return 'yellow'
-  }
-
-  // En este punto: Cédula + Antecedentes tienen AL MENOS uno APROBADO
-  
-  // 🟢 VERDE: Cert. Tributario también aprobado
-  if (taxDoc && taxDoc.status === 'APPROVED') {
-    return 'green'
-  }
-
-  // 🔵 AZUL: Falta Cert. Tributario
-  return 'blue'
-}
-
-// ✅ INCLUDE OPTIMIZADO
-const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
+  },
   documents: {
     select: {
       id: true,
@@ -81,7 +67,22 @@ const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
       status: true,
     }
   },
-  // Último run del agente (si existe) para mostrar ícono con la decisión
+  equipmentPayments: {
+    select: {
+      id: true,
+      status: true,
+      paymentDate: true,
+      paymentProofUrl: true,
+    },
+    orderBy: {
+      createdAt: 'desc'
+    },
+    take: 1
+  },
+}
+
+const POSTULACION_SELECT_EXTRA: Prisma.FormDriverSelect = {
+  id: true,
   agentRuns: {
     orderBy: { createdAt: 'desc' },
     take: 1,
@@ -107,18 +108,6 @@ const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
       },
     },
   },
-  equipmentPayments: {
-    select: {
-      id: true,
-      status: true,
-      paymentDate: true,
-      paymentProofUrl: true,
-    },
-    orderBy: {
-      createdAt: 'desc'
-    },
-    take: 1
-  },
   financialService: {
     select: {
       id: true,
@@ -142,31 +131,11 @@ const POSTULACION_INCLUDE: Prisma.FormDriverInclude = {
     },
     take: 1
   },
-  driverContacts: {
-    select: {
-      id: true,
-      contactedAt: true,
-      contactMethod: true,
-      contactedBy: true,
-    },
-    orderBy: {
-      contactedAt: 'desc'
-    },
-    take: 1
-  },
-  notes: {
-    select: {
-      id: true,
-    },
-    orderBy: {
-      createdAt: 'desc'
-    }
-  }
 }
 
 export default async function PostulacionesPage({ searchParams }: PageProps) {
   const params = await searchParams
-  
+
   const page = params.page ? parseInt(params.page) : 1
   const limit = 50
 
@@ -174,36 +143,38 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
   const sortBy = params.sortBy || 'createdAt'
   const sortOrder = params.sortOrder || 'desc'
 
-  const orderBy: any = {}
+  const primaryOrder: Prisma.FormDriverOrderByWithRelationInput = {}
   if (sortBy === 'fullName' || sortBy === 'city' || sortBy === 'createdAt' || sortBy === 'currentStep') {
-    orderBy[sortBy] = sortOrder
+    (primaryOrder as Record<string, string>)[sortBy] = sortOrder
   } else {
-    orderBy.createdAt = 'desc'
+    primaryOrder.createdAt = 'desc'
   }
+  // Tiebreak determinístico: los dos selects paginados deben devolver
+  // exactamente el mismo conjunto de filas para poder mergear por id.
+  const orderBy: Prisma.FormDriverOrderByWithRelationInput[] = [primaryOrder, { id: 'desc' }]
 
-  // ✅ Detectar filtro payment-proof temprano
   const isPaymentProofFilter = params.paymentStatus === 'payment-proof'
 
   // ==================== WHERE CLAUSE ====================
   const where: Prisma.FormDriverWhereInput = {}
 
-  // Filtro de status general (incluye ASISTIDA)
-  // ⚠️ NO filtrar por status si es payment-proof (queremos todas las postulaciones)
+  // Archivadas: excluidas por defecto de todas las vistas de trabajo
+  const showArchived = params.archived === 'true'
+  where.archivedAt = showArchived ? { not: null } : null
+
   if (params.status && params.status !== 'all' && !isPaymentProofFilter) {
     if (params.status === 'ASISTIDA') {
       where.assistedCompletion = true
       where.status = 'IN_PROGRESS'
     } else {
-      where.status = params.status as any
+      where.status = params.status as Prisma.EnumFormDriverStatusFilter
     }
   }
 
-  // Filtro de PASO ACTUAL
   if (params.currentStep && params.currentStep !== 'all') {
     where.currentStep = parseInt(params.currentStep)
   }
 
-  // Filtro de onboarding
   if (params.onboardingStatus && params.onboardingStatus !== 'all') {
     if (params.onboardingStatus === 'pending') {
       where.OR = [
@@ -214,35 +185,26 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     } else if (params.onboardingStatus === 'scheduled') {
       where.onboardingStatus = 'SCHEDULED'
     } else if (params.onboardingStatus === 'scheduled-no-show') {
-      // Para "No Asistieron", traemos todas las completadas y filtramos en post-processing
-      // porque necesitamos verificar también el status de attendance
-      // No agregamos filtro aquí, se filtra en post-processing
+      // Translated to DB filter below
     } else if (params.onboardingStatus === 'scheduled-pending') {
-      // Postulaciones agendadas pero pendientes (SCHEDULED o IN_PROGRESS, pero no NO_SHOW ni COMPLETED)
-      where.OR = [
-        { onboardingStatus: 'SCHEDULED' },
-        { onboardingStatus: 'IN_PROGRESS' },
-      ]
+      // Translated to DB filter below
     } else if (params.onboardingStatus === 'completed') {
       where.onboardingStatus = 'COMPLETED'
     }
   }
 
-  // Filtro de vehículo
   if (params.hasVehicle === 'yes') {
     where.hasVehicle = true
   } else if (params.hasVehicle === 'no') {
     where.hasVehicle = false
   }
 
-  // Filtro de zona de trabajo
   if (params.workZone && params.workZone !== 'all') {
     where.workZone = {
       contains: params.workZone
     }
   }
 
-  // Filtro de búsqueda
   if (params.search) {
     where.OR = [
       { fullName: { contains: params.search, mode: 'insensitive' } },
@@ -254,7 +216,6 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     ]
   }
 
-  // Filtro de RUC (estado del contribuyente, multi-select)
   const rucSlugs = parseRucFilter(params.rucStatus)
   if (rucSlugs.length > 0) {
     const includeNotChecked = rucSlugs.includes('no-consultado')
@@ -269,373 +230,342 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
         { rucStatus: 'NOT_CHECKED' },
       ]
       if (dbValues.length > 0) orClauses.push({ rucStatus: { in: dbValues } })
-      where.AND = [...((where.AND as any[]) || []), { OR: orClauses }]
+      where.AND = [...((where.AND as Prisma.FormDriverWhereInput[]) || []), { OR: orClauses }]
     } else if (dbValues.length > 0) {
       where.rucStatus = { in: dbValues }
     }
   }
 
-  // Filtro de fechas
   if (params.startDate) {
     const startDate = new Date(params.startDate)
     startDate.setHours(0, 0, 0, 0)
-    where.createdAt = { ...where.createdAt as any, gte: startDate }
+    where.createdAt = { ...(where.createdAt as Prisma.DateTimeFilter), gte: startDate }
   }
 
   if (params.endDate) {
     const endDate = new Date(params.endDate)
     endDate.setHours(23, 59, 59, 999)
-    where.createdAt = { ...where.createdAt as any, lte: endDate }
+    where.createdAt = { ...(where.createdAt as Prisma.DateTimeFilter), lte: endDate }
   }
 
-  // ==================== QUERIES PARALELAS ====================
-  const treintaDiasAtras = new Date()
-  treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30)
-
-  // ✅ Detectar quick filters que necesitan filtrado por color de documentos o attendance
-  const isPendingScheduleFilter = 
-    params.onboardingStatus === 'pending' && 
+  // ==================== QUICK-FILTER FLAGS ====================
+  const isPendingScheduleFilter =
+    params.onboardingStatus === 'pending' &&
     params.status === 'COMPLETED' &&
-    !params.documentStatus // Para asegurar que viene del quick filter
+    !params.documentStatus
 
-  const isScheduledNoShowFilter = 
-    params.onboardingStatus === 'scheduled-no-show' && 
+  const isScheduledNoShowFilter =
+    params.onboardingStatus === 'scheduled-no-show' &&
     params.status === 'COMPLETED'
 
-  const isScheduledPendingFilter = 
-    params.onboardingStatus === 'scheduled-pending' && 
+  const isScheduledPendingFilter =
+    params.onboardingStatus === 'scheduled-pending' &&
     params.status === 'COMPLETED'
 
   const isReviewFilter =
     params.status === 'COMPLETED' &&
     !params.onboardingStatus &&
     !params.documentStatus &&
-    !params.paymentStatus // Para asegurar que es el quick filter "Revisar Postulación"
+    !params.paymentStatus
 
   const isRejectedFilter = params.status === 'REJECTED'
 
-  // Verificar si hay filtros POST-PROCESSING que requieren traer todos los datos
-  const hasPostProcessingFilters =
-    isPendingScheduleFilter ||
-    isScheduledNoShowFilter ||
-    isScheduledPendingFilter ||
-    isReviewFilter ||
-    isRejectedFilter ||
-    isPaymentProofFilter ||
-    (params.contactStatus && params.contactStatus !== 'all') ||
-    (params.documentStatus && params.documentStatus !== 'all') ||
-    (params.paymentStatus && params.paymentStatus !== 'all') ||
-    (params.invoiceStatus && params.invoiceStatus !== 'all')
+  // ==================== TRANSLATE ALL FILTERS TO DB WHERE ====================
 
-  // ✅ Calcular conteos de filtros rápidos
-  // Necesitamos traer todas las postulaciones completadas, rechazadas y TODAS (para payment-proof)
-  const [completadasForCounts, rechazadasForCounts, todasForPaymentProof] = await Promise.all([
-    prisma.formDriver.findMany({
-      where: { status: 'COMPLETED' },
-      include: {
-        ...POSTULACION_INCLUDE,
-        onboardingAttendances: {
-          select: {
-            id: true,
-            status: true,
-            createdAt: true,
-            event: {
-              select: {
-                id: true,
-                scheduledDate: true,
-              }
-            }
-          },
-          orderBy: {
-            createdAt: 'desc'
-          },
-          // Traemos todas las asistencias para calcular correctamente NO_SHOW
-        }
-      },
-    }),
-    prisma.formDriver.findMany({
-      where: { status: 'REJECTED' },
-      include: POSTULACION_INCLUDE,
-    }),
-    // Para payment-proof, traemos TODAS las postulaciones
-    prisma.formDriver.findMany({
-      include: POSTULACION_INCLUDE,
-    }),
-  ])
-
-  // Calcular conteos de filtros rápidos
-  const quickFilterCounts = {
-    'scheduled-no-show': completadasForCounts.filter(p => {
-      // Excluir los que ya completaron el onboarding
-      if (p.onboardingStatus === 'COMPLETED') return false
-      
-      // Postulaciones con onboardingStatus = 'NO_SHOW'
-      if (p.onboardingStatus === 'NO_SHOW') return true
-      // O que tengan alguna asistencia marcada como NO_SHOW
-      const attendances = p.onboardingAttendances || []
-      return attendances.some((att: any) => att.status === 'NO_SHOW')
-    }).length,
-    'scheduled-pending': completadasForCounts.filter(p => {
-      // Postulaciones agendadas pero que aún no completaron ni son no-show
-      const isScheduled = p.onboardingStatus === 'SCHEDULED' || p.onboardingStatus === 'IN_PROGRESS'
-      const isNoShow = p.onboardingStatus === 'NO_SHOW'
-      const isCompleted = p.onboardingStatus === 'COMPLETED'
-      const attendance = p.onboardingAttendances?.[0]
-      const attendanceIsNoShow = attendance?.status === 'NO_SHOW'
-      
-      return isScheduled && !isNoShow && !isCompleted && !attendanceIsNoShow
-    }).length,
-    trained: completadasForCounts.filter(p => p.onboardingStatus === 'COMPLETED').length,
-    'pending-schedule': completadasForCounts.filter(p => {
-      const hasPendingOnboarding = !p.onboardingStatus || 
-        p.onboardingStatus === 'NOT_READY' || 
-        p.onboardingStatus === 'READY'
-      if (!hasPendingOnboarding) return false
-      const colorStatus = calculateDocumentColorStatus(p)
-      return colorStatus === 'green' || colorStatus === 'blue'
-    }).length,
-    review: completadasForCounts.filter(p => {
-      const colorStatus = calculateDocumentColorStatus(p)
-      return colorStatus === 'yellow'
-    }).length,
-    'pending-completion': 0, // Se calcula con count directo
-    rejected: rechazadasForCounts.length + completadasForCounts.filter(p => {
-      const colorStatus = calculateDocumentColorStatus(p)
-      return colorStatus === 'red'
-    }).length,
-    'payment-proof': todasForPaymentProof.filter(p => {
-      // Postulaciones que tienen comprobante de pago en estado PENDING
-      const payment = p.equipmentPayments?.[0]
-      const hasPaymentProof = payment?.paymentProofUrl && payment.paymentProofUrl.trim() !== ''
-      const isPending = payment?.status === 'PENDING'
-      return hasPaymentProof && isPending
-    }).length,
-  }
-
-  const [
-    total,
-    completadas,
-    enProgreso,
-    abandonadas,
-    nuevasUltimos30Dias,
-    totalFiltered,
-    postulacionesRaw
-  ] = await Promise.all([
-    prisma.formDriver.count(),
-    prisma.formDriver.count({ where: { status: 'COMPLETED' } }),
-    prisma.formDriver.count({ where: { status: 'IN_PROGRESS' } }),
-    prisma.formDriver.count({ where: { status: 'ABANDONED' } }),
-    prisma.formDriver.count({ where: { createdAt: { gte: treintaDiasAtras } } }),
-    prisma.formDriver.count({ where }),
-    hasPostProcessingFilters
-      ? prisma.formDriver.findMany({
-          where,
-          include: isScheduledNoShowFilter
-            ? {
-                ...POSTULACION_INCLUDE,
-                onboardingAttendances: {
-                  select: {
-                    id: true,
-                    status: true,
-                    createdAt: true,
-                    event: {
-                      select: {
-                        id: true,
-                        scheduledDate: true,
-                      }
-                    }
-                  },
-                  orderBy: {
-                    createdAt: 'desc'
-                  },
-                  // Para NO_SHOW, traemos todas las asistencias para verificar correctamente
-                }
-              }
-            : POSTULACION_INCLUDE,
-          orderBy: orderBy,
-        })
-      : prisma.formDriver.findMany({
-          where,
-          include: POSTULACION_INCLUDE,
-          orderBy: orderBy,
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-  ])
-
-  quickFilterCounts['pending-completion'] = enProgreso
-
-  // ==================== POST-PROCESSING FILTERS ====================
-
-  let postulaciones = postulacionesRaw
-
-  // ✅ Filtro "Pendiente de Agendar" - Docs verde o azul
+  // 1. isPendingScheduleFilter: cedula + criminal_record both APPROVED
   if (isPendingScheduleFilter) {
-    postulaciones = postulaciones.filter(p => {
-      const colorStatus = calculateDocumentColorStatus(p)
-      return colorStatus === 'green' || colorStatus === 'blue'
-    })
+    where.AND = [
+      ...((where.AND as Prisma.FormDriverWhereInput[]) ?? []),
+      { documents: { some: { documentType: 'CEDULA', status: 'APPROVED' } } },
+      { documents: { some: { documentType: 'CRIMINAL_RECORD', status: 'APPROVED' } } },
+    ]
   }
 
-  // ✅ Filtro "Agendados - No Asistieron" - NO_SHOW o attendance con NO_SHOW
+  // 2. isScheduledNoShowFilter: onboardingStatus NO_SHOW or any attendance NO_SHOW
   if (isScheduledNoShowFilter) {
-    postulaciones = postulaciones.filter(p => {
-      // Excluir los que ya completaron el onboarding (ya están capacitados)
-      if (p.onboardingStatus === 'COMPLETED') return false
-
-      // Postulaciones con onboardingStatus = 'NO_SHOW'
-      if (p.onboardingStatus === 'NO_SHOW') return true
-
-      // O que tengan alguna asistencia marcada como NO_SHOW
-      const attendances = p.onboardingAttendances || []
-      const hasNoShowAttendance = attendances.some((att: any) => att.status === 'NO_SHOW')
-      if (hasNoShowAttendance) return true
-
-      return false
-    })
+    where.status = 'COMPLETED'
+    where.onboardingStatus = { not: 'COMPLETED' }
+    where.OR = [
+      { onboardingStatus: 'NO_SHOW' },
+      { onboardingAttendances: { some: { status: 'NO_SHOW' } } },
+    ]
   }
 
-  // ✅ Filtro "Agendados - Pendiente Capacitación" - SCHEDULED/IN_PROGRESS pero no NO_SHOW ni COMPLETED
+  // 3. isScheduledPendingFilter: SCHEDULED or IN_PROGRESS, no NO_SHOW attendance
   if (isScheduledPendingFilter) {
-    postulaciones = postulaciones.filter(p => {
-      const isScheduled = p.onboardingStatus === 'SCHEDULED' || p.onboardingStatus === 'IN_PROGRESS'
-      const isNoShow = p.onboardingStatus === 'NO_SHOW'
-      const isCompleted = p.onboardingStatus === 'COMPLETED'
-      const attendance = p.onboardingAttendances?.[0]
-      const attendanceIsNoShow = attendance?.status === 'NO_SHOW'
-
-      return isScheduled && !isNoShow && !isCompleted && !attendanceIsNoShow
-    })
+    where.status = 'COMPLETED'
+    where.onboardingStatus = { in: ['SCHEDULED', 'IN_PROGRESS'] }
+    where.onboardingAttendances = { none: { status: 'NO_SHOW' } }
   }
 
-  // ✅ Filtro "Revisar Postulación" - Docs amarillo
+  // 4. isReviewFilter: both doc types present, none APPROVED, none REJECTED
   if (isReviewFilter) {
-    postulaciones = postulaciones.filter(p => {
-      const colorStatus = calculateDocumentColorStatus(p)
-      return colorStatus === 'yellow'
-    })
+    where.status = 'COMPLETED'
+    where.AND = [
+      ...((where.AND as Prisma.FormDriverWhereInput[]) ?? []),
+      { documents: { some: { documentType: 'CEDULA' } } },
+      { documents: { some: { documentType: 'CRIMINAL_RECORD' } } },
+      { documents: { none: { documentType: 'CEDULA', status: 'APPROVED' } } },
+      { documents: { none: { documentType: 'CRIMINAL_RECORD', status: 'APPROVED' } } },
+      { documents: { none: { documentType: 'CEDULA', status: 'REJECTED' } } },
+      { documents: { none: { documentType: 'CRIMINAL_RECORD', status: 'REJECTED' } } },
+    ]
   }
 
-  // ✅ Filtro "Rechazados" - Status REJECTED O docs rojos
+  // 5. isRejectedFilter: status REJECTED OR red docs (rejected in any main doc type without an approved)
   if (isRejectedFilter) {
-    postulaciones = postulaciones.filter(p => {
-      const colorStatus = calculateDocumentColorStatus(p)
-      return p.status === 'REJECTED' || colorStatus === 'red'
-    })
+    // Remove the simple status filter set earlier; replace with OR
+    delete where.status
+    where.OR = [
+      { status: 'REJECTED' },
+      {
+        AND: [
+          { documents: { some: { documentType: 'CEDULA', status: 'REJECTED' } } },
+          { documents: { none: { documentType: 'CEDULA', status: 'APPROVED' } } },
+        ],
+      },
+      {
+        AND: [
+          { documents: { some: { documentType: 'CRIMINAL_RECORD', status: 'REJECTED' } } },
+          { documents: { none: { documentType: 'CRIMINAL_RECORD', status: 'APPROVED' } } },
+        ],
+      },
+    ]
   }
 
-  // ✅ Filtro "Con Comprobante de Pago" - Tienen paymentProofUrl en estado PENDING
+  // 6. isPaymentProofFilter: payment PENDING with a proof URL
   if (isPaymentProofFilter) {
-    postulaciones = postulaciones.filter(p => {
-      const payment = p.equipmentPayments?.[0]
-      // Tiene comprobante de pago subido Y está en estado PENDING (para revisión)
-      const hasPaymentProof = payment?.paymentProofUrl && payment.paymentProofUrl.trim() !== ''
-      const isPending = payment?.status === 'PENDING'
-      return hasPaymentProof && isPending
-    })
+    where.equipmentPayments = {
+      some: {
+        status: 'PENDING',
+        paymentProofUrl: { not: null },
+      },
+    }
   }
 
-  // Filtro de CONTACTO
+  // 7. contactStatus filter
   if (params.contactStatus && params.contactStatus !== 'all') {
-    postulaciones = postulaciones.filter(p => {
-      const hasBeenContacted = (p.driverContacts?.length ?? 0) > 0
-      const isRejected = p.status === 'REJECTED'
-      const completedSteps = p.completedSteps?.length ?? 0
-      
-      let contactStatus = 'not-applicable'
-      if (isRejected) {
-        contactStatus = 'not-applicable'
-      } else if (hasBeenContacted) {
-        contactStatus = 'contacted'
-      } else if (completedSteps > 0) {
-        contactStatus = 'pending'
-      }
-      
-      return contactStatus === params.contactStatus
-    })
+    if (params.contactStatus === 'contacted') {
+      where.driverContacts = { some: {} }
+    } else if (params.contactStatus === 'pending') {
+      where.status = { not: 'REJECTED' } as Prisma.EnumFormDriverStatusFilter
+      where.driverContacts = { none: {} }
+      where.AND = [
+        ...((where.AND as Prisma.FormDriverWhereInput[]) ?? []),
+        { completedSteps: { isEmpty: false } },
+      ]
+    } else if (params.contactStatus === 'not-applicable') {
+      where.status = 'REJECTED'
+    }
   }
 
-  // Filtro de DOCUMENTOS
+  // 8. documentStatus filter
   if (params.documentStatus && params.documentStatus !== 'all') {
-    postulaciones = postulaciones.filter(p => {
-      const documents = p.documents || []
-      
-      const criminalRecords = documents.filter(d => d.documentType === 'CRIMINAL_RECORD')
-      const cedulas = documents.filter(d => d.documentType === 'CEDULA')
-
-      const hasCriminalRecord = criminalRecords.length > 0
-      const hasCedula = cedulas.length > 0
-
-      if (!hasCriminalRecord || !hasCedula) {
-        return params.documentStatus === 'pendientes'
-      }
-
-      const mainDocuments = [...criminalRecords, ...cedulas]
-      const hasRejected = mainDocuments.some(d => d.status === 'REJECTED')
-      
-      if (hasRejected) {
-        return params.documentStatus === 'pendientes'
-      }
-      
-      const hasPending = mainDocuments.some(d => d.status === 'PENDING' || d.status === 'IN_REVIEW')
-      
-      if (hasPending) {
-        return params.documentStatus === 'en-revision'
-      }
-      
-      const allApproved = mainDocuments.every(d => d.status === 'APPROVED')
-      
-      if (allApproved) {
-        return params.documentStatus === 'completos'
-      }
-      
-      return params.documentStatus === 'pendientes'
-    })
+    if (params.documentStatus === 'pendientes') {
+      where.OR = [
+        { documents: { none: { documentType: 'CRIMINAL_RECORD' } } },
+        { documents: { none: { documentType: 'CEDULA' } } },
+        { documents: { some: { documentType: { in: ['CRIMINAL_RECORD', 'CEDULA'] }, status: 'REJECTED' } } },
+      ]
+    } else if (params.documentStatus === 'en-revision') {
+      where.AND = [
+        ...((where.AND as Prisma.FormDriverWhereInput[]) ?? []),
+        { documents: { some: { documentType: 'CEDULA' } } },
+        { documents: { some: { documentType: 'CRIMINAL_RECORD' } } },
+        { documents: { none: { documentType: { in: ['CRIMINAL_RECORD', 'CEDULA'] }, status: 'REJECTED' } } },
+        { documents: { some: { documentType: { in: ['CRIMINAL_RECORD', 'CEDULA'] }, status: { in: ['PENDING', 'IN_REVIEW'] } } } },
+      ]
+    } else if (params.documentStatus === 'completos') {
+      where.AND = [
+        ...((where.AND as Prisma.FormDriverWhereInput[]) ?? []),
+        { documents: { some: { documentType: 'CEDULA', status: 'APPROVED' } } },
+        { documents: { some: { documentType: 'CRIMINAL_RECORD', status: 'APPROVED' } } },
+        { documents: { none: { documentType: { in: ['CRIMINAL_RECORD', 'CEDULA'] }, status: { in: ['PENDING', 'IN_REVIEW', 'REJECTED'] } } } },
+      ]
+    }
   }
 
-  // Filtro de PAGO (solo si no es payment-proof, que ya se filtró arriba)
+  // 9. paymentStatus filter (excluding payment-proof handled above)
   if (params.paymentStatus && params.paymentStatus !== 'all' && params.paymentStatus !== 'payment-proof') {
-    postulaciones = postulaciones.filter(p => {
-      const payment = p.equipmentPayments?.[0]
-
-      if (!payment) {
-        return params.paymentStatus === 'pendiente'
-      }
-
-      if (payment.status === 'VERIFIED') {
-        return params.paymentStatus === 'verificado'
-      }
-
-      if (payment.status === 'PENDING' || payment.status === 'PARTIAL') {
-        return params.paymentStatus === 'en-verificacion'
-      }
-
-      return params.paymentStatus === 'pendiente'
-    })
+    if (params.paymentStatus === 'verificado') {
+      where.equipmentPayments = { some: { status: 'VERIFIED' } }
+    } else if (params.paymentStatus === 'en-verificacion') {
+      where.equipmentPayments = { some: { status: { in: ['PENDING', 'PARTIAL'] } } }
+    } else if (params.paymentStatus === 'pendiente') {
+      where.equipmentPayments = { none: {} }
+    }
   }
 
-  // Filtro de FACTURACIÓN
+  // 10. invoiceStatus filter
   if (params.invoiceStatus && params.invoiceStatus !== 'all') {
-    postulaciones = postulaciones.filter(p => {
-      const financial = p.financialService
-      const documents = p.documents || []
-      
-      const taxDoc = documents.find(d => d.documentType === 'TAX_COMPLIANCE')
-      
-      if (taxDoc && taxDoc.status === 'APPROVED') {
-        return params.invoiceStatus === 'completa'
+    if (params.invoiceStatus === 'completa') {
+      where.documents = { some: { documentType: 'TAX_COMPLIANCE', status: 'APPROVED' } }
+    } else if (params.invoiceStatus === 'na') {
+      where.AND = [
+        ...((where.AND as Prisma.FormDriverWhereInput[]) ?? []),
+        { documents: { none: { documentType: 'TAX_COMPLIANCE', status: 'APPROVED' } } },
+        { financialService: { hasInvoice: false } },
+      ]
+    } else if (params.invoiceStatus === 'pendiente') {
+      where.AND = [
+        ...((where.AND as Prisma.FormDriverWhereInput[]) ?? []),
+        { documents: { none: { documentType: 'TAX_COMPLIANCE', status: 'APPROVED' } } },
+        {
+          OR: [
+            { financialService: null },
+            { financialService: { hasInvoice: true } },
+          ],
+        },
+      ]
+    }
+  }
+
+  // ==================== QUERIES ====================
+  // Static queries (don't depend on active filters) → cached 60s
+  const getStaticData = unstable_cache(
+    async () => {
+      const d30ago = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      const d60ago = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+      const [
+        qNoShow, qScheduledPending, qTrained, qPendingSchedule, qReview, qRejected, qPaymentProof,
+        qArchived,
+        statusGroups,
+        nuevasUltimos30Dias,
+        nuevasLast30, nuevasPrior30,
+        completadasLast30, completadasPrior30,
+        agendadosLast30, agendadosPrior30,
+        capacitadasLast30, capacitadasPrior30,
+      ] = await Promise.all([
+        prisma.formDriver.count({
+          where: {
+            archivedAt: null,
+            status: 'COMPLETED',
+            onboardingStatus: { not: 'COMPLETED' },
+            OR: [
+              { onboardingStatus: 'NO_SHOW' },
+              { onboardingAttendances: { some: { status: 'NO_SHOW' } } },
+            ],
+          },
+        }),
+        prisma.formDriver.count({
+          where: {
+            archivedAt: null,
+            status: 'COMPLETED',
+            onboardingStatus: { in: ['SCHEDULED', 'IN_PROGRESS'] },
+            onboardingAttendances: { none: { status: 'NO_SHOW' } },
+          },
+        }),
+        prisma.formDriver.count({ where: { archivedAt: null, status: 'COMPLETED', onboardingStatus: 'COMPLETED' } }),
+        prisma.formDriver.count({
+          where: {
+            archivedAt: null,
+            status: 'COMPLETED',
+            OR: [{ onboardingStatus: 'NOT_READY' }, { onboardingStatus: 'READY' }, { onboardingStatus: null }],
+            AND: [
+              { documents: { some: { documentType: 'CEDULA', status: 'APPROVED' } } },
+              { documents: { some: { documentType: 'CRIMINAL_RECORD', status: 'APPROVED' } } },
+            ],
+          },
+        }),
+        prisma.formDriver.count({
+          where: {
+            archivedAt: null,
+            status: 'COMPLETED',
+            OR: [{ onboardingStatus: 'NOT_READY' }, { onboardingStatus: 'READY' }, { onboardingStatus: null }],
+            AND: [
+              { documents: { some: { documentType: 'CEDULA' } } },
+              { documents: { some: { documentType: 'CRIMINAL_RECORD' } } },
+              { documents: { none: { documentType: 'CEDULA', status: 'APPROVED' } } },
+            ],
+          },
+        }),
+        prisma.formDriver.count({ where: { archivedAt: null, status: 'REJECTED' } }),
+        prisma.formDriver.count({
+          where: { archivedAt: null, equipmentPayments: { some: { status: 'PENDING', paymentProofUrl: { not: null } } } },
+        }),
+        prisma.formDriver.count({ where: { archivedAt: { not: null } } }),
+        prisma.formDriver.groupBy({ by: ['status'], _count: { _all: true }, where: { archivedAt: null } }),
+        prisma.formDriver.count({ where: { createdAt: { gte: d30ago } } }),
+        prisma.formDriver.count({ where: { createdAt: { gte: d30ago } } }),
+        prisma.formDriver.count({ where: { createdAt: { gte: d60ago, lt: d30ago } } }),
+        prisma.formDriver.count({ where: { status: 'COMPLETED', createdAt: { gte: d30ago } } }),
+        prisma.formDriver.count({ where: { status: 'COMPLETED', createdAt: { gte: d60ago, lt: d30ago } } }),
+        prisma.formDriver.count({ where: { onboardingStatus: { in: ['SCHEDULED', 'IN_PROGRESS'] }, onboardingScheduledAt: { gte: d30ago } } }),
+        prisma.formDriver.count({ where: { onboardingStatus: { in: ['SCHEDULED', 'IN_PROGRESS'] }, onboardingScheduledAt: { gte: d60ago, lt: d30ago } } }),
+        prisma.formDriver.count({ where: { onboardingStatus: 'COMPLETED', onboardingCompletedAt: { gte: d30ago } } }),
+        prisma.formDriver.count({ where: { onboardingStatus: 'COMPLETED', onboardingCompletedAt: { gte: d60ago, lt: d30ago } } }),
+      ])
+      return {
+        qNoShow, qScheduledPending, qTrained, qPendingSchedule, qReview, qRejected, qPaymentProof,
+        qArchived,
+        statusGroups, nuevasUltimos30Dias,
+        nuevasLast30, nuevasPrior30,
+        completadasLast30, completadasPrior30,
+        agendadosLast30, agendadosPrior30,
+        capacitadasLast30, capacitadasPrior30,
       }
-      
-      if (!financial) {
-        return params.invoiceStatus === 'pendiente'
-      }
-      
-      if (!financial.hasInvoice) {
-        return params.invoiceStatus === 'na'
-      }
-      
-      return params.invoiceStatus === 'pendiente'
-    })
+    },
+    ['postulaciones-static-counts-v3'],
+    { revalidate: 60 }
+  )
+
+  // Filter-dependent queries run fresh on every filter change
+  const pagination = { where, orderBy, skip: (page - 1) * limit, take: limit }
+  const [staticData, totalFiltered, mainRows, extraRows] = await Promise.all([
+    getStaticData(),
+    prisma.formDriver.count({ where }),
+    prisma.formDriver.findMany({ ...pagination, select: POSTULACION_SELECT_MAIN }),
+    prisma.formDriver.findMany({ ...pagination, select: POSTULACION_SELECT_EXTRA }),
+  ])
+
+  const extraById = new Map(extraRows.map((r) => [r.id, r]))
+  const postulaciones = mainRows.map((row) => ({
+    ...row,
+    agentRuns: extraById.get(row.id)?.agentRuns ?? [],
+    financialService: extraById.get(row.id)?.financialService ?? null,
+    onboardingAttendances: extraById.get(row.id)?.onboardingAttendances ?? [],
+  }))
+
+  // Auto-curación: postulaciones creadas por código previo al slug limpio
+  const sinSlug = postulaciones.filter((p) => !p.slug)
+  if (sinSlug.length > 0) {
+    await Promise.all(
+      sinSlug.map(async (p) => {
+        const name = p.fullName || [p.firstName, p.lastName].filter(Boolean).join(' ')
+        p.slug = await assignDriverSlug(p.id, name)
+      })
+    )
+  }
+
+  const {
+    qNoShow, qScheduledPending, qTrained, qPendingSchedule, qReview, qRejected, qPaymentProof,
+    qArchived,
+    statusGroups, nuevasUltimos30Dias,
+    nuevasLast30, nuevasPrior30,
+    completadasLast30, completadasPrior30,
+    agendadosLast30, agendadosPrior30,
+    capacitadasLast30, capacitadasPrior30,
+  } = staticData
+
+  // Derive totals from groupBy result
+  const countByStatus = Object.fromEntries(
+    statusGroups.map((g) => [g.status, g._count._all])
+  )
+  const total = statusGroups.reduce((sum, g) => sum + g._count._all, 0)
+  const completadas = countByStatus['COMPLETED'] ?? 0
+  const enProgreso = countByStatus['IN_PROGRESS'] ?? 0
+  const abandonadas = countByStatus['ABANDONED'] ?? 0
+
+  const quickFilterCounts = {
+    'scheduled-no-show': qNoShow,
+    'scheduled-pending': qScheduledPending,
+    trained: qTrained,
+    'pending-schedule': qPendingSchedule,
+    review: qReview,
+    'pending-completion': enProgreso,
+    rejected: qRejected,
+    'payment-proof': qPaymentProof,
+    archived: qArchived,
   }
 
   const tasaCompletado = total > 0 ? Math.round((completadas / total) * 100) : 0
@@ -651,50 +581,22 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
     tasaCompletado,
     capacitados,
     rechazados,
+    kpis7d: {
+      iniciadas:   { current: nuevasLast30,      prior: nuevasPrior30 },
+      completadas: { current: completadasLast30, prior: completadasPrior30 },
+      agendados:   { current: agendadosLast30,   prior: agendadosPrior30 },
+      capacitados: { current: capacitadasLast30, prior: capacitadasPrior30 },
+    },
   }
 
-  // Cargar plantillas de WhatsApp activas
-  const whatsappTemplates = await getActiveTemplates()
-  const templatesForContact = whatsappTemplates.map(template => ({
-    id: template.id,
-    key: template.key,
-    name: template.name,
-    content: template.content,
-  }))
-
-  // Calcular total y paginación correctamente
-  let finalTotal = totalFiltered
-  let totalPages = 1
-  let hasMore = false
-  let postulacionesToShow = postulaciones
-
-  if (hasPostProcessingFilters) {
-    finalTotal = postulaciones.length
-    totalPages = Math.ceil(finalTotal / limit)
-
-    const startIndex = (page - 1) * limit
-    const endIndex = startIndex + limit
-    postulacionesToShow = postulaciones.slice(startIndex, endIndex)
-
-    hasMore = endIndex < postulaciones.length
-  } else {
-    finalTotal = totalFiltered
-    totalPages = Math.ceil(finalTotal / limit)
-    hasMore = page < totalPages
-    postulacionesToShow = postulaciones
-  }
-
-  // Agregar plantillas a todas las postulaciones
-  const postulacionesWithTemplates = postulacionesToShow.map(postulacion => ({
-    ...postulacion,
-    whatsappTemplates: templatesForContact,
-  }))
+  const totalPages = Math.ceil(totalFiltered / limit)
+  const hasMore = page < totalPages
 
   return (
     <PostulacionesPageContent
       stats={stats}
-      postulaciones={postulacionesWithTemplates}
-      total={finalTotal}
+      postulaciones={postulaciones}
+      total={totalFiltered}
       currentPage={page}
       totalPages={totalPages}
       hasMore={hasMore}
@@ -714,6 +616,7 @@ export default async function PostulacionesPage({ searchParams }: PageProps) {
         rucStatus: params.rucStatus,
         sortBy: params.sortBy,
         sortOrder: params.sortOrder,
+        archived: params.archived,
       }}
     />
   )

@@ -27,6 +27,7 @@ import {
   ChevronLeft,
   Eye,
   Phone,
+  Mail,
   MapPin,
   User,
   Clock,
@@ -45,6 +46,7 @@ import { toast } from "sonner"
 import { ScheduleOnboardingModal } from "@/components/admin/schedule-onboarding-modal"
 import { ContactButton } from "@/components/admin/postulaciones/contact-button"
 import { RejectButton } from "@/components/admin/postulaciones/reject-button"
+import { ArchiveButton } from "@/components/admin/postulaciones/archive-button"
 import { useRouter } from "next/navigation"
 import { formatBirthDateWithAge } from "@/lib/utils"
 import { calculatePostulacionBadges } from "@/lib/utils/postulacion-badges.utils"
@@ -65,13 +67,24 @@ interface PostulacionesTableProps {
   onPageChange: (page: number) => void
 }
 
-// Componente para filas de información
+function formatShortDate(date: string | Date) {
+  return new Date(date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit' })
+}
+
+function formatDateTime(date: string | Date) {
+  const d = new Date(date)
+  return `${formatShortDate(d)} ${d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`
+}
+
 function InfoRow({ label, value }: { label: string, value?: string | null }) {
-  if (!value) return null
   return (
-    <div className="flex flex-col">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium break-words">{value}</span>
+    <div className="flex items-baseline gap-1.5 leading-tight">
+      <span className="text-[10px] text-muted-foreground shrink-0">{label}</span>
+      {value ? (
+        <span className="text-xs font-medium text-foreground truncate">{value}</span>
+      ) : (
+        <span className="text-xs text-muted-foreground">-</span>
+      )}
     </div>
   )
 }
@@ -79,19 +92,19 @@ function InfoRow({ label, value }: { label: string, value?: string | null }) {
 // Helper function para determinar el label del badge
 function getBadgeConfig(badgeType: string) {
   const configs: Record<string, { label: string; color: string }> = {
-    'DOCUMENTOS_COMPLETOS': { label: 'Documentos Completos', color: 'bg-green-50 text-green-700' },
-    'DOCUMENTOS_EN_REVISION': { label: 'Documentos en Revisión', color: 'bg-amber-50 text-amber-700' },
-    'DOCUMENTOS_PENDIENTES': { label: 'Documentos Pendientes', color: 'bg-yellow-50 text-yellow-700' },
-    'PAGO_COMPLETO': { label: 'Pago Completo', color: 'bg-green-50 text-green-700' },
-    'PAGO_EN_VERIFICACION': { label: 'Pago en Verificación', color: 'bg-yellow-50 text-yellow-700' },
-    'PAGO_PENDIENTE': { label: 'Pago Pendiente', color: 'bg-red-50 text-red-700' },
-    'FACTURACION_COMPLETA': { label: 'Facturación Completa', color: 'bg-green-50 text-green-700' },
-    'FACTURACION_NA': { label: 'Sin Facturación', color: 'bg-gray-50 text-gray-500' },
-    'FACTURACION_PENDIENTE': { label: 'Facturación Pendiente', color: 'bg-orange-50 text-orange-700' },
-    'PAGADO': { label: 'Pagado', color: 'bg-green-50 text-green-700' },
+    'DOCUMENTOS_COMPLETOS': { label: 'Documentos Completos', color: 'bg-success-soft text-success' },
+    'DOCUMENTOS_EN_REVISION': { label: 'Documentos en Revisión', color: 'bg-warning-soft text-warning' },
+    'DOCUMENTOS_PENDIENTES': { label: 'Documentos Pendientes', color: 'bg-warning-soft text-warning' },
+    'PAGO_COMPLETO': { label: 'Pago Completo', color: 'bg-success-soft text-success' },
+    'PAGO_EN_VERIFICACION': { label: 'Pago en Verificación', color: 'bg-warning-soft text-warning' },
+    'PAGO_PENDIENTE': { label: 'Pago Pendiente', color: 'bg-danger-soft text-destructive' },
+    'FACTURACION_COMPLETA': { label: 'Facturación Completa', color: 'bg-success-soft text-success' },
+    'FACTURACION_NA': { label: 'Sin Facturación', color: 'bg-muted text-muted-foreground' },
+    'FACTURACION_PENDIENTE': { label: 'Facturación Pendiente', color: 'bg-warning-soft text-warning' },
+    'PAGADO': { label: 'Pagado', color: 'bg-success-soft text-success' },
     'VERIFICAR_PAGO': { label: 'Verificar Pago', color: 'bg-purple-50 text-purple-700' },
   }
-  return configs[badgeType] || { label: badgeType, color: 'bg-gray-50 text-gray-600' }
+  return configs[badgeType] || { label: badgeType, color: 'bg-muted text-muted-foreground' }
 }
 
 export function PostulacionesTableExpandable({
@@ -119,9 +132,9 @@ export function PostulacionesTableExpandable({
     setExpandedRows(newExpanded)
   }
 
-  const handleViewDetails = (postulacionId: string, e: React.MouseEvent) => {
+  const handleViewDetails = (postulacion: any, e: React.MouseEvent) => {
     e.stopPropagation()
-    window.location.href = `/admin/postulaciones/${postulacionId}`
+    router.push(`/admin/postulaciones/${postulacion.slug ?? postulacion.id}`)
   }
 
   const handleScheduleOnboarding = (postulacion: any, e: React.MouseEvent) => {
@@ -286,8 +299,8 @@ export function PostulacionesTableExpandable({
                       if (!hasCedulaDocs || !hasAntecedentesDocs) {
                         return {
                           icon: FileText,
-                          bg: 'bg-gray-100',
-                          text: 'text-gray-500',
+                          bg: 'bg-muted',
+                          text: 'text-muted-foreground',
                           tooltip: 'Documentos Faltantes'
                         }
                       }
@@ -306,8 +319,8 @@ export function PostulacionesTableExpandable({
                         if ((hasRejectedCedula && !hasCedulaApproved) || (hasRejectedAntecedentes && !hasAntecedentesApproved)) {
                           return {
                             icon: FileText,
-                            bg: 'bg-red-100',
-                            text: 'text-red-700',
+                            bg: 'bg-danger-soft',
+                            text: 'text-destructive',
                             tooltip: 'Documentos Rechazados'
                           }
                         }
@@ -315,8 +328,8 @@ export function PostulacionesTableExpandable({
                         // Sino, están en revisión
                         return {
                           icon: FileText,
-                          bg: 'bg-yellow-100',
-                          text: 'text-yellow-700',
+                          bg: 'bg-warning-soft',
+                          text: 'text-warning',
                           tooltip: 'Documentos en Revisión'
                         }
                       }
@@ -329,8 +342,8 @@ export function PostulacionesTableExpandable({
                       if ((taxDoc && taxDoc.status === 'APPROVED') || postulacion.rucInactiveWaived) {
                         return {
                           icon: FileText,
-                          bg: 'bg-green-100',
-                          text: 'text-green-700',
+                          bg: 'bg-success-soft',
+                          text: 'text-success',
                           tooltip: postulacion.rucInactiveWaived
                             ? 'Documentos Completos (RUC Inactivo: excepción admin)'
                             : 'Documentos Completos'
@@ -340,8 +353,8 @@ export function PostulacionesTableExpandable({
                       // 🔵 AZUL: Cédula + Antecedentes APROBADOS, pero falta Cert. Tributario
                       return {
                         icon: FileText,
-                        bg: 'bg-blue-100',
-                        text: 'text-blue-700',
+                        bg: 'bg-info-soft',
+                        text: 'text-info',
                         tooltip: 'Falta Certificado Tributario'
                       }
                     }
@@ -352,8 +365,8 @@ export function PostulacionesTableExpandable({
                       if (!payment) {
                         return {
                           icon: CreditCard,
-                          bg: 'bg-red-100',
-                          text: 'text-red-700',
+                          bg: 'bg-danger-soft',
+                          text: 'text-destructive',
                           tooltip: 'Pago pendiente'
                         }
                       }
@@ -361,8 +374,8 @@ export function PostulacionesTableExpandable({
                       if (payment.status === 'VERIFIED') {
                         return {
                           icon: CreditCard,
-                          bg: 'bg-green-100',
-                          text: 'text-green-700',
+                          bg: 'bg-success-soft',
+                          text: 'text-success',
                           tooltip: 'Pago verificado'
                         }
                       }
@@ -371,8 +384,8 @@ export function PostulacionesTableExpandable({
                       if (payment.receiptUrl) { // O el campo que corresponda
                         return {
                           icon: CreditCard,
-                          bg: 'bg-blue-100',
-                          text: 'text-blue-700',
+                          bg: 'bg-info-soft',
+                          text: 'text-info',
                           tooltip: 'Pago cargado, en verificación'
                         }
                       }
@@ -380,8 +393,8 @@ export function PostulacionesTableExpandable({
                       // 🟡 AMARILLO: Completó paso pero sin archivo
                       return {
                         icon: CreditCard,
-                        bg: 'bg-yellow-100',
-                        text: 'text-yellow-700',
+                        bg: 'bg-warning-soft',
+                        text: 'text-warning',
                         tooltip: 'Pago en proceso, falta comprobante'
                       }
                     }
@@ -415,7 +428,7 @@ export function PostulacionesTableExpandable({
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
                                 <Link
-                                  href={`/admin/postulaciones/${postulacion.id}`}
+                                  href={`/admin/postulaciones/${postulacion.slug ?? postulacion.id}`}
                                   onClick={(e) => e.stopPropagation()}
                                   className="font-medium text-sm hover:underline hover:text-primary"
                                 >
@@ -451,21 +464,21 @@ export function PostulacionesTableExpandable({
                                     </Tooltip>
                                   </TooltipProvider>
                                 )}
-                                {postulacion.notes && postulacion.notes.length > 0 && (
+                                {(postulacion._count?.notes ?? 0) > 0 && (
                                   <TooltipProvider>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <Badge
                                           variant="outline"
-                                          className="text-xs px-1.5 py-0 h-5 bg-blue-50 text-blue-700 border-blue-300 font-semibold flex items-center gap-1"
+                                          className="text-xs px-1.5 py-0 h-5 bg-info-soft text-info border-info font-semibold flex items-center gap-1"
                                         >
                                           <MessageSquare className="h-3 w-3" />
-                                          {postulacion.notes.length}
+                                          {postulacion._count.notes}
                                         </Badge>
                                       </TooltipTrigger>
                                       <TooltipContent>
                                         <p className="text-xs">
-                                          {postulacion.notes.length} nota{postulacion.notes.length > 1 ? 's' : ''} interna{postulacion.notes.length > 1 ? 's' : ''}
+                                          {postulacion._count.notes} nota{postulacion._count.notes > 1 ? 's' : ''} interna{postulacion._count.notes > 1 ? 's' : ''}
                                         </p>
                                       </TooltipContent>
                                     </Tooltip>
@@ -503,6 +516,11 @@ export function PostulacionesTableExpandable({
                                 <span className="text-xs text-muted-foreground">
                                   {' '}{postulacion.currentStep}/6
                                 </span>
+                              )}
+                              {postulacion.archivedAt && (
+                                <Badge variant="outline" className="text-xs bg-muted text-muted-foreground">
+                                  Archivada {new Date(postulacion.archivedAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+                                </Badge>
                               )}
                             </div>
                           </td>
@@ -555,12 +573,12 @@ export function PostulacionesTableExpandable({
         variant="outline"
         className={`text-xs ${
           hasOnboarding.status === 'ATTENDED' || hasOnboarding.status === 'CONFIRMED'
-            ? 'bg-green-50 text-green-700 border-green-200'
+            ? 'bg-success-soft text-success border-success'
             : hasOnboarding.status === 'SCHEDULED' || hasOnboarding.status === 'INVITED'
-            ? 'bg-blue-50 text-blue-700 border-blue-200'
+            ? 'bg-info-soft text-info border-info'
             : hasOnboarding.status === 'NO_SHOW' || hasOnboarding.status === 'ABSENT'
-            ? 'bg-red-50 text-red-700 border-red-200'
-            : 'bg-amber-50 text-amber-700 border-amber-200'
+            ? 'bg-danger-soft text-destructive border-destructive'
+            : 'bg-warning-soft text-warning border-warning'
         }`}
       >
         {hasOnboarding.status === 'ATTENDED' ? 'Capacitado' :
@@ -579,11 +597,11 @@ export function PostulacionesTableExpandable({
       )}
     </div>
   ) : onboardingStatus === 'SCHEDULED' ? (
-    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+    <Badge variant="outline" className="text-xs bg-info-soft text-info border-info">
       Agendado
     </Badge>
   ) : onboardingStatus === 'READY' ? (
-    <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+    <Badge variant="outline" className="text-xs bg-warning-soft text-warning border-warning">
       Pendiente
     </Badge>
   ) : (
@@ -593,12 +611,13 @@ export function PostulacionesTableExpandable({
 
                           {/* FECHA */}
                           <td className="px-3 py-3">
-                            <div className="text-xs text-muted-foreground">
-                              {new Date(postulacion.startedAt).toLocaleDateString('es-ES', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric'
-                              })}
+                            <div className="space-y-0.5 text-xs text-muted-foreground">
+                              <div>{formatShortDate(postulacion.startedAt)}</div>
+                              {postulacion.completedAt && (
+                                <div className="text-[11px]">
+                                  Completó {formatShortDate(postulacion.completedAt)}
+                                </div>
+                              )}
                             </div>
                           </td>
 
@@ -606,7 +625,7 @@ export function PostulacionesTableExpandable({
                           <td className="px-3 py-3">
                             <div className="flex items-center justify-end gap-2">
                               <Link
-                                href={`/admin/postulaciones/${postulacion.id}`}
+                                href={`/admin/postulaciones/${postulacion.slug ?? postulacion.id}`}
                                 onClick={(e) => e.stopPropagation()}
                                 className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8 p-0"
                               >
@@ -627,44 +646,30 @@ export function PostulacionesTableExpandable({
                                     <MoreVertical className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                  {/* === PORTAL PÚBLICO === */}
+                                <DropdownMenuContent
+                                  align="end"
+                                  className="w-60 **:data-[slot=dropdown-menu-item]:text-xs"
+                                >
                                   {postulacion.accessToken && (
                                     <>
-                                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                                        Portal Público
-                                      </DropdownMenuLabel>
-                                      <DropdownMenuItem
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          window.open(`/postulacion/${postulacion.accessToken}`, '_blank')
-                                        }}
-                                      >
-                                        <ExternalLink className="mr-2 h-4 w-4 text-muted-foreground" />
-                                        Abrir portal
-                                      </DropdownMenuItem>
+                                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Portal</DropdownMenuLabel>
                                       <DropdownMenuItem
                                         onClick={(e) => {
                                           e.stopPropagation()
                                           const url = `${window.location.origin}/postulacion/${postulacion.accessToken}`
                                           navigator.clipboard.writeText(url)
-                                          toast.success('Link del portal copiado')
+                                          toast.success('Link copiado')
                                         }}
                                       >
                                         <Copy className="mr-2 h-4 w-4 text-muted-foreground" />
-                                        Copiar link del portal
+                                        Copiar link
                                       </DropdownMenuItem>
                                       <DropdownMenuSeparator />
                                     </>
                                   )}
-
-                                  {/* === CONTACTO === */}
                                   {postulacion.phoneNumber && (
                                     <>
-                                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                                        Contacto
-                                      </DropdownMenuLabel>
-
+                                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Contacto</DropdownMenuLabel>
                                       <DropdownMenuItem
                                         onSelect={(e) => e.preventDefault()}
                                         onClick={(e) => e.stopPropagation()}
@@ -678,40 +683,35 @@ export function PostulacionesTableExpandable({
                                           onSuccess={() => router.refresh()}
                                         />
                                       </DropdownMenuItem>
-
                                       <DropdownMenuSeparator />
                                     </>
                                   )}
-
-                                  {/* === GESTIONAR === */}
-                                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                                    Gestionar
-                                  </DropdownMenuLabel>
+                                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Gestionar</DropdownMenuLabel>
                                   {canSchedule && (
                                     <DropdownMenuItem onClick={(e) => handleScheduleOnboarding(postulacion, e)}>
                                       <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
-                                      Agendar Onboarding
+                                      Agendar
                                     </DropdownMenuItem>
                                   )}
-                                  <RefreshRucButton
-                                    driverId={postulacion.id}
-                                    onSuccess={() => router.refresh()}
-                                  />
-                                  <RunAgentButton
-                                    driverId={postulacion.id}
-                                    hasExistingRun={(postulacion.agentRuns?.length ?? 0) > 0}
-                                  />
+                                  <RefreshRucButton driverId={postulacion.id} onSuccess={() => router.refresh()} />
+                                  <RunAgentButton driverId={postulacion.id} hasExistingRun={(postulacion.agentRuns?.length ?? 0) > 0} />
                                   <AssistedCompletionButton
                                     driverId={postulacion.id}
                                     driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
                                     isAssisted={postulacion.assistedCompletion || false}
-                                    onSuccess={() => window.location.reload()}
+                                    onSuccess={() => router.refresh()}
                                   />
                                   <RejectButton
                                     driverId={postulacion.id}
                                     driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
                                     isRejected={postulacion.status === 'REJECTED'}
-                                    onSuccess={() => window.location.reload()}
+                                    onSuccess={() => router.refresh()}
+                                  />
+                                  <ArchiveButton
+                                    driverId={postulacion.id}
+                                    driverName={postulacion.fullName || `${postulacion.firstName} ${postulacion.lastName}`}
+                                    isArchived={!!postulacion.archivedAt}
+                                    onSuccess={() => router.refresh()}
                                   />
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -722,114 +722,58 @@ export function PostulacionesTableExpandable({
                         {/* FILA EXPANDIDA */}
                         {isExpanded && (
                           <tr>
-                            <td colSpan={8} className="px-6 py-4 bg-muted/20">
-                              <div className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                  <div className="space-y-2">
-                                    <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                                      <User className="h-3.5 w-3.5" />
-                                      INFO PERSONAL
-                                    </h5>
-                                    <div className="space-y-1.5">
-                                      <InfoRow label="Nombre" value={postulacion.fullName} />
-                                      <InfoRow label="Cédula" value={postulacion.cedula} />
-                                      {postulacion.birthDate && (
-                                        <InfoRow
-                                          label="F. Nacimiento"
-                                          value={formatBirthDateWithAge(postulacion.birthDate)}
-                                        />
-                                      )}
-                                      <InfoRow label="Teléfono" value={postulacion.phoneNumber} />
-                                      {postulacion.email && (
-                                        <InfoRow label="Email" value={postulacion.email} />
-                                      )}
-                                      {postulacion.emergencyName && (
-                                        <div className="pt-1.5 border-t">
-                                          <InfoRow label="Emergencia" value={postulacion.emergencyName} />
-                                          <InfoRow label="Tel. Emergencia" value={postulacion.emergencyPhone} />
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                                      <Bike className="h-3.5 w-3.5" />
-                                      VEHÍCULO
-                                    </h5>
-                                    {postulacion.hasVehicle ? (
-                                      <div className="space-y-1.5">
-                                        <InfoRow
-                                          label="Vehículo"
-                                          value={`${postulacion.vehicleBrand} ${postulacion.vehicleModel}`}
-                                        />
-                                        <InfoRow label="Año" value={postulacion.vehicleYear?.toString()} />
-                                      </div>
-                                    ) : (
-                                      <p className="text-sm text-muted-foreground italic">Sin vehículo</p>
-                                    )}
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                                      <MapPin className="h-3.5 w-3.5" />
-                                      UBICACIÓN
-                                    </h5>
-                                    <div className="space-y-1.5">
-                                      <InfoRow label="Ciudad" value={postulacion.city} />
-                                      <InfoRow label="Departamento" value={postulacion.department} />
-                                      {postulacion.address && (
-                                        <InfoRow label="Dirección" value={postulacion.address} />
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    <h5 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                                      <Clock className="h-3.5 w-3.5" />
-                                      ESTADO
-                                    </h5>
-                                    <div className="space-y-1.5">
-                                      <InfoRow
-                                        label="Progreso"
-                                        value={`${postulacion.currentStep}/6 pasos`}
-                                      />
-                                      <InfoRow
-                                        label="Fecha inicio"
-                                        value={new Date(postulacion.startedAt).toLocaleDateString('es-ES')}
-                                      />
-                                      {postulacion.completedAt && (
-                                        <InfoRow
-                                          label="Fecha completado"
-                                          value={new Date(postulacion.completedAt).toLocaleDateString('es-ES')}
-                                        />
-                                      )}
-                                    </div>
-                                  </div>
+                            <td colSpan={8} className="px-6 py-2.5 bg-muted/20 border-b border-border">
+                              <div className="grid grid-cols-4 gap-4">
+                                <div className="space-y-1">
+                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Personal</p>
+                                  <InfoRow label="CI" value={postulacion.cedula} />
+                                  {postulacion.birthDate && <InfoRow label="Nac." value={formatBirthDateWithAge(postulacion.birthDate)} />}
+                                  <InfoRow label="Tel." value={postulacion.phoneNumber} />
+                                  {postulacion.email && <InfoRow label="Email" value={postulacion.email} />}
                                 </div>
-
-                                {/* Lista completa de badges */}
-                                {badges.length > 0 && (
-                                  <div className="pt-3 border-t">
-                                    <h5 className="text-xs font-semibold text-muted-foreground mb-2">
-                                      ESTADOS Y DOCUMENTACIÓN
-                                    </h5>
-                                    <div className="flex flex-wrap gap-2">
+                                <div className="space-y-1">
+                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Vehículo</p>
+                                  {postulacion.hasVehicle ? (
+                                    <>
+                                      <InfoRow label="Marca" value={`${postulacion.vehicleBrand ?? ''} ${postulacion.vehicleModel ?? ''}`.trim() || null} />
+                                      <InfoRow label="Año" value={postulacion.vehicleYear?.toString()} />
+                                    </>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground">Sin vehículo</p>
+                                  )}
+                                  {postulacion.emergencyName && (
+                                    <div className="pt-1 border-t border-border/40 space-y-1">
+                                      <InfoRow label="Emerg." value={postulacion.emergencyName} />
+                                      <InfoRow label="Tel. emerg." value={postulacion.emergencyPhone} />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Ubicación</p>
+                                  <InfoRow label="Ciudad" value={postulacion.city} />
+                                  <InfoRow label="Dpto." value={postulacion.department} />
+                                  {postulacion.address && <InfoRow label="Dir." value={postulacion.address} />}
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Estado</p>
+                                  <InfoRow label="Progreso" value={`${postulacion.currentStep}/6 pasos`} />
+                                  <InfoRow label="Inicio" value={formatDateTime(postulacion.startedAt)} />
+                                  {postulacion.completedAt && (
+                                    <InfoRow label="Completado" value={formatDateTime(postulacion.completedAt)} />
+                                  )}
+                                  {badges.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 pt-0.5">
                                       {badges.map((badgeType, idx) => {
                                         const config = getBadgeConfig(badgeType)
                                         return (
-                                          <Badge
-                                            key={idx}
-                                            variant="outline"
-                                            className={`text-xs ${config.color} border`}
-                                          >
+                                          <Badge key={idx} variant="outline" className={`text-[10px] h-4 px-1.5 py-0 ${config.color} border`}>
                                             {config.label}
                                           </Badge>
                                         )
                                       })}
                                     </div>
-                                  </div>
-                                )}
+                                  )}
+                                </div>
                               </div>
                             </td>
                           </tr>
