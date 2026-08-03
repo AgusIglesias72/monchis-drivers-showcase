@@ -1,6 +1,7 @@
 // app/api/admin/pagos/export/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import * as XLSX from "xlsx";
 
 export async function POST(request: NextRequest) {
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
     const { status, searchTerm } = await request.json();
 
     // Construir filtros
-    const where: Parameters<typeof prisma.equipmentPayment.findMany>[0]["where"] = {};
+    const where: Prisma.EquipmentPaymentWhereInput = {};
 
     if (status && status !== "all") {
       where.status = status;
