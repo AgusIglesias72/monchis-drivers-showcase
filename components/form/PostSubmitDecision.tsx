@@ -6,6 +6,7 @@
 // cualquier error/timeout degrada a "en revisión" — nunca bloquea al postulante.
 
 import React, { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { AlertTriangle, Check, Clock, Loader2, X } from 'lucide-react'
 import { addMonths, endOfMonth, startOfMonth } from 'date-fns'
 import { Button } from '@/components/ui/button'
@@ -305,9 +306,9 @@ function ApprovedContent({ shareToken }: { shareToken: string }) {
           <LandingCalendar sessionToken={shareToken} hideHeader />
           <p className="text-xs text-gray-500 text-center mt-4">
             Si preferís agendar más tarde, entrá a{' '}
-            <a href="/capacitaciones" className="underline font-medium text-gray-700">
+            <Link href="/capacitaciones" className="underline font-medium text-gray-700">
               monchisdrivers.com/capacitaciones
-            </a>
+            </Link>
             .
           </p>
         </>
