@@ -37,31 +37,31 @@ const STATUS_CONFIG = {
   QUEUED: {
     label: 'En Cola',
     icon: Clock,
-    color: 'bg-warning',
+    color: 'bg-gray-500',
     variant: 'secondary' as const,
   },
   PROCESSING: {
     label: 'Procesando',
     icon: Loader2,
-    color: 'bg-info',
+    color: 'bg-blue-500',
     variant: 'default' as const,
   },
   COMPLETED: {
     label: 'Completado',
     icon: CheckCircle,
-    color: 'bg-success',
+    color: 'bg-green-500',
     variant: 'default' as const,
   },
   FAILED: {
     label: 'Fallido',
     icon: XCircle,
-    color: 'bg-destructive',
+    color: 'bg-red-500',
     variant: 'destructive' as const,
   },
   CANCELLED: {
     label: 'Cancelado',
     icon: AlertTriangle,
-    color: 'bg-warning',
+    color: 'bg-orange-500',
     variant: 'secondary' as const,
   },
 }
@@ -227,27 +227,27 @@ export function ProcessingMonitor({
 
           {/* Resultado */}
           {result && (
-            <div className="rounded-lg bg-success-soft border border-success p-3">
-              <p className="font-semibold text-success flex items-center gap-1.5 text-sm mb-3">
+            <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 p-3">
+              <p className="font-semibold text-green-900 dark:text-green-100 flex items-center gap-1.5 text-sm mb-3">
                 <CheckCircle className="h-4 w-4" />
                 Resultado
               </p>
               <div className="grid grid-cols-3 gap-3">
-                <div className="text-center p-3 rounded-lg bg-success-soft">
-                  <p className="text-success font-bold text-2xl">{result.successful}</p>
-                  <p className="text-success text-xs mt-1">Exitosos</p>
+                <div className="text-center p-3 rounded-lg bg-green-100 dark:bg-green-900/30">
+                  <p className="text-green-600 dark:text-green-400 font-bold text-2xl">{result.successful}</p>
+                  <p className="text-green-700 dark:text-green-300 text-xs mt-1">Exitosos</p>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-danger-soft">
-                  <p className="text-destructive font-bold text-2xl">{result.failed}</p>
-                  <p className="text-destructive text-xs mt-1">Fallidos</p>
+                <div className="text-center p-3 rounded-lg bg-red-100 dark:bg-red-900/30">
+                  <p className="text-red-600 dark:text-red-400 font-bold text-2xl">{result.failed}</p>
+                  <p className="text-red-700 dark:text-red-300 text-xs mt-1">Fallidos</p>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-info-soft">
-                  <p className="text-info font-bold text-2xl">{result.total}</p>
-                  <p className="text-info text-xs mt-1">Total</p>
+                <div className="text-center p-3 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                  <p className="text-blue-600 dark:text-blue-400 font-bold text-2xl">{result.total}</p>
+                  <p className="text-blue-700 dark:text-blue-300 text-xs mt-1">Total</p>
                 </div>
               </div>
               {(result.jsFolder || result.mgFolder) && (
-                <div className="mt-3 space-y-1 text-xs text-success bg-success-soft p-2 rounded">
+                <div className="mt-3 space-y-1 text-xs text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 p-2 rounded">
                   {result.jsFolder && <p>📁 JS: {result.jsFolder}</p>}
                   {result.mgFolder && <p>📁 M&G: {result.mgFolder}</p>}
                 </div>
@@ -333,8 +333,8 @@ export function ProcessingMonitor({
 
           {/* Info adicional */}
           {status === 'PROCESSING' && !isFinished && (
-            <div className="text-center py-2 px-3 rounded-lg bg-info-soft border border-info">
-              <p className="text-xs text-info">
+            <div className="text-center py-2 px-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900">
+              <p className="text-xs text-blue-700 dark:text-blue-300">
                 💡 El proceso continúa en segundo plano si cierras esta ventana
               </p>
             </div>

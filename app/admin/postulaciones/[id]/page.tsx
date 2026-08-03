@@ -1,6 +1,6 @@
-// app/admin/postulaciones/[slug]/page.tsx
+// app/admin/postulaciones/[id]/page.tsx
 
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { postulacionService } from '@/lib/services/postulacion.service'
 import { onboardingService } from '@/lib/services/onboarding.service'
 import { getActiveTemplates } from '@/lib/services/whatsapp-templates.service'
@@ -8,17 +8,19 @@ import { PostulacionDetailContent } from '@/components/admin/postulacion-detail-
 
 export const revalidate = 0 // Siempre fresh data
 
-async function getPostulacion(slugOrId: string) {
+async function getPostulacion(id: string) {
   try {
-    const [postulacion, availableEvents, whatsappTemplates] = await Promise.all([
-      postulacionService.getPostulacionById(slugOrId),
-      onboardingService.getAvailableEvents(),
-      getActiveTemplates(),
-    ])
+    const postulacion = await postulacionService.getPostulacionById(id)
 
     if (!postulacion) {
       return null
     }
+
+    // ✅ Cargar eventos disponibles y plantillas de WhatsApp en paralelo
+    const [availableEvents, whatsappTemplates] = await Promise.all([
+      onboardingService.getAvailableEvents(),
+      getActiveTemplates(),
+    ])
 
     // Transformar para serialización (convertir Dates, etc)
     return {
@@ -102,27 +104,14 @@ async function getPostulacion(slugOrId: string) {
 
 export default async function PostulacionDetailPage({
   params,
-  searchParams,
 }: {
-  params: Promise<{ slug: string }>
-  searchParams: Promise<Record<string, string | string[] | undefined>>
+  params: Promise<{ id: string }>
 }) {
-  const { slug } = await params
-  const postulacion = await getPostulacion(slug)
+  const { id } = await params
+  const postulacion = await getPostulacion(id)
 
   if (!postulacion) {
     notFound()
-  }
-
-  // URL canónica: si se entró por id (o slug viejo), redirigir al slug limpio
-  // preservando el query string (?tab=, etc.)
-  if (postulacion.slug && slug !== postulacion.slug) {
-    const sp = new URLSearchParams()
-    for (const [key, value] of Object.entries(await searchParams)) {
-      if (typeof value === 'string') sp.set(key, value)
-      else if (Array.isArray(value)) value.forEach((v) => sp.append(key, v))
-    }
-    redirect(`/admin/postulaciones/${postulacion.slug}${sp.size ? `?${sp}` : ''}`)
   }
 
   return <PostulacionDetailContent postulacion={postulacion} />

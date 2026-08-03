@@ -28,7 +28,6 @@ import { LiveZonesGrid } from "@/components/admin/gestion/live/live-zones-grid"
 import {
   DriversTab,
   PedidosTab,
-  requestMatchesQuery,
 } from "@/components/admin/gestion/live/live-side-panel"
 import { PedidoDetailSheet } from "@/components/admin/gestion/live/pedido-detail-sheet"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -37,7 +36,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LIVE_PANEL_CONFIG } from "@/lib/config/live-panel.config"
 import { aggregateCommerces } from "@/lib/services/live-commerces"
 import type {
-  LiveBreadcrumb,
   LivePanelPayload,
   LiveRequest,
   LiveRoute,
@@ -61,11 +59,9 @@ export function LivePanelContent({ initial }: Props) {
   const [pedidosFilter, setPedidosFilter] = useState<PedidoFilter>("all")
   const [activeRoute, setActiveRoute] = useState<LiveRoute | null>(null)
   const [routeLoading, setRouteLoading] = useState(false)
-  const [breadcrumb, setBreadcrumb] = useState<LiveBreadcrumb | null>(null)
   const [view, setView] = useState<LiveView>("pedidos")
   const [showMap, setShowMap] = useState(true)
   const [showZones, setShowZones] = useState(true)
-  const [pedidosQuery, setPedidosQuery] = useState("")
 
   const commerces = useMemo(
     () =>
@@ -80,50 +76,6 @@ export function LivePanelContent({ initial }: Props) {
     () => commerces.filter((c) => c.hasAlert).length,
     [commerces],
   )
-
-  // Búsqueda activa en la vista Pedidos → el mapa muestra SOLO los pedidos que
-  // matchean (y sus drivers), para no perder la orden buscada entre el resto.
-  const searchActive = view === "pedidos" && pedidosQuery.trim().length > 0
-  const matchedRequestIds = useMemo(() => {
-    if (!searchActive) return null
-    const ids = new Set<string>()
-    for (const r of [...data.pending, ...data.active, ...data.delayed]) {
-      if (requestMatchesQuery(r, pedidosQuery)) ids.add(r.requestId)
-    }
-    return ids
-  }, [searchActive, pedidosQuery, data.pending, data.active, data.delayed])
-
-  const mapData = useMemo(() => {
-    if (!matchedRequestIds) {
-      return {
-        pending: data.pending,
-        active: data.active,
-        delayed: data.delayed,
-        drivers: data.drivers,
-      }
-    }
-    const keep = (r: LiveRequest) => matchedRequestIds.has(r.requestId)
-    const pending = data.pending.filter(keep)
-    const active = data.active.filter(keep)
-    const delayed = data.delayed.filter(keep)
-    const driverIds = new Set<string>()
-    for (const r of [...pending, ...active, ...delayed]) {
-      if (r.driverId) driverIds.add(r.driverId)
-    }
-    const drivers = data.drivers.filter((d) => driverIds.has(d.driverId))
-    return { pending, active, delayed, drivers }
-  }, [matchedRequestIds, data.pending, data.active, data.delayed, data.drivers])
-
-  // Si la búsqueda se reduce a UNA sola orden, la resaltamos (abre detalle +
-  // carga ruta/rastro + encuadra el mapa). Dependemos del id (no del Set) para
-  // no re-disparar en cada poll ni reabrir el sheet si el usuario lo cerró.
-  const soleMatchId = useMemo(() => {
-    if (!matchedRequestIds || matchedRequestIds.size !== 1) return null
-    return [...matchedRequestIds][0]
-  }, [matchedRequestIds])
-  useEffect(() => {
-    if (soleMatchId) setHighlight({ kind: "request", id: soleMatchId })
-  }, [soleMatchId])
   // Cache local de rutas. Guardamos `null` para fetches fallidos así no
   // reintentamos en bucle si el backend legacy está caído / devuelve 500.
   const routeCacheRef = useRef(new Map<string, LiveRoute | null>())
@@ -207,18 +159,12 @@ export function LivePanelContent({ initial }: Props) {
     return sorted[0]?.requestId ?? null
   }, [highlight, data.active])
 
-  // requestId cuyo trayecto/rastro mostramos: el pedido resaltado, o el pedido
-  // vigente más representativo del driver resaltado.
-  const routeRequestId = useMemo<string | null>(() => {
-    if (highlight?.kind === "request") return highlight.id
-    if (highlight?.kind === "driver") return driverActiveRequestId
-    return null
-  }, [highlight, driverActiveRequestId])
-
   // Cuando highlight cambia a un pedido (o a un driver con pedido vigente),
   // fetch (o lee del cache) la ruta correspondiente.
   useEffect(() => {
-    const requestId = routeRequestId
+    let requestId: string | null = null
+    if (highlight?.kind === "request") requestId = highlight.id
+    else if (highlight?.kind === "driver") requestId = driverActiveRequestId
 
     if (!requestId) {
       setActiveRoute(null)
@@ -242,7 +188,7 @@ export function LivePanelContent({ initial }: Props) {
       })
       .then((route) => {
         if (cancelled) return
-        routeCacheRef.current.set(requestId, route)
+        routeCacheRef.current.set(requestId!, route)
         setActiveRoute(route)
       })
       .catch((err) => {
@@ -252,7 +198,7 @@ export function LivePanelContent({ initial }: Props) {
         // loop y dejamos al panel funcionando sin ruta — el resto del mapa
         // sigue siendo útil.
         console.error("[live-panel] route fetch error:", err)
-        routeCacheRef.current.set(requestId, null)
+        routeCacheRef.current.set(requestId!, null)
         setActiveRoute(null)
       })
       .finally(() => {
@@ -261,37 +207,7 @@ export function LivePanelContent({ initial }: Props) {
     return () => {
       cancelled = true
     }
-  }, [routeRequestId])
-
-  // Rastro fino (breadcrumb) del driver para el pedido resaltado. A diferencia
-  // de la ruta (hitos estáticos), el rastro crece con cada poll, así que NO lo
-  // cacheamos: lo re-pedimos cuando cambia el pedido y en cada refresh de datos
-  // (data.fetchedAt) para que aparezcan los puntos nuevos en vivo.
-  useEffect(() => {
-    if (!routeRequestId) {
-      setBreadcrumb(null)
-      return
-    }
-    let cancelled = false
-    fetch(`/api/admin/gestion/live/breadcrumb?requestId=${routeRequestId}`, {
-      cache: "no-store",
-    })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return (await res.json()) as LiveBreadcrumb
-      })
-      .then((bc) => {
-        if (!cancelled) setBreadcrumb(bc)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        console.error("[live-panel] breadcrumb fetch error:", err)
-        setBreadcrumb(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [routeRequestId, data.fetchedAt])
+  }, [highlight, driverActiveRequestId])
 
   // Polling con visibility-awareness: si el tab está oculto, pausamos para
   // no quemar requests ni cuota de la API legacy.
@@ -496,15 +412,14 @@ export function LivePanelContent({ initial }: Props) {
           >
             <LiveMap
               zones={data.zones}
-              drivers={mapData.drivers}
-              pending={mapData.pending}
-              delayed={mapData.delayed}
-              active={mapData.active}
+              drivers={data.drivers}
+              pending={data.pending}
+              delayed={data.delayed}
+              active={data.active}
               highlight={highlight}
               onHighlight={setHighlight}
               activeRoute={activeRoute}
               routeLoading={routeLoading}
-              breadcrumb={breadcrumb}
             />
           </div>
         )}
@@ -530,8 +445,6 @@ export function LivePanelContent({ initial }: Props) {
             onHighlight={setHighlight}
             filter={pedidosFilter}
             onFilterChange={setPedidosFilter}
-            query={pedidosQuery}
-            onQueryChange={setPedidosQuery}
           />
         )}
         {view === "drivers" && (
@@ -583,12 +496,6 @@ export function LivePanelContent({ initial }: Props) {
           return data.drivers.find((d) => d.driverId === r.driverId) ?? null
         })()}
         delayedSet={new Set(data.delayed.map((r) => r.requestId))}
-        breadcrumb={
-          highlight?.kind === "request" &&
-          breadcrumb?.requestId === highlight.id
-            ? breadcrumb
-            : null
-        }
         onClose={() => setHighlight(null)}
       />
 
@@ -677,7 +584,7 @@ function ViewTabs({
             {commercesCount}
           </span>
           {commercesAlertCount > 0 && (
-            <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold tabular-nums text-white">
+            <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold tabular-nums text-white">
               {commercesAlertCount}
             </span>
           )}

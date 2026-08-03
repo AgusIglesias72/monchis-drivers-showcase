@@ -61,10 +61,10 @@ const statusLabels = {
 }
 
 const statusColors = {
-  PENDING: "bg-warning-soft text-warning",
-  IN_REVIEW: "bg-info-soft text-info",
-  APPROVED: "bg-success-soft text-success",
-  REJECTED: "bg-danger-soft text-destructive",
+  PENDING: "bg-blue-100 text-blue-700",
+  IN_REVIEW: "bg-orange-100 text-orange-700",
+  APPROVED: "bg-green-100 text-green-700",
+  REJECTED: "bg-red-100 text-red-700",
 }
 
 const documentTypeLabels: Record<string, string> = {
@@ -275,9 +275,9 @@ export function DocumentsTable({ documents, totalPages, currentPage, totalDocume
                           {doc.confidenceScore !== null && doc.confidenceScore !== undefined ? (
                             <span className={cn(
                               "text-xs font-medium",
-                              doc.confidenceScore >= 85 ? "text-success" :
-                              doc.confidenceScore >= 60 ? "text-warning" :
-                              "text-destructive"
+                              doc.confidenceScore >= 85 ? "text-green-600" :
+                              doc.confidenceScore >= 60 ? "text-orange-600" :
+                              "text-red-600"
                             )}>
                               {doc.confidenceScore}%
                             </span>
@@ -320,7 +320,7 @@ export function DocumentsTable({ documents, totalPages, currentPage, totalDocume
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="cursor-pointer text-success hover:text-success h-6 w-6 p-0"
+                                className="cursor-pointer text-green-600 hover:text-green-700 h-6 w-6 p-0"
                                 title="Aprobar documento"
                               >
                                 <CheckCircle className="h-3 w-3" />
@@ -328,7 +328,7 @@ export function DocumentsTable({ documents, totalPages, currentPage, totalDocume
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="cursor-pointer text-destructive hover:text-destructive h-6 w-6 p-0"
+                                className="cursor-pointer text-red-600 hover:text-red-700 h-6 w-6 p-0"
                                 title="Rechazar documento"
                               >
                                 <XCircle className="h-3 w-3" />

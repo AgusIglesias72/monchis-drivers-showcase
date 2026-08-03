@@ -43,11 +43,11 @@ const SOURCE_LABELS: Record<string, string> = {
 
 // Mapeo de estados
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
-  SENT: { label: "Enviado", color: "bg-info-soft text-info border-info", icon: CheckCircle2 },
-  DELIVERED: { label: "Entregado", color: "bg-success-soft text-success border-success", icon: CheckCircle2 },
+  SENT: { label: "Enviado", color: "bg-blue-50 text-blue-700 border-blue-200", icon: CheckCircle2 },
+  DELIVERED: { label: "Entregado", color: "bg-green-50 text-green-700 border-green-200", icon: CheckCircle2 },
   READ: { label: "Leído", color: "bg-purple-50 text-purple-700 border-purple-200", icon: CheckCircle2 },
-  FAILED: { label: "Fallido", color: "bg-danger-soft text-destructive border-destructive", icon: AlertCircle },
-  PENDING: { label: "Pendiente", color: "bg-warning-soft text-warning border-warning", icon: Clock },
+  FAILED: { label: "Fallido", color: "bg-red-50 text-red-700 border-red-200", icon: AlertCircle },
+  PENDING: { label: "Pendiente", color: "bg-yellow-50 text-yellow-700 border-yellow-200", icon: Clock },
 }
 
 export function WhatsAppMessagesHistory({ messages }: WhatsAppMessagesHistoryProps) {
@@ -82,8 +82,7 @@ export function WhatsAppMessagesHistory({ messages }: WhatsAppMessagesHistoryPro
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-4">
-        <div className="max-h-[60vh] overflow-y-auto pr-1">
-          <div className="space-y-3">
+        <div className="space-y-3">
           {messages.map((message, index) => {
             const statusConfig = STATUS_CONFIG[message.status] || STATUS_CONFIG.SENT
             const StatusIcon = statusConfig.icon
@@ -93,13 +92,13 @@ export function WhatsAppMessagesHistory({ messages }: WhatsAppMessagesHistoryPro
               <div
                 key={message.id}
                 className={`relative pl-6 pb-3 ${
-                  index < messages.length - 1 ? "border-l-2 border-border" : ""
+                  index < messages.length - 1 ? "border-l-2 border-gray-200" : ""
                 }`}
               >
                 {/* Dot indicator */}
-                <div className="absolute left-0 top-1.5 w-3 h-3 rounded-full bg-info border-2 border-card -translate-x-[7px]" />
+                <div className="absolute left-0 top-1.5 w-3 h-3 rounded-full bg-blue-500 border-2 border-white -translate-x-[7px]" />
 
-                <div className="bg-muted rounded-lg p-3 space-y-2">
+                <div className="bg-gray-50 rounded-lg p-3 space-y-2">
                   {/* Header */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
@@ -108,7 +107,7 @@ export function WhatsAppMessagesHistory({ messages }: WhatsAppMessagesHistoryPro
                           {MESSAGE_TYPE_LABELS[message.messageType] || message.messageType}
                         </span>
                         {reminderLevel && (
-                          <Badge variant="outline" className="text-xs bg-info-soft text-info border-info">
+                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">
                             Recordatorio #{reminderLevel}
                           </Badge>
                         )}
@@ -144,7 +143,7 @@ export function WhatsAppMessagesHistory({ messages }: WhatsAppMessagesHistoryPro
                       <StatusIcon className="h-3 w-3" />
                       {statusConfig.label}
                     </Badge>
-                    <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border flex items-center gap-1">
+                    <Badge variant="outline" className="text-xs bg-gray-100 text-gray-700 border-gray-300 flex items-center gap-1">
                       {message.source === "MANUAL" ? (
                         <User className="h-3 w-3" />
                       ) : (
@@ -157,7 +156,6 @@ export function WhatsAppMessagesHistory({ messages }: WhatsAppMessagesHistoryPro
               </div>
             )
           })}
-          </div>
         </div>
       </CardContent>
     </Card>

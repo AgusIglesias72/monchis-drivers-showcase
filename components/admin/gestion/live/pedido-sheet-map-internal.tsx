@@ -4,14 +4,7 @@ import "leaflet/dist/leaflet.css"
 
 import { useEffect, useMemo, useRef } from "react"
 import L from "leaflet"
-import {
-  CircleMarker,
-  MapContainer,
-  Marker,
-  Polyline,
-  TileLayer,
-  Tooltip,
-} from "react-leaflet"
+import { MapContainer, Marker, Polyline, TileLayer, Tooltip } from "react-leaflet"
 
 import type { PedidoSheetMapProps } from "./pedido-sheet-map"
 import {
@@ -103,14 +96,8 @@ export default function PedidoSheetMapInternal({
   driverName,
   origin,
   destination,
-  trail,
 }: PedidoSheetMapProps) {
   const mapRef = useRef<L.Map | null>(null)
-
-  const trailLine = useMemo<[number, number][] | null>(() => {
-    if (!trail || trail.length < 2) return null
-    return trail.map((p) => [p.lat, p.lng])
-  }, [trail])
 
   // Tramo activo (línea sólida). Si no hay driver o estado no mapeado, no
   // dibujamos línea sólida — solo los markers + una línea tenue origin↔dest
@@ -142,7 +129,6 @@ export default function PedidoSheetMapInternal({
     if (driverPosition) pts.push([driverPosition.lat, driverPosition.lng])
     if (origin) pts.push([origin.lat, origin.lng])
     if (destination) pts.push([destination.lat, destination.lng])
-    if (trail) for (const p of trail) pts.push([p.lat, p.lng])
     if (pts.length === 0) return null
     if (pts.length === 1) {
       const [lat, lng] = pts[0]
@@ -157,7 +143,7 @@ export default function PedidoSheetMapInternal({
       [Math.min(...lats), Math.min(...lngs)],
       [Math.max(...lats), Math.max(...lngs)],
     ]
-  }, [driverPosition, origin, destination, trail])
+  }, [driverPosition, origin, destination])
 
   useEffect(() => {
     if (!mapRef.current || !bounds) return
@@ -212,27 +198,6 @@ export default function PedidoSheetMapInternal({
           />
         )}
 
-        {/* Recorrido real del driver (rastro fino), debajo del tramo activo */}
-        {trailLine && (
-          <Polyline
-            positions={trailLine}
-            pathOptions={{ color: "#6366f1", weight: 3, opacity: 0.85 }}
-          />
-        )}
-        {trail?.map((p, i) => (
-          <CircleMarker
-            key={`${p.lat},${p.lng},${i}`}
-            center={[p.lat, p.lng]}
-            radius={i === trail.length - 1 ? 4 : 2.5}
-            pathOptions={{
-              color: "#ffffff",
-              weight: 1.2,
-              fillColor: i === trail.length - 1 ? "#4338ca" : "#6366f1",
-              fillOpacity: 1,
-            }}
-          />
-        ))}
-
         {/* Tramo activo (sólido, azul) driver → target */}
         {activeLine && (
           <Polyline
@@ -249,7 +214,7 @@ export default function PedidoSheetMapInternal({
           <Marker position={[origin.lat, origin.lng]} icon={ORIGIN_ICON}>
             <Tooltip>
               <div className="text-xs">
-                <div className="font-semibold text-success">Comercio</div>
+                <div className="font-semibold text-emerald-700">Comercio</div>
                 {origin.name && <div>{origin.name}</div>}
               </div>
             </Tooltip>
@@ -262,7 +227,7 @@ export default function PedidoSheetMapInternal({
           >
             <Tooltip>
               <div className="text-xs">
-                <div className="font-semibold text-destructive">Cliente</div>
+                <div className="font-semibold text-red-700">Cliente</div>
                 {destination.name && <div>{destination.name}</div>}
               </div>
             </Tooltip>
@@ -276,7 +241,7 @@ export default function PedidoSheetMapInternal({
           >
             <Tooltip>
               <div className="text-xs">
-                <div className="font-semibold text-info">Driver</div>
+                <div className="font-semibold text-blue-700">Driver</div>
                 {driverName && <div>{driverName}</div>}
               </div>
             </Tooltip>

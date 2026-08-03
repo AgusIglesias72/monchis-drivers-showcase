@@ -324,10 +324,10 @@ export function DriverManagementSheet({
 
   const getStatusBadge = (status: string) => {
     const config = {
-      PENDING: { className: 'bg-warning-soft text-warning border-warning', icon: Clock, label: 'Pendiente' },
-      APPROVED: { className: 'bg-success-soft text-success border-success', icon: CheckCircle, label: 'Aprobado' },
-      REJECTED: { className: 'bg-danger-soft text-destructive border-destructive', icon: XCircle, label: 'Rechazado' },
-      INTERVIEW_SCHEDULED: { className: 'bg-info-soft text-info border-info', icon: Users, label: 'Entrevista' },
+      PENDING: { className: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock, label: 'Pendiente' },
+      APPROVED: { className: 'bg-green-50 text-green-700 border-green-200', icon: CheckCircle, label: 'Aprobado' },
+      REJECTED: { className: 'bg-red-50 text-red-700 border-red-200', icon: XCircle, label: 'Rechazado' },
+      INTERVIEW_SCHEDULED: { className: 'bg-blue-50 text-blue-700 border-blue-200', icon: Users, label: 'Entrevista' },
     }
 
     const { className, icon: Icon, label } = config[status as keyof typeof config] || config.PENDING
@@ -343,7 +343,7 @@ export function DriverManagementSheet({
   const getDocumentsStatusBadge = (status: string) => {
     if (status === 'APPROVED') {
       return (
-        <Badge variant="outline" className="bg-success-soft text-success border-success gap-1">
+        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
           <CheckCircle className="h-3 w-3" />
           Aprobados
         </Badge>
@@ -351,14 +351,14 @@ export function DriverManagementSheet({
     }
     if (status === 'REJECTED') {
       return (
-        <Badge variant="outline" className="bg-danger-soft text-destructive border-destructive gap-1">
+        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 gap-1">
           <XCircle className="h-3 w-3" />
           Rechazados
         </Badge>
       )
     }
     return (
-      <Badge variant="outline" className="bg-warning-soft text-warning border-warning gap-1">
+      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1">
         <AlertTriangle className="h-3 w-3" />
         Pendientes
       </Badge>
@@ -368,7 +368,7 @@ export function DriverManagementSheet({
   const getPaymentBadge = () => {
     if (!driver?.equipmentPayments || driver.equipmentPayments.length === 0) {
       return (
-        <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
+        <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
           Sin pago registrado
         </Badge>
       )
@@ -378,7 +378,7 @@ export function DriverManagementSheet({
 
     if (payment.status === 'VERIFIED') {
       return (
-        <Badge variant="outline" className="bg-success-soft text-success border-success gap-1">
+        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
           <CheckCircle className="h-3 w-3" />
           Verificado
         </Badge>
@@ -387,7 +387,7 @@ export function DriverManagementSheet({
 
     if (payment.status === 'REJECTED') {
       return (
-        <Badge variant="outline" className="bg-danger-soft text-destructive border-destructive gap-1">
+        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 gap-1">
           <XCircle className="h-3 w-3" />
           Rechazado
         </Badge>
@@ -395,7 +395,7 @@ export function DriverManagementSheet({
     }
 
     return (
-      <Badge variant="outline" className="bg-warning-soft text-warning border-warning gap-1">
+      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1">
         <Clock className="h-3 w-3" />
         Pendiente
       </Badge>
@@ -680,9 +680,9 @@ export function DriverManagementSheet({
                             {payment.rejectionReason && (
                               <>
                                 <Separator />
-                                <div className="bg-danger-soft p-3 rounded-md">
-                                  <p className="text-xs font-medium text-destructive mb-1">Motivo de Rechazo</p>
-                                  <p className="text-sm text-destructive">{payment.rejectionReason}</p>
+                                <div className="bg-red-50 p-3 rounded-md">
+                                  <p className="text-xs font-medium text-red-700 mb-1">Motivo de Rechazo</p>
+                                  <p className="text-sm text-red-600">{payment.rejectionReason}</p>
                                 </div>
                               </>
                             )}

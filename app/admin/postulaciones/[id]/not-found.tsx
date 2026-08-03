@@ -1,4 +1,4 @@
-// app/admin/postulaciones/[slug]/not-found.tsx
+// app/admin/postulaciones/[id]/not-found.tsx
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"

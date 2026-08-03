@@ -1,5 +1,7 @@
 // components/admin/dashboard-kpis-improved.tsx
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+"use client"
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Users,
   CheckCircle,
@@ -10,7 +12,7 @@ import {
   UserX,
   Clock,
 } from "lucide-react"
-import { MotionDiv } from "@/components/ds"
+import { motion } from "motion/react"
 
 interface DashboardKpisImprovedProps {
   postulacionesStats: {
@@ -64,16 +66,16 @@ export function DashboardKpisImproved({
       value: postulacionesStats.totalPostulaciones,
       icon: Users,
       description: `${postulacionesStats.completadas} completadas`,
-      color: "text-info",
-      bgColor: "bg-info-soft",
+      color: "text-blue-600 dark:text-blue-400",
+      bgColor: "bg-blue-50 dark:bg-blue-950/20",
     },
     {
       title: "Tasa de Completado",
       value: `${postulacionesStats.tasaCompletado}%`,
       icon: TrendingUp,
       description: `${postulacionesStats.enProgreso} en progreso`,
-      color: "text-success",
-      bgColor: "bg-success-soft",
+      color: "text-green-600 dark:text-green-400",
+      bgColor: "bg-green-50 dark:bg-green-950/20",
     },
     {
       title: "Eventos Próximos",
@@ -88,13 +90,13 @@ export function DashboardKpisImproved({
       value: onboardingStats.pendingDrivers,
       icon: Clock,
       description: `${onboardingStats.inProgressDrivers} en proceso`,
-      color: "text-warning",
-      bgColor: "bg-warning-soft",
+      color: "text-orange-600 dark:text-orange-400",
+      bgColor: "bg-orange-50 dark:bg-orange-950/20",
     },
   ]
 
   return (
-    <MotionDiv
+    <motion.div
       variants={container}
       initial="hidden"
       animate="show"
@@ -103,7 +105,7 @@ export function DashboardKpisImproved({
       {kpis.map((kpi, index) => {
         const Icon = kpi.icon
         return (
-          <MotionDiv key={index} variants={item}>
+          <motion.div key={index} variants={item}>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5">
                 <CardTitle className="text-xs font-medium">
@@ -122,9 +124,9 @@ export function DashboardKpisImproved({
                 </p>
               </CardContent>
             </Card>
-          </MotionDiv>
+          </motion.div>
         )
       })}
-    </MotionDiv>
+    </motion.div>
   )
 }

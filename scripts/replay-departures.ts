@@ -48,8 +48,8 @@ const SCENARIOS: Scenario[] = [
     destination: FAR_DEST,
     steps: [
       { state: "ACCEPTED", dist: 800 },
-      { state: "WAITING_ORDER", dist: 40 },
-      { state: "WAITING_ORDER", dist: 30 }, // arrival origin (≤50m)
+      { state: "WAITING_ORDER", dist: 50 },
+      { state: "WAITING_ORDER", dist: 60 }, // arrival origin
       { state: "DELIVERY", dist: 500 }, // marcó DELIVERY antes de irse → sano
       { state: "DELIVERY", dist: 1900 }, // cerca del cliente (a 100m)
       { state: "OUTSIDE", dist: 1950 }, // arrival dest
@@ -62,8 +62,8 @@ const SCENARIOS: Scenario[] = [
     destination: FAR_DEST,
     steps: [
       { state: "WAITING_ORDER", dist: 40 },
-      { state: "WAITING_ORDER", dist: 45 }, // arrival (≤50m)
-      { state: "WAITING_ORDER", dist: 400 }, // far 1 (>300m)
+      { state: "WAITING_ORDER", dist: 80 }, // arrival
+      { state: "WAITING_ORDER", dist: 400 }, // far 1
       { state: "WAITING_ORDER", dist: 600 }, // far 2 → evento
     ],
     expectEvents: ["LEFT_ORIGIN_WITHOUT_DELIVERY"],
@@ -80,15 +80,15 @@ const SCENARIOS: Scenario[] = [
     expectEvents: ["LEFT_DESTINATION_WITHOUT_FINALIZE"],
   },
   {
-    name: "(d) jitter GPS en banda muerta (50-300m) tras llegar: sin evento",
+    name: "(d) jitter GPS en banda muerta (150-350m) tras llegar: sin evento",
     destination: FAR_DEST,
     steps: [
-      { state: "WAITING_ORDER", dist: 40 },
-      { state: "WAITING_ORDER", dist: 45 }, // arrival (≤50m)
-      { state: "WAITING_ORDER", dist: 200 },
-      { state: "WAITING_ORDER", dist: 280 },
-      { state: "WAITING_ORDER", dist: 200 },
-      { state: "WAITING_ORDER", dist: 290 },
+      { state: "WAITING_ORDER", dist: 100 },
+      { state: "WAITING_ORDER", dist: 100 }, // arrival
+      { state: "WAITING_ORDER", dist: 250 },
+      { state: "WAITING_ORDER", dist: 300 },
+      { state: "WAITING_ORDER", dist: 250 },
+      { state: "WAITING_ORDER", dist: 340 },
     ],
     expectEvents: [],
   },
@@ -96,8 +96,8 @@ const SCENARIOS: Scenario[] = [
     name: "(e) GPS congelado/null no genera evidencia",
     destination: FAR_DEST,
     steps: [
-      { state: "WAITING_ORDER", dist: 40 },
-      { state: "WAITING_ORDER", dist: 45 }, // arrival (≤50m)
+      { state: "WAITING_ORDER", dist: 50 },
+      { state: "WAITING_ORDER", dist: 70 }, // arrival
       { state: "WAITING_ORDER", dist: 400 }, // far 1
       { state: "WAITING_ORDER", dist: "repeat" }, // congelado → no avanza
       { state: "WAITING_ORDER", dist: null }, // sin GPS → no avanza
@@ -109,10 +109,10 @@ const SCENARIOS: Scenario[] = [
     name: "(f) se aleja 1 muestra y vuelve: reset, sin evento",
     destination: FAR_DEST,
     steps: [
-      { state: "WAITING_ORDER", dist: 40 },
-      { state: "WAITING_ORDER", dist: 45 }, // arrival (≤50m)
+      { state: "WAITING_ORDER", dist: 60 },
+      { state: "WAITING_ORDER", dist: 90 }, // arrival
       { state: "WAITING_ORDER", dist: 400 }, // far 1
-      { state: "WAITING_ORDER", dist: 100 }, // volvió (<300m) → reset
+      { state: "WAITING_ORDER", dist: 100 }, // volvió → reset
       { state: "WAITING_ORDER", dist: 120 },
       { state: "DELIVERY", dist: 500 }, // después marcó bien
     ],

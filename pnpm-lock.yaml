@@ -16,7 +16,7 @@ importers:
         version: 3.37.5(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
       '@clerk/nextjs':
         specifier: ^6.33.5
-        version: 6.39.3(next@15.5.18(@playwright/test@1.60.0)(react-dom@19.1.2(react@19.1.2))(react@19.1.2))(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
+        version: 6.39.3(next@15.5.18(react-dom@19.1.2(react@19.1.2))(react@19.1.2))(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.75.0(react@19.1.2))
@@ -25,7 +25,7 @@ importers:
         version: 1.0.2
       '@next/third-parties':
         specifier: ^15.5.4
-        version: 15.5.18(next@15.5.18(@playwright/test@1.60.0)(react-dom@19.1.2(react@19.1.2))(react@19.1.2))(react@19.1.2)
+        version: 15.5.18(next@15.5.18(react-dom@19.1.2(react@19.1.2))(react@19.1.2))(react@19.1.2)
       '@prisma/client':
         specifier: ^6.16.2
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
@@ -125,6 +125,9 @@ importers:
       date-fns-tz:
         specifier: ^3.2.0
         version: 3.2.0(date-fns@4.1.0)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.4.2
       google-auth-library:
         specifier: ^10.3.0
         version: 10.6.2
@@ -148,7 +151,7 @@ importers:
         version: 5.1.11
       next:
         specifier: ^15.5.9
-        version: 15.5.18(@playwright/test@1.60.0)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
+        version: 15.5.18(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
@@ -207,15 +210,9 @@ importers:
         specifier: ^4.1.11
         version: 4.4.3
     devDependencies:
-      '@clerk/testing':
-        specifier: ^2.2.4
-        version: 2.2.4(@playwright/test@1.60.0)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
       '@eslint/eslintrc':
         specifier: ^3
         version: 3.3.5
-      '@playwright/test':
-        specifier: ^1.60.0
-        version: 1.60.0
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.3.0
@@ -234,9 +231,6 @@ importers:
       '@types/uuid':
         specifier: ^10.0.0
         version: 10.0.0
-      dotenv:
-        specifier: ^17.2.3
-        version: 17.4.2
       eslint:
         specifier: ^9
         version: 9.39.4(jiti@2.7.0)
@@ -307,10 +301,6 @@ packages:
     resolution: {integrity: sha512-cgkFVEYFG2nZn4QDuYBhiAwPtMdo8Yj7DAtq/SBQ5C/ainh3uxNRDgUj4bFn52qJkWLiCkraYJIw1b8dEUbUBg==}
     engines: {node: '>=18.17.0'}
 
-  '@clerk/backend@3.11.1':
-    resolution: {integrity: sha512-rBEI0Erfd1Ddp7V+kxPL+Ki6QorNhQeLtliwAMNoM/CmbVqk7fGrNAa1iE0OIX5Q5ajjAcOiBMne7InhIQyraQ==}
-    engines: {node: '>=20.9.0'}
-
   '@clerk/clerk-react@5.61.6':
     resolution: {integrity: sha512-OiyBlrnkRr9IhZtPd7EwlzhYScBpvNKJ8lgg7Uw6JElzJYz854IeQaez5mAfpiib3LcW/Dn53E2PQhagcuLJ3Q==}
     engines: {node: '>=18.17.0'}
@@ -340,30 +330,6 @@ packages:
       react:
         optional: true
       react-dom:
-        optional: true
-
-  '@clerk/shared@4.25.0':
-    resolution: {integrity: sha512-49WX0F0wqQvY2vf2ehNRZcKby0zkuaMinxF8O9GONOkaDktWISVghVHyCl+aN2hYk0r80UAXosD1T3rLSUlWog==}
-    engines: {node: '>=20.9.0'}
-    peerDependencies:
-      react: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
-      react-dom: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
-    peerDependenciesMeta:
-      react:
-        optional: true
-      react-dom:
-        optional: true
-
-  '@clerk/testing@2.2.4':
-    resolution: {integrity: sha512-gSbN9ZOymH94eoLxxraYZH2ivdv0tNGQsmKxwZhNahgslopGFKTWaQSBblOAMIFB8PYhLzLHh43kli9uQudfhQ==}
-    engines: {node: '>=20.9.0'}
-    peerDependencies:
-      '@playwright/test': ^1
-      cypress: ^13 || ^14 || ^15
-    peerDependenciesMeta:
-      '@playwright/test':
-        optional: true
-      cypress:
         optional: true
 
   '@clerk/types@4.101.23':
@@ -928,11 +894,6 @@ packages:
   '@nolyfill/is-core-module@1.0.39':
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
-
-  '@playwright/test@1.60.0':
-    resolution: {integrity: sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag==}
-    engines: {node: '>=18'}
-    hasBin: true
 
   '@prisma/client@6.19.3':
     resolution: {integrity: sha512-mKq3jQFhjvko5LTJFHGilsuQs+W+T3Gm451NzuTDGQxwCzwXHYnIu2zGkRoW+Exq3Rob7yp2MfzSrdIiZVhrBg==}
@@ -1857,9 +1818,6 @@ packages:
     peerDependencies:
       tailwindcss: '>=3.0.0 || insiders || >=4.0.0-alpha.20 || >=4.0.0-beta.1'
 
-  '@tanstack/query-core@5.101.2':
-    resolution: {integrity: sha512-hH5MLoJhF7KaIGd7q3xTXGXvslI+GYlM1Z/35aSHHWaCJWB7XvTSHYuV3eM7tw+aE0mT/xMro4M4Q9rCGHT0lw==}
-
   '@tiptap/core@3.23.1':
     resolution: {integrity: sha512-8YvSGiJTeU5wPuGiYIIYgyiyaaT1CAx+kJL0bju0w871OvbJJj0T/ywhcmxGXW6pOal2T8X2xt9ZqE+vib0VJw==}
     peerDependencies:
@@ -2715,10 +2673,6 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
-  dotenv@17.2.2:
-    resolution: {integrity: sha512-Sf2LSQP+bOlhKWWyhFsn0UsfdK/kCWRv1iuA2gXAwt3dyNabr6QSj00I2V10pidqz69soatm9ZwZvpQMTIOd5Q==}
-    engines: {node: '>=12'}
-
   dotenv@17.4.2:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
     engines: {node: '>=12'}
@@ -3362,10 +3316,6 @@ packages:
   js-cookie@3.0.5:
     resolution: {integrity: sha512-cEiJEAEoIbWfCZYKWhVwFuvPX1gETRYPw6LlaTKoxD3s2AkXzkCjnp6h0V77ozyqj0jakteJ4YqDJT830+lVGw==}
     engines: {node: '>=14'}
-
-  js-cookie@3.0.7:
-    resolution: {integrity: sha512-z/wZZgDrkNV1eA0ULjM/F9/50Ya8fbzgKneSpoPsXSGd0KnpdtHfOZWK+GcwLk+EZbS4F9RBhU+K2RgzuDaItw==}
-    engines: {node: '>=20'}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -4581,15 +4531,6 @@ snapshots:
       - react
       - react-dom
 
-  '@clerk/backend@3.11.1(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
-    dependencies:
-      '@clerk/shared': 4.25.0(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
-      standardwebhooks: 1.0.0
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - react
-      - react-dom
-
   '@clerk/clerk-react@5.61.6(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
     dependencies:
       '@clerk/shared': 3.47.5(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
@@ -4604,13 +4545,13 @@ snapshots:
       - react
       - react-dom
 
-  '@clerk/nextjs@6.39.3(next@15.5.18(@playwright/test@1.60.0)(react-dom@19.1.2(react@19.1.2))(react@19.1.2))(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
+  '@clerk/nextjs@6.39.3(next@15.5.18(react-dom@19.1.2(react@19.1.2))(react@19.1.2))(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
     dependencies:
       '@clerk/backend': 2.33.3(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
       '@clerk/clerk-react': 5.61.6(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
       '@clerk/shared': 3.47.5(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
       '@clerk/types': 4.101.23(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
-      next: 15.5.18(@playwright/test@1.60.0)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
+      next: 15.5.18(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
       react: 19.1.2
       react-dom: 19.1.2(react@19.1.2)
       server-only: 0.0.1
@@ -4627,27 +4568,6 @@ snapshots:
     optionalDependencies:
       react: 19.1.2
       react-dom: 19.1.2(react@19.1.2)
-
-  '@clerk/shared@4.25.0(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
-    dependencies:
-      '@tanstack/query-core': 5.101.2
-      dequal: 2.0.3
-      glob-to-regexp: 0.4.1
-      js-cookie: 3.0.7
-    optionalDependencies:
-      react: 19.1.2
-      react-dom: 19.1.2(react@19.1.2)
-
-  '@clerk/testing@2.2.4(@playwright/test@1.60.0)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
-    dependencies:
-      '@clerk/backend': 3.11.1(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
-      '@clerk/shared': 4.25.0(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
-      dotenv: 17.2.2
-    optionalDependencies:
-      '@playwright/test': 1.60.0
-    transitivePeerDependencies:
-      - react
-      - react-dom
 
   '@clerk/types@4.101.23(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
     dependencies:
@@ -5032,9 +4952,9 @@ snapshots:
   '@next/swc-win32-x64-msvc@15.5.18':
     optional: true
 
-  '@next/third-parties@15.5.18(next@15.5.18(@playwright/test@1.60.0)(react-dom@19.1.2(react@19.1.2))(react@19.1.2))(react@19.1.2)':
+  '@next/third-parties@15.5.18(next@15.5.18(react-dom@19.1.2(react@19.1.2))(react@19.1.2))(react@19.1.2)':
     dependencies:
-      next: 15.5.18(@playwright/test@1.60.0)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
+      next: 15.5.18(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
       react: 19.1.2
       third-party-capital: 1.0.20
 
@@ -5051,10 +4971,6 @@ snapshots:
       fastq: 1.20.1
 
   '@nolyfill/is-core-module@1.0.39': {}
-
-  '@playwright/test@1.60.0':
-    dependencies:
-      playwright: 1.60.0
 
   '@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)':
     optionalDependencies:
@@ -5912,8 +5828,6 @@ snapshots:
     dependencies:
       postcss-selector-parser: 6.0.10
       tailwindcss: 4.3.0
-
-  '@tanstack/query-core@5.101.2': {}
 
   '@tiptap/core@3.23.1(@tiptap/pm@3.23.1)':
     dependencies:
@@ -6774,8 +6688,6 @@ snapshots:
 
   dotenv@16.6.1: {}
 
-  dotenv@17.2.2: {}
-
   dotenv@17.4.2: {}
 
   dunder-proto@1.0.1:
@@ -7625,8 +7537,6 @@ snapshots:
 
   js-cookie@3.0.5: {}
 
-  js-cookie@3.0.7: {}
-
   js-tokens@4.0.0: {}
 
   js-yaml@4.1.1:
@@ -7877,7 +7787,7 @@ snapshots:
       react: 19.1.2
       react-dom: 19.1.2(react@19.1.2)
 
-  next@15.5.18(@playwright/test@1.60.0)(react-dom@19.1.2(react@19.1.2))(react@19.1.2):
+  next@15.5.18(react-dom@19.1.2(react@19.1.2))(react@19.1.2):
     dependencies:
       '@next/env': 15.5.18
       '@swc/helpers': 0.5.15
@@ -7895,7 +7805,6 @@ snapshots:
       '@next/swc-linux-x64-musl': 15.5.18
       '@next/swc-win32-arm64-msvc': 15.5.18
       '@next/swc-win32-x64-msvc': 15.5.18
-      '@playwright/test': 1.60.0
       sharp: 0.34.5
     transitivePeerDependencies:
       - '@babel/core'

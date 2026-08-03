@@ -101,7 +101,7 @@ export function StagesTrendChart({
       <div className="flex flex-wrap items-start justify-between gap-3 p-4 pb-2">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <LineIcon className="h-3.5 w-3.5 text-info" />
+            <LineIcon className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Evolución por etapa
             </h3>
@@ -132,7 +132,7 @@ export function StagesTrendChart({
             className={cn(
               "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium transition-colors",
               showAll
-                ? "bg-info-soft border-info text-info"
+                ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300"
                 : "hover:bg-muted text-muted-foreground"
             )}
           >

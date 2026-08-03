@@ -221,23 +221,3 @@ export interface LiveRoute {
   history: LiveRoutePoint[]
   fetchedAt: string
 }
-
-// Rastro fino ("breadcrumb") del driver para un pedido: posiciones GPS minuto a
-// minuto capturadas por el cron collect-live-orders en LiveOrderSample. A
-// diferencia de LiveRoute.history (sólo hitos de cambio de estado), esto muestra
-// por dónde pasó realmente el repartidor. Sólo existe mientras el pedido estuvo
-// activo y con la retención de LiveOrderSample (7 días).
-export interface LiveBreadcrumbPoint {
-  lat: number
-  lng: number
-  at: string // ISO (fetchedAt de la muestra)
-  state: string
-  distOriginM: number | null
-  distDestM: number | null
-}
-
-export interface LiveBreadcrumb {
-  requestId: string
-  points: LiveBreadcrumbPoint[]
-  fetchedAt: string
-}

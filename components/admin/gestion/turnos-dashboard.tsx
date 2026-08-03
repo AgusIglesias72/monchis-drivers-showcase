@@ -16,6 +16,7 @@ import { TURNOS_CONFIG, TURNOS_HOURS } from "@/lib/config/turnos.config"
 import {
   computeKpis,
   coversSlot,
+  hourlyAggregates,
   shiftsForDate,
   uniqueDates,
 } from "@/lib/services/turnos-aggregate"
@@ -120,6 +121,10 @@ export function TurnosDashboard({ initialShifts, fetchedAtIso, errors, available
     [relevantShifts, selectedDate],
   )
   const kpis = useMemo(() => computeKpis(dayShifts), [dayShifts])
+  const hourly = useMemo(
+    () => hourlyAggregates(dayShifts, TURNOS_HOURS),
+    [dayShifts],
+  )
 
   const drawerShifts = useMemo(() => {
     if (!drawerCell) return []
@@ -208,12 +213,7 @@ export function TurnosDashboard({ initialShifts, fetchedAtIso, errors, available
               comparison={comparison}
               comparisonLoading={comparisonLoading}
             />
-            <TurnosHourlyChart
-              shifts={dayShifts}
-              hours={TURNOS_HOURS}
-              selectedDate={selectedDate}
-              availableWeeks={availableWeeks}
-            />
+            <TurnosHourlyChart data={hourly} />
           </>
         )}
       </div>

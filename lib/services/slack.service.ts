@@ -14,9 +14,6 @@ export async function sendSlackMessage(
   text: string,
   webhookUrl?: string,
 ): Promise<SlackResult> {
-  if (process.env.E2E_TESTING === "true") {
-    return { ok: true }
-  }
   const target = webhookUrl || WEBHOOK_URL
   if (!target) {
     return { ok: false, error: "SLACK_WEBHOOK_URL no configurado" }

@@ -59,14 +59,14 @@ const STATE_CHIPS: Record<string, StateChip> = {
   PENDING: {
     label: "Buscando",
     icon: Search,
-    bg: "bg-muted",
-    text: "text-muted-foreground",
+    bg: "bg-slate-100",
+    text: "text-slate-700",
   },
   ACCEPTED: {
     label: "Aceptado",
     icon: Handshake,
-    bg: "bg-warning-soft",
-    text: "text-warning",
+    bg: "bg-amber-100",
+    text: "text-amber-800",
   },
   ASSIGNED: {
     label: "Asignado",
@@ -95,8 +95,8 @@ const STATE_CHIPS: Record<string, StateChip> = {
   DELIVERY: {
     label: "En camino",
     icon: Bike,
-    bg: "bg-info-soft",
-    text: "text-info",
+    bg: "bg-blue-100",
+    text: "text-blue-800",
   },
   OUTSIDE: {
     label: "Afuera",
@@ -177,7 +177,7 @@ function CommerceDetail({
               </span>
             )}
             {commerce.hasAlert && (
-              <span className="inline-flex items-center gap-1 rounded bg-danger-soft px-1.5 py-0.5 font-semibold text-destructive">
+              <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 font-semibold text-red-800">
                 <AlertTriangle className="h-3 w-3" />
                 Alerta
               </span>

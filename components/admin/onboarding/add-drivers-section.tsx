@@ -155,10 +155,10 @@ export function AddDriversSection({ eventId, onSuccess }: AddDriversSectionProps
     if (!status) return null
     
     const config = {
-      PENDING: { label: 'Pendiente', className: 'bg-warning-soft text-warning border-warning' },
-      UNDER_REVIEW: { label: 'En Revisión', className: 'bg-info-soft text-info border-info' },
-      APPROVED: { label: 'Aprobada', className: 'bg-success-soft text-success border-success' },
-      REJECTED: { label: 'Rechazada', className: 'bg-danger-soft text-destructive border-destructive' },
+      PENDING: { label: 'Pendiente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+      UNDER_REVIEW: { label: 'En Revisión', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+      APPROVED: { label: 'Aprobada', className: 'bg-green-50 text-green-700 border-green-200' },
+      REJECTED: { label: 'Rechazada', className: 'bg-red-50 text-red-700 border-red-200' },
     }
     
     const statusConfig = config[status as keyof typeof config]
@@ -284,12 +284,12 @@ export function AddDriversSection({ eventId, onSuccess }: AddDriversSectionProps
                     {/* Document Status */}
                     <div className="col-span-2 flex items-center">
                       {docsApproved ? (
-                        <Badge variant="outline" className="text-xs h-5 bg-success-soft text-success border-success gap-1">
+                        <Badge variant="outline" className="text-xs h-5 bg-green-50 text-green-700 border-green-200 gap-1">
                           <CheckCircle className="h-3 w-3" />
                           Aprobados
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-xs h-5 bg-warning-soft text-warning border-warning gap-1">
+                        <Badge variant="outline" className="text-xs h-5 bg-amber-50 text-amber-700 border-amber-200 gap-1">
                           <AlertTriangle className="h-3 w-3" />
                           Pendiente
                         </Badge>
@@ -312,7 +312,7 @@ export function AddDriversSection({ eventId, onSuccess }: AddDriversSectionProps
                     {/* Onboarding Status */}
                     <div className="col-span-2 flex items-center">
                       {hasOnboarding ? (
-                        <Badge variant="outline" className="text-xs h-5 bg-info-soft text-info border-info gap-1">
+                        <Badge variant="outline" className="text-xs h-5 bg-blue-50 text-blue-700 border-blue-200 gap-1">
                           <FileText className="h-3 w-3" />
                           {driver.onboardingStatus === 'COMPLETED' ? 'Completado' : 'Programado'}
                         </Badge>

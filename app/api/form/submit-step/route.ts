@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { WhatsAppMessageType } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { assignDriverSlug } from '@/lib/services/postulacion.service';
 import { z } from 'zod';
 
 // Schemas Zod por paso. .strict() rechaza campos extra para cerrar
@@ -218,11 +217,10 @@ export async function POST(request: NextRequest) {
             currentStep: 1,
             completedSteps: [1],
             status: 'IN_PROGRESS',
-            accessToken: randomUUID(),
+            accessToken: randomUUID(), // ← Generar token automáticamente
             accessTokenGeneratedAt: new Date()
           }
         });
-        formDriver.slug = await assignDriverSlug(formDriver.id, formDriver.fullName).catch(() => null);
       } else {
         // Actualizar FormDriver existente y generar token si no tiene
         const updateData: any = {

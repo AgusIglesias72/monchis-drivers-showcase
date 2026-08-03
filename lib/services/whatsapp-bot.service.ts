@@ -143,29 +143,7 @@ export interface SendResponse {
 
 // ==================== API ====================
 
-// Guard de conexión: el bot whatsapp-web.js puede aceptar /send-message y
-// responder OK aunque la sesión de WhatsApp esté DESCONECTADA — eso producía
-// registros SENT falsos (el mensaje nunca se entregaba). Antes de cada envío
-// verificamos que la sesión esté conectada. Cacheamos el estado unos segundos
-// para no llamar /qr-status en cada mensaje de un loop de cron.
-const CONN_CACHE_MS = 15_000;
-let _connCache: { connected: boolean; at: number } | null = null;
-
-async function isBotConnectedCached(): Promise<boolean> {
-  const now = Date.now();
-  if (_connCache && now - _connCache.at < CONN_CACHE_MS) return _connCache.connected;
-  const st = await getStatus();
-  _connCache = { connected: st.connected === true, at: now };
-  return _connCache.connected;
-}
-
-const DISCONNECTED_ERROR = 'WhatsApp bot desconectado (sesión no conectada)';
-
 export async function sendMessage(params: SendMessageParams): Promise<SendResponse> {
-  if (!(await isBotConnectedCached())) {
-    console.warn('[WHATSAPP_BOT] envío bloqueado: sesión desconectada', { phone: params.phone });
-    return { success: false, error: DISCONNECTED_ERROR };
-  }
   const result = await callBot<SendResponse>('/send-message', {
     method: 'POST',
     body: params,
@@ -177,10 +155,6 @@ export async function sendMessage(params: SendMessageParams): Promise<SendRespon
 export async function sendContextualMessage(
   params: SendContextualMessageParams,
 ): Promise<SendResponse> {
-  if (!(await isBotConnectedCached())) {
-    console.warn('[WHATSAPP_BOT] envío contextual bloqueado: sesión desconectada', { phone: params.phone });
-    return { success: false, error: DISCONNECTED_ERROR };
-  }
   const result = await callBot<SendResponse>('/send-contextual-message', {
     method: 'POST',
     body: params,

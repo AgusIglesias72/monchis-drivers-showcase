@@ -300,7 +300,7 @@ export function ManageOnboardingModalClient({
                       variant="outline"
                       onClick={() => setAction('cancel')}
                       disabled={isPending || action === 'reschedule'}
-                      className="cursor-pointer flex-1 text-destructive hover:text-destructive hover:bg-danger-soft"
+                      className="cursor-pointer flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
                       <CalendarX className="h-3.5 w-3.5 mr-1.5" />
                       Cancelar
@@ -316,11 +316,11 @@ export function ManageOnboardingModalClient({
           {/* Cancelar onboarding */}
           {action === 'cancel' && currentOnboarding && (
             <div className="space-y-3">
-              <div className="flex items-start gap-2 p-3 bg-danger-soft border border-destructive rounded-lg">
-                <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 text-sm">
-                  <p className="font-medium text-destructive mb-1">¿Cancelar este onboarding?</p>
-                  <p className="text-destructive">
+                  <p className="font-medium text-red-900 mb-1">¿Cancelar este onboarding?</p>
+                  <p className="text-red-700">
                     El driver será removido del evento. Esta acción no se puede deshacer.
                   </p>
                 </div>
@@ -348,9 +348,9 @@ export function ManageOnboardingModalClient({
               </Label>
 
               {action === 'reschedule' && (
-                <div className="flex items-start gap-2 p-3 bg-info-soft border border-info rounded-lg text-sm">
-                  <Info className="h-4 w-4 text-info mt-0.5 flex-shrink-0" />
-                  <p className="text-info">
+                <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                  <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-blue-900">
                     El onboarding actual será cancelado y el driver será asignado al nuevo evento que selecciones.
                   </p>
                 </div>
@@ -441,12 +441,12 @@ export function ManageOnboardingModalClient({
                                 {occupiedSlots}{totalSlots ? ` / ${totalSlots}` : ''}
                               </span>
                               {availableSlots !== null && availableSlots > 0 && (
-                                <span className="text-success ml-1">
+                                <span className="text-green-600 ml-1">
                                   ({availableSlots} {availableSlots === 1 ? 'libre' : 'libres'})
                                 </span>
                               )}
                               {isFull && (
-                                <span className="text-destructive ml-1 font-medium">
+                                <span className="text-red-600 ml-1 font-medium">
                                   (Lleno)
                                 </span>
                               )}

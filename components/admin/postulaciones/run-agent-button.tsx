@@ -244,9 +244,9 @@ function AgentResultView({ result }: { result: AgentResult }) {
       </section>
 
       {result.error && (
-        <section className="rounded-md border border-destructive bg-danger-soft p-3">
-          <p className="text-xs font-semibold text-destructive mb-1">Error</p>
-          <p className="text-xs text-destructive">{result.error}</p>
+        <section className="rounded-md border border-red-200 bg-red-50 p-3">
+          <p className="text-xs font-semibold text-red-700 mb-1">Error</p>
+          <p className="text-xs text-red-700">{result.error}</p>
         </section>
       )}
 
@@ -262,19 +262,19 @@ function AgentResultView({ result }: { result: AgentResult }) {
 function DecisionBadge({ decision }: { decision: Decision }) {
   if (!decision) {
     return (
-      <div className="flex items-center gap-2 rounded-md bg-muted p-3">
-        <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-        <span className="text-sm font-medium text-muted-foreground">Sin decisión</span>
+      <div className="flex items-center gap-2 rounded-md bg-slate-100 p-3">
+        <AlertTriangle className="h-5 w-5 text-slate-500" />
+        <span className="text-sm font-medium text-slate-700">Sin decisión</span>
       </div>
     )
   }
 
   if (decision === 'APPROVED') {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-success bg-success-soft p-3">
-        <CheckCircle2 className="h-5 w-5 text-success" />
-        <span className="text-sm font-semibold text-success">APROBADO</span>
-        <Badge variant="outline" className="ml-auto border-success text-success">
+      <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3">
+        <CheckCircle2 className="h-5 w-5 text-green-600" />
+        <span className="text-sm font-semibold text-green-800">APROBADO</span>
+        <Badge variant="outline" className="ml-auto border-green-300 text-green-700">
           Lista para avanzar
         </Badge>
       </div>
@@ -283,10 +283,10 @@ function DecisionBadge({ decision }: { decision: Decision }) {
 
   if (decision === 'REJECTED') {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-destructive bg-danger-soft p-3">
-        <XCircle className="h-5 w-5 text-destructive" />
-        <span className="text-sm font-semibold text-destructive">RECHAZADO</span>
-        <Badge variant="outline" className="ml-auto border-destructive text-destructive">
+      <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3">
+        <XCircle className="h-5 w-5 text-red-600" />
+        <span className="text-sm font-semibold text-red-800">RECHAZADO</span>
+        <Badge variant="outline" className="ml-auto border-red-300 text-red-700">
           Motivos claros de rechazo
         </Badge>
       </div>
@@ -294,10 +294,10 @@ function DecisionBadge({ decision }: { decision: Decision }) {
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-md border border-info bg-info-soft p-3">
-      <AlertTriangle className="h-5 w-5 text-info" />
-      <span className="text-sm font-semibold text-info">REVISIÓN MANUAL</span>
-      <Badge variant="outline" className="ml-auto border-info text-info">
+    <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+      <AlertTriangle className="h-5 w-5 text-amber-600" />
+      <span className="text-sm font-semibold text-amber-800">REVISIÓN MANUAL</span>
+      <Badge variant="outline" className="ml-auto border-amber-300 text-amber-700">
         Requiere admin
       </Badge>
     </div>

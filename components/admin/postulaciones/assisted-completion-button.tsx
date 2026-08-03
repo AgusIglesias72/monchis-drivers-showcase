@@ -72,7 +72,7 @@ export function AssistedCompletionButton({
             variant="outline"
             size={size}
             onClick={handleClick}
-            className="gap-2 border-warning text-warning hover:bg-warning-soft hover:text-warning"
+            className="gap-2 border-orange-600 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
           >
             <UserX className="h-4 w-4" />
             Desmarcar Asistida
@@ -98,7 +98,7 @@ export function AssistedCompletionButton({
                 <AlertDialogAction 
                   onClick={confirmAction}
                   disabled={isProcessing}
-                  className="bg-warning hover:bg-warning"
+                  className="bg-orange-600 hover:bg-orange-700"
                 >
                   {isProcessing ? 'Desmarcando...' : 'Desmarcar'}
                 </AlertDialogAction>
@@ -115,7 +115,7 @@ export function AssistedCompletionButton({
           variant="default"
           size={size}
           onClick={handleClick}
-          className="gap-2 bg-success hover:bg-success"
+          className="gap-2 bg-emerald-600 hover:bg-emerald-700"
         >
           <UserCheck className="h-4 w-4" />
           Marcar como Asistida
@@ -141,7 +141,7 @@ export function AssistedCompletionButton({
               <AlertDialogAction 
                 onClick={confirmAction}
                 disabled={isProcessing}
-                className="bg-success hover:bg-success"
+                className="bg-emerald-600 hover:bg-emerald-700"
               >
                 {isProcessing ? 'Marcando...' : 'Marcar como Asistida'}
               </AlertDialogAction>
@@ -186,7 +186,7 @@ export function AssistedCompletionButton({
               <AlertDialogAction 
                 onClick={confirmAction}
                 disabled={isProcessing}
-                className="bg-warning hover:bg-warning"
+                className="bg-orange-600 hover:bg-orange-700"
               >
                 {isProcessing ? 'Desmarcando...' : 'Desmarcar'}
               </AlertDialogAction>
@@ -229,7 +229,7 @@ export function AssistedCompletionButton({
             <AlertDialogAction 
               onClick={confirmAction}
               disabled={isProcessing}
-              className="bg-success hover:bg-success"
+              className="bg-emerald-600 hover:bg-emerald-700"
             >
               {isProcessing ? 'Marcando...' : 'Marcar como Asistida'}
             </AlertDialogAction>

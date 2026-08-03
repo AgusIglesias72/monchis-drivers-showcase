@@ -2,15 +2,15 @@
 
 "use client"
 
-import { useState, useEffect, useRef, useCallback, useTransition, useMemo } from "react"
-import { format } from "date-fns"
+import { useState, useEffect, useCallback, useTransition, useMemo } from "react"
 import { AdminHeader } from "@/components/admin/admin-header"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { PostulacionesKPIs } from "@/components/admin/postulaciones-kpis"
-import { DateRangePicker, type DateRangeValue } from "@/components/ds"
 import { PostulacionesTableExpandable } from "@/components/admin/postulaciones-table-expandable"
 import {
   Sheet,
@@ -44,7 +44,7 @@ import {
   ChevronUp,
   UserX,
   Receipt,
-  Archive,
+  Download,
 } from "lucide-react"
 import {
   Tooltip,
@@ -66,7 +66,6 @@ import {
   serializeRucFilter,
 } from "@/types/postulacion-filters.types"
 import { RucStatusMultiSelect } from "@/components/admin/postulaciones/ruc-status-multi-select"
-import { ExportConfigModal } from "@/components/admin/postulaciones/export-config-modal"
 
 interface PostulacionesPageContentProps {
   stats: any
@@ -84,12 +83,11 @@ interface PostulacionesPageContentProps {
     'pending-completion': number
     rejected: number
     'payment-proof': number
-    archived: number
   }
   currentFilters: PostulacionFilters
 }
 
-type QuickFilter = 'all' | 'scheduled-no-show' | 'scheduled-pending' | 'trained' | 'pending-schedule' | 'review' | 'pending-completion' | 'rejected' | 'payment-proof' | 'archived'
+type QuickFilter = 'all' | 'scheduled-no-show' | 'scheduled-pending' | 'trained' | 'pending-schedule' | 'review' | 'pending-completion' | 'rejected' | 'payment-proof'
 
 export function PostulacionesPageContent({
   stats,
@@ -116,21 +114,56 @@ export function PostulacionesPageContent({
   const [invoiceStatusFilter, setInvoiceStatusFilter] = useState(currentFilters.invoiceStatus || 'all')
   const [rucStatusSlugs, setRucStatusSlugs] = useState<RucStatusSlug[]>(parseRucFilter(currentFilters.rucStatus))
   const [workZoneFilter, setWorkZoneFilter] = useState(currentFilters.workZone || 'all')
-  const [dateRange, setDateRange] = useState<DateRangeValue | undefined>(() => {
-    const from = currentFilters.startDate ? new Date(currentFilters.startDate) : undefined
-    const to = currentFilters.endDate ? new Date(currentFilters.endDate) : undefined
-    return from || to ? { from, to } : undefined
-  })
+  const [startDate, setStartDate] = useState(currentFilters.startDate || '')
+  const [endDate, setEndDate] = useState(currentFilters.endDate || '')
   const [sortBy, setSortBy] = useState(currentFilters.sortBy || 'createdAt')
   const [sortOrder, setSortOrder] = useState(currentFilters.sortOrder || 'desc')
   const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter>('all')
   const [showMoreFilters, setShowMoreFilters] = useState(false)
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const isFirstSearchRender = useRef(true)
+  const [isExporting, setIsExporting] = useState(false)
+
+  // Función para exportar a XLSX
+  const handleExportToXLSX = async () => {
+    setIsExporting(true)
+    try {
+      const response = await fetch('/api/admin/postulaciones/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: statusFilter !== 'all' ? statusFilter : undefined,
+          searchTerm: searchTerm || undefined,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al exportar datos')
+      }
+
+      // Descargar el archivo
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `postulaciones_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast.success('Exportación completada exitosamente')
+    } catch (error) {
+      console.error('Error al exportar:', error)
+      toast.error('Error al exportar datos')
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   const postulacionesWithContactStatus = useMemo(() => {
     return postulaciones.map(post => {
-      const hasBeenContacted = (post._count?.driverContacts ?? 0) > 0
+      const hasBeenContacted = (post.driverContacts?.length ?? 0) > 0
       const isRejected = post.status === 'REJECTED'
       const completedSteps = post.completedSteps?.length ?? 0
 
@@ -154,28 +187,14 @@ export function PostulacionesPageContent({
     setInvoiceStatusFilter(currentFilters.invoiceStatus || 'all')
     setRucStatusSlugs(parseRucFilter(currentFilters.rucStatus))
     setWorkZoneFilter(currentFilters.workZone || 'all')
-    const from = currentFilters.startDate ? new Date(currentFilters.startDate) : undefined
-    const to = currentFilters.endDate ? new Date(currentFilters.endDate) : undefined
-    setDateRange(from || to ? { from, to } : undefined)
+    setStartDate(currentFilters.startDate || '')
+    setEndDate(currentFilters.endDate || '')
     setSortBy(currentFilters.sortBy || 'createdAt')
     setSortOrder(currentFilters.sortOrder || 'desc')
   }, [currentFilters])
 
   useEffect(() => {
-    if (isFirstSearchRender.current) {
-      isFirstSearchRender.current = false
-      return
-    }
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
-    searchDebounceRef.current = setTimeout(() => applyFilters(1), 400)
-    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm])
-
-  useEffect(() => {
-    if (currentFilters.archived === 'true') {
-      setActiveQuickFilter('archived')
-    } else if (paymentStatusFilter === 'payment-proof') {
+    if (paymentStatusFilter === 'payment-proof') {
       setActiveQuickFilter('payment-proof')
     } else if (statusFilter === 'REJECTED') {
       setActiveQuickFilter('rejected')
@@ -194,7 +213,7 @@ export function PostulacionesPageContent({
     } else {
       setActiveQuickFilter('all')
     }
-  }, [statusFilter, onboardingStatusFilter, paymentStatusFilter, documentStatusFilter, currentFilters.archived])
+  }, [statusFilter, onboardingStatusFilter, paymentStatusFilter, documentStatusFilter])
 
   const applyFilters = useCallback((page: number = 1, quickFilter?: QuickFilter) => {
     const params = new URLSearchParams()
@@ -230,9 +249,6 @@ export function PostulacionesPageContent({
           params.set('paymentStatus', 'payment-proof')
           // No filtrar por status - queremos TODAS las postulaciones con comprobante
           break
-        case 'archived':
-          params.set('archived', 'true')
-          break
       }
     } else {
       // ✅ FIX: Usar filtros del estado local cuando no hay quick filter activo
@@ -250,8 +266,8 @@ export function PostulacionesPageContent({
     if (!quickFilter || quickFilter === 'all') {
       if (searchTerm) params.set('search', searchTerm)
       if (workZoneFilter !== 'all') params.set('workZone', workZoneFilter)
-      if (dateRange?.from) params.set('startDate', format(dateRange.from, 'yyyy-MM-dd'))
-      if (dateRange?.to) params.set('endDate', format(dateRange.to, 'yyyy-MM-dd'))
+      if (startDate) params.set('startDate', startDate)
+      if (endDate) params.set('endDate', endDate)
     }
 
     if (sortBy !== 'createdAt') params.set('sortBy', sortBy)
@@ -263,7 +279,7 @@ export function PostulacionesPageContent({
     startTransition(() => {
       router.push(`/admin/postulaciones${queryString ? `?${queryString}` : ''}`, { scroll: false })
     })
-  }, [router, statusFilter, onboardingStatusFilter, currentStepFilter, contactStatusFilter, documentStatusFilter, paymentStatusFilter, invoiceStatusFilter, rucStatusSlugs, workZoneFilter, searchTerm, dateRange, sortBy, sortOrder])
+  }, [router, statusFilter, onboardingStatusFilter, currentStepFilter, contactStatusFilter, documentStatusFilter, paymentStatusFilter, invoiceStatusFilter, rucStatusSlugs, workZoneFilter, searchTerm, startDate, endDate, sortBy, sortOrder])
 
   const handleQuickFilter = (filter: QuickFilter) => {
     setActiveQuickFilter(filter)
@@ -280,7 +296,8 @@ export function PostulacionesPageContent({
       setRucStatusSlugs([])
       setWorkZoneFilter('all')
       setSearchTerm('')
-      setDateRange(undefined)
+      setStartDate('')
+      setEndDate('')
     }
 
     applyFilters(1, filter)
@@ -306,7 +323,8 @@ export function PostulacionesPageContent({
     setInvoiceStatusFilter('all')
     setRucStatusSlugs([])
     setWorkZoneFilter('all')
-    setDateRange(undefined)
+    setStartDate('')
+    setEndDate('')
     setSortBy('createdAt')
     setSortOrder('desc')
     setActiveQuickFilter('all')
@@ -327,8 +345,8 @@ export function PostulacionesPageContent({
     invoiceStatusFilter !== 'all',
     rucStatusSlugs.length > 0,
     workZoneFilter !== 'all',
-    !!dateRange?.from,
-    !!dateRange?.to,
+    startDate !== '',
+    endDate !== '',
   ].filter(Boolean).length
 
   const hasActiveFilters =
@@ -342,8 +360,8 @@ export function PostulacionesPageContent({
     invoiceStatusFilter !== 'all' ||
     rucStatusSlugs.length > 0 ||
     workZoneFilter !== 'all' ||
-    dateRange?.from ||
-    dateRange?.to
+    startDate ||
+    endDate
 
   const handlePageChange = (newPage: number) => {
     // ✅ FIX: Solo pasar quickFilter si hay uno activo, sino usa filtros del estado local
@@ -370,12 +388,24 @@ export function PostulacionesPageContent({
               Gestiona y revisa todas las postulaciones de drivers
             </p>
           </div>
-          <ExportConfigModal
-            status={statusFilter}
-            searchTerm={searchTerm}
-            viewingArchived={currentFilters.archived === 'true'}
-            disabled={isPending}
-          />
+          <Button
+            onClick={handleExportToXLSX}
+            disabled={isExporting || isPending}
+            variant="outline"
+            className="gap-2 whitespace-nowrap"
+          >
+            {isExporting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Exportando...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" />
+                Exportar a Excel
+              </>
+            )}
+          </Button>
         </div>
 
         <PostulacionesKPIs stats={stats} />
@@ -390,7 +420,7 @@ export function PostulacionesPageContent({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="pl-9 pr-9 h-9"
+              className="pl-9 pr-9 h-10"
               disabled={isPending}
             />
             {searchTerm && (
@@ -411,7 +441,7 @@ export function PostulacionesPageContent({
           {/* Botón de Filtros con Sheet */}
           <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline" className="gap-2 relative h-9">
+              <Button variant="outline" className="gap-2 relative">
                 <Filter className="h-4 w-4" />
                 Filtros
                 {activeFiltersCount > 0 && (
@@ -422,9 +452,9 @@ export function PostulacionesPageContent({
               </Button>
             </SheetTrigger>
             <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-4">
-              <SheetHeader className="pb-2 border-b border-border mb-3 px-0">
-                <SheetTitle className="text-lg font-semibold text-foreground">Filtros</SheetTitle>
-                <SheetDescription className="text-xs text-muted-foreground mt-1">
+              <SheetHeader className="pb-2 border-b border-gray-200 mb-3 px-0">
+                <SheetTitle className="text-lg font-semibold text-gray-900">Filtros</SheetTitle>
+                <SheetDescription className="text-xs text-gray-500 mt-1">
                   Selecciona los criterios para filtrar las postulaciones
                 </SheetDescription>
               </SheetHeader>
@@ -433,23 +463,70 @@ export function PostulacionesPageContent({
                 <div className="space-y-4">
                   {/* Sección: Filtros de Fecha */}
                   <div className="space-y-2.5">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Rango de Fechas</h3>
-                    <DateRangePicker value={dateRange} onChange={setDateRange} presets />
-                  </div>
-
-                  {/* Sección: Estado General */}
-                  <div className="space-y-2.5 pt-3 border-t border-border">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estado General</h3>
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Rango de Fechas</h3>
                     
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1.5">
-                          <Label htmlFor="sheet-status" className="text-xs font-medium text-muted-foreground">
+                          <Label htmlFor="sheet-start-date" className="text-xs font-medium text-gray-600">
+                            Fecha Desde
+                          </Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Filtra postulaciones desde esta fecha</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Input
+                          id="sheet-start-date"
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          className="h-9 text-sm w-full cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="sheet-end-date" className="text-xs font-medium text-gray-600">
+                            Fecha Hasta
+                          </Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Filtra postulaciones hasta esta fecha</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Input
+                          id="sheet-end-date"
+                          type="date"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          className="h-9 text-sm w-full cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sección: Estado General */}
+                  <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Estado General</h3>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="sheet-status" className="text-xs font-medium text-gray-600">
                             Estado de Postulación
                           </Label>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <HelpCircle className="h-3 w-3 text-ink-subtle cursor-help" />
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="text-xs">Filtra por el estado general de la postulación</p>
@@ -476,12 +553,12 @@ export function PostulacionesPageContent({
 
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1.5">
-                          <Label htmlFor="sheet-step" className="text-xs font-medium text-muted-foreground">
+                          <Label htmlFor="sheet-step" className="text-xs font-medium text-gray-600">
                             Paso Actual
                           </Label>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <HelpCircle className="h-3 w-3 text-ink-subtle cursor-help" />
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="text-xs">Filtra por el paso actual del proceso</p>
@@ -510,17 +587,17 @@ export function PostulacionesPageContent({
                   </div>
 
                   {/* Sección: Proceso de Onboarding */}
-                  <div className="space-y-2.5 pt-3 border-t border-border">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Proceso de Onboarding</h3>
+                  <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Proceso de Onboarding</h3>
                     
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-1.5">
-                        <Label htmlFor="sheet-onboarding" className="text-xs font-medium text-muted-foreground">
+                        <Label htmlFor="sheet-onboarding" className="text-xs font-medium text-gray-600">
                           Estado de Onboarding
                         </Label>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <HelpCircle className="h-3 w-3 text-ink-subtle cursor-help" />
+                            <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent>
                             <p className="text-xs">Filtra por el estado de la capacitación</p>
@@ -545,17 +622,17 @@ export function PostulacionesPageContent({
                   </div>
 
                   {/* Sección: Zona de Trabajo */}
-                  <div className="space-y-2.5 pt-3 border-t border-border">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Zona de Trabajo</h3>
+                  <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Zona de Trabajo</h3>
 
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-1.5">
-                        <Label htmlFor="sheet-workzone" className="text-xs font-medium text-muted-foreground">
+                        <Label htmlFor="sheet-workzone" className="text-xs font-medium text-gray-600">
                           Zona Preferida
                         </Label>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <HelpCircle className="h-3 w-3 text-ink-subtle cursor-help" />
+                            <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent>
                             <p className="text-xs">Filtra por la zona donde el driver quiere trabajar</p>
@@ -584,18 +661,18 @@ export function PostulacionesPageContent({
                   </div>
 
                   {/* Sección: Estados de Proceso */}
-                  <div className="space-y-2.5 pt-3 border-t border-border">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estados de Proceso</h3>
+                  <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Estados de Proceso</h3>
                     
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1.5">
-                          <Label htmlFor="sheet-contact" className="text-xs font-medium text-muted-foreground">
+                          <Label htmlFor="sheet-contact" className="text-xs font-medium text-gray-600">
                             Estado de Contacto
                           </Label>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <HelpCircle className="h-3 w-3 text-ink-subtle cursor-help" />
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="text-xs">Filtra por si el driver ha sido contactado</p>
@@ -620,12 +697,12 @@ export function PostulacionesPageContent({
 
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1.5">
-                          <Label htmlFor="sheet-docs" className="text-xs font-medium text-muted-foreground">
+                          <Label htmlFor="sheet-docs" className="text-xs font-medium text-gray-600">
                             Estado de Documentos
                           </Label>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <HelpCircle className="h-3 w-3 text-ink-subtle cursor-help" />
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="text-xs">Filtra por el estado de los documentos</p>
@@ -650,12 +727,12 @@ export function PostulacionesPageContent({
 
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1.5">
-                          <Label htmlFor="sheet-payment" className="text-xs font-medium text-muted-foreground">
+                          <Label htmlFor="sheet-payment" className="text-xs font-medium text-gray-600">
                             Estado de Pago
                           </Label>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <HelpCircle className="h-3 w-3 text-ink-subtle cursor-help" />
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="text-xs">Filtra por el estado de verificación de pago</p>
@@ -680,12 +757,12 @@ export function PostulacionesPageContent({
 
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1.5">
-                          <Label htmlFor="sheet-invoice" className="text-xs font-medium text-muted-foreground">
+                          <Label htmlFor="sheet-invoice" className="text-xs font-medium text-gray-600">
                             Estado de Facturación
                           </Label>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <HelpCircle className="h-3 w-3 text-ink-subtle cursor-help" />
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="text-xs">Filtra por el estado de facturación</p>
@@ -710,12 +787,12 @@ export function PostulacionesPageContent({
 
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1.5">
-                          <Label htmlFor="sheet-ruc" className="text-xs font-medium text-muted-foreground">
+                          <Label htmlFor="sheet-ruc" className="text-xs font-medium text-gray-600">
                             Estado RUC
                           </Label>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <HelpCircle className="h-3 w-3 text-ink-subtle cursor-help" />
+                              <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="text-xs">Filtra por estado del contribuyente (SET)</p>
@@ -732,17 +809,17 @@ export function PostulacionesPageContent({
                   </div>
 
                   {/* Sección: Ordenamiento */}
-                  <div className="space-y-2.5 pt-3 border-t border-border">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ordenamiento</h3>
+                  <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Ordenamiento</h3>
                     
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-1.5">
-                        <Label htmlFor="sheet-sort" className="text-xs font-medium text-muted-foreground">
+                        <Label htmlFor="sheet-sort" className="text-xs font-medium text-gray-600">
                           Ordenar Por
                         </Label>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <HelpCircle className="h-3 w-3 text-ink-subtle cursor-help" />
+                            <HelpCircle className="h-3 w-3 text-gray-400 cursor-help" />
                           </TooltipTrigger>
                           <TooltipContent>
                             <p className="text-xs">Selecciona cómo ordenar los resultados</p>
@@ -768,7 +845,7 @@ export function PostulacionesPageContent({
                 </div>
               </TooltipProvider>
 
-              <SheetFooter className="gap-2 pt-4 mt-4 border-t border-border">
+              <SheetFooter className="gap-2 pt-4 mt-4 border-t border-gray-200">
                 <Button
                   variant="outline"
                   onClick={handleClearFilters}
@@ -796,18 +873,23 @@ export function PostulacionesPageContent({
             </SheetContent>
           </Sheet>
 
+          {/* Contador de resultados */}
+          <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 rounded-lg text-sm whitespace-nowrap">
+            <span className="font-semibold text-foreground">{total}</span>
+            <span className="text-muted-foreground">resultado{total !== 1 ? 's' : ''}</span>
+          </div>
         </div>
 
         {/* ✅ QUICK FILTERS MEJORADOS - RESPONSIVE */}
         <div className="relative">
-          <div className="flex items-end gap-1 overflow-x-auto pb-2 -mb-2 sm:flex-wrap sm:overflow-x-visible sm:pb-0 sm:-mb-0 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-secondary [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
+          <div className="flex items-end gap-1 overflow-x-auto pb-2 -mb-2 sm:flex-wrap sm:overflow-x-visible sm:pb-0 sm:-mb-0 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
             <button
               onClick={() => handleQuickFilter('all')}
               disabled={isPending}
               className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
                 cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                 ${activeQuickFilter === 'all'
-                  ? 'bg-card border-border shadow-sm text-foreground relative z-10'
+                  ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -822,7 +904,7 @@ export function PostulacionesPageContent({
               className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                 ${activeQuickFilter === 'scheduled-no-show'
-                  ? 'bg-card border-border shadow-sm text-foreground relative z-10'
+                  ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -842,7 +924,7 @@ export function PostulacionesPageContent({
               className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                 ${activeQuickFilter === 'scheduled-pending'
-                  ? 'bg-card border-border shadow-sm text-foreground relative z-10'
+                  ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -861,7 +943,7 @@ export function PostulacionesPageContent({
               className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                 ${activeQuickFilter === 'trained'
-                  ? 'bg-card border-border shadow-sm text-foreground relative z-10'
+                  ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -880,7 +962,7 @@ export function PostulacionesPageContent({
               className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                 ${activeQuickFilter === 'pending-schedule'
-                  ? 'bg-card border-border shadow-sm text-foreground relative z-10'
+                  ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -900,7 +982,7 @@ export function PostulacionesPageContent({
               className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                 ${activeQuickFilter === 'review'
-                  ? 'bg-card border-border shadow-sm text-foreground relative z-10'
+                  ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -920,7 +1002,7 @@ export function PostulacionesPageContent({
               className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
                 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                 ${activeQuickFilter === 'payment-proof'
-                  ? 'bg-card border-border shadow-sm text-foreground relative z-10'
+                  ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                   : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                 }`}
             >
@@ -962,7 +1044,7 @@ export function PostulacionesPageContent({
                   className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
                     whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                     ${activeQuickFilter === 'pending-completion'
-                      ? 'bg-card border-border shadow-sm text-foreground relative z-10'
+                      ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                       : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                     }`}
                 >
@@ -982,7 +1064,7 @@ export function PostulacionesPageContent({
                   className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
                     whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
                     ${activeQuickFilter === 'rejected'
-                      ? 'bg-card border-border shadow-sm text-foreground relative z-10'
+                      ? 'bg-white border-gray-200 shadow-sm text-foreground relative z-10'
                       : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
                     }`}
                 >
@@ -994,35 +1076,21 @@ export function PostulacionesPageContent({
                     </Badge>
                   )}
                 </button>
-
-                <button
-                  onClick={() => handleQuickFilter('archived')}
-                  disabled={isPending}
-                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-t-lg border border-b-0 transition-all text-xs font-medium
-                    whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0
-                    ${activeQuickFilter === 'archived'
-                      ? 'bg-card border-border shadow-sm text-foreground relative z-10'
-                      : 'bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50'
-                    }`}
-                >
-                  <Archive className="h-4 w-4 flex-shrink-0" />
-                  <span className="hidden sm:inline">Archivadas</span>
-                  {quickFilterCounts && (
-                    <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs font-semibold flex-shrink-0">
-                      {quickFilterCounts.archived}
-                    </Badge>
-                  )}
-                </button>
               </>
             )}
           </div>
           
-          {/* Durante la transición mantenemos la tabla visible con los datos
-              anteriores (nada de skeletons que borran el contexto) */}
-          <div
-            className={`transition-opacity duration-200 ${isPending ? 'opacity-50 pointer-events-none' : ''}`}
-            aria-busy={isPending}
-          >
+          {isPending ? (
+            <Card className="rounded-t-none">
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
             <PostulacionesTableExpandable
               postulaciones={postulacionesWithContactStatus}
               currentPage={currentPage}
@@ -1031,7 +1099,7 @@ export function PostulacionesPageContent({
               isPending={isPending}
               onPageChange={handlePageChange}
             />
-          </div>
+          )}
         </div>
       </div>
     </div>

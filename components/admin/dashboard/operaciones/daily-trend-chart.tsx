@@ -56,13 +56,13 @@ function CustomTooltip({
       </div>
       <div className="flex items-center justify-between gap-3">
         <span className="text-muted-foreground">Cancelados</span>
-        <span className="tabular-nums font-medium text-destructive">
+        <span className="tabular-nums font-medium text-rose-500">
           {data.cancelled}
         </span>
       </div>
       <div className="flex items-center justify-between gap-3">
         <span className="text-muted-foreground">Tiempo E2E</span>
-        <span className="tabular-nums font-medium text-warning">
+        <span className="tabular-nums font-medium text-amber-600">
           {data.avgE2EMinutes !== null ? `${data.avgE2EMinutes} min` : "—"}
         </span>
       </div>
@@ -87,7 +87,7 @@ export function OperacionesDailyTrendChart({ data }: DailyTrendChartProps) {
           <div className="flex items-center justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2 text-base">
-                <TrendingUp className="h-4 w-4 text-success" />
+                <TrendingUp className="h-4 w-4 text-emerald-600" />
                 Tendencia diaria
               </CardTitle>
               <CardDescription>

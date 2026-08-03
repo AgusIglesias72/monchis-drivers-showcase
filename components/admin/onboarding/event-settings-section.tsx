@@ -52,11 +52,11 @@ function parseYmd(s: string | undefined): Date | undefined {
 }
 
 const STATUS_OPTIONS = [
-  { value: 'DRAFT', label: 'Borrador', icon: Edit, className: 'bg-muted text-foreground border-border' },
-  { value: 'SCHEDULED', label: 'Programado', icon: CalendarIcon, className: 'bg-info-soft text-info border-info' },
-  { value: 'IN_PROGRESS', label: 'En curso', icon: PlayCircle, className: 'bg-warning-soft text-warning border-warning' },
-  { value: 'COMPLETED', label: 'Completado', icon: CheckCircle, className: 'bg-success-soft text-success border-success' },
-  { value: 'CANCELLED', label: 'Cancelado', icon: XCircle, className: 'bg-danger-soft text-destructive border-destructive' },
+  { value: 'DRAFT', label: 'Borrador', icon: Edit, className: 'bg-gray-100 text-gray-800 border-gray-200' },
+  { value: 'SCHEDULED', label: 'Programado', icon: CalendarIcon, className: 'bg-blue-100 text-blue-800 border-blue-200' },
+  { value: 'IN_PROGRESS', label: 'En curso', icon: PlayCircle, className: 'bg-amber-100 text-amber-800 border-amber-200' },
+  { value: 'COMPLETED', label: 'Completado', icon: CheckCircle, className: 'bg-green-100 text-green-800 border-green-200' },
+  { value: 'CANCELLED', label: 'Cancelado', icon: XCircle, className: 'bg-red-100 text-red-800 border-red-200' },
   { value: 'POSTPONED', label: 'Pospuesto', icon: PauseCircle, className: 'bg-purple-100 text-purple-800 border-purple-200' },
 ] as const
 
@@ -185,7 +185,7 @@ export function EventSettingsSection({ event, onUpdate, adminUsers = [] }: Event
           </p>
         </div>
         {hasChanges && (
-          <span className="inline-flex items-center gap-1 text-xs text-warning px-2 py-1 rounded-md bg-warning-soft border border-warning">
+          <span className="inline-flex items-center gap-1 text-xs text-amber-600 px-2 py-1 rounded-md bg-amber-50 border border-amber-200">
             <Info className="h-3 w-3" />
             Cambios sin guardar
           </span>

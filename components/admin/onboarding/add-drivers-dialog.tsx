@@ -283,12 +283,12 @@ export function AddDriversDialog({
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {/* Document Status Badge */}
                             {docsApproved ? (
-                              <Badge variant="outline" className="text-xs bg-success-soft text-success border-success gap-1 px-2 py-0">
+                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 gap-1 px-2 py-0">
                                 <CheckCircle className="h-3 w-3" />
                                 Docs OK
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="text-xs bg-warning-soft text-warning border-warning gap-1 px-2 py-0">
+                              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 gap-1 px-2 py-0">
                                 <AlertTriangle className="h-3 w-3" />
                                 Docs {driver.documentsStatus === 'PENDING' ? 'Pendientes' : 
                                       driver.documentsStatus === 'IN_REVIEW' ? 'En Revisión' :
@@ -299,7 +299,7 @@ export function AddDriversDialog({
 
                             {/* Onboarding Status Badge */}
                             {hasOnboarding && (
-                              <Badge variant="outline" className="text-xs bg-info-soft text-info border-info px-2 py-0">
+                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 px-2 py-0">
                                 {driver.onboardingStatus === 'COMPLETED' ? 'OB Completado' : 'OB Agendado'}
                               </Badge>
                             )}

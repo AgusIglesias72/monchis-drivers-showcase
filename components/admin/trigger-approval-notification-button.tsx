@@ -83,7 +83,7 @@ export function TriggerApprovalNotificationButton({
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start text-left gap-2 h-auto whitespace-normal py-2 px-3 text-xs font-normal"
+            className="w-full justify-start text-left gap-2 h-auto py-1.5 px-2 text-sm font-normal"
             disabled={isSending}
           >
             {isSending ? (

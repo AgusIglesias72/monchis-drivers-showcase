@@ -22,6 +22,7 @@ import { TURNOS_HOURS } from "@/lib/config/turnos.config"
 import {
   computeKpis,
   coversSlot,
+  hourlyAggregates,
   shiftsForDate,
   uniqueDates,
 } from "@/lib/services/turnos-aggregate"
@@ -195,6 +196,10 @@ export function TurnosHistorialContent({ snapshots, initialDetail }: Props) {
     [relevantShifts, effectiveShiftDay],
   )
   const kpis = useMemo(() => computeKpis(dayShifts), [dayShifts])
+  const hourly = useMemo(
+    () => hourlyAggregates(dayShifts, TURNOS_HOURS),
+    [dayShifts],
+  )
   const drawerShifts = useMemo(() => {
     if (!drawerCell) return []
     return dayShifts.filter(
@@ -355,7 +360,7 @@ export function TurnosHistorialContent({ snapshots, initialDetail }: Props) {
               metric={metric}
               onCellClick={(zone, hour) => setDrawerCell({ zone, hour })}
             />
-            <TurnosHourlyChart shifts={dayShifts} hours={TURNOS_HOURS} />
+            <TurnosHourlyChart data={hourly} />
           </>
         )}
 
@@ -411,14 +416,14 @@ export function TurnosHistorialContent({ snapshots, initialDetail }: Props) {
                     {(d.joined.length > 0 || d.left.length > 0) && (
                       <div className="mt-0.5 text-xs text-muted-foreground">
                         {d.joined.length > 0 && (
-                          <span className="text-success">
+                          <span className="text-emerald-700">
                             altas:{" "}
                             {d.joined.map((j) => j.driverName || j.driverId).join(", ")}
                           </span>
                         )}
                         {d.joined.length > 0 && d.left.length > 0 && " · "}
                         {d.left.length > 0 && (
-                          <span className="text-destructive">
+                          <span className="text-rose-700">
                             bajas:{" "}
                             {d.left.map((l) => l.driverName || l.driverId).join(", ")}
                           </span>
@@ -428,11 +433,11 @@ export function TurnosHistorialContent({ snapshots, initialDetail }: Props) {
                   </div>
                   <span className="shrink-0 text-sm font-medium tabular-nums">
                     {d.joined.length > 0 && (
-                      <span className="text-success">+{d.joined.length}</span>
+                      <span className="text-emerald-700">+{d.joined.length}</span>
                     )}
                     {d.joined.length > 0 && d.left.length > 0 && " / "}
                     {d.left.length > 0 && (
-                      <span className="text-destructive">−{d.left.length}</span>
+                      <span className="text-rose-700">−{d.left.length}</span>
                     )}
                   </span>
                 </li>

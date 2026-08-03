@@ -62,17 +62,17 @@ export function OperacionesKpiCards({ kpis }: KpiCardsProps) {
       description: (
         <span className="inline-flex items-center gap-1">
           {delta.neutral ? null : delta.positive ? (
-            <TrendingUp className="h-3 w-3 text-success" />
+            <TrendingUp className="h-3 w-3 text-emerald-600" />
           ) : (
-            <TrendingDown className="h-3 w-3 text-destructive" />
+            <TrendingDown className="h-3 w-3 text-rose-500" />
           )}
           <span
             className={
               delta.neutral
                 ? "text-muted-foreground"
                 : delta.positive
-                  ? "text-success"
-                  : "text-destructive"
+                  ? "text-emerald-600"
+                  : "text-rose-500"
             }
           >
             {delta.text}
@@ -81,7 +81,7 @@ export function OperacionesKpiCards({ kpis }: KpiCardsProps) {
         </span>
       ),
       Icon: Package,
-      accent: "text-foreground",
+      accent: "text-slate-700 dark:text-slate-200",
     },
     {
       title: "Finalizados hoy",
@@ -94,7 +94,7 @@ export function OperacionesKpiCards({ kpis }: KpiCardsProps) {
         </span>
       ),
       Icon: CheckCircle2,
-      accent: "text-success",
+      accent: "text-emerald-600",
     },
     {
       title: "Cancelados hoy",
@@ -105,7 +105,7 @@ export function OperacionesKpiCards({ kpis }: KpiCardsProps) {
         </span>
       ),
       Icon: XCircle,
-      accent: "text-destructive",
+      accent: "text-rose-500",
     },
     {
       title: "Tiempo entrega (7d)",
@@ -116,7 +116,7 @@ export function OperacionesKpiCards({ kpis }: KpiCardsProps) {
         </span>
       ),
       Icon: Clock,
-      accent: "text-warning",
+      accent: "text-amber-600",
     },
     {
       title: "Esta semana",
@@ -127,7 +127,7 @@ export function OperacionesKpiCards({ kpis }: KpiCardsProps) {
         </span>
       ),
       Icon: CalendarRange,
-      accent: "text-foreground",
+      accent: "text-slate-700 dark:text-slate-200",
     },
     {
       title: "Este mes (30d)",
@@ -138,7 +138,7 @@ export function OperacionesKpiCards({ kpis }: KpiCardsProps) {
         </span>
       ),
       Icon: CalendarRange,
-      accent: "text-foreground",
+      accent: "text-slate-700 dark:text-slate-200",
     },
   ]
 

@@ -177,11 +177,11 @@ export function AttendeesManagementSection({
 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { label: string; className: string }> = {
-      INVITED: { label: 'Invitado', className: 'bg-muted text-foreground' },
-      CONFIRMED: { label: 'Confirmado', className: 'bg-info-soft text-info' },
-      ATTENDED: { label: 'Asistió', className: 'bg-success-soft text-success' },
-      NO_SHOW: { label: 'No Asistió', className: 'bg-danger-soft text-destructive' },
-      CANCELLED: { label: 'Cancelado', className: 'bg-warning-soft text-warning' },
+      INVITED: { label: 'Invitado', className: 'bg-gray-100 text-gray-800' },
+      CONFIRMED: { label: 'Confirmado', className: 'bg-blue-100 text-blue-800' },
+      ATTENDED: { label: 'Asistió', className: 'bg-green-100 text-green-800' },
+      NO_SHOW: { label: 'No Asistió', className: 'bg-red-100 text-red-800' },
+      CANCELLED: { label: 'Cancelado', className: 'bg-orange-100 text-orange-800' },
       RESCHEDULED: { label: 'Reagendado', className: 'bg-purple-100 text-purple-800' },
     }
     const { label, className} = config[status] || config.INVITED
@@ -191,16 +191,16 @@ export function AttendeesManagementSection({
   const getAttendanceIcon = (status: string) => {
     switch (status) {
       case 'ATTENDED':
-        return <Check className="h-5 w-5 text-success" />
+        return <Check className="h-5 w-5 text-green-600" />
       case 'NO_SHOW':
-        return <X className="h-5 w-5 text-destructive" />
+        return <X className="h-5 w-5 text-red-600" />
       case 'CONFIRMED':
-        return <CheckCircle className="h-5 w-5 text-info" />
+        return <CheckCircle className="h-5 w-5 text-blue-600" />
       case 'CANCELLED':
-        return <Ban className="h-5 w-5 text-warning" />
+        return <Ban className="h-5 w-5 text-orange-600" />
       case 'INVITED':
       default:
-        return <CircleDashed className="h-5 w-5 text-ink-subtle" />
+        return <CircleDashed className="h-5 w-5 text-gray-400" />
     }
   }
 
@@ -244,10 +244,10 @@ export function AttendeesManagementSection({
   const getDocumentsBadge = (status: string | null | undefined) => {
     if (!status) return null
     const config: Record<string, { label: string; className: string }> = {
-      PENDING: { label: 'Docs pend.', className: 'bg-muted text-muted-foreground' },
-      IN_REVIEW: { label: 'Docs en revisión', className: 'bg-warning-soft text-warning' },
-      APPROVED: { label: 'Docs OK', className: 'bg-success-soft text-success' },
-      REJECTED: { label: 'Docs rech.', className: 'bg-danger-soft text-destructive' },
+      PENDING: { label: 'Docs pend.', className: 'bg-gray-100 text-gray-700' },
+      IN_REVIEW: { label: 'Docs en revisión', className: 'bg-amber-100 text-amber-700' },
+      APPROVED: { label: 'Docs OK', className: 'bg-green-100 text-green-700' },
+      REJECTED: { label: 'Docs rech.', className: 'bg-red-100 text-red-700' },
     }
     const { label, className } = config[status] || config.PENDING
     return (
@@ -260,12 +260,12 @@ export function AttendeesManagementSection({
   const getOnboardingStatusBadge = (status: string | null | undefined) => {
     if (!status) return null
     const config: Record<string, { label: string; className: string }> = {
-      NOT_READY: { label: 'No listo', className: 'bg-muted text-muted-foreground' },
-      READY: { label: 'Listo', className: 'bg-info-soft text-info' },
-      SCHEDULED: { label: 'Agendado', className: 'bg-info-soft text-info' },
-      IN_PROGRESS: { label: 'En curso', className: 'bg-warning-soft text-warning' },
-      COMPLETED: { label: 'Capacitado', className: 'bg-success-soft text-success' },
-      NO_SHOW: { label: 'No asistió', className: 'bg-danger-soft text-destructive' },
+      NOT_READY: { label: 'No listo', className: 'bg-gray-100 text-gray-700' },
+      READY: { label: 'Listo', className: 'bg-blue-100 text-blue-700' },
+      SCHEDULED: { label: 'Agendado', className: 'bg-indigo-100 text-indigo-700' },
+      IN_PROGRESS: { label: 'En curso', className: 'bg-amber-100 text-amber-700' },
+      COMPLETED: { label: 'Capacitado', className: 'bg-green-100 text-green-700' },
+      NO_SHOW: { label: 'No asistió', className: 'bg-red-100 text-red-700' },
     }
     const cfg = config[status]
     if (!cfg) return null
@@ -283,7 +283,7 @@ export function AttendeesManagementSection({
     
     if (!hasPayment) {
       return (
-        <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border">
+        <Badge variant="outline" className="text-xs bg-gray-50 text-gray-700 border-gray-200">
           Sin pago
         </Badge>
       )
@@ -291,7 +291,7 @@ export function AttendeesManagementSection({
 
     if (payment.status === 'VERIFIED') {
       return (
-        <Badge variant="outline" className="text-xs bg-success-soft text-success border-success">
+        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
           Verificado
         </Badge>
       )
@@ -299,14 +299,14 @@ export function AttendeesManagementSection({
 
     if (payment.status === 'REJECTED') {
       return (
-        <Badge variant="outline" className="text-xs bg-danger-soft text-destructive border-destructive">
+        <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
           Rechazado
         </Badge>
       )
     }
 
     return (
-      <Badge variant="outline" className="text-xs bg-warning-soft text-warning border-warning">
+      <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
         Pendiente
       </Badge>
     )
@@ -415,7 +415,7 @@ export function AttendeesManagementSection({
             </p>
           </div>
           <Badge variant="outline" className="gap-1 flex-shrink-0">
-            <CheckCircle className="h-3 w-3 text-success" />
+            <CheckCircle className="h-3 w-3 text-green-600" />
             {attendees.filter(a => a.status === 'ATTENDED').length} asistieron
           </Badge>
         </div>
@@ -572,7 +572,7 @@ export function AttendeesManagementSection({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-success hover:text-success hover:bg-success-soft"
+                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
                               onClick={() => handleCheckIn(attendee.id)}
                               disabled={loading === attendee.id}
                               title="Marcar asistencia"
@@ -590,7 +590,7 @@ export function AttendeesManagementSection({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-danger-soft"
+                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                               onClick={() => handleMarkNoShow(attendee.id)}
                               disabled={loading === attendee.id}
                               title="Marcar no asistió"
@@ -635,14 +635,14 @@ export function AttendeesManagementSection({
                                 Ver detalles
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => router.push(`/admin/postulaciones/${attendee.formDriver.slug ?? attendee.formDriver.id}`)}
+                                onClick={() => router.push(`/admin/postulaciones/${attendee.formDriver.id}`)}
                               >
                                 <FileText className="h-4 w-4 mr-2" />
                                 Ver postulación
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => handleCancelClick(attendee)}
-                                className="text-destructive"
+                                className="text-red-600"
                               >
                                 <Ban className="h-4 w-4 mr-2" />
                                 Cancelar asistencia

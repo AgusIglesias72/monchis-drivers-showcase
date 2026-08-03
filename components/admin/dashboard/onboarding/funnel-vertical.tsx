@@ -68,7 +68,7 @@ export function FunnelVertical({
       <div className="flex items-start justify-between gap-3 p-4 pb-3">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <Activity className="h-3.5 w-3.5 text-info" />
+            <Activity className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Funnel de conversión
             </h3>
@@ -78,7 +78,7 @@ export function FunnelVertical({
           </p>
         </div>
         <div className="text-right">
-          <div className="text-3xl font-semibold tabular-nums text-info leading-none">
+          <div className="text-3xl font-semibold tabular-nums text-blue-600 dark:text-blue-400 leading-none">
             {tasaConversionTotal}%
           </div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">
@@ -139,8 +139,8 @@ export function FunnelVertical({
                     className={cn(
                       "inline-flex items-center gap-0.5 text-[10px] font-medium",
                       dropped
-                        ? "text-destructive"
-                        : "text-success"
+                        ? "text-rose-600 dark:text-rose-400"
+                        : "text-emerald-600 dark:text-emerald-400"
                     )}
                   >
                     {dropped ? (

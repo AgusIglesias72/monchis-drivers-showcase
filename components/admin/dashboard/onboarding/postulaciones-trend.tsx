@@ -83,17 +83,17 @@ export function PostulacionesTrend({
       <div className="flex flex-wrap items-start justify-between gap-3 p-4 pb-2">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <TrendingUp className="h-3.5 w-3.5 text-info" />
+            <TrendingUp className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Postulaciones por {periodoLabel}
             </h3>
             <div className="flex items-center gap-2 ml-1">
               <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                <span className="h-2 w-2 rounded-full bg-info" />
+                <span className="h-2 w-2 rounded-full bg-blue-500" />
                 Iniciadas
               </span>
               <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                <span className="h-2 w-2 rounded-full bg-success" />
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 Completadas
               </span>
             </div>
@@ -105,7 +105,7 @@ export function PostulacionesTrend({
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
               Iniciadas
             </div>
-            <div className="text-sm font-semibold text-info">
+            <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">
               {totalIniciadas.toLocaleString("es-PY")}
             </div>
           </div>
@@ -113,7 +113,7 @@ export function PostulacionesTrend({
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
               Completadas
             </div>
-            <div className="text-sm font-semibold text-success">
+            <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
               {totalCompletadas.toLocaleString("es-PY")}
             </div>
           </div>

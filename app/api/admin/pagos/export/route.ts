@@ -1,7 +1,6 @@
 // app/api/admin/pagos/export/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
 import * as XLSX from "xlsx";
 
 export async function POST(request: NextRequest) {
@@ -9,25 +8,15 @@ export async function POST(request: NextRequest) {
     const { status, searchTerm } = await request.json();
 
     // Construir filtros
-    const where: Prisma.EquipmentPaymentWhereInput = {};
+    const where: any = {};
 
     if (status && status !== "all") {
       where.status = status;
     }
 
-    if (searchTerm) {
-      where.OR = [
-        { formDriver: { fullName: { contains: searchTerm, mode: "insensitive" } } },
-        { formDriver: { cedula: { contains: searchTerm } } },
-        { invoiceNumber: { contains: searchTerm, mode: "insensitive" } },
-        { paymentNumber: { contains: searchTerm, mode: "insensitive" } },
-      ];
-    }
-
-    // Obtener pagos con información del conductor
-    const pagos = await prisma.equipmentPayment.findMany({
+    // Obtener todos los pagos con información del conductor
+    let pagos = await prisma.equipmentPayment.findMany({
       where,
-      take: 2000,
       include: {
         formDriver: {
           select: {
@@ -55,6 +44,19 @@ export async function POST(request: NextRequest) {
         createdAt: "desc",
       },
     });
+
+    // Aplicar filtro de búsqueda si existe
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      pagos = pagos.filter((pago) => {
+        const matchName = pago.formDriver?.fullName?.toLowerCase().includes(search);
+        const matchCedula = pago.formDriver?.cedula?.toLowerCase().includes(search);
+        const matchInvoice = pago.invoiceNumber?.toLowerCase().includes(search);
+        const matchPaymentNumber = pago.paymentNumber?.toLowerCase().includes(search);
+
+        return matchName || matchCedula || matchInvoice || matchPaymentNumber;
+      });
+    }
 
     // Preparar datos para Excel
     const excelData = pagos.map((p) => {

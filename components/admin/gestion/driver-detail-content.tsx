@@ -200,7 +200,7 @@ export function DriverDetailContent({
                 {displayName}
               </h1>
               {driver.enabled ? (
-                <Badge variant="secondary" className="bg-success-soft text-success hover:bg-success-soft">
+                <Badge variant="secondary" className="bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
                   Habilitado
                 </Badge>
               ) : (
@@ -222,7 +222,7 @@ export function DriverDetailContent({
                   className={
                     "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-base font-semibold " +
                     (driver.enabled
-                      ? "bg-success-soft text-success"
+                      ? "bg-emerald-100 text-emerald-900"
                       : "bg-muted text-muted-foreground")
                   }
                 >
@@ -255,7 +255,7 @@ export function DriverDetailContent({
                     {driver.phoneValidatedAtIso && (
                       <span
                         title={`Validado ${format(parseISO(driver.phoneValidatedAtIso), "d MMM yyyy", { locale: es })}`}
-                        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-success-soft text-success"
+                        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"
                       >
                         <CheckCircle2 className="h-3 w-3" />
                       </span>
@@ -363,7 +363,7 @@ export function DriverDetailContent({
                   </span>{" "}
                   de {processed.total} días con datos guardados.
                   {processed.processed === 0 && !isPending && (
-                    <span className="ml-2 text-warning">
+                    <span className="ml-2 text-amber-700">
                       Apretá &quot;Procesar&quot; para traer los datos.
                     </span>
                   )}
@@ -704,9 +704,9 @@ function KpiCard({
 }) {
   const cardClass =
     variant === "emerald"
-      ? "border-success bg-success-soft/40"
+      ? "border-emerald-200 bg-emerald-50/40"
       : variant === "rose"
-        ? "border-destructive bg-danger-soft/40"
+        ? "border-rose-200 bg-rose-50/40"
         : ""
   return (
     <Card className={cardClass}>

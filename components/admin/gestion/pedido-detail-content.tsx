@@ -35,17 +35,18 @@ interface Props {
   source?: "api" | "cache"
   fetchedAtIso?: string
   attendance?: AttendanceFetchResult | null
+  googleMapsApiKey?: string
   error?: string
 }
 
 function statusBadgeClass(status: string | undefined): string {
   switch (status) {
     case "FINALIZED":
-      return "bg-success-soft text-success hover:bg-success-soft"
+      return "bg-emerald-100 text-emerald-900 hover:bg-emerald-100"
     case "CANCELLED":
-      return "bg-danger-soft text-destructive hover:bg-danger-soft"
+      return "bg-red-100 text-red-900 hover:bg-red-100"
     default:
-      return "bg-info-soft text-info hover:bg-info-soft"
+      return "bg-blue-100 text-blue-900 hover:bg-blue-100"
   }
 }
 
@@ -55,6 +56,7 @@ export function PedidoDetailContent({
   source,
   fetchedAtIso,
   attendance,
+  googleMapsApiKey,
   error,
 }: Props) {
   const router = useRouter()
@@ -202,6 +204,7 @@ export function PedidoDetailContent({
           <div className="space-y-6 lg:col-span-2">
             <PedidoMap
               points={mapPoints}
+              apiKey={googleMapsApiKey || ""}
               focusedHistoryIdx={focusedHistoryIdx}
               onMarkerClick={setFocusedHistoryIdx}
             />

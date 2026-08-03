@@ -16,15 +16,11 @@ import {
   CalendarDays,
   CheckCircle2,
   ChefHat,
-  ChevronRight,
   Clock,
   Handshake,
-  Hash,
-  Package,
   Repeat,
   Search,
   ShieldCheck,
-  Store,
   Timer,
   Upload,
   X,
@@ -32,9 +28,11 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import { AdminHeader } from "@/components/admin/admin-header"
 import { PedidoSearchForm } from "@/components/admin/gestion/pedido-search-form"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
   Popover,
@@ -49,14 +47,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
-import { ScrollArea } from "@/components/ui/scroll-area"
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { parseOrderInstant } from "@/lib/utils/pedidos-time"
 import { cn } from "@/lib/utils"
 
@@ -119,144 +114,25 @@ const SIGNAL_OPTIONS = [
   { value: "long_e2e", label: "Entrega larga (>1h)" },
 ]
 
-const SORT_OPTIONS: { value: "confirmedAt" | "refreshedAt"; label: string }[] = [
-  { value: "confirmedAt", label: "Fecha" },
-  { value: "refreshedAt", label: "Actualizado" },
-]
-
 interface StatusGlyph {
   icon: LucideIcon
+  hex: string
   label: string
 }
 
 const STATUS_MAP: Record<string, StatusGlyph> = {
-  FINALIZED: { icon: CheckCircle2, label: "Entregado" },
-  CANCELLED: { icon: XCircle, label: "Cancelado" },
-  DELIVERY: { icon: Bike, label: "En camino" },
-  OUTSIDE: { icon: Bike, label: "Afuera" },
-  WAITING_ORDER: { icon: ChefHat, label: "En el comercio" },
-  ACCEPTED: { icon: Handshake, label: "Aceptado" },
-  PENDING: { icon: Search, label: "Buscando driver" },
+  FINALIZED: { icon: CheckCircle2, hex: "#059669", label: "Entregado" },
+  CANCELLED: { icon: XCircle, hex: "#ef4444", label: "Cancelado" },
+  DELIVERY: { icon: Bike, hex: "#2563eb", label: "En camino" },
+  OUTSIDE: { icon: Bike, hex: "#0891b2", label: "Afuera" },
+  WAITING_ORDER: { icon: ChefHat, hex: "#0ea5e9", label: "En el comercio" },
+  ACCEPTED: { icon: Handshake, hex: "#8b5cf6", label: "Aceptado" },
+  PENDING: { icon: Search, hex: "#f59e0b", label: "Buscando driver" },
 }
 
 function statusGlyph(status: string | null): StatusGlyph {
-  if (!status) return { icon: Clock, label: "Desconocido" }
-  return STATUS_MAP[status] || { icon: Clock, label: status }
-}
-
-function statusLabel(status: string | null): string {
-  if (!status) return "—"
-  return STATUS_MAP[status]?.label || status
-}
-
-// Tono semántico de cada estado de negocio → mismo color en toda la app.
-function statusTone(status: string | null): string {
-  switch (status) {
-    case "FINALIZED":
-      return "bg-success-soft text-success"
-    case "CANCELLED":
-      return "bg-danger-soft text-destructive"
-    case "DELIVERY":
-    case "ACCEPTED":
-      return "bg-info-soft text-info"
-    case "OUTSIDE":
-    case "WAITING_ORDER":
-    case "PENDING":
-      return "bg-warning-soft text-warning"
-    default:
-      return "bg-muted text-muted-foreground"
-  }
-}
-
-function StatusPill({ status }: { status: string | null }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
-        statusTone(status),
-      )}
-    >
-      {statusLabel(status)}
-    </span>
-  )
-}
-
-// Chip neutro para métricas (mono) o etiquetas.
-function Chip({
-  children,
-  mono,
-  icon: Icon,
-  tone,
-}: {
-  children: React.ReactNode
-  mono?: boolean
-  icon?: typeof Clock
-  tone?: string
-}) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]",
-        tone ??
-          (mono
-            ? "bg-muted font-[family-name:var(--font-mono)] text-foreground"
-            : "bg-muted text-muted-foreground"),
-      )}
-    >
-      {Icon && <Icon className="size-3 text-ink-subtle" />}
-      {children}
-    </span>
-  )
-}
-
-const SLOW_ACCEPT = 10 * 60
-const LONG_E2E = 60 * 60
-const MANY_OFFERS = 3
-
-interface Signal {
-  icon: LucideIcon
-  tone: string
-  label: string
-  sub: string
-}
-
-// Señales de calidad del pedido con tono semántico (neutral = informativo,
-// warning = demora, danger = problema). Sin colores decorativos.
-function getSignals(row: OrderRow): Signal[] {
-  const signals: Signal[] = []
-  if (row.hasAdminChange) {
-    signals.push({
-      icon: ShieldCheck,
-      tone: "bg-muted text-muted-foreground",
-      label: "Cambio admin",
-      sub: "Hubo intervención manual en algún estado",
-    })
-  }
-  if (row.acceptanceSeconds !== null && row.acceptanceSeconds > SLOW_ACCEPT) {
-    signals.push({
-      icon: Timer,
-      tone: "bg-warning-soft text-warning",
-      label: "Aceptación lenta",
-      sub: `${formatDuration(row.acceptanceSeconds)} desde la oferta`,
-    })
-  }
-  if (row.offersWithDriverCount >= MANY_OFFERS) {
-    signals.push({
-      icon: Repeat,
-      tone: "bg-warning-soft text-warning",
-      label: "Muchas ofertas",
-      sub: `${row.offersWithDriverCount} drivers ofertados antes de aceptar`,
-    })
-  }
-  if (row.endToEndSeconds !== null && row.endToEndSeconds > LONG_E2E) {
-    signals.push({
-      icon: AlertTriangle,
-      tone: "bg-danger-soft text-destructive",
-      label: "Entrega larga",
-      sub: `${formatDuration(row.endToEndSeconds)} end-to-end`,
-    })
-  }
-  return signals
+  if (!status) return { icon: Clock, hex: "#64748b", label: "Desconocido" }
+  return STATUS_MAP[status] || { icon: Clock, hex: "#64748b", label: status }
 }
 
 function formatDuration(seconds: number | null): string {
@@ -280,22 +156,6 @@ function formatOrderDate(iso: string | null): { strong: string; weak: string } {
     strong: format(d, "dd MMM", { locale: es }),
     weak: format(d, "HH:mm", { locale: es }),
   }
-}
-
-// Fecha completa para un instante del pedido (wall-clock PY, ver formatOrderDate).
-function formatFullOrderDate(iso: string | null): string {
-  if (!iso) return "—"
-  const d = parseOrderInstant(iso)
-  if (!d) return iso
-  return format(d, "dd MMM yyyy, HH:mm", { locale: es })
-}
-
-// Fecha completa para timestamps reales del cache (refreshedAt), sin plantado.
-function formatFullRealDate(iso: string | null): string {
-  if (!iso) return "—"
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  return format(d, "dd MMM yyyy, HH:mm", { locale: es })
 }
 
 function parseYmd(s: string): Date | undefined {
@@ -342,7 +202,6 @@ export function PedidosHomeContent({
     return from || to ? { from, to } : undefined
   })
   const [datePopoverOpen, setDatePopoverOpen] = useState(false)
-  const [selected, setSelected] = useState<OrderRow | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const hasFilters =
@@ -436,541 +295,526 @@ export function PedidosHomeContent({
   }
 
   return (
-    <div className="w-full space-y-6 p-4 sm:p-6 lg:p-8">
-      {/* Encabezado */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-[var(--ls-tight)] sm:text-3xl">
-            Pedidos
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground sm:text-base">
-            Tabla completa de pedidos cacheados desde la API de Monchis. Click
-            en uno para ver el detalle.
-          </p>
-        </div>
-        <Button asChild variant="outline" className="gap-2">
-          <Link href="/admin/gestion/pedidos/import">
-            <Upload className="size-4" />
-            Importar en bloque
-          </Link>
-        </Button>
-      </div>
+    <div className="min-h-screen bg-background">
+      <AdminHeader
+        breadcrumbs={[
+          { label: "Gestión Admin" },
+          { label: "Pedidos", href: "/admin/gestion/pedidos" },
+        ]}
+      />
 
-      <CaptureStatusBar capture={capture} />
-
-      {/* Búsqueda directa por request_id (atajo a detalle) */}
-      <div className="rounded-[var(--radius-xl)] border border-border bg-card p-4 shadow-[var(--shadow-soft)]">
-        <div className="mb-2 text-[11px] font-medium uppercase tracking-[var(--ls-label)] text-muted-foreground">
-          Ir directo a un pedido
-        </div>
-        <PedidoSearchForm />
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
-          ID interno (24 hex) — abre la página del pedido. Para buscar en la
-          lista, usá el filtro debajo.
-        </p>
-      </div>
-
-      {/* Filtros */}
-      <div className="space-y-4 rounded-[var(--radius-xl)] border border-border bg-card p-4 shadow-[var(--shadow-soft)]">
-        <form
-          onSubmit={handleSubmit}
-          className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center"
-        >
-          {/* Search: full width on mobile, grow on desktop */}
-          <div className="relative min-w-[260px] flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" />
-            <Input
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Buscar por request_id, external_order_id, driver o comercio…"
-              className="h-9 pl-8 pr-8"
-            />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={() => setSearchInput("")}
-                aria-label="Limpiar búsqueda"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3.5" />
-              </button>
-            )}
+      <div className="w-full p-4 sm:p-6 lg:p-8 space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Pedidos</h1>
+            <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+              Tabla completa de pedidos cacheados desde la API de Monchis.
+            </p>
           </div>
+          <Link href="/admin/gestion/pedidos/import">
+            <Button variant="outline" className="gap-2">
+              <Upload className="h-4 w-4" />
+              Importar en bloque
+            </Button>
+          </Link>
+        </div>
 
-          {/* Date range picker */}
-          <Popover
-            open={datePopoverOpen}
-            onOpenChange={handleDatePopoverOpenChange}
-          >
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "h-9 min-w-[200px] justify-start gap-2 font-normal",
-                  !dateRange?.from && !dateRange?.to && "text-muted-foreground",
-                )}
-              >
-                <CalendarDays className="size-4 shrink-0" />
-                <span className="truncate">
-                  {formatRangeLabel(dateRange?.from, dateRange?.to)}
-                </span>
-                {(dateRange?.from || dateRange?.to) && (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      commitDateRange(undefined)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        commitDateRange(undefined)
-                      }
-                    }}
-                    aria-label="Limpiar rango"
-                    className="ml-auto text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="size-3.5" />
-                  </span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              className="flex w-auto flex-col p-0 sm:flex-row"
+        <CaptureStatusBar capture={capture} />
+
+        {/* Búsqueda directa por request_id (atajo a detalle) */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+              Ir directo a un pedido
+            </div>
+            <PedidoSearchForm />
+            <p className="text-[11px] text-muted-foreground mt-1.5">
+              ID interno (24 hex) — abre la página del pedido. Para buscar en la tabla, usá el filtro debajo.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Filtros */}
+        <Card>
+          <CardContent className="p-3 sm:p-4">
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center"
             >
-              <div className="flex min-w-[140px] flex-row flex-wrap gap-1 border-b p-2 sm:flex-col sm:border-b-0 sm:border-r">
-                {[
-                  { label: "Hoy", days: "today" as const },
-                  { label: "Últimos 7", days: 7 },
-                  { label: "Últimos 14", days: 14 },
-                  { label: "Últimos 30", days: 30 },
-                  { label: "Últimos 90", days: 90 },
-                ].map((p) => (
-                  <Button
-                    key={p.label}
+              {/* Search: full width on mobile, grow on desktop */}
+              <div className="relative flex-1 min-w-[260px]">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Buscar por request_id, external_order_id, driver o comercio…"
+                  className="h-9 pl-8 pr-8"
+                />
+                {searchInput && (
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 justify-start text-xs sm:w-full"
-                    onClick={() => applyPreset(p.days)}
+                    onClick={() => setSearchInput("")}
+                    aria-label="Limpiar búsqueda"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
-                    {p.label}
-                  </Button>
-                ))}
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
-              <Calendar
-                mode="range"
-                min={1}
-                selected={dateRange}
-                onSelect={handleCalendarSelect}
-                numberOfMonths={2}
-                defaultMonth={dateRange?.from}
-                locale={es}
-                showOutsideDays={false}
-              />
-            </PopoverContent>
-          </Popover>
 
-          {/* Estado — segmented control STUDIO (activo = brand, nunca negro) */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-medium uppercase tracking-[var(--ls-label)] text-muted-foreground">
-              Estado
-            </span>
-            <RadioGroupPrimitive.Root
-              value={filters.status}
-              onValueChange={(v) =>
-                updateParams({ status: v === "all" ? null : v })
-              }
-              className="inline-flex items-center gap-1 rounded-full bg-muted p-1"
-            >
-              {STATUS_OPTIONS.map((opt) => {
-                const isSelected = filters.status === opt.value
-                return (
-                  <RadioGroupPrimitive.Item
-                    key={opt.value}
-                    value={opt.value}
+              {/* Date range picker */}
+              <Popover
+                open={datePopoverOpen}
+                onOpenChange={handleDatePopoverOpenChange}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
                     className={cn(
-                      "rounded-full px-3 py-1 text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
-                      isSelected
-                        ? "bg-card text-primary shadow-[var(--shadow-soft)]"
-                        : "text-muted-foreground hover:text-foreground",
+                      "h-9 gap-2 font-normal min-w-[200px] justify-start",
+                      !dateRange?.from &&
+                        !dateRange?.to &&
+                        "text-muted-foreground",
                     )}
                   >
-                    {opt.label}
-                  </RadioGroupPrimitive.Item>
-                )
-              })}
-            </RadioGroupPrimitive.Root>
-          </div>
-
-          {/* Signal select */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-medium uppercase tracking-[var(--ls-label)] text-muted-foreground">
-              Señal
-            </span>
-            <Select
-              value={filters.signal}
-              onValueChange={(v) =>
-                updateParams({ signal: v === "all" ? null : v })
-              }
-            >
-              <SelectTrigger className="h-9 w-[200px]">
-                <SelectValue placeholder="Cualquiera" />
-              </SelectTrigger>
-              <SelectContent>
-                {SIGNAL_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-1.5 lg:ml-auto">
-            <Button type="submit" size="sm" disabled={isPending}>
-              Aplicar
-            </Button>
-            {hasFilters && (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={handleClearAll}
-                disabled={isPending}
-              >
-                Limpiar
-              </Button>
-            )}
-          </div>
-        </form>
-
-        {/* Orden — pills STUDIO con dirección */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-[var(--ls-label)] text-muted-foreground">
-            Ordenar
-          </span>
-          <div className="inline-flex flex-wrap items-center gap-1 rounded-full bg-muted p-1">
-            {SORT_OPTIONS.map((opt) => {
-              const isSelected = filters.sortBy === opt.value
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => handleSort(opt.value)}
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
-                    isSelected
-                      ? "bg-card text-primary shadow-[var(--shadow-soft)]"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {opt.label}
-                  {isSelected &&
-                    (filters.sortOrder === "asc" ? (
-                      <ArrowUp className="size-3" />
-                    ) : (
-                      <ArrowDown className="size-3" />
-                    ))}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Conteo */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">
-          {total.toLocaleString("es-AR")} pedidos
-          {hasFilters && (
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              con los filtros activos
-            </span>
-          )}
-        </h2>
-        {isPending && (
-          <span className="text-xs text-muted-foreground">Aplicando...</span>
-        )}
-      </div>
-
-      {/* Lista de cards */}
-      {rows.length === 0 ? (
-        <div className="rounded-[var(--radius-lg)] border border-dashed border-border bg-card/40 p-10 text-center text-sm text-muted-foreground">
-          {hasFilters
-            ? "Sin resultados con los filtros aplicados."
-            : "Todavía no hay pedidos cacheados. Importá un CSV o buscá por ID."}
-        </div>
-      ) : (
-        <div className="grid gap-2.5">
-          {rows.map((r) => (
-            <OrderCard key={r.requestId} row={r} onOpen={() => setSelected(r)} />
-          ))}
-        </div>
-      )}
-
-      {/* Paginación */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between rounded-[var(--radius-lg)] border border-border bg-card px-4 py-2.5 text-xs text-muted-foreground shadow-[var(--shadow-soft)]">
-          <span>
-            Página {page} de {totalPages} · {total.toLocaleString("es-AR")}{" "}
-            resultados
-          </span>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={page <= 1 || isPending}
-              onClick={() => updateParams({ page: String(page - 1) })}
-            >
-              Anterior
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={page >= totalPages || isPending}
-              onClick={() => updateParams({ page: String(page + 1) })}
-            >
-              Siguiente
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Drawer de detalle */}
-      <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-        <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md">
-          {selected && <OrderDetail row={selected} />}
-        </SheetContent>
-      </Sheet>
-    </div>
-  )
-}
-
-function OrderCard({ row, onOpen }: { row: OrderRow; onOpen: () => void }) {
-  const glyph = statusGlyph(row.status)
-  const StatusIcon = glyph.icon
-  const date = formatOrderDate(row.confirmedAt)
-  const signals = getSignals(row)
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="group w-full rounded-[var(--radius-lg)] border border-border bg-card p-3.5 text-left shadow-[var(--shadow-soft)] transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-[var(--shadow-1)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/30 sm:p-4"
-    >
-      <div className="flex items-start gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-primary">
-          <StatusIcon className="size-5" />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-[family-name:var(--font-mono)] font-semibold leading-tight">
-              {row.externalOrderId ? `#${row.externalOrderId}` : "—"}
-            </span>
-            <StatusPill status={row.status} />
-          </div>
-          <div className="mt-0.5 truncate text-xs text-muted-foreground">
-            {row.branchName || "—"}
-            {row.driverName ? ` · ${row.driverName}` : ""}
-          </div>
-
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {row.endToEndSeconds !== null && (
-              <Chip mono icon={Timer}>
-                {formatDuration(row.endToEndSeconds)}
-              </Chip>
-            )}
-            {row.acceptanceSeconds !== null && (
-              <Chip mono icon={Clock}>
-                {formatDuration(row.acceptanceSeconds)}
-              </Chip>
-            )}
-            {row.offersWithDriverCount > 0 && (
-              <Chip mono icon={Repeat}>
-                {row.offersWithDriverCount} of.
-              </Chip>
-            )}
-            {signals.map((s) => (
-              <Chip key={s.label} icon={s.icon} tone={s.tone}>
-                {s.label}
-              </Chip>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 flex-col items-end gap-0.5">
-          <span className="font-[family-name:var(--font-mono)] text-xs font-medium">
-            {date.strong}
-          </span>
-          <span className="font-[family-name:var(--font-mono)] text-[10px] text-muted-foreground">
-            {date.weak}
-          </span>
-          <ChevronRight className="mt-1 size-4 text-ink-subtle transition-colors group-hover:text-primary" />
-        </div>
-      </div>
-    </button>
-  )
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-[var(--ls-label)] text-ink-subtle">
-        {title}
-      </h3>
-      <div className="divide-y divide-border rounded-[var(--radius-md)] border border-border bg-surface-3/40 px-3">
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function Field({
-  icon,
-  label,
-  children,
-  mono,
-}: {
-  icon?: React.ReactNode
-  label: string
-  children: React.ReactNode
-  mono?: boolean
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4 py-1.5">
-      <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-        {icon && <span className="text-ink-subtle">{icon}</span>}
-        {label}
-      </span>
-      <span
-        className={cn(
-          "text-right text-sm",
-          mono && "font-[family-name:var(--font-mono)]",
-        )}
-      >
-        {children}
-      </span>
-    </div>
-  )
-}
-
-function OrderDetail({ row }: { row: OrderRow }) {
-  const glyph = statusGlyph(row.status)
-  const StatusIcon = glyph.icon
-  const signals = getSignals(row)
-
-  return (
-    <div className="flex h-full flex-col">
-      <SheetHeader className="border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand-soft text-primary">
-            <StatusIcon className="size-5" />
-          </div>
-          <div className="min-w-0">
-            <SheetTitle className="font-[family-name:var(--font-mono)] text-base leading-tight">
-              {row.externalOrderId ? `#${row.externalOrderId}` : "Pedido"}
-            </SheetTitle>
-            <SheetDescription className="font-[family-name:var(--font-mono)] text-xs">
-              …{row.requestId.slice(-8)}
-            </SheetDescription>
-          </div>
-          <div className="ml-auto">
-            <StatusPill status={row.status} />
-          </div>
-        </div>
-      </SheetHeader>
-
-      <ScrollArea className="flex-1">
-        <div className="space-y-5 p-4">
-          <Section title="Pedido">
-            <Field icon={<Hash className="size-3.5" />} label="N° pedido" mono>
-              {row.externalOrderId ? `#${row.externalOrderId}` : "—"}
-            </Field>
-            <Field icon={<Package className="size-3.5" />} label="Request ID" mono>
-              <span className="break-all text-xs">{row.requestId}</span>
-            </Field>
-            <Field icon={<Store className="size-3.5" />} label="Comercio">
-              {row.branchName || "—"}
-            </Field>
-            <Field icon={<Bike className="size-3.5" />} label="Driver">
-              {row.driverName || "—"}
-            </Field>
-          </Section>
-
-          <Section title="Tiempos">
-            <Field icon={<CalendarDays className="size-3.5" />} label="Confirmado" mono>
-              {formatFullOrderDate(row.confirmedAt)}
-            </Field>
-            <Field icon={<CheckCircle2 className="size-3.5" />} label="Finalizado" mono>
-              {formatFullOrderDate(row.finalizedAt)}
-            </Field>
-            <Field icon={<Clock className="size-3.5" />} label="Aceptación" mono>
-              {formatDuration(row.acceptanceSeconds)}
-            </Field>
-            <Field icon={<Timer className="size-3.5" />} label="End-to-end" mono>
-              {formatDuration(row.endToEndSeconds)}
-            </Field>
-            <Field icon={<Repeat className="size-3.5" />} label="Ofertas" mono>
-              {row.offersWithDriverCount}
-            </Field>
-            <Field icon={<Clock className="size-3.5" />} label="Refrescado" mono>
-              {formatFullRealDate(row.refreshedAt)}
-            </Field>
-          </Section>
-
-          <Section title="Señales">
-            {signals.length === 0 ? (
-              <div className="py-2 text-xs text-muted-foreground">
-                Sin señales — pedido sin anomalías detectadas.
-              </div>
-            ) : (
-              signals.map((s) => {
-                const Icon = s.icon
-                return (
-                  <div
-                    key={s.label}
-                    className="flex items-start gap-2.5 py-2"
-                  >
-                    <span
-                      className={cn(
-                        "mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full",
-                        s.tone,
-                      )}
-                    >
-                      <Icon className="size-3.5" />
+                    <CalendarDays className="h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      {formatRangeLabel(dateRange?.from, dateRange?.to)}
                     </span>
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium leading-tight">
-                        {s.label}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {s.sub}
-                      </div>
+                    {(dateRange?.from || dateRange?.to) && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          commitDateRange(undefined)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            commitDateRange(undefined)
+                          }
+                        }}
+                        aria-label="Limpiar rango"
+                        className="ml-auto text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-auto p-0 flex flex-col sm:flex-row"
+                >
+                  <div className="flex flex-row sm:flex-col gap-1 border-b sm:border-b-0 sm:border-r p-2 min-w-[140px] flex-wrap">
+                    {[
+                      { label: "Hoy", days: "today" as const },
+                      { label: "Últimos 7", days: 7 },
+                      { label: "Últimos 14", days: 14 },
+                      { label: "Últimos 30", days: 30 },
+                      { label: "Últimos 90", days: 90 },
+                    ].map((p) => (
+                      <Button
+                        key={p.label}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start h-8 text-xs sm:w-full"
+                        onClick={() => applyPreset(p.days)}
+                      >
+                        {p.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <Calendar
+                    mode="range"
+                    min={1}
+                    selected={dateRange}
+                    onSelect={handleCalendarSelect}
+                    numberOfMonths={2}
+                    defaultMonth={dateRange?.from}
+                    locale={es}
+                    showOutsideDays={false}
+                  />
+                </PopoverContent>
+              </Popover>
+
+              {/* Status chips */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Estado
+                </span>
+                <RadioGroupPrimitive.Root
+                  value={filters.status}
+                  onValueChange={(v) =>
+                    updateParams({ status: v === "all" ? null : v })
+                  }
+                  className="flex flex-wrap gap-1"
+                >
+                  {STATUS_OPTIONS.map((opt) => {
+                    const isSelected = filters.status === opt.value
+                    return (
+                      <RadioGroupPrimitive.Item
+                        key={opt.value}
+                        value={opt.value}
+                        className={cn(
+                          "rounded-md border px-2.5 py-1 text-xs transition-colors outline-none",
+                          "hover:bg-accent hover:text-accent-foreground",
+                          "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                          isSelected
+                            ? "border-foreground bg-foreground text-background hover:bg-foreground hover:text-background"
+                            : "border-border bg-background text-foreground",
+                        )}
+                      >
+                        {opt.label}
+                      </RadioGroupPrimitive.Item>
+                    )
+                  })}
+                </RadioGroupPrimitive.Root>
+              </div>
+
+              {/* Signal select */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Señal
+                </span>
+                <Select
+                  value={filters.signal}
+                  onValueChange={(v) =>
+                    updateParams({ signal: v === "all" ? null : v })
+                  }
+                >
+                  <SelectTrigger className="h-9 w-[200px]">
+                    <SelectValue placeholder="Cualquiera" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SIGNAL_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-1.5 lg:ml-auto">
+                <Button type="submit" size="sm" disabled={isPending}>
+                  Aplicar
+                </Button>
+                {hasFilters && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleClearAll}
+                    disabled={isPending}
+                  >
+                    Limpiar
+                  </Button>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Tabla */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold">
+              {total.toLocaleString("es-AR")} pedidos
+              {hasFilters && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  con los filtros activos
+                </span>
+              )}
+            </h2>
+            {isPending && (
+              <span className="text-xs text-muted-foreground">Aplicando...</span>
+            )}
+          </div>
+
+          {rows.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+              {hasFilters
+                ? "Sin resultados con los filtros aplicados."
+                : "Todavía no hay pedidos cacheados. Importá un CSV o buscá por ID."}
+            </div>
+          ) : (
+            <TooltipProvider delayDuration={150}>
+              <div className="rounded-lg border bg-card overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr className="text-left">
+                        <th className="px-3 py-2 w-8"></th>
+                        <th className="px-4 py-2 font-medium">Pedido</th>
+                        <SortHeader
+                          label="Fecha"
+                          sortKey="confirmedAt"
+                          activeSortBy={filters.sortBy}
+                          activeSortOrder={filters.sortOrder}
+                          onSort={handleSort}
+                        />
+                        <th className="px-4 py-2 font-medium">Comercio</th>
+                        <th className="px-4 py-2 font-medium">Driver</th>
+                        <th className="px-4 py-2 font-medium">Señales</th>
+                        <th className="px-4 py-2 font-medium">Tiempo</th>
+                        <th className="px-4 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r) => (
+                        <OrderRowItem key={r.requestId} row={r} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between border-t bg-muted/30 px-4 py-2 text-xs">
+                    <span>
+                      Página {page} de {totalPages} · {total.toLocaleString("es-AR")}{" "}
+                      resultados
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={page <= 1 || isPending}
+                        onClick={() => updateParams({ page: String(page - 1) })}
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={page >= totalPages || isPending}
+                        onClick={() => updateParams({ page: String(page + 1) })}
+                      >
+                        Siguiente
+                      </Button>
                     </div>
                   </div>
-                )
-              })
-            )}
-          </Section>
+                )}
+              </div>
+            </TooltipProvider>
+          )}
         </div>
-      </ScrollArea>
+      </div>
+    </div>
+  )
+}
 
-      <SheetFooter className="border-t border-border">
-        <Button asChild className="w-full">
-          <Link href={`/admin/gestion/pedidos/${row.requestId}`}>
-            Ver pedido completo
-            <ArrowRight className="size-4" />
-          </Link>
-        </Button>
-      </SheetFooter>
+function SortHeader({
+  label,
+  sortKey,
+  activeSortBy,
+  activeSortOrder,
+  onSort,
+}: {
+  label: string
+  sortKey: "confirmedAt" | "refreshedAt"
+  activeSortBy: string
+  activeSortOrder: string
+  onSort: (key: "confirmedAt" | "refreshedAt") => void
+}) {
+  const isActive = activeSortBy === sortKey
+  return (
+    <th className="px-4 py-2 font-medium">
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={cn(
+          "inline-flex items-center gap-1 hover:text-foreground",
+          isActive ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {label}
+        {isActive ? (
+          activeSortOrder === "asc" ? (
+            <ArrowUp className="h-3 w-3" />
+          ) : (
+            <ArrowDown className="h-3 w-3" />
+          )
+        ) : null}
+      </button>
+    </th>
+  )
+}
+
+function OrderRowItem({ row }: { row: OrderRow }) {
+  const status = statusGlyph(row.status)
+  const StatusIcon = status.icon
+  const date = formatOrderDate(row.confirmedAt)
+
+  return (
+    <tr className="border-t hover:bg-muted/30">
+      <td className="px-3 py-2.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-white"
+              style={{ backgroundColor: status.hex }}
+            >
+              <StatusIcon className="h-3.5 w-3.5" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <div className="text-xs">
+              <div className="font-medium">{status.label}</div>
+              <div className="text-muted-foreground font-mono text-[10px]">
+                {row.status}
+              </div>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </td>
+
+      <td className="px-4 py-2.5">
+        <div className="font-medium leading-tight">
+          {row.externalOrderId ? `#${row.externalOrderId}` : "—"}
+        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-[10px] text-muted-foreground/70 font-mono cursor-default">
+              …{row.requestId.slice(-6)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <span className="font-mono text-[11px]">{row.requestId}</span>
+          </TooltipContent>
+        </Tooltip>
+      </td>
+
+      <td className="px-4 py-2.5">
+        <div className="font-medium tabular-nums">{date.strong}</div>
+        <div className="text-[10px] text-muted-foreground tabular-nums">
+          {date.weak}
+        </div>
+      </td>
+
+      <td className="px-4 py-2.5">
+        <div className="truncate max-w-[180px]">{row.branchName || "—"}</div>
+      </td>
+
+      <td className="px-4 py-2.5">
+        <div className="truncate max-w-[160px]">{row.driverName || "—"}</div>
+      </td>
+
+      <td className="px-4 py-2.5">
+        <SignalIcons row={row} />
+      </td>
+
+      <td className="px-4 py-2.5">
+        {row.endToEndSeconds !== null ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center gap-1 text-xs tabular-nums cursor-default">
+                <Timer className="h-3 w-3 text-muted-foreground" />
+                {formatDuration(row.endToEndSeconds)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className="text-xs">
+                <div className="font-medium">Tiempo total</div>
+                <div className="text-muted-foreground">
+                  Desde que el comercio confirmó hasta entregar al cliente
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <span className="text-[10px] text-muted-foreground/60">—</span>
+        )}
+      </td>
+
+      <td className="px-4 py-2.5">
+        <Link
+          href={`/admin/gestion/pedidos/${row.requestId}`}
+          className="inline-flex items-center gap-1 text-primary hover:underline whitespace-nowrap"
+        >
+          Ver
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </td>
+    </tr>
+  )
+}
+
+function SignalIcons({ row }: { row: OrderRow }) {
+  const SLOW_ACCEPT = 10 * 60
+  const LONG_E2E = 60 * 60
+  const MANY_OFFERS = 3
+
+  const signals: { icon: LucideIcon; tone: string; label: string; sub?: string }[] = []
+
+  if (row.hasAdminChange) {
+    signals.push({
+      icon: ShieldCheck,
+      tone: "bg-fuchsia-100 text-fuchsia-700 ring-fuchsia-200",
+      label: "Cambio admin",
+      sub: "Hubo intervención manual en algún estado",
+    })
+  }
+  if (row.acceptanceSeconds !== null && row.acceptanceSeconds > SLOW_ACCEPT) {
+    signals.push({
+      icon: Timer,
+      tone: "bg-amber-100 text-amber-700 ring-amber-200",
+      label: "Aceptación lenta",
+      sub: `${formatDuration(row.acceptanceSeconds)} desde la oferta`,
+    })
+  }
+  if (row.offersWithDriverCount >= MANY_OFFERS) {
+    signals.push({
+      icon: Repeat,
+      tone: "bg-orange-100 text-orange-700 ring-orange-200",
+      label: "Muchas ofertas",
+      sub: `${row.offersWithDriverCount} drivers ofertados antes de aceptar`,
+    })
+  }
+  if (row.endToEndSeconds !== null && row.endToEndSeconds > LONG_E2E) {
+    signals.push({
+      icon: AlertTriangle,
+      tone: "bg-rose-100 text-rose-700 ring-rose-200",
+      label: "Entrega larga",
+      sub: `${formatDuration(row.endToEndSeconds)} end-to-end`,
+    })
+  }
+
+  if (signals.length === 0) {
+    return <span className="text-[10px] text-muted-foreground/60">—</span>
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {signals.map((s, i) => {
+        const Icon = s.icon
+        return (
+          <Tooltip key={i}>
+            <TooltipTrigger asChild>
+              <span
+                className={cn(
+                  "inline-flex h-5 w-5 items-center justify-center rounded-full ring-1",
+                  s.tone,
+                )}
+              >
+                <Icon className="h-3 w-3" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className="text-xs">
+                <div className="font-medium">{s.label}</div>
+                {s.sub && <div className="text-muted-foreground">{s.sub}</div>}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        )
+      })}
     </div>
   )
 }
@@ -987,35 +831,27 @@ function formatLag(ms: number | null): string {
 // Estado de la captura automática de pedidos (cron collect-live-orders). Tira
 // alerta visual si la captura está atrasada o si hay items fallados en la cola.
 function CaptureStatusBar({ capture }: { capture: CaptureStatus }) {
-  const alert = capture.isStale || capture.queueFailed > 0
   return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-[var(--radius-lg)] border px-4 py-2.5 text-xs shadow-[var(--shadow-soft)]",
-        alert
-          ? "border-warning/40 bg-warning-soft text-warning"
-          : "border-border bg-card text-muted-foreground",
-      )}
-    >
-      <span className="inline-flex items-center gap-1.5 font-medium">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <span
+        className={cn(
+          "inline-flex items-center gap-1.5",
+          capture.isStale && "font-medium text-amber-600",
+        )}
+      >
         <span
           className={cn(
-            "size-2 rounded-full",
-            capture.isStale ? "bg-warning" : "bg-success",
+            "h-2 w-2 rounded-full",
+            capture.isStale ? "bg-amber-500" : "bg-emerald-500",
           )}
         />
-        Captura{" "}
-        <span className="font-[family-name:var(--font-mono)]">
-          {formatLag(capture.captureLagMs)}
-        </span>
+        Captura {formatLag(capture.captureLagMs)}
         {capture.isStale && " — atrasada"}
       </span>
-      <span className="text-ink-subtle">·</span>
-      <span className="font-[family-name:var(--font-mono)]">
-        {capture.inProgressCount} en curso
-      </span>
-      <span className="text-ink-subtle">·</span>
-      <span className="font-[family-name:var(--font-mono)]">
+      <span>·</span>
+      <span>{capture.inProgressCount} en curso</span>
+      <span>·</span>
+      <span className={cn(capture.queueFailed > 0 && "text-amber-600")}>
         Cola: {capture.queuePending.toLocaleString("es")} pendientes
         {capture.queueFailed > 0 &&
           ` · ${capture.queueFailed.toLocaleString("es")} fallados`}
@@ -1023,3 +859,4 @@ function CaptureStatusBar({ capture }: { capture: CaptureStatus }) {
     </div>
   )
 }
+

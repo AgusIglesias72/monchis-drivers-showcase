@@ -50,7 +50,7 @@ export function DocumentsFilters({ counts, currentStatus }: DocumentsFiltersProp
           variant={currentStatus === "IN_REVIEW" ? "default" : "outline"}
           className={cn(
             "cursor-pointer",
-            currentStatus === "IN_REVIEW" && "bg-info hover:bg-info/90"
+            currentStatus === "IN_REVIEW" && "bg-orange-500 hover:bg-orange-600"
           )}
         >
           En Revisión
@@ -69,7 +69,7 @@ export function DocumentsFilters({ counts, currentStatus }: DocumentsFiltersProp
           variant={currentStatus === "PENDING" ? "default" : "outline"}
           className={cn(
             "cursor-pointer",
-            currentStatus === "PENDING" && "bg-warning hover:bg-warning/90"
+            currentStatus === "PENDING" && "bg-blue-500 hover:bg-blue-600"
           )}
         >
           Pendientes
@@ -88,7 +88,7 @@ export function DocumentsFilters({ counts, currentStatus }: DocumentsFiltersProp
           variant={currentStatus === "REJECTED" ? "default" : "outline"}
           className={cn(
             "cursor-pointer",
-            currentStatus === "REJECTED" && "bg-destructive hover:bg-destructive/90"
+            currentStatus === "REJECTED" && "bg-red-500 hover:bg-red-600"
           )}
         >
           Rechazados
@@ -107,7 +107,7 @@ export function DocumentsFilters({ counts, currentStatus }: DocumentsFiltersProp
           variant={currentStatus === "APPROVED" ? "default" : "outline"}
           className={cn(
             "cursor-pointer",
-            currentStatus === "APPROVED" && "bg-success hover:bg-success/90"
+            currentStatus === "APPROVED" && "bg-green-500 hover:bg-green-600"
           )}
         >
           Aprobados

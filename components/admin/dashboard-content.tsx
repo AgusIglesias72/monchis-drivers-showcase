@@ -70,27 +70,27 @@ const CustomFunnelTooltip = ({ active, payload, fullFunnelData }: any) => {
   }
 
   return (
-    <div className="bg-card border border-border rounded-lg shadow-lg p-4 min-w-[220px]">
-      <div className="font-bold text-base mb-3 text-foreground">
+    <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg p-4 min-w-[220px]">
+      <div className="font-bold text-base mb-3 text-gray-900 dark:text-gray-100">
         {data.step}
       </div>
       <div className="space-y-2">
         <div className="flex justify-between items-center gap-4">
-          <span className="text-sm text-muted-foreground">Cantidad:</span>
-          <span className="font-semibold text-foreground">
+          <span className="text-sm text-gray-600 dark:text-gray-400">Cantidad:</span>
+          <span className="font-semibold text-gray-900 dark:text-gray-100">
             {currentValue.toLocaleString()}
           </span>
         </div>
         <div className="flex justify-between items-center gap-4">
-          <span className="text-sm text-muted-foreground">% del total:</span>
-          <span className="font-semibold text-info">
+          <span className="text-sm text-gray-600 dark:text-gray-400">% del total:</span>
+          <span className="font-semibold text-blue-600 dark:text-blue-400">
             {porcentajeTotal}%
           </span>
         </div>
         {porcentajeAnterior !== null && (
-          <div className="flex justify-between items-center gap-4 pt-1 border-t border-border">
-            <span className="text-sm text-muted-foreground">% del anterior:</span>
-            <span className="font-semibold text-success">
+          <div className="flex justify-between items-center gap-4 pt-1 border-t border-gray-200 dark:border-gray-700">
+            <span className="text-sm text-gray-600 dark:text-gray-400">% del anterior:</span>
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
               {porcentajeAnterior}%
             </span>
           </div>
@@ -139,8 +139,8 @@ export function DashboardContent({
       changeLabel: undefined, // Ya no mostramos "últimos 7 días" porque varía según filtro
       icon: Users,
       color: "blue",
-      bgColor: "bg-info-soft",
-      iconColor: "text-info",
+      bgColor: "bg-blue-500/10",
+      iconColor: "text-blue-600",
     },
     {
       title: "Completadas",
@@ -150,8 +150,8 @@ export function DashboardContent({
       percentage: postulacionesStats.tasaCompletado,
       icon: CheckCircle,
       color: "green",
-      bgColor: "bg-success-soft",
-      iconColor: "text-success",
+      bgColor: "bg-green-500/10",
+      iconColor: "text-green-600",
       asistidasIncluidas: postulacionesStats.asistenciasIncluidas || 0,
     },
     {
@@ -161,8 +161,8 @@ export function DashboardContent({
       changeLabel: undefined,
       icon: Calendar,
       color: "amber",
-      bgColor: "bg-warning-soft",
-      iconColor: "text-warning",
+      bgColor: "bg-amber-500/10",
+      iconColor: "text-amber-600",
     },
     {
       title: "Asistencias",
@@ -254,19 +254,19 @@ export function DashboardContent({
       : '0'
 
     return (
-      <div className="bg-card border border-border rounded-lg shadow-lg p-3 min-w-[180px]">
-        <div className="font-bold text-sm mb-2 text-foreground">
+      <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg p-3 min-w-[180px]">
+        <div className="font-bold text-sm mb-2 text-gray-900 dark:text-gray-100">
           {data.name}
         </div>
         <div className="space-y-1">
           <div className="flex justify-between items-center gap-3">
-            <span className="text-xs text-muted-foreground">Cantidad:</span>
-            <span className="font-semibold text-foreground">
+            <span className="text-xs text-gray-600 dark:text-gray-400">Cantidad:</span>
+            <span className="font-semibold text-gray-900 dark:text-gray-100">
               {data.value}
             </span>
           </div>
           <div className="flex justify-between items-center gap-3">
-            <span className="text-xs text-muted-foreground">Porcentaje:</span>
+            <span className="text-xs text-gray-600 dark:text-gray-400">Porcentaje:</span>
             <span className="font-semibold" style={{ color: data.payload.fill }}>
               {porcentaje}%
             </span>
@@ -381,9 +381,9 @@ export function DashboardContent({
                   {kpi.change !== undefined && kpi.changeLabel && (
                     <div className="flex items-center gap-1 mt-1">
                       {kpi.change > 0 ? (
-                        <TrendingUp className="h-3 w-3 text-success" />
+                        <TrendingUp className="h-3 w-3 text-green-600" />
                       ) : (
-                        <TrendingDown className="h-3 w-3 text-destructive" />
+                        <TrendingDown className="h-3 w-3 text-red-600" />
                       )}
                       <p className="text-xs text-muted-foreground">
                         {kpi.change > 0 && '+'}{kpi.change} {kpi.changeLabel}
@@ -402,15 +402,15 @@ export function DashboardContent({
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-info" />
+                  <Activity className="h-5 w-5 text-blue-500" />
                   Funnel de Conversión Completo
                 </CardTitle>
                 <CardDescription className="text-sm">
                   Recorrido desde inicio de postulación hasta asistencia a capacitación
                 </CardDescription>
               </div>
-              <div className="text-right bg-info-soft px-4 py-2 rounded-lg border border-info">
-                <div className="text-2xl font-bold text-info">
+              <div className="text-right bg-blue-50 dark:bg-blue-950 px-4 py-2 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                   {tasaConversionTotal}%
                 </div>
                 <div className="text-xs text-muted-foreground font-medium">
@@ -470,11 +470,11 @@ export function DashboardContent({
             {/* Leyenda personalizada */}
             <div className="mt-4 pt-4 border-t flex flex-wrap gap-4 justify-center">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded bg-info" />
+                <div className="w-3 h-3 rounded bg-blue-500" />
                 <span className="text-xs text-muted-foreground">Proceso de Postulación</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded bg-success" />
+                <div className="w-3 h-3 rounded bg-green-500" />
                 <span className="text-xs text-muted-foreground">Proceso de Onboarding</span>
               </div>
             </div>
@@ -487,7 +487,7 @@ export function DashboardContent({
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Users className="h-4 w-4 text-info" />
+                <Users className="h-4 w-4 text-blue-500" />
                 Postulaciones Iniciadas
               </CardTitle>
               <CardDescription>
@@ -536,7 +536,7 @@ export function DashboardContent({
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-success" />
+                <CheckCircle className="h-4 w-4 text-green-500" />
                 Postulaciones Completadas
               </CardTitle>
               <CardDescription>
@@ -588,7 +588,7 @@ export function DashboardContent({
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <FileCheck className="h-4 w-4 text-info" />
+                <FileCheck className="h-4 w-4 text-blue-500" />
                 Estado de Documentos
               </CardTitle>
               <CardDescription>
@@ -653,8 +653,8 @@ export function DashboardContent({
                   
                   {/* Alerta de pendientes */}
                   {mainStats.pendingDocs > 0 && (
-                    <div className="mt-3 p-2 bg-warning-soft border border-warning rounded-lg">
-                      <div className="flex items-center gap-2 text-warning">
+                    <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
                         <AlertCircle className="h-4 w-4" />
                         <span className="text-xs font-medium">
                           {mainStats.pendingDocs} doc{mainStats.pendingDocs !== 1 ? 's' : ''} pendiente{mainStats.pendingDocs !== 1 ? 's' : ''}
@@ -711,7 +711,7 @@ export function DashboardContent({
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-destructive" />
+                <TrendingDown className="h-4 w-4 text-red-500" />
                 Abandonos por Step
               </CardTitle>
               <CardDescription>

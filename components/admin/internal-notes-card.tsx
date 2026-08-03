@@ -133,7 +133,7 @@ export function InternalNotesCard({
                           size="icon"
                           variant="ghost"
                           onClick={() => setDeleteNoteId(note.id)}
-                          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-danger-soft cursor-pointer"
+                          className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer"
                           disabled={isLoading}
                         >
                           <Trash2 className="h-3 w-3" />
@@ -197,7 +197,7 @@ export function InternalNotesCard({
             <AlertDialogAction
               onClick={handleDelete}
               disabled={isLoading}
-              className="bg-destructive hover:bg-destructive/90"
+              className="bg-red-600 hover:bg-red-700"
             >
               Eliminar
             </AlertDialogAction>

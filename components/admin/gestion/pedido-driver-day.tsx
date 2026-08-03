@@ -51,11 +51,11 @@ function tsOf(s: string | undefined): number {
 function statusClass(state: string): string {
   switch (state) {
     case "FINALIZED":
-      return "bg-success-soft text-success hover:bg-success-soft"
+      return "bg-emerald-100 text-emerald-900 hover:bg-emerald-100"
     case "CANCELLED":
-      return "bg-danger-soft text-destructive hover:bg-danger-soft"
+      return "bg-red-100 text-red-900 hover:bg-red-100"
     default:
-      return "bg-info-soft text-info hover:bg-info-soft"
+      return "bg-blue-100 text-blue-900 hover:bg-blue-100"
   }
 }
 
@@ -201,7 +201,7 @@ function TurnCard({
             {group.sessions.length > 1 && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="inline-flex items-center gap-1 rounded bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                  <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
                     Conexión / desconexión
                   </span>
                 </TooltipTrigger>
@@ -224,11 +224,11 @@ function TurnCard({
                   </span>
                 )}
                 <span className="inline-flex items-center gap-1">
-                  <LogIn className="h-3 w-3 text-success" />
+                  <LogIn className="h-3 w-3 text-emerald-600" />
                   {fmtDriverTime(s.driver_entry_time)}
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <LogOut className="h-3 w-3 text-destructive" />
+                  <LogOut className="h-3 w-3 text-rose-500" />
                   {fmtDriverTime(s.driver_exit_time)}
                 </span>
                 {s.driver_exit_reason && (

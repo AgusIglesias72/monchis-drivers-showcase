@@ -52,21 +52,21 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload || !payload.length) return null
 
   return (
-    <div className="bg-card border border-border rounded-lg shadow-lg p-4 min-w-[200px]">
-      <div className="font-bold text-sm mb-2 text-foreground">
+    <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg p-4 min-w-[200px]">
+      <div className="font-bold text-sm mb-2 text-gray-900 dark:text-gray-100">
         {label}
       </div>
       <div className="space-y-1">
         {payload.map((entry: any, index: number) => (
           <div key={index} className="flex justify-between items-center gap-4">
-            <span className="text-sm text-muted-foreground flex items-center gap-2">
+            <span className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
               <div
                 className="w-3 h-3 rounded-full"
                 style={{ backgroundColor: entry.color }}
               />
               {entry.name}:
             </span>
-            <span className="font-semibold text-foreground">
+            <span className="font-semibold text-gray-900 dark:text-gray-100">
               {entry.value}
             </span>
           </div>
@@ -82,20 +82,20 @@ const CustomPieTooltip = ({ active, payload }: any) => {
   const data = payload[0].payload
 
   return (
-    <div className="bg-card border border-border rounded-lg shadow-lg p-4 min-w-[180px]">
-      <div className="font-bold text-sm mb-2 text-foreground">
+    <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg p-4 min-w-[180px]">
+      <div className="font-bold text-sm mb-2 text-gray-900 dark:text-gray-100">
         {data.label}
       </div>
       <div className="space-y-1">
         <div className="flex justify-between items-center gap-4">
-          <span className="text-sm text-muted-foreground">Cantidad:</span>
-          <span className="font-semibold text-foreground">
+          <span className="text-sm text-gray-600 dark:text-gray-400">Cantidad:</span>
+          <span className="font-semibold text-gray-900 dark:text-gray-100">
             {data.cantidad}
           </span>
         </div>
         <div className="flex justify-between items-center gap-4">
-          <span className="text-sm text-muted-foreground">Porcentaje:</span>
-          <span className="font-semibold text-foreground">
+          <span className="text-sm text-gray-600 dark:text-gray-400">Porcentaje:</span>
+          <span className="font-semibold text-gray-900 dark:text-gray-100">
             {data.porcentaje}%
           </span>
         </div>
@@ -140,32 +140,32 @@ export function AsistenciasCharts({
       value: asistenciasProgramadasVsRealizadas.asistieron,
       icon: UserCheck,
       description: `${asistenciasProgramadasVsRealizadas.totalProgramadas} programadas`,
-      color: "text-success",
-      bgColor: "bg-success-soft",
+      color: "text-green-600 dark:text-green-400",
+      bgColor: "bg-green-50 dark:bg-green-950/20",
     },
     {
       title: "Tasa de Presentismo",
       value: `${asistenciasProgramadasVsRealizadas.tasaPresentismo}%`,
       icon: CheckCircle,
       description: `${asistenciasProgramadasVsRealizadas.resueltas} resueltas`,
-      color: "text-success",
-      bgColor: "bg-success-soft",
+      color: "text-emerald-600 dark:text-emerald-400",
+      bgColor: "bg-emerald-50 dark:bg-emerald-950/20",
     },
     {
       title: "No-Shows",
       value: asistenciasProgramadasVsRealizadas.noAsistieron,
       icon: UserX,
       description: `${((asistenciasProgramadasVsRealizadas.noAsistieron / Math.max(asistenciasProgramadasVsRealizadas.resueltas, 1)) * 100).toFixed(1)}% del total`,
-      color: "text-destructive",
-      bgColor: "bg-danger-soft",
+      color: "text-red-600 dark:text-red-400",
+      bgColor: "bg-red-50 dark:bg-red-950/20",
     },
     {
       title: "Pendientes",
       value: asistenciasProgramadasVsRealizadas.pendientes,
       icon: Calendar,
       description: "Por confirmar asistencia",
-      color: "text-warning",
-      bgColor: "bg-warning-soft",
+      color: "text-amber-600 dark:text-amber-400",
+      bgColor: "bg-amber-50 dark:bg-amber-950/20",
     },
   ]
 
@@ -253,15 +253,15 @@ export function AsistenciasCharts({
           </ResponsiveContainer>
 
           {/* Métrica destacada */}
-          <div className="mt-4 p-4 bg-gradient-to-r from-success-soft to-success-soft rounded-lg">
+          <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-success" />
-                <span className="text-sm font-medium text-muted-foreground">
+                <TrendingUp className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Tasa de Presentismo
                 </span>
               </div>
-              <span className="text-2xl font-bold text-success">
+              <span className="text-2xl font-bold text-green-600 dark:text-green-400">
                 {asistenciasProgramadasVsRealizadas.tasaPresentismo}%
               </span>
             </div>

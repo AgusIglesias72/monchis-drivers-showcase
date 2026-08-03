@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
@@ -19,6 +20,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -27,24 +34,39 @@ import {
 } from "@/components/ui/select"
 import {
   FileText,
+  Clock,
   MessageSquare,
+  MessageCircle,
+  Edit,
+  Save,
+  X,
+  CheckCircle,
+  Bot,
   Loader2,
   CreditCard,
   Calendar,
+  XCircle,
+  AlertTriangle,
   Download,
+  Phone,
+  MoreVertical,
+  ExternalLink,
+  Copy,
 } from "lucide-react"
 import { DocumentPreview } from "@/components/admin/document-preview"
-import { ManageOnboardingModalClient as ManageOnboardingModal } from "@/components/admin/manage-onboarding-modal-client"
+import { ManageOnboardingModal } from "@/components/admin/manage-onboarding-modal"
 import { PersonalInfoCard } from "@/components/admin/personal-info-card"
 import { InternalNotesCard } from "@/components/admin/internal-notes-card"
 import { WhatsAppMessagesHistory } from "@/components/admin/whatsapp-messages-history"
 import {
   PaymentSection,
   OnboardingSection,
+  StatusBadges
 } from "@/components/admin/postulacion-helpers"
+import { ContactButton } from "@/components/admin/postulaciones/contact-button"
+import { RejectButton } from "@/components/admin/postulaciones/reject-button"
+import { TriggerApprovalNotificationButton } from "@/components/admin/trigger-approval-notification-button"
 import { AgentRunSummaryCard } from "@/components/admin/agent-runs/agent-run-summary-card"
-import { DetailHeader } from "@/components/admin/postulacion-detail/detail-header"
-import { DetailTabsBar, useDetailTab } from "@/components/admin/postulacion-detail/detail-tabs"
 import { getContactStatus } from "@/lib/utils/contact-status.utils"
 import { toast } from "sonner"
 import {
@@ -56,7 +78,20 @@ import {
   approveDocument,
   rejectDocument,
   deleteDocument,
+  updateDocumentType,
 } from "@/lib/actions/postulacion.actions"
+import { AssistedCompletionButton } from "./postulaciones/assisted-completion-button"
+import { RefreshRucButton } from "./postulaciones/refresh-ruc-button"
+import { RunAgentButton } from "./postulaciones/run-agent-button"
+import { AgentRunBadge } from "./agent-runs/agent-run-badge"
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "../ui/dropdown-menu"
 
 interface PostulacionDetailContentProps {
   postulacion: any
@@ -75,12 +110,11 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
     setPostulacion(initialPostulacion)
   }, [onboardingKey, initialPostulacion])
 
-  const [tab, setTab] = useDetailTab()
-
   const [isEditingPending, startEditingTransition] = useTransition()
   const [isNotePending, startNoteTransition] = useTransition()
   const [isDocumentPending, startDocumentTransition] = useTransition()
   const [isPaymentPending, startPaymentTransition] = useTransition()
+  const [isRejectPending, startRejectTransition] = useTransition()
 
   const [isEditing, setIsEditing] = useState(false)
   const [editedData, setEditedData] = useState(postulacion)
@@ -89,8 +123,20 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
 
   const regularDocuments = documents.filter((doc: any) => doc.documentType !== 'PAYMENT_PROOF')
 
+  // Verificar si tiene documentos de identidad pendientes
+  const hasIdentityDocs = documents.some((doc: any) =>
+    doc.documentType === 'CEDULA' &&
+    doc.status === 'PENDING'
+  ) && documents.some((doc: any) =>
+    doc.documentType === 'CRIMINAL_RECORD' &&
+    doc.status === 'PENDING'
+  )
+
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showProofPreview, setShowProofPreview] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
   const [showProofModal, setShowProofModal] = useState(false)
   const [uploadingProof, setUploadingProof] = useState(false)
 
@@ -123,11 +169,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
     postulacion.completedSteps?.length || 0
   )
 
-  const handleEditStart = () => {
-    setIsEditing(true)
-    if (tab !== 'ficha') setTab('ficha')
-  }
-
   const handleSave = () => {
     const updatedPostulacion = { ...postulacion, ...editedData }
     setPostulacion(updatedPostulacion)
@@ -144,7 +185,6 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         setPostulacion(postulacion)
         setEditedData(postulacion)
         setIsEditing(true)
-        setTab('ficha')
         toast.error(result.error || 'Error al guardar')
       }
     })
@@ -386,6 +426,36 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
     })
   }
 
+  const handleReject = () => {
+    if (!rejectReason.trim()) {
+      toast.error('Debes indicar el motivo del rechazo')
+      return
+    }
+
+    setPostulacion({
+      ...postulacion,
+      status: 'REJECTED'
+    })
+
+    setShowRejectModal(false)
+    toast.success('Rechazando postulación...')
+
+    startRejectTransition(async () => {
+      const result = await updatePostulacion(postulacion.id, {
+        status: 'REJECTED',
+        rejectionReason: rejectReason
+      })
+
+      if (result.success) {
+        toast.success('Postulación rechazada')
+        setTimeout(() => router.refresh(), 800)
+      } else {
+        setPostulacion(postulacion)
+        toast.error(result.error || 'Error al rechazar')
+      }
+    })
+  }
+
   // ==================== HANDLER PARA SUBIR COMPROBANTE ====================
   const handleUploadPaymentProof = async (file: File) => {
     setUploadingProof(true)
@@ -449,19 +519,221 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         ]}
       />
 
-      <div className="flex-1 p-4 md:p-8 space-y-4">
-        <DetailHeader
-          postulacion={postulacion}
-          contactStatus={contactStatus}
-          hasScheduledOnboarding={hasScheduledOnboarding}
-          isEditing={isEditing}
-          isSaving={isEditingPending}
-          onEditStart={handleEditStart}
-          onEditSave={handleSave}
-          onEditCancel={handleCancel}
-          onScheduleOnboarding={handleScheduleOnboarding}
-          onActionSuccess={handleActionSuccess}
-        />
+      <div className="flex-1 p-4 md:p-8 space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold tracking-tight">
+                {postulacion.fullName}
+              </h1>
+              {postulacion.agentRuns?.[0] && (
+                <AgentRunBadge
+                  driverName={postulacion.fullName || 'Driver'}
+                  cedula={postulacion.cedula}
+                  run={{
+                    ...postulacion.agentRuns[0],
+                    createdAt:
+                      postulacion.agentRuns[0].createdAt instanceof Date
+                        ? postulacion.agentRuns[0].createdAt.toISOString()
+                        : postulacion.agentRuns[0].createdAt,
+                  }}
+                />
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span>CI: {postulacion.cedula}</span>
+              <span>•</span>
+              <span>Postulación iniciada el {new Date(postulacion.startedAt).toLocaleDateString('es-PY')}</span>
+            </div>
+
+            {/* Badges de estado */}
+            <StatusBadges
+              formStatus={postulacion.status}
+              paymentStatus={postulacion.equipmentPayments?.[0]?.status}
+              onboardingStatus={postulacion.onboardingAttendances?.[0]?.status}
+            />
+          </div>
+
+          <div className="flex flex-wrap justify-end items-center gap-2">
+            {/* Botón principal: Contactar */}
+            {!isEditing && postulacion.phoneNumber && (
+              <ContactButton
+                driverId={postulacion.id}
+                driverName={postulacion.fullName || 'Driver'}
+                phoneNumber={postulacion.phoneNumber}
+                contactStatus={contactStatus}
+                showLabel={true}
+                approvalNotifiedAt={postulacion.approvalNotifiedAt}
+              />
+            )}
+
+            {/* Botón principal: Onboarding */}
+            {!isEditing && hasScheduledOnboarding ? (
+              <Button
+                onClick={handleScheduleOnboarding}
+                className="gap-2 cursor-pointer"
+                variant="outline"
+              >
+                <Calendar className="h-4 w-4" />
+                Gestionar Onboarding
+              </Button>
+            ) : !isEditing ? (
+              <Button
+                onClick={handleScheduleOnboarding}
+                className="gap-2 cursor-pointer"
+              >
+                <Calendar className="h-4 w-4" />
+                Agendar Onboarding
+              </Button>
+            ) : null}
+
+            {/* Botón de Editar/Guardar/Cancelar */}
+            {!isEditing ? (
+              <Button
+                onClick={() => setIsEditing(true)}
+                variant="outline"
+                className="gap-2 cursor-pointer"
+              >
+                <Edit className="h-4 w-4" />
+                Editar
+              </Button>
+            ) : (
+              <>
+                <Button
+                  onClick={handleCancel}
+                  variant="outline"
+                  className="gap-2 cursor-pointer"
+                  disabled={isEditingPending}
+                >
+                  <X className="h-4 w-4" />
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  className="gap-2 cursor-pointer"
+                  disabled={isEditingPending}
+                >
+                  {isEditingPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Guardar
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+
+            {/* ✅ NUEVO: Dropdown de Acciones */}
+            {!isEditing && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <MoreVertical className="h-4 w-4" />
+                    Acciones
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {/* === PORTAL PÚBLICO === */}
+                  {postulacion.accessToken && (
+                    <>
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                        Portal Público
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => window.open(`/postulacion/${postulacion.accessToken}`, '_blank')}
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4 text-muted-foreground" />
+                        Abrir portal
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const url = `${window.location.origin}/postulacion/${postulacion.accessToken}`
+                          navigator.clipboard.writeText(url)
+                          toast.success('Link del portal copiado al portapapeles')
+                        }}
+                      >
+                        <Copy className="mr-2 h-4 w-4 text-muted-foreground" />
+                        Copiar link del portal
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+
+                  {/* === CONTACTO === */}
+                  {postulacion.phoneNumber && (
+                    <>
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                        Contacto
+                      </DropdownMenuLabel>
+
+                      <DropdownMenuItem
+                        onSelect={(e) => e.preventDefault()}
+                        className="p-0"
+                      >
+                        <TriggerApprovalNotificationButton
+                          driverId={postulacion.id}
+                          driverName={postulacion.fullName || 'Driver'}
+                          approvalNotifiedAt={postulacion.approvalNotifiedAt}
+                          inDropdown={true}
+                          onSuccess={handleActionSuccess}
+                        />
+                      </DropdownMenuItem>
+
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+
+                  {/* === GESTIONAR === */}
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Gestionar
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onSelect={(e) => e.preventDefault()}
+                    className="p-0"
+                  >
+                    <RefreshRucButton
+                      driverId={postulacion.id}
+                      onSuccess={handleActionSuccess}
+                    />
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={(e) => e.preventDefault()}
+                    className="p-0"
+                  >
+                    <RunAgentButton
+                      driverId={postulacion.id}
+                      hasExistingRun={(postulacion.agentRuns?.length ?? 0) > 0}
+                    />
+                  </DropdownMenuItem>
+                  {postulacion.status === 'IN_PROGRESS' && (
+                    <DropdownMenuItem
+                      onSelect={(e) => e.preventDefault()}
+                      className="p-0"
+                    >
+                      <AssistedCompletionButton
+                        driverId={postulacion.id}
+                        driverName={postulacion.fullName || 'Driver'}
+                        isAssisted={postulacion.assistedCompletion || false}
+                        onSuccess={handleActionSuccess}
+                      />
+                    </DropdownMenuItem>
+                  )}
+                  <RejectButton
+                    driverId={postulacion.id}
+                    driverName={postulacion.fullName || 'Driver'}
+                    isRejected={postulacion.status === 'REJECTED'}
+                    onSuccess={handleActionSuccess}
+                  />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        </div>
 
         {/* Card del agente IA: visible siempre que haya un AgentRun.
             Muestra decisión, summary, conteo de acciones y un click-through al
@@ -474,25 +746,14 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
           />
         )}
 
-        <DetailTabsBar
-          value={tab}
-          onChange={setTab}
-          counts={{
-            documentos: regularDocuments.length,
-            actividad: notes.length + (postulacion.whatsappMessagesSent?.length || 0),
-          }}
-        />
-
-        <section hidden={tab !== 'ficha'} aria-label="Ficha">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
           <PersonalInfoCard
             postulacion={postulacion}
             editedData={editedData}
             isEditing={isEditing}
             setEditedData={setEditedData}
           />
-        </section>
 
-        <section hidden={tab !== 'documentos'} aria-label="Documentos">
           <Card>
             <CardHeader className="pb-3 border-b">
               <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
@@ -517,70 +778,106 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
               />
             </CardContent>
           </Card>
-        </section>
+        </div>
 
-        <section hidden={tab !== 'capacitacion'} aria-label="Capacitación y pago">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start">
-            <Card>
-              <CardHeader className="pb-3 border-b">
-                <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
-                  <Calendar className="h-4 w-4" />
-                  Onboarding
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <OnboardingSection
-                  attendance={postulacion.onboardingAttendances?.[0]}
-                  status={postulacion.onboardingStatus}
-                  postulacionId={postulacion.id}
-                  onSchedule={handleScheduleOnboarding}
-                />
-              </CardContent>
-            </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+          <Card>
+            <CardHeader className="pb-3 border-b">
+              <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
+                <MessageSquare className="h-4 w-4" />
+                Notas Internas
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <InternalNotesCard
+                notes={notes}
+                onAddNote={handleAddNote}
+                onEditNote={handleEditNote}
+                onDeleteNote={handleDeleteNote}
+                isLoading={isNotePending}
+              />
+            </CardContent>
+          </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Pago de Equipamiento
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PaymentSection
-                  payment={postulacion.equipmentPayments?.[0]}
-                  postulacionId={postulacion.id}
-                  onManage={() => setShowPaymentModal(true)}
-                  onViewProof={handleViewPaymentProof}
-                  onUploadProof={handleUploadPaymentProof}
-                />
-              </CardContent>
-            </Card>
-          </div>
-        </section>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Pago de Equipamiento
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PaymentSection
+                payment={postulacion.equipmentPayments?.[0]}
+                postulacionId={postulacion.id}
+                onManage={() => setShowPaymentModal(true)}
+                onViewProof={handleViewPaymentProof}
+                onUploadProof={handleUploadPaymentProof}
+              />
+            </CardContent>
+          </Card>
 
-        <section hidden={tab !== 'actividad'} aria-label="Actividad">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start">
-            <Card>
-              <CardHeader className="pb-3 border-b">
-                <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
-                  <MessageSquare className="h-4 w-4" />
-                  Notas Internas
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <InternalNotesCard
-                  notes={notes}
-                  onAddNote={handleAddNote}
-                  onEditNote={handleEditNote}
-                  onDeleteNote={handleDeleteNote}
-                  isLoading={isNotePending}
-                />
-              </CardContent>
-            </Card>
+          {showProofModal && postulacion.equipmentPayments[0]?.paymentProofUrl && (
+            <Dialog open={showProofModal} onOpenChange={setShowProofModal}>
+              <DialogContent className="max-w-4xl max-h-[90vh]">
+                <DialogHeader>
+                  <DialogTitle>Comprobante de Pago</DialogTitle>
+                </DialogHeader>
 
-            <WhatsAppMessagesHistory messages={postulacion.whatsappMessagesSent || []} />
-          </div>
-        </section>
+                <div className="overflow-auto">
+                  {postulacion.equipmentPayments[0].paymentProofUrl.toLowerCase().endsWith('.pdf') ? (
+                    <iframe
+                      src={postulacion.equipmentPayments[0].paymentProofUrl}
+                      className="w-full h-[70vh]"
+                      title="Comprobante de Pago"
+                    />
+                  ) : (
+                    <Image
+                      src={postulacion.equipmentPayments[0].paymentProofUrl}
+                      alt="Comprobante de Pago"
+                      width={800}
+                      height={600}
+                      className="w-full h-auto"
+                    />
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open(postulacion.equipmentPayments[0].paymentProofUrl, '_blank')}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Descargar
+                  </Button>
+                  <Button onClick={() => setShowProofModal(false)}>
+                    Cerrar
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          <Card>
+            <CardHeader className="pb-3 border-b">
+              <CardTitle className="text-base font-bold flex items-center gap-2 tracking-tight">
+                <Calendar className="h-4 w-4" />
+                Onboarding
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <OnboardingSection
+                attendance={postulacion.onboardingAttendances?.[0]}
+                status={postulacion.onboardingStatus}
+                postulacionId={postulacion.id}
+                onSchedule={handleScheduleOnboarding}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Historial de Mensajes WhatsApp */}
+        <WhatsAppMessagesHistory messages={postulacion.whatsappMessagesSent || []} />
       </div>
 
       <ManageOnboardingModal
@@ -593,46 +890,57 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
         onSuccess={handleModalSuccess}
       />
 
-      {showProofModal && postulacion.equipmentPayments[0]?.paymentProofUrl && (
-        <Dialog open={showProofModal} onOpenChange={setShowProofModal}>
-          <DialogContent className="max-w-4xl max-h-[90vh]">
-            <DialogHeader>
-              <DialogTitle>Comprobante de Pago</DialogTitle>
-            </DialogHeader>
+      <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rechazar Postulación</DialogTitle>
+            <DialogDescription>
+              Indica el motivo del rechazo. Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
 
-            <div className="overflow-auto">
-              {postulacion.equipmentPayments[0].paymentProofUrl.toLowerCase().endsWith('.pdf') ? (
-                <iframe
-                  src={postulacion.equipmentPayments[0].paymentProofUrl}
-                  className="w-full h-[70vh]"
-                  title="Comprobante de Pago"
-                />
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reject-reason">Motivo del rechazo</Label>
+              <Textarea
+                id="reject-reason"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Ej: Documentos no cumplen con los requisitos"
+                rows={4}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowRejectModal(false)}
+              className="cursor-pointer"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleReject}
+              disabled={!rejectReason.trim() || isRejectPending}
+              className="cursor-pointer"
+            >
+              {isRejectPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Rechazando...
+                </>
               ) : (
-                <Image
-                  src={postulacion.equipmentPayments[0].paymentProofUrl}
-                  alt="Comprobante de Pago"
-                  width={800}
-                  height={600}
-                  className="w-full h-auto"
-                />
+                <>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Confirmar Rechazo
+                </>
               )}
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => window.open(postulacion.equipmentPayments[0].paymentProofUrl, '_blank')}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Descargar
-              </Button>
-              <Button onClick={() => setShowProofModal(false)}>
-                Cerrar
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -762,6 +1070,25 @@ export function PostulacionDetailContent({ postulacion: initialPostulacion }: Po
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showProofPreview} onOpenChange={setShowProofPreview}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Comprobante de Pago</DialogTitle>
+          </DialogHeader>
+          {postulacion.equipmentPayments?.[0]?.paymentProofUrl && (
+            <div className="relative aspect-video">
+              <Image
+                src={postulacion.equipmentPayments[0].paymentProofUrl}
+                alt="Comprobante de pago"
+                width={800}
+                height={600}
+                className="w-full h-full object-contain rounded-lg"
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

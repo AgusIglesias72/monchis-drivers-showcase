@@ -1,6 +1,5 @@
 // app/admin/layout.tsx
 import { AppSidebar } from '@/components/admin/app-sidebar'
-import { AdminTopBar } from '@/components/admin/admin-topbar'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -30,16 +29,11 @@ export default async function AdminLayout({
   // Obtener el estado del sidebar desde cookies para persistencia
   const cookieStore = await cookies()
   const defaultOpen = cookieStore.get("sidebar:state")?.value !== "false"
-  const sidebarVariant =
-    cookieStore.get("sidebar:variant")?.value === "floating" ? "floating" : "sidebar"
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
-      {/* Top bar global, full-width arriba de todo (el logo Monchis abre/cierra el sidebar). */}
-      <AdminTopBar />
-      {/* El sidebar arranca DEBAJO del top bar (offset de 4rem = h-16). */}
-      <AppSidebar initialVariant={sidebarVariant} />
-      <SidebarInset className="pt-[52px]">
+      <AppSidebar />
+      <SidebarInset>
         {/* Page Content */}
         <main className="flex flex-1 flex-col">
           {children}

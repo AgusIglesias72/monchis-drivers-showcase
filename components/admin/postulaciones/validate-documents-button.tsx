@@ -100,16 +100,16 @@ export function ValidateDocumentsButton({
       {isValidating ? (
         <>
           <div className="relative mr-2">
-            <Bot className="h-4 w-4 text-info" />
-            <Sparkles className="h-2 w-2 absolute -top-1 -right-1 text-warning animate-pulse" />
+            <Bot className="h-4 w-4 text-blue-600" />
+            <Sparkles className="h-2 w-2 absolute -top-1 -right-1 text-yellow-500 animate-pulse" />
           </div>
-          <span className="text-info font-medium">Validando con IA...</span>
+          <span className="text-blue-600 font-medium">Validando con IA...</span>
         </>
       ) : (
         <>
           <div className="relative mr-2">
             <Bot className="h-4 w-4 text-violet-600 group-hover:text-violet-700 transition-colors" />
-            <Sparkles className="h-2 w-2 absolute -top-1 -right-1 text-warning opacity-75" />
+            <Sparkles className="h-2 w-2 absolute -top-1 -right-1 text-yellow-500 opacity-75" />
           </div>
           <span className="font-medium text-violet-600 group-hover:text-violet-700 transition-colors">
             Validar con IA

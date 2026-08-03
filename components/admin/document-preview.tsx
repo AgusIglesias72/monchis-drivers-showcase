@@ -201,10 +201,10 @@ export function DocumentPreview({
 
   const getStatusBadge = (status: string) => {
     const badges = {
-      PENDING: <Badge variant="outline" className="gap-1 bg-warning-soft text-warning border-warning"><Clock className="h-3 w-3" />Pendiente</Badge>,
-      IN_REVIEW: <Badge variant="outline" className="gap-1 bg-info-soft text-info border-info"><Eye className="h-3 w-3" />En Revisión</Badge>,
-      APPROVED: <Badge variant="outline" className="gap-1 bg-success-soft text-success border-success"><CheckCircle className="h-3 w-3" />Aprobado</Badge>,
-      REJECTED: <Badge variant="outline" className="gap-1 bg-danger-soft text-destructive border-destructive"><XCircle className="h-3 w-3" />Rechazado</Badge>,
+      PENDING: <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-700 border-amber-200"><Clock className="h-3 w-3" />Pendiente</Badge>,
+      IN_REVIEW: <Badge variant="outline" className="gap-1 bg-blue-50 text-blue-700 border-blue-200"><Eye className="h-3 w-3" />En Revisión</Badge>,
+      APPROVED: <Badge variant="outline" className="gap-1 bg-green-50 text-green-700 border-green-200"><CheckCircle className="h-3 w-3" />Aprobado</Badge>,
+      REJECTED: <Badge variant="outline" className="gap-1 bg-red-50 text-red-700 border-red-200"><XCircle className="h-3 w-3" />Rechazado</Badge>,
     }
     return badges[status as keyof typeof badges] || badges.PENDING
   }
@@ -254,13 +254,15 @@ export function DocumentPreview({
           <p className="text-sm">No hay documentos adjuntos</p>
         </div>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-2 items-start">
-          {sortedGroups.map(([groupKey, group]) => {
+        <div className="space-y-6">
+          {sortedGroups.map(([groupKey, group], groupIndex) => {
             const GroupIcon = group.info.icon
             const isSpecialGroup = group.info.special
 
             return (
               <div key={groupKey}>
+                {groupIndex > 0 && <div className="border-t border-border my-6" />}
+                
                 {/* ✅ Header del grupo con icono y descripción */}
                 <div className="mb-4">
                   <div className="flex items-center gap-3 mb-1">
@@ -328,14 +330,14 @@ export function DocumentPreview({
                           <p className="text-xs text-muted-foreground mb-1 truncate">
                             {doc.fileName}
                             {doc.fileSize && (
-                              <span className="ml-2 text-ink-subtle">
+                              <span className="ml-2 text-gray-400">
                                 ({(doc.fileSize / 1024 / 1024).toFixed(2)} MB)
                               </span>
                             )}
                           </p>
 
                           {doc.status === 'APPROVED' && doc.reviewedBy && (
-                            <p className="text-xs text-success flex items-center gap-1 mt-1">
+                            <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
                               <CheckCircle className="h-3 w-3" />
                               Aprobado por {doc.reviewedByUser?.firstName || 'Admin'} el{' '}
                               {new Date(doc.reviewedAt).toLocaleDateString('es-PY', {
@@ -348,7 +350,7 @@ export function DocumentPreview({
                           )}
 
                           {doc.status === 'REJECTED' && doc.rejectionReason && (
-                            <p className="text-xs text-destructive mt-1 flex items-start gap-1">
+                            <p className="text-xs text-red-600 mt-1 flex items-start gap-1">
                               <XCircle className="h-3 w-3 flex-shrink-0 mt-0.5" />
                               <span>Motivo: {doc.rejectionReason}</span>
                             </p>
@@ -388,7 +390,7 @@ export function DocumentPreview({
                                   size="icon"
                                   variant="ghost"
                                   onClick={() => setDeleteDocumentId(doc.id)}
-                                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-danger-soft"
+                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                                   title="Eliminar"
                                   disabled={isLoading}
                                 >
@@ -448,11 +450,11 @@ export function DocumentPreview({
       {isEditing && onDocumentUpload && (
         <div className="space-y-4 pt-6 border-t">
           {isLoading && (
-            <div className="border border-info bg-info-soft rounded-lg p-4 flex items-center gap-3">
-              <Loader2 className="h-5 w-5 text-info animate-spin flex-shrink-0" />
+            <div className="border border-blue-200 bg-blue-50 rounded-lg p-4 flex items-center gap-3">
+              <Loader2 className="h-5 w-5 text-blue-600 animate-spin flex-shrink-0" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-info">Procesando documento...</p>
-                <p className="text-xs text-info">Por favor espera mientras se sube y procesa el archivo</p>
+                <p className="text-sm font-medium text-blue-900">Procesando documento...</p>
+                <p className="text-xs text-blue-700">Por favor espera mientras se sube y procesa el archivo</p>
               </div>
             </div>
           )}
@@ -499,18 +501,18 @@ export function DocumentPreview({
           
           {/* ✅ Warning especial para TAX_COMPLIANCE */}
           {uploadType === 'TAX_COMPLIANCE' && (
-            <div className="border border-info bg-info-soft rounded-lg p-4">
+            <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0">
-                  <div className="w-8 h-8 rounded-full bg-info-soft flex items-center justify-center">
-                    <AlertCircle className="h-4 w-4 text-info" />
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                    <AlertCircle className="h-4 w-4 text-blue-600" />
                   </div>
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-info mb-1">
+                  <p className="text-sm font-medium text-blue-900 mb-1">
                     Certificado Tributario
                   </p>
-                  <ul className="text-xs text-info space-y-1">
+                  <ul className="text-xs text-blue-700 space-y-1">
                     <li>• Se actualizará automáticamente el registro de facturación del conductor</li>
                     {/* <li>• Se extraerá el RUC del documento para el sistema de facturación</li> */}
                     {/* <li>• Cualquier cambio en este documento afectará los datos de facturación</li> */}
@@ -563,7 +565,7 @@ export function DocumentPreview({
             <AlertDialogDescription>
               Esta acción no se puede deshacer. El documento será eliminado permanentemente del sistema.
               {deleteDocumentId && documents.find(d => d.id === deleteDocumentId)?.documentType === 'TAX_COMPLIANCE' && (
-                <span className="block mt-3 p-3 bg-warning-soft border border-warning rounded text-warning text-sm font-medium">
+                <span className="block mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-sm font-medium">
                   ⚠️ Advertencia: También se eliminará la referencia en el registro de facturación del conductor.
                 </span>
               )}
@@ -579,7 +581,7 @@ export function DocumentPreview({
                 }
               }}
               disabled={isLoading}
-              className="bg-destructive hover:bg-destructive"
+              className="bg-red-600 hover:bg-red-700"
             >
               {isLoading ? (
                 <>

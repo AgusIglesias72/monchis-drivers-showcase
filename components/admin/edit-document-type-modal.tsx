@@ -132,8 +132,8 @@ export function EditDocumentTypeModal({
             </Select>
           </div>
 
-          <div className="bg-info-soft border border-info rounded-md p-3">
-            <p className="text-xs text-info">
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <p className="text-xs text-blue-800">
               <strong>Nota:</strong> Esta acción actualizará el tipo del documento pero no modificará el archivo original.
             </p>
           </div>

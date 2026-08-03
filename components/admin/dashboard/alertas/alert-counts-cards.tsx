@@ -26,21 +26,21 @@ export function AlertCountsCards({ counts }: { counts: AlertsCounts }) {
       value: counts.orderSignals.total,
       description: "Pedidos con anomalías (últimos 7 días)",
       icon: Bell,
-      iconClassName: "text-info",
+      iconClassName: "text-blue-600 dark:text-blue-400",
     },
     {
       title: "No-shows 7 días",
       value: counts.noShowsLast7Days,
       description: "Postulantes que no se presentaron",
       icon: UserX,
-      iconClassName: "text-warning",
+      iconClassName: "text-amber-600 dark:text-amber-400",
     },
     {
       title: "Docs trabados",
       value: counts.stuckDocs,
       description: "Pendientes hace más de 7 días",
       icon: FileClock,
-      iconClassName: "text-warning",
+      iconClassName: "text-orange-600 dark:text-orange-400",
     },
     {
       title: "Críticas",
@@ -49,11 +49,11 @@ export function AlertCountsCards({ counts }: { counts: AlertsCounts }) {
       icon: counts.totalCritical > 0 ? AlertOctagon : AlertTriangle,
       iconClassName:
         counts.totalCritical > 0
-          ? "text-destructive"
+          ? "text-red-600 dark:text-red-400"
           : "text-muted-foreground",
       containerClassName:
         counts.totalCritical > 0
-          ? "border-destructive"
+          ? "border-red-200 dark:border-red-900/60"
           : undefined,
     },
   ]

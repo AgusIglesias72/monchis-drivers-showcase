@@ -50,7 +50,6 @@ export interface PostulacionFilters {
   sortBy?: SortByFilter
   sortOrder?: SortOrderFilter
   page?: string
-  archived?: string
 }
 
 export interface FilterOption {

@@ -143,7 +143,7 @@ export function PostulacionesTableWithBadges({
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation()
-                          router.push(`/admin/postulaciones/${postulacion.slug ?? postulacion.id}`)
+                          router.push(`/admin/postulaciones/${postulacion.id}`)
                         }}
                       >
                         <Eye className="h-4 w-4" />

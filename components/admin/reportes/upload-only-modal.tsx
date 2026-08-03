@@ -181,8 +181,8 @@ export function UploadOnlyModal({ open, onOpenChange }: UploadOnlyModalProps) {
           </div>
 
           {/* Info Box */}
-          <div className="rounded-lg bg-info-soft border border-info p-4">
-            <p className="text-sm text-info">
+          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-4">
+            <p className="text-sm text-blue-900 dark:text-blue-100">
               ℹ️ Este proceso solo subirá los reportes a Google Sheets. 
               No procesará conductores externos ni generará PDFs.
             </p>

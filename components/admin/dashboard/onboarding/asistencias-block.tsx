@@ -95,29 +95,29 @@ export function AsistenciasBlock({
       label: "Asistieron",
       value: a.asistieron,
       Icon: UserCheck,
-      color: "text-success",
-      bg: "bg-success-soft",
+      color: "text-emerald-600 dark:text-emerald-400",
+      bg: "bg-emerald-500/10",
     },
     {
       label: "No-shows",
       value: a.noAsistieron,
       Icon: UserX,
-      color: "text-destructive",
-      bg: "bg-danger-soft",
+      color: "text-rose-600 dark:text-rose-400",
+      bg: "bg-rose-500/10",
     },
     {
       label: "Pendientes",
       value: a.pendientes,
       Icon: Clock,
-      color: "text-warning",
-      bg: "bg-warning-soft",
+      color: "text-amber-600 dark:text-amber-400",
+      bg: "bg-amber-500/10",
     },
     {
       label: "Resueltas",
       value: a.resueltas,
       Icon: CheckCircle2,
-      color: "text-info",
-      bg: "bg-info-soft",
+      color: "text-blue-600 dark:text-blue-400",
+      bg: "bg-blue-500/10",
     },
   ]
 
@@ -165,7 +165,7 @@ export function AsistenciasBlock({
               </RadialBarChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-semibold tabular-nums text-success leading-none">
+              <span className="text-3xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400 leading-none">
                 {tasa}%
               </span>
               <span className="text-[10px] text-muted-foreground mt-1 tabular-nums">
@@ -259,7 +259,7 @@ export function AsistenciasBlock({
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
             Tendencia presentismo
           </div>
-          <div className="text-2xl font-semibold tabular-nums text-success leading-none">
+          <div className="text-2xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400 leading-none">
             {tasa}%
           </div>
           <div className="text-[10px] text-muted-foreground mt-1 tabular-nums">

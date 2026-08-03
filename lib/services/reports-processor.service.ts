@@ -2,7 +2,7 @@
 import 'dotenv/config';
 import { chromium, Browser, Page, BrowserContext, Download } from 'playwright';
 import * as XLSX from 'xlsx';
-import { writeToSheet, clearSheet, appendToSheet } from '@/scripts/utils/sheet-connection';
+import { writeToSheet, clearSheet } from '@/scripts/utils/sheet-connection';
 import { performOktaLogin } from '../utils/okta-login';
 
 export interface ReportsConfig {
@@ -172,7 +172,6 @@ class ReportProcessorAndUploader {
   private context: BrowserContext | null = null;
   private page: Page | null = null;
   private allData: any[][] = [];
-  private lastChunk: any[][] = [];
   private processedRanges: number = 0;
   private totalRowsFiltered: number = 0;
   private config: ReportsConfig;
@@ -442,8 +441,7 @@ class ReportProcessorAndUploader {
       this.allData = this.allData.concat(cleanData);
       this.log(`   ✅ ${cleanData.length} filas de datos agregadas`);
     }
-
-    this.lastChunk = cleanData;
+    
     this.processedRanges++;
     
     await sleep(2000);
@@ -536,35 +534,24 @@ class ReportProcessorAndUploader {
     }
   }
 
-  async uploadChunkToSheets(isFirstRange: boolean): Promise<void> {
-    if (this.lastChunk.length === 0) {
-      this.log('⚠️  Rango sin filas nuevas, nada que subir a Sheets');
-      return;
-    }
-
-    if (isFirstRange) {
-      this.log('\n📝 SUBIENDO A GOOGLE SHEETS (primer rango)');
-      this.log('🧹 Limpiando hoja...');
-      await clearSheet(this.config.spreadsheetId, this.config.sheetName, false);
-      this.log('✅ Hoja limpiada');
-
-      this.log(`📝 Escribiendo ${this.lastChunk.length} filas (incluyendo headers)...`);
-      await writeToSheet(
-        this.config.spreadsheetId,
-        this.config.sheetName,
-        this.lastChunk,
-        'A1'
-      );
-    } else {
-      this.log(`\n➕ Agregando ${this.lastChunk.length} filas del rango a Google Sheets...`);
-      await appendToSheet(
-        this.config.spreadsheetId,
-        this.config.sheetName,
-        this.lastChunk
-      );
-    }
-
-    this.log('✅ Rango subido a Sheets\n');
+  async uploadToSheets(): Promise<void> {
+    this.log('\n📝 SUBIENDO DATOS A GOOGLE SHEETS');
+    
+    this.log(`📊 Total de filas a subir: ${this.allData.length}`);
+    this.log(`   (1 fila de headers + ${this.allData.length - 1} filas de datos)\n`);
+    
+    this.log('🧹 Limpiando hoja...');
+    await clearSheet(this.config.spreadsheetId, this.config.sheetName, true);
+    this.log('✅ Hoja limpiada\n');
+    
+    this.log('📝 Escribiendo datos...');
+    await writeToSheet(
+      this.config.spreadsheetId,
+      this.config.sheetName,
+      this.allData,
+      'A1'
+    );
+    this.log('✅ Datos escritos exitosamente');
   }
 
   async close(): Promise<void> {
@@ -667,12 +654,13 @@ export const reportsProcessorService = {
         }
 
         await processor.processDateRange(range.start, range.end);
-        await processor.uploadChunkToSheets(i === 0);
 
         if (i < dateRanges.length - 1) {
           await sleep(5000);
         }
       }
+
+      await processor.uploadToSheets();
 
       const stats = processor.getStats();
 

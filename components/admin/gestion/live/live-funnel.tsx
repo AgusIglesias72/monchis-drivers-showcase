@@ -39,12 +39,12 @@ const STAGES: Stage[] = [
     key: "PENDING",
     label: "Buscando driver",
     icon: Search,
-    color: "text-warning",
-    bg: "bg-warning-soft",
-    bgHover: "hover:bg-warning-soft",
-    border: "border-warning",
-    borderActive: "border-warning ring-2 ring-warning/30",
-    iconBg: "bg-warning-soft text-warning",
+    color: "text-amber-700 dark:text-amber-400",
+    bg: "bg-amber-50 dark:bg-amber-950/30",
+    bgHover: "hover:bg-amber-100 dark:hover:bg-amber-950/50",
+    border: "border-amber-200 dark:border-amber-900",
+    borderActive: "border-amber-500 ring-2 ring-amber-500/30",
+    iconBg: "bg-amber-100 text-amber-700 dark:bg-amber-900/50",
   },
   {
     key: "ACCEPTED",
@@ -72,12 +72,12 @@ const STAGES: Stage[] = [
     key: "DELIVERY",
     label: "En camino",
     icon: Bike,
-    color: "text-info",
-    bg: "bg-info-soft",
-    bgHover: "hover:bg-info-soft",
-    border: "border-info",
-    borderActive: "border-info ring-2 ring-info/30",
-    iconBg: "bg-info-soft text-info",
+    color: "text-blue-700 dark:text-blue-400",
+    bg: "bg-blue-50 dark:bg-blue-950/30",
+    bgHover: "hover:bg-blue-100 dark:hover:bg-blue-950/50",
+    border: "border-blue-200 dark:border-blue-900",
+    borderActive: "border-blue-500 ring-2 ring-blue-500/30",
+    iconBg: "bg-blue-100 text-blue-700 dark:bg-blue-900/50",
   },
   {
     key: "OUTSIDE",
@@ -93,10 +93,10 @@ const STAGES: Stage[] = [
 ]
 
 const BUCKETS = [
-  { key: "fresh", label: "0-3m", max: 3, fill: "bg-success", text: "text-success" },
-  { key: "warm", label: "3-7m", max: 7, fill: "bg-warning", text: "text-warning" },
-  { key: "hot", label: "7-15m", max: 15, fill: "bg-warning", text: "text-warning" },
-  { key: "critical", label: "15+m", max: Infinity, fill: "bg-destructive", text: "text-destructive" },
+  { key: "fresh", label: "0-3m", max: 3, fill: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400" },
+  { key: "warm", label: "3-7m", max: 7, fill: "bg-amber-500", text: "text-amber-700 dark:text-amber-400" },
+  { key: "hot", label: "7-15m", max: 15, fill: "bg-orange-500", text: "text-orange-700 dark:text-orange-400" },
+  { key: "critical", label: "15+m", max: Infinity, fill: "bg-red-500", text: "text-red-700 dark:text-red-400" },
 ] as const
 
 type BucketKey = (typeof BUCKETS)[number]["key"]
@@ -236,7 +236,7 @@ export function LiveFunnel({
               </div>
 
               {critical > 0 && (
-                <div className="mt-2 flex items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-[11px] font-semibold text-destructive">
+                <div className="mt-2 flex items-center gap-1.5 rounded-md bg-red-100 px-2 py-1 text-[11px] font-semibold text-red-800 dark:bg-red-950/50 dark:text-red-300">
                   <AlertCircle className="h-3 w-3" />
                   {critical} con más de 15 min
                 </div>

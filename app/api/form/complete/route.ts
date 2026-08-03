@@ -1,15 +1,12 @@
 // app/api/form/complete/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { after } from 'next/server';
+import { WhatsAppMessageSource, WhatsAppMessageType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { refreshRucForDriverAsync } from '@/lib/services/turuc.service';
-import { runRealtimeDecision } from '@/lib/services/realtime-decision.service';
+import { sendTemplateByKey } from '@/lib/services/whatsapp-messenger.service';
 
-export const runtime = 'nodejs';
-// El after() corre dentro del lifetime de la función: pipeline del agente
-// (~10-45s) + espera de auto-approve + WhatsApp. Margen amplio para no dejar
-// AgentRuns zombie en RUNNING.
-export const maxDuration = 120;
+const FORM_COMPLETED_TEMPLATE_KEY = 'form_completed';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,6 +18,9 @@ export async function POST(request: NextRequest) {
 
     const submission = await prisma.formSubmission.findUnique({
       where: { sessionId },
+      include: {
+        formDriver: true,
+      },
     });
 
     if (!submission || !submission.formDriverId) {
@@ -85,12 +85,32 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Decisión IA en tiempo real, diferida con after() para responder al
-    // postulante de inmediato. El cliente hace polling a /api/form/decision-status.
-    // El WhatsApp 'form_completed' se envía adentro, post-decisión, solo si el
-    // resultado NO es aprobado-auto-ejecutado.
-    const formDriverId = submission.formDriverId;
-    after(() => runRealtimeDecision(formDriverId));
+    // Enviar confirmación post-form por el bot WhatsApp (apps/whatsapp-bot/).
+    // Diferido con after() para no bloquear la respuesta al postulante con la
+    // latencia del bot. Si falla solo queda log — el form ya se completó.
+    const driverForMessaging = submission.formDriver;
+    if (driverForMessaging) {
+      after(async () => {
+        try {
+          const result = await sendTemplateByKey(driverForMessaging, FORM_COMPLETED_TEMPLATE_KEY, {
+            source: WhatsAppMessageSource.TRIGGER,
+            messageType: WhatsAppMessageType.APPLICATION_RECEIVED,
+            step: 'form_completed',
+          });
+          if (result.status !== 'sent') {
+            console.warn('[FORM_COMPLETE] bot no envió', {
+              driverId: driverForMessaging.id,
+              result,
+            });
+          }
+        } catch (err) {
+          console.error('[FORM_COMPLETE] Error inesperado enviando WhatsApp', {
+            driverId: driverForMessaging.id,
+            error: err instanceof Error ? err.message : err,
+          });
+        }
+      });
+    }
 
     // Dispara consulta RUC en background (no bloquea la respuesta al postulante).
     // El admin verá el estado fiscal cuando abra la postulación.

@@ -24,12 +24,12 @@ export function OnboardingKPIs({ stats }: { stats: OnboardingStats }) {
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {/* Eventos Próximos */}
       <Link href="/admin/onboarding">
-        <Card className="cursor-pointer hover:border-info transition-colors">
+        <Card className="cursor-pointer hover:border-blue-500 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Eventos Próximos
             </CardTitle>
-            <Calendar className="h-4 w-4 text-info" />
+            <Calendar className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.upcomingEvents}</div>
@@ -45,12 +45,12 @@ export function OnboardingKPIs({ stats }: { stats: OnboardingStats }) {
 
       {/* Drivers Pendientes */}
       <Link href="/admin/onboarding/drivers">
-        <Card className="cursor-pointer hover:border-warning transition-colors">
+        <Card className="cursor-pointer hover:border-amber-500 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Pendientes de Agendar
             </CardTitle>
-            <Clock className="h-4 w-4 text-warning" />
+            <Clock className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.pendingDrivers}</div>
@@ -86,7 +86,7 @@ export function OnboardingKPIs({ stats }: { stats: OnboardingStats }) {
           <CardTitle className="text-sm font-medium">
             Tasa de Asistencia
           </CardTitle>
-          <TrendingUp className="h-4 w-4 text-success" />
+          <TrendingUp className="h-4 w-4 text-green-500" />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{stats.attendanceRate}%</div>

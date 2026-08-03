@@ -180,9 +180,9 @@ export function AgentRunDetailSheet(props: AgentRunDetailProps) {
             </section>
 
             {props.error && (
-              <section className="rounded-md border border-danger/25 bg-danger-soft p-3">
-                <p className="text-xs font-semibold text-danger mb-1">Error</p>
-                <p className="text-xs text-danger">{props.error}</p>
+              <section className="rounded-md border border-red-200 bg-red-50 p-3">
+                <p className="text-xs font-semibold text-red-700 mb-1">Error</p>
+                <p className="text-xs text-red-700">{props.error}</p>
               </section>
             )}
 
@@ -217,44 +217,44 @@ function translateRunStatus(status: string): string {
 function DecisionBadge({ decision }: { decision: Decision }) {
   if (!decision) {
     return (
-      <div className="flex items-center gap-2 rounded-md bg-muted p-3">
-        <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-        <span className="text-sm font-medium text-foreground">Sin decisión</span>
+      <div className="flex items-center gap-2 rounded-md bg-slate-100 p-3">
+        <AlertTriangle className="h-5 w-5 text-slate-500" />
+        <span className="text-sm font-medium text-slate-700">Sin decisión</span>
       </div>
     )
   }
 
   if (decision === 'APPROVED') {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-success/25 bg-success-soft p-3">
-        <CheckCircle2 className="h-5 w-5 text-success" />
-        <span className="text-sm font-semibold text-success">APROBADO</span>
+      <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3">
+        <CheckCircle2 className="h-5 w-5 text-green-600" />
+        <span className="text-sm font-semibold text-green-800">APROBADO</span>
       </div>
     )
   }
   if (decision === 'REJECTED') {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-danger/25 bg-danger-soft p-3">
-        <XCircle className="h-5 w-5 text-danger" />
-        <span className="text-sm font-semibold text-danger">RECHAZADO</span>
+      <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3">
+        <XCircle className="h-5 w-5 text-red-600" />
+        <span className="text-sm font-semibold text-red-800">RECHAZADO</span>
       </div>
     )
   }
   return (
-    <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning-soft p-3">
-      <AlertTriangle className="h-5 w-5 text-warning" />
-      <span className="text-sm font-semibold text-warning">REVISIÓN MANUAL</span>
+    <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+      <AlertTriangle className="h-5 w-5 text-amber-600" />
+      <span className="text-sm font-semibold text-amber-800">REVISIÓN MANUAL</span>
     </div>
   )
 }
 
 function ActionStatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
-    PROPOSED: { label: 'Propuesta', cls: 'bg-muted text-muted-foreground border-border' },
-    APPROVED: { label: 'Aprobada', cls: 'bg-success-soft text-success border-success/30' },
-    EXECUTED: { label: 'Ejecutada', cls: 'bg-success-soft text-success border-success/30' },
-    REJECTED: { label: 'Rechazada', cls: 'bg-danger-soft text-danger border-danger/30' },
-    FAILED: { label: 'Falló', cls: 'bg-danger-soft text-danger border-danger/30' },
+    PROPOSED: { label: 'Propuesta', cls: 'bg-slate-50 text-slate-700 border-slate-200' },
+    APPROVED: { label: 'Aprobada', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+    EXECUTED: { label: 'Ejecutada', cls: 'bg-green-50 text-green-700 border-green-200' },
+    REJECTED: { label: 'Rechazada', cls: 'bg-red-50 text-red-700 border-red-200' },
+    FAILED: { label: 'Falló', cls: 'bg-red-50 text-red-700 border-red-200' },
   }
   const c = map[status] ?? map.PROPOSED
   return (

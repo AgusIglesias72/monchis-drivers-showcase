@@ -16,7 +16,6 @@ interface ProcessDailyRequest {
   keepBrowserOpen?: boolean;
   startFromExtra?: string; // Para retomar desde un extra específico (salta los anteriores)
   skipSheetUpload?: boolean; // Salta descarga de Excel y upload a Sheet (usa el sheet existente)
-  stores?: string[]; // Bono puntual por sucursal: solo procesa pedidos cuyo storeName "contiene" alguno (normalizado)
 }
 
 export async function POST(request: NextRequest) {
@@ -108,9 +107,6 @@ export async function POST(request: NextRequest) {
         await backgroundJobsService.addLog(job.id, `📅 Fecha: ${body.bonusDate}`);
         await backgroundJobsService.addLog(job.id, `🏃 Modo: ${executionMode}`);
         await backgroundJobsService.addLog(job.id, `🎯 Scope: ${scope}`);
-        if (body.stores && body.stores.length > 0) {
-          await backgroundJobsService.addLog(job.id, `🏪 Bono por sucursal — solo: ${body.stores.join(', ')}`);
-        }
         if (body.skipSheetUpload) {
           await backgroundJobsService.addLog(job.id, `⏭️  Saltando generación de sheet (usando existente)`);
         }
@@ -127,7 +123,6 @@ export async function POST(request: NextRequest) {
           keepBrowserOpen: body.keepBrowserOpen || false,
           startFromExtra: body.startFromExtra,
           skipSheetUpload: body.skipSheetUpload || false,
-          stores: body.stores,
         });
 
         // Guardar resultado

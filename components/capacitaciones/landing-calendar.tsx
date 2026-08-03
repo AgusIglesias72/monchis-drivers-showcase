@@ -60,11 +60,9 @@ const MODALITY_LABEL = {
 interface Props {
   initialSlots?: SlotResponse[]
   sessionToken?: string
-  /** Modo embebido (ej. pantalla post-submit del form): sin heading de sección ni márgenes de landing. */
-  hideHeader?: boolean
 }
 
-export function LandingCalendar({ initialSlots = [], sessionToken, hideHeader = false }: Props) {
+export function LandingCalendar({ initialSlots = [], sessionToken }: Props) {
   const flow = useBookingFlow(sessionToken)
   const [month, setMonth] = useState<Date>(new Date())
   const [slots, setSlots] = useState<SlotResponse[]>(initialSlots)
@@ -179,20 +177,18 @@ export function LandingCalendar({ initialSlots = [], sessionToken, hideHeader = 
   const selectedModalities = selectedYmd ? dayModalities.get(selectedYmd) : null
 
   return (
-    <section className={hideHeader ? '' : 'mt-2 mb-12 lg:mb-14'}>
-      {!hideHeader && (
-        <div className="text-center mb-6 lg:mb-8">
-          <div className="text-xs uppercase tracking-wider font-semibold text-brand mb-2">
-            Agendá tu capacitación
-          </div>
-          <h2 className="text-2xl lg:text-3xl font-bold tracking-tight">
-            Elegí tu fecha
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1.5 max-w-md mx-auto">
-            Tocá un día disponible y reservá tu lugar en el momento.
-          </p>
+    <section className="mt-2 mb-12 lg:mb-14">
+      <div className="text-center mb-6 lg:mb-8">
+        <div className="text-xs uppercase tracking-wider font-semibold text-brand mb-2">
+          Agendá tu capacitación
         </div>
-      )}
+        <h2 className="text-2xl lg:text-3xl font-bold tracking-tight">
+          Elegí tu fecha
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1.5 max-w-md mx-auto">
+          Tocá un día disponible y reservá tu lugar en el momento.
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-5">
         {/* Calendar */}

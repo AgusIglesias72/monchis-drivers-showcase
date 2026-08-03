@@ -39,19 +39,19 @@ export function ExternalDriversReportCard() {
         <CardContent className="pt-0">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="flex items-start gap-2 text-sm">
-              <div className="h-1.5 w-1.5 rounded-full bg-info mt-2 flex-shrink-0" />
+              <div className="h-1.5 w-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
               <span className="text-muted-foreground">Lee datos existentes de Google Sheets</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
-              <div className="h-1.5 w-1.5 rounded-full bg-info mt-2 flex-shrink-0" />
+              <div className="h-1.5 w-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
               <span className="text-muted-foreground">Genera PDFs individuales por conductor</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
-              <div className="h-1.5 w-1.5 rounded-full bg-info mt-2 flex-shrink-0" />
+              <div className="h-1.5 w-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
               <span className="text-muted-foreground">Sube PDFs a Google Drive</span>
             </div>
             <div className="flex items-start gap-2 text-sm">
-              <div className="h-1.5 w-1.5 rounded-full bg-success mt-2 flex-shrink-0" />
+              <div className="h-1.5 w-1.5 rounded-full bg-green-500 mt-2 flex-shrink-0" />
               <span className="text-muted-foreground">Control de concurrencia configurable</span>
             </div>
           </div>

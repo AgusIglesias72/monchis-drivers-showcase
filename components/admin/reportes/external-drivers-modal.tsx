@@ -188,8 +188,8 @@ export function ExternalDriversModal({ open, onOpenChange }: ExternalDriversModa
           </div>
 
           {/* Info Box */}
-          <div className="rounded-lg bg-warning-soft border border-warning p-4">
-            <p className="text-sm text-warning">
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-4">
+            <p className="text-sm text-amber-900 dark:text-amber-100">
               ⚠️ Este proceso lee datos existentes de Google Sheets. 
               Asegúrate de que los reportes ya estén subidos para el período seleccionado.
             </p>

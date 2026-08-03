@@ -102,24 +102,6 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-// Historial de conexión del bot de WhatsApp (whatsapp-web.js). El cron
-// check-bot-connection lo puebla registrando los CAMBIOS de estado (transición
-// conectado<->desconectado), para tener trazabilidad de "de qué hora a qué hora
-// estuvo conectado" — clave porque un envío puede marcarse SENT sin que la
-// sesión esté realmente conectada.
-model BotConnectionLog {
-  id          String   @id @default(cuid())
-  checkedAt   DateTime @default(now()) @map("checked_at")
-  connected   Boolean
-  status      String // 'connected' | 'qr_available' | 'initializing' | 'error'
-  phoneNumber String?  @map("phone_number")
-  message     String?  @db.Text
-  source      String   @default("cron") // 'cron' | 'manual'
-
-  @@index([checkedAt])
-  @@map("bot_connection_logs")
-}
-
 model DriverContact {
   id              String        @id @default(cuid())
   formDriverId    String        @map("form_driver_id")
@@ -222,8 +204,6 @@ model FormDriver {
   lastMessageSentAt DateTime? @map("last_message_sent_at") // Último mensaje automático enviado
 
   // Portal de autogestión
-  slug                   String?   @unique @map("slug")
-
   accessToken            String?   @unique @map("access_token")
   accessTokenGeneratedAt DateTime? @map("access_token_generated_at")
   lastPortalAccessAt     DateTime? @map("last_portal_access_at")
@@ -249,10 +229,6 @@ model FormDriver {
   rucInactiveWaivedAt   DateTime? @map("ruc_inactive_waived_at")
   rucInactiveWaivedNote String?   @map("ruc_inactive_waived_note") @db.Text
 
-  // Archivado (oculta la postulación de las vistas de trabajo sin tocar el status)
-  archivedAt DateTime? @map("archived_at")
-  archivedBy String?   @map("archived_by") // clerkId del admin
-
   // Timestamps
   startedAt      DateTime  @default(now()) @map("started_at")
   lastActivityAt DateTime  @updatedAt @map("last_activity_at")
@@ -272,7 +248,6 @@ model FormDriver {
   whatsappMessagesSent  WhatsAppMessage[]
   agentRuns             AgentRun[]
 
-  @@index([slug])
   @@index([cedula])
   @@index([phoneNumber])
   @@index([email])
@@ -282,48 +257,7 @@ model FormDriver {
   @@index([onboardingStatus])
   @@index([accessToken])
   @@index([rucStatus])
-  @@index([status, createdAt])
-  @@index([status, completedAt])
-  @@index([status, lastActivityAt])
-  @@index([status, onboardingStatus])
-  @@index([onboardingStatus, onboardingScheduledAt])
-  @@index([onboardingStatus, onboardingCompletedAt])
-  @@index([rucStatus, startedAt])
-  @@index([documentsStatus, completedAt, lastActivityAt])
-  @@index([archivedAt])
   @@map("form_drivers")
-}
-
-// Reportes internos de bugs/mejoras desde el panel admin
-model BugReport {
-  id          String          @id @default(cuid())
-  type        BugReportType   @default(BUG)
-  title       String
-  description String          @db.Text
-  pageUrl     String?         @map("page_url") // ruta del admin donde se reportó
-  attachments Json?           // [{ url, name, contentType, size }]
-  status      BugReportStatus @default(OPEN)
-  reportedBy  String          @map("reported_by") // clerkId del admin
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
-
-  @@index([status, createdAt])
-  @@index([type])
-  @@map("bug_reports")
-}
-
-enum BugReportType {
-  BUG
-  MEJORA
-  IDEA
-  OTRO
-}
-
-enum BugReportStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  DISCARDED
 }
 
 model FormSubmission {
@@ -457,7 +391,6 @@ model FormDocument {
   @@index([formDriverId])
   @@index([documentType])
   @@index([status])
-  @@index([documentType, status])
   @@index([uploadedBy])
   @@map("form_documents")
 }
@@ -502,8 +435,6 @@ model EquipmentPayment {
 
   @@index([formDriverId])
   @@index([status])
-  @@index([formDriverId, status])
-  @@index([createdAt])
   @@map("equipment_payments")
 }
 
@@ -772,8 +703,6 @@ model OnboardingAttendee {
   @@index([eventId])
   @@index([formDriverId])
   @@index([status])
-  @@index([formDriverId, status])
-  @@index([status, markedNoShowAt])
   @@map("onboarding_attendees")
 }
 
@@ -1423,30 +1352,6 @@ model TurnosShiftEvent {
   @@map("turnos_shift_event")
 }
 
-// Recordatorio pre-turno enviado por Intercom (cron `/api/cron/turno-reminders`,
-// cada 15 min, ventana 15-30 min antes del arranque). El unique de
-// (shiftId, driverId) es la garantía de idempotencia: "1 mensaje por persona
-// por turno" aunque el cron se solape o corra dos veces sobre la misma ventana.
-model TurnoReminderSent {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now()) @map("created_at")
-
-  shiftId  String @map("shift_id")
-  driverId String @map("driver_id")
-  dateIso  String @map("date_iso")
-  fromHour Float? @map("from_hour")
-  zoneId   String @map("zone_id")
-  zoneName String @map("zone_name")
-
-  status                 String  // 'sent' | 'failed' | 'skipped_no_contact'
-  intercomConversationId String? @map("intercom_conversation_id")
-  errorMessage           String? @map("error_message")
-
-  @@unique([shiftId, driverId])
-  @@index([dateIso])
-  @@map("turno_reminder_sent")
-}
-
 // Refresh token vigente de Google OAuth (singleton: id = "default").
 // Persistido en DB para que `scripts/get-google-refresh-token.ts` lo suba
 // una sola vez y todos los entornos lo lean sin editar `.env` por entorno.
@@ -1715,11 +1620,6 @@ model AgentRun {
   // Auditoría
   triggeredBy String? @map("triggered_by") // clerkId o 'SYSTEM'
   error       String? @db.Text
-
-  // Feedback apto para mostrar al postulante en la pantalla post-submit.
-  // Array de checks con mensajes de catálogo fijo (nunca texto libre del modelo):
-  // [{ key: 'identidad'|'antecedentes'|'ruc', status: 'ok'|'warn'|'fail', motive: string }]
-  publicChecks Json? @map("public_checks")
 
   // Feedback humano (admin califica si la decisión del agente fue correcta).
   // Usado para medir accuracy y alimentar análisis automático (Fase 2).

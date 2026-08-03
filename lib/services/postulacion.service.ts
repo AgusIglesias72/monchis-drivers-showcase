@@ -1,63 +1,16 @@
 // lib/services/postulacion.service.ts
 
-import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { formatDateOnly } from '@/lib/utils'
-import { slugify } from '@/lib/utils/slugify'
-
-export function driverSlugBase(name: string | null | undefined, id: string): string {
-  return slugify(name ?? '', 60) || `postulante-${id.slice(0, 6)}`
-}
-
-export async function generateUniqueDriverSlug(
-  name: string | null | undefined,
-  id: string,
-): Promise<string> {
-  const base = driverSlugBase(name, id)
-  const existing = await prisma.formDriver.findMany({
-    where: { slug: { startsWith: base }, id: { not: id } },
-    select: { slug: true },
-  })
-  const taken = new Set(existing.map((d) => d.slug))
-  if (!taken.has(base)) return base
-  for (let n = 2; ; n++) {
-    const candidate = `${base}-${n}`
-    if (!taken.has(candidate)) return candidate
-  }
-}
-
-function isUniqueConstraintError(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
-}
-
-// Asigna slug con reintentos ante carreras de unicidad (P2002): el candidato se
-// recalcula contra la DB en cada intento.
-export async function assignDriverSlug(
-  driverId: string,
-  name: string | null | undefined,
-): Promise<string | null> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const slug = await generateUniqueDriverSlug(name, driverId)
-    try {
-      await prisma.formDriver.update({ where: { id: driverId }, data: { slug } })
-      return slug
-    } catch (error) {
-      if (!isUniqueConstraintError(error)) throw error
-    }
-  }
-  return null
-}
 
 export class PostulacionService {
-
+  
   /**
-   * Obtiene una postulación completa por slug o ID
+   * Obtiene una postulación completa por ID
    */
-  async getPostulacionById(slugOrId: string) {
-    const formDriver = await prisma.formDriver.findFirst({
-      where: { OR: [{ slug: slugOrId }, { id: slugOrId }] },
-      // Json pesados que la vista de detalle no consume
-      omit: { rucApiRawResponse: true, metadata: true },
+  async getPostulacionById(id: string) {
+    const formDriver = await prisma.formDriver.findUnique({
+      where: { id },
       include: {
         notes: {
           orderBy: { createdAt: 'desc' },
@@ -120,12 +73,6 @@ export class PostulacionService {
 
     if (!formDriver) {
       return null
-    }
-
-    // Auto-curación: postulaciones creadas por código previo al slug limpio
-    if (!formDriver.slug) {
-      const name = formDriver.fullName || [formDriver.firstName, formDriver.lastName].filter(Boolean).join(' ')
-      formDriver.slug = await assignDriverSlug(formDriver.id, name)
     }
 
     // Generar timeline

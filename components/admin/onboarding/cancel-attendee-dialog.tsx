@@ -214,7 +214,7 @@ export function CancelAttendeeDialog({
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">Evento Actual:</p>
                   <div className="flex items-start gap-3">
-                    <Calendar className="h-4 w-4 text-info mt-0.5" />
+                    <Calendar className="h-4 w-4 text-blue-600 mt-0.5" />
                     <div className="flex-1 text-sm">
                       <p className="font-medium">{attendee.event.title || 'Sin título'}</p>
                       <p className="text-muted-foreground">
@@ -249,7 +249,7 @@ export function CancelAttendeeDialog({
                   className="cursor-pointer justify-start h-auto p-4"
                 >
                   <div className="flex items-start gap-3 text-left">
-                    <CalendarCheck className="h-5 w-5 text-info mt-0.5 flex-shrink-0" />
+                    <CalendarCheck className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">Reagendar a otro evento</p>
                       <p className="text-sm text-muted-foreground">
@@ -263,10 +263,10 @@ export function CancelAttendeeDialog({
                   variant="outline"
                   onClick={() => setAction('cancel')}
                   disabled={isPending}
-                  className="cursor-pointer justify-start h-auto p-4 hover:bg-danger-soft hover:border-destructive"
+                  className="cursor-pointer justify-start h-auto p-4 hover:bg-red-50 hover:border-red-200"
                 >
                   <div className="flex items-start gap-3 text-left">
-                    <CalendarX className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+                    <CalendarX className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="font-medium">Cancelar asistencia</p>
                       <p className="text-sm text-muted-foreground">
@@ -282,11 +282,11 @@ export function CancelAttendeeDialog({
           {/* Vista de Cancelar */}
           {action === 'cancel' && (
             <div className="space-y-3">
-              <div className="flex items-start gap-2 p-3 bg-danger-soft border border-destructive rounded-lg">
-                <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 text-sm">
-                  <p className="font-medium text-destructive mb-1">¿Cancelar esta asistencia?</p>
-                  <p className="text-destructive">
+                  <p className="font-medium text-red-900 mb-1">¿Cancelar esta asistencia?</p>
+                  <p className="text-red-700">
                     El driver será removido del evento y podrás asignarlo a otro onboarding más adelante.
                   </p>
                 </div>
@@ -309,9 +309,9 @@ export function CancelAttendeeDialog({
           {/* Vista de Reagendar */}
           {action === 'reschedule' && (
             <div className="space-y-3">
-              <div className="flex items-start gap-2 p-3 bg-info-soft border border-info rounded-lg text-sm">
-                <Info className="h-4 w-4 text-info mt-0.5 flex-shrink-0" />
-                <p className="text-info">
+              <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <p className="text-blue-900">
                   El onboarding actual será cancelado y el driver será asignado al nuevo evento que selecciones.
                 </p>
               </div>
@@ -345,16 +345,16 @@ export function CancelAttendeeDialog({
                           className={cn(
                             "w-full text-left p-4 rounded-lg border-2 transition-all",
                             isSelected
-                              ? "border-info bg-info-soft"
+                              ? "border-blue-600 bg-blue-50"
                               : isFull
-                              ? "border-border bg-muted opacity-60 cursor-not-allowed"
-                              : "border-border hover:border-border hover:bg-muted cursor-pointer"
+                              ? "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
+                              : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer"
                           )}
                         >
                           <div className="flex items-start gap-3">
                             <Calendar className={cn(
                               "h-5 w-5 mt-0.5",
-                              isSelected ? "text-info" : "text-muted-foreground"
+                              isSelected ? "text-blue-600" : "text-muted-foreground"
                             )} />
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-sm">
@@ -380,12 +380,12 @@ export function CancelAttendeeDialog({
                                   {event.currentCapacity}{totalSlots ? ` / ${totalSlots}` : ''}
                                 </span>
                                 {availableSlots !== null && availableSlots > 0 && (
-                                  <span className="text-success ml-1">
+                                  <span className="text-green-600 ml-1">
                                     ({availableSlots} {availableSlots === 1 ? 'libre' : 'libres'})
                                   </span>
                                 )}
                                 {isFull && (
-                                  <span className="text-destructive ml-1 font-medium">
+                                  <span className="text-red-600 ml-1 font-medium">
                                     (Lleno)
                                   </span>
                                 )}

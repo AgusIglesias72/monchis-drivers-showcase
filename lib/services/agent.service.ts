@@ -52,45 +52,12 @@ export type ProposedToolCall =
     }
   | { tool: 'escalate_to_admin'; input: { reason: string }; reasoning?: string }
 
-// ============================================================================
-// Public checks: feedback apto para mostrar al postulante en la pantalla
-// post-submit del form público. Los motivos salen SIEMPRE de un catálogo fijo
-// es-PY — nunca texto libre del modelo hacia el postulante.
-// ============================================================================
-
-export type PublicCheckKey = 'identidad' | 'antecedentes' | 'ruc'
-export type PublicCheckStatus = 'ok' | 'warn' | 'fail'
-export interface PublicCheck {
-  key: PublicCheckKey
-  status: PublicCheckStatus
-  motive: string
-}
-
-const PUBLIC_CHECK_MSG = {
-  ok: 'Sin observaciones',
-  generic: 'Necesitamos revisar este punto manualmente',
-  cedulaMissing: 'Falta la foto de tu cédula',
-  cedulaUnreadable: 'No pudimos leer bien las fotos de tu cédula',
-  cedulaMismatch: 'Los datos de tu cédula no coinciden con los del formulario',
-  cedulaWrongType: 'El archivo que subiste no corresponde a una cédula',
-  cedulaObservations: 'Encontramos observaciones en la foto de tu cédula',
-  criminalMissing: 'Falta tu certificado de antecedentes',
-  criminalExpired: 'Tu certificado de antecedentes tiene más de 90 días',
-  criminalUnreadable: 'No pudimos leer tu certificado de antecedentes',
-  criminalObservations: 'El certificado de antecedentes presenta observaciones',
-  criminalWrongType: 'El archivo que subiste no corresponde al certificado de antecedentes',
-  rucObservations: 'Tu RUC figura con observaciones en la SET',
-  rucBlocking:
-    'Tu RUC figura cancelado o bloqueado en la SET — necesitás regularizarlo para poder facturar',
-} as const
-
 export interface AgentRunResult {
   agentRunId: string
   decision: AgentRunDecision | null
   summary: string
   reasoning: string
   actions: ProposedToolCall[]
-  publicChecks: PublicCheck[]
   metrics: {
     iterations: number
     inputTokens: number
@@ -167,7 +134,6 @@ export async function runAgentForDriver(params: RunAgentParams): Promise<AgentRu
         cacheWriteTokens: result.metrics.cacheWriteTokens,
         costMicroUsd: result.metrics.costMicroUsd,
         model: result.model,
-        publicChecks: result.publicChecks as unknown as Prisma.InputJsonValue,
         completedAt: new Date(),
       },
     })
@@ -217,7 +183,6 @@ export async function runAgentForDriver(params: RunAgentParams): Promise<AgentRu
       summary: 'El agente falló durante la ejecución.',
       reasoning: '',
       actions: [],
-      publicChecks: [],
       metrics: emptyMetrics(),
       model: null,
       error: err?.message ?? 'Error desconocido',
@@ -274,11 +239,6 @@ async function runDeterministicPipeline(
           input: { reason: 'Cédula del postulante está vacía — registrar manualmente.' },
           reasoning: 'Sin cédula no podemos hacer ninguna validación fiscal ni de identidad.',
         },
-      ],
-      publicChecks: [
-        { key: 'identidad', status: 'warn', motive: PUBLIC_CHECK_MSG.generic },
-        { key: 'antecedentes', status: 'warn', motive: PUBLIC_CHECK_MSG.generic },
-        { key: 'ruc', status: 'warn', motive: PUBLIC_CHECK_MSG.generic },
       ],
       metrics,
       model: null,
@@ -839,135 +799,14 @@ async function runDeterministicPipeline(
 
   const reasoning = steps.join('\n')
 
-  const publicChecks = buildPublicChecks({
-    missingCedula: cedulas.length === 0,
-    missingCriminal: !criminal,
-    validationFailed: validationFailedGlobally && hasUploadedDocs,
-    fraudSignal,
-    cedulaTypo: !!cedulaTypo,
-    rejects: rejectsFromImages,
-    reviews: reviewsFromImages,
-    wrongTypes: wrongTypeFromImages,
-    rucBlocking,
-    rucSoftIssue: rucSoftIssue && !driver.rucInactiveWaived,
-    rucUnknown,
-  })
-
   return {
     decision,
     summary,
     reasoning,
     actions,
-    publicChecks,
     metrics,
     model: HAIKU_MODEL,
   }
-}
-
-// ============================================================================
-// Derivación determinística de los checks públicos (pantalla post-submit).
-// Mapea las señales que el pipeline ya computó a mensajes del catálogo fijo.
-// Regla dura: nada de texto libre del modelo — si un caso no matchea el
-// catálogo, cae al motive genérico con status 'warn'.
-// ============================================================================
-
-function buildPublicChecks(input: {
-  missingCedula: boolean
-  missingCriminal: boolean
-  validationFailed: boolean
-  fraudSignal: boolean
-  cedulaTypo: boolean
-  rejects: { doc: string; reason: string }[]
-  reviews: { doc: string; concern: string }[]
-  wrongTypes: { doc: string }[]
-  rucBlocking: boolean
-  rucSoftIssue: boolean
-  rucUnknown: boolean
-}): PublicCheck[] {
-  const isCedulaDoc = (label: string) => /c[eé]dula/i.test(label)
-  const isCriminalDoc = (label: string) => /antecedentes/i.test(label)
-  const cedulaMismatchRegex =
-    /cédula.*no coincide|cedula.*no coincide|otra persona|diferente persona/i
-
-  // --- identidad (cédula) ---
-  let identidad: PublicCheck = { key: 'identidad', status: 'ok', motive: PUBLIC_CHECK_MSG.ok }
-  if (input.missingCedula) {
-    identidad = { key: 'identidad', status: 'fail', motive: PUBLIC_CHECK_MSG.cedulaMissing }
-  } else if (input.fraudSignal || input.cedulaTypo || input.validationFailed) {
-    // Sospecha de fraude, typo de cédula o falla técnica del provider: nunca
-    // exponemos el detalle al postulante — mensaje genérico de revisión manual.
-    identidad = { key: 'identidad', status: 'warn', motive: PUBLIC_CHECK_MSG.generic }
-  } else if (input.wrongTypes.some((w) => isCedulaDoc(w.doc))) {
-    identidad = { key: 'identidad', status: 'warn', motive: PUBLIC_CHECK_MSG.cedulaWrongType }
-  } else {
-    const reject = input.rejects.find((r) => isCedulaDoc(r.doc))
-    const review = input.reviews.find((r) => isCedulaDoc(r.doc))
-    if (reject) {
-      const motive = cedulaMismatchRegex.test(reject.reason)
-        ? PUBLIC_CHECK_MSG.cedulaMismatch
-        : classifyConcern(reject.reason.toLowerCase()) === 'QUALITY'
-          ? PUBLIC_CHECK_MSG.cedulaUnreadable
-          : PUBLIC_CHECK_MSG.cedulaObservations
-      identidad = { key: 'identidad', status: 'fail', motive }
-    } else if (review) {
-      const motive =
-        classifyConcern(review.concern.toLowerCase()) === 'QUALITY'
-          ? PUBLIC_CHECK_MSG.cedulaUnreadable
-          : PUBLIC_CHECK_MSG.generic
-      identidad = { key: 'identidad', status: 'warn', motive }
-    }
-  }
-
-  // --- antecedentes ---
-  let antecedentes: PublicCheck = {
-    key: 'antecedentes',
-    status: 'ok',
-    motive: PUBLIC_CHECK_MSG.ok,
-  }
-  if (input.missingCriminal) {
-    antecedentes = { key: 'antecedentes', status: 'fail', motive: PUBLIC_CHECK_MSG.criminalMissing }
-  } else if (input.fraudSignal || input.validationFailed) {
-    antecedentes = { key: 'antecedentes', status: 'warn', motive: PUBLIC_CHECK_MSG.generic }
-  } else if (input.wrongTypes.some((w) => isCriminalDoc(w.doc))) {
-    antecedentes = {
-      key: 'antecedentes',
-      status: 'warn',
-      motive: PUBLIC_CHECK_MSG.criminalWrongType,
-    }
-  } else {
-    const reject = input.rejects.find((r) => isCriminalDoc(r.doc))
-    const review = input.reviews.find((r) => isCriminalDoc(r.doc))
-    if (reject) {
-      const motive =
-        classifyConcern(reject.reason.toLowerCase()) === 'QUALITY'
-          ? PUBLIC_CHECK_MSG.criminalUnreadable
-          : PUBLIC_CHECK_MSG.criminalObservations
-      antecedentes = { key: 'antecedentes', status: 'fail', motive }
-    } else if (review) {
-      const classification = classifyConcern(review.concern.toLowerCase())
-      const motive =
-        classification === 'EXPIRED'
-          ? PUBLIC_CHECK_MSG.criminalExpired
-          : classification === 'QUALITY'
-            ? PUBLIC_CHECK_MSG.criminalUnreadable
-            : PUBLIC_CHECK_MSG.generic
-      antecedentes = { key: 'antecedentes', status: 'warn', motive }
-    }
-  }
-
-  // --- ruc ---
-  // RUC bloqueante (CANCELADO/BLOQUEADO) es el único fail fiscal: es el caso en
-  // que el pipeline rechaza por motivo fiscal y el postulante necesita saber por qué.
-  let ruc: PublicCheck = { key: 'ruc', status: 'ok', motive: PUBLIC_CHECK_MSG.ok }
-  if (input.rucBlocking) {
-    ruc = { key: 'ruc', status: 'fail', motive: PUBLIC_CHECK_MSG.rucBlocking }
-  } else if (input.rucSoftIssue) {
-    ruc = { key: 'ruc', status: 'warn', motive: PUBLIC_CHECK_MSG.rucObservations }
-  } else if (input.rucUnknown) {
-    ruc = { key: 'ruc', status: 'warn', motive: PUBLIC_CHECK_MSG.generic }
-  }
-
-  return [identidad, antecedentes, ruc]
 }
 
 function pickLatestDoc<T extends { documentType: string; createdAt: Date }>(
@@ -1517,24 +1356,12 @@ function emptyMetrics() {
 // el endpoint /api/agent/auto-approve que aprueba docs + manda WhatsApp. Si las
 // condiciones no se cumplen (admin manual, decisión amarilla/roja, overrides),
 // las AgentActions quedan PROPOSED para revisión humana — sin cambio de
-// comportamiento previo. Las acciones "pasajeras" (informativas) de un APPROVED
-// no bloquean el disparo pero tampoco se ejecutan: quedan PROPOSED.
+// comportamiento previo.
 // ============================================================================
-
-const AUTO_APPROVE_TRIGGER_PREFIXES = ['cron:', 'form:'] as const
 
 const AUTO_APPROVE_ALLOWED_TOOLS = new Set<ProposedToolCall['tool']>([
   'propose_approve_document',
   'propose_send_whatsapp_template',
-])
-// Acciones informativas que pueden acompañar un APPROVED limpio sin bloquear el
-// auto-approve (aviso de RUC NO_ENCONTRADO, plantilla capacitaciones inactiva).
-// El endpoint NO las ejecuta: quedan PROPOSED para el admin. Sin esto, el caso
-// APPROVED más común (RUC no registrado en SET) nunca dispararía el auto-approve
-// y el postulante quedaría en "pending" hasta degradar a "en revisión".
-const AUTO_APPROVE_PASSENGER_TOOLS = new Set<ProposedToolCall['tool']>([
-  'propose_request_document_resubmission',
-  'escalate_to_admin',
 ])
 // Solo se considera auto-approvable si las plantillas WhatsApp sugeridas son del
 // set "estándar" del flow APPROVED limpio. Cualquier otra cosa queda PROPOSED.
@@ -1552,19 +1379,10 @@ async function maybeTriggerAutoApprove(params: MaybeAutoApproveParams): Promise<
   const { agentRunId, mode, triggeredBy, decision, actions } = params
 
   if (mode !== 'REAL') return
-  // 'cron:' = pipeline batch; 'form:' = decisión en tiempo real al completar el
-  // form público. El botón admin manda DRY_RUN, así que nunca entra acá.
-  if (!AUTO_APPROVE_TRIGGER_PREFIXES.some((p) => triggeredBy.startsWith(p))) return
+  if (!triggeredBy.startsWith('cron:')) return
   if (decision !== 'APPROVED') return
   if (actions.length === 0) return
-  if (
-    !actions.every(
-      (a) => AUTO_APPROVE_ALLOWED_TOOLS.has(a.tool) || AUTO_APPROVE_PASSENGER_TOOLS.has(a.tool),
-    )
-  ) {
-    return
-  }
-  if (!actions.some((a) => a.tool === 'propose_approve_document')) return
+  if (!actions.every((a) => AUTO_APPROVE_ALLOWED_TOOLS.has(a.tool))) return
   // Si hay propose_send_whatsapp_template, asegurar que la clave esté en el set permitido.
   const hasUnknownTemplate = actions.some(
     (a) =>

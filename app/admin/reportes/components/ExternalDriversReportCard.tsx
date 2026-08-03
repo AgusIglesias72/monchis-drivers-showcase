@@ -129,9 +129,9 @@ export function ExternalDriversReportCard({ onJobStart }: ExternalDriversReportC
 
       <CardContent className="space-y-4">
         {/* Integración con Google - COMPRIMIDO */}
-        <div className="flex items-center gap-3 p-2.5 rounded-lg bg-gradient-to-r from-info-soft to-success-soft border">
+        <div className="flex items-center gap-3 p-2.5 rounded-lg bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-950/20 dark:to-green-950/20 border">
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card border shadow-sm">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-slate-900 border shadow-sm">
               {/* Ícono correcto de Google Sheets */}
               <svg className="h-4 w-4" viewBox="0 0 64 88" xmlns="http://www.w3.org/2000/svg">
                 <path d="M10 0C4.5 0 0 4.5 0 10v68c0 5.5 4.5 10 10 10h44c5.5 0 10-4.5 10-10V26L42 0H10z" fill="#0F9D58"/>
@@ -142,7 +142,7 @@ export function ExternalDriversReportCard({ onJobStart }: ExternalDriversReportC
               <span className="text-xs font-medium">Google Sheets</span>
             </div>
             <span className="text-muted-foreground text-sm">→</span>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card border shadow-sm">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-slate-900 border shadow-sm">
               <svg className="h-4 w-4" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
                 <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
                 <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>

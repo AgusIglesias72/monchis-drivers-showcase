@@ -23,12 +23,10 @@
 */
 
 @theme inline {
-  /* Tipografía — roles STUDIO: display (títulos), body (texto), mono (códigos/métricas).
-     Familias cargadas vía <link> en el root layout. */
-  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --font-display: 'Bricolage Grotesque', 'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-mono: 'Space Mono', ui-monospace, 'JetBrains Mono', monospace;
-  --font-montserrat: 'Plus Jakarta Sans', system-ui, sans-serif;
+  /* Tipografía */
+  --font-sans: 'Montserrat', var(--font-geist-sans), sans-serif;
+  --font-mono: var(--font-geist-mono);
+  --font-montserrat: 'Montserrat', sans-serif;
 
   /* Shadcn core */
   --color-background: var(--background);
@@ -46,34 +44,15 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Brand Monchis (uso explícito) + escala derivada */
+  /* Brand Monchis (uso explícito) */
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-hover: var(--brand-hover);
   --color-brand-soft: var(--brand-soft);
-  --color-brand-50: var(--brand-50);
-  --color-brand-100: var(--brand-100);
-  --color-brand-300: var(--brand-300);
-  --color-brand-500: var(--brand-500);
-  --color-brand-600: var(--brand-600);
-  --color-brand-700: var(--brand-700);
-
-  /* Accent cálido — "el alma" STUDIO */
-  --color-accent-warm: var(--accent-warm);
-  --color-accent-warm-600: var(--accent-warm-600);
-  --color-accent-warm-soft: var(--accent-warm-soft);
-  --color-accent-warm-foreground: var(--accent-warm-foreground);
-
-  /* Superficies extra STUDIO + tinta terciaria */
-  --color-surface-2: var(--surface-2);
-  --color-surface-3: var(--surface-3);
-  --color-surface-inverse: var(--surface-inverse);
-  --color-ink-subtle: var(--ink-subtle);
 
   /* Semánticos (estados del pipeline driver) */
   --color-success: var(--success);
@@ -111,111 +90,37 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 10px);
   --radius-pill: 9999px;
 }
 
 :root {
-  /* Radio STUDIO — sello cálido y redondeado (cards/inputs). Botones → pill. */
-  --radius: 0.875rem;
+  --radius: 0.625rem;
 
-  /* === Superficies STUDIO === */
-  --background: #f7f5ee;              /* crema RED Suma — page base */
-  --foreground: #21302d;             /* ink RED Suma — tinta verde-oscura neutra */
-  --card: #ffffff;
-  --card-foreground: #21302d;
-  --popover: #ffffff;
-  --popover-foreground: #21302d;
+  /* === Shadcn core (neutros, IGUAL que antes) === */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
 
-  /* === Brand Monchis — AHORA es el primary (carácter STUDIO) === */
-  --primary: #E52050;
-  --primary-foreground: #ffffff;
-
-  --secondary: #ece7da;              /* surface-2 RED Suma */
-  --secondary-foreground: #21302d;
-  --muted: #ece7da;
-  --muted-foreground: #5e6b67;       /* ink-muted RED Suma */
-  --accent: #ece7da;                 /* hover neutro — surface-2 */
-  --accent-foreground: #21302d;
-  --destructive: #d6504d;
-  --destructive-foreground: #ffffff;
-  --border: #e7e1d2;                 /* hairline RED Suma */
-  --input: #d6ccb8;
-  --ring: #E52050;                   /* foco con halo brand */
-
-  /* === Escala brand (derivada de #E52050) === */
+  /* === Brand Monchis (uso EXPLÍCITO, no default) === */
   --brand: #E52050;
-  --brand-50: #FDE8EE;
-  --brand-100: #FBD0DA;
-  --brand-300: #F49DB0;
-  --brand-500: #EC4B6C;
-  --brand-600: #D11C49;
-  --brand-700: #C41B48;              /* hover */
   --brand-foreground: #ffffff;
   --brand-hover: #C41B48;
   --brand-soft: #FDE8EE;
-
-  /* === Accent cálido — "el alma" STUDIO (CTA críticos, progreso, banners) === */
-  --accent-warm: #F5853F;
-  --accent-warm-600: #C9661F;
-  --accent-warm-soft: #FCE9D8;
-  --accent-warm-foreground: #3a2410;
-
-  /* === Tinta extra === */
-  --ink-subtle: #94a09b;             /* ink-subtle RED Suma */
-
-  /* === Superficies extra STUDIO === */
-  --surface-2: #ece7da;              /* surface-2 RED Suma */
-  --surface-3: #f3efe5;              /* surface-3 RED Suma */
-  --surface-inverse: #21302d;        /* inverse — deep ink RED Suma */
-  --overlay: rgba(229, 32, 80, 0.05);
-
-  /* === Gradientes gentiles (permitidos en STUDIO) === */
-  --grad-brand: linear-gradient(135deg, #EC4B6C 0%, #E52050 55%, #C41B48 100%);
-  --grad-warm: linear-gradient(135deg, #FF8A4C 0%, #F5853F 50%, #E52050 100%);
-  --grad-page: radial-gradient(1100px 560px at 88% -12%, #fdeef0 0%, rgba(253, 238, 240, 0) 55%),
-               radial-gradient(900px 500px at -8% 108%, #fbeede 0%, rgba(251, 238, 222, 0) 50%);
-
-  /* === Sombras difusas STUDIO (rgba teñido con tinta/brand) === */
-  --shadow-soft: 0 2px 8px rgba(33, 28, 30, 0.05);
-  --shadow-1: 0 2px 10px rgba(33, 28, 30, 0.06), 0 1px 3px rgba(33, 28, 30, 0.04);
-  --shadow-2: 0 12px 30px rgba(33, 28, 30, 0.08), 0 3px 8px rgba(33, 28, 30, 0.05);
-  --shadow-3: 0 24px 60px rgba(23, 63, 58, 0.14), 0 8px 18px rgba(33, 48, 45, 0.06);
-  --shadow-brand: 0 12px 28px rgba(229, 32, 80, 0.26);
-  --shadow-accent: 0 10px 24px rgba(245, 133, 63, 0.30);
-  --ring-focus: 0 0 0 4px rgba(229, 32, 80, 0.18);
-  --ring-accent: 0 0 0 4px rgba(245, 133, 63, 0.22);
-  --ring-error: 0 0 0 4px rgba(214, 80, 77, 0.18);
-
-  /* === Escala tipográfica fluida (STUDIO) === */
-  --t-display-1: clamp(2.5rem, 4.5vw, 3.75rem);
-  --t-display-2: clamp(1.9rem, 3vw, 2.6rem);
-  --t-h1: clamp(1.6rem, 2.4vw, 2.1rem);
-  --t-h2: 1.4rem;
-  --t-h3: 1.125rem;
-  --t-body: 0.975rem;
-  --t-small: 0.85rem;
-  --t-label: 0.74rem;
-  --t-mono: 0.8rem;
-
-  /* Line-heights + tracking */
-  --lh-tight: 1.08;
-  --lh-snug: 1.3;
-  --lh-body: 1.6;
-  --ls-label: 0.04em;
-  --ls-tight: -0.02em;
-
-  /* Espaciado + radios semánticos + target de toque */
-  --sp-1: 0.25rem; --sp-2: 0.5rem; --sp-3: 0.75rem; --sp-4: 1rem;
-  --sp-5: 1.5rem; --sp-6: 2rem; --sp-7: 3rem; --sp-8: 4rem; --sp-9: 6rem;
-  --r-xs: 6px; --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-xl: 28px; --r-pill: 999px;
-  --tap: 44px;
-
-  /* === Badges de estado de negocio (mismo color en TODA la app) === */
-  --b-pendiente: var(--warning);   --b-pendiente-bg: var(--warning-soft);
-  --b-revision: var(--info);       --b-revision-bg: var(--info-soft);
-  --b-aprobado: var(--success);    --b-aprobado-bg: var(--success-soft);
-  --b-rechazado: var(--danger);    --b-rechazado-bg: var(--danger-soft);
 
   /* === Semánticos del pipeline === */
   --success: #16A34A;                 /* APPROVED / VERIFIED / ACTIVE */
@@ -238,39 +143,15 @@
   --chart-4: #D97706;                 /* warning */
   --chart-5: #7C3AED;                 /* violet — 5to acento */
 
-  /* === Sidebar (cálido STUDIO; ítem activo = realce rosa-brand) === */
-  --sidebar: #faf7f4;
-  --sidebar-foreground: #211c1e;
-  --sidebar-primary: #E52050;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #FDE8EE;             /* fondo del ítem activo/hover */
-  --sidebar-accent-foreground: #C41B48;  /* texto del ítem activo */
-  --sidebar-border: #ece7e3;
-  --sidebar-ring: #E52050;
-
-  /* ── Aliases RED Suma (--c-*) → Monchis; portá componentes de Suma sin traducir ── */
-  --c-brand:       var(--brand);          --c-brand-700: var(--brand-hover);
-  --c-brand-600:   var(--brand-600);      --c-brand-500: var(--brand-500);
-  --c-brand-300:   var(--brand-300);      --c-brand-100: var(--brand-100);
-  --c-brand-50:    var(--brand-soft);
-  --c-accent:      var(--accent-warm);    --c-accent-600: var(--accent-warm-600);
-  --c-accent-soft: var(--accent-warm-soft);
-  --c-page:          var(--background);
-  --c-surface:       var(--card);
-  --c-surface-2:     var(--surface-2);
-  --c-surface-3:     var(--surface-3);
-  --c-surface-inverse: var(--surface-inverse);
-  --c-ink:         var(--foreground);     /* #21302d — ink RED Suma */
-  --c-ink-muted:   var(--muted-foreground); /* #5e6b67 */
-  --c-ink-subtle:  var(--ink-subtle);
-  --c-ink-onbrand: #ffffff;
-  --c-border:       var(--border);        --c-border-strong: var(--input);
-  --c-border-brand: var(--brand-300);
-  --c-ring: rgba(229, 32, 80, 0.12);
-  --c-success: var(--success); --c-success-bg: var(--success-soft);
-  --c-warning: var(--warning); --c-warning-bg: var(--warning-soft);
-  --c-danger:  var(--danger);  --c-danger-bg:  var(--danger-soft);
-  --c-info:    var(--info);    --c-info-bg:    var(--info-soft);
+  /* === Sidebar (neutros, IGUAL que antes) === */
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
@@ -281,8 +162,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: #E52050;                /* brand también en dark (carácter STUDIO) */
-  --primary-foreground: #ffffff;
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -290,56 +171,15 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: #ffffff;
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: #E52050;
+  --ring: oklch(0.556 0 0);
 
-  /* Brand Monchis dark + escala */
+  /* Brand Monchis dark */
   --brand: #E52050;
-  --brand-50: rgba(229, 32, 80, 0.10);
-  --brand-100: rgba(229, 32, 80, 0.16);
-  --brand-300: #F14672;
-  --brand-500: #EC4B6C;
-  --brand-600: #F14672;
-  --brand-700: #F14672;
   --brand-foreground: #ffffff;
   --brand-hover: #F14672;
   --brand-soft: rgba(229, 32, 80, 0.15);
-
-  /* Accent cálido dark */
-  --accent-warm: #F5853F;
-  --accent-warm-600: #FFA968;
-  --accent-warm-soft: rgba(245, 133, 63, 0.16);
-  --accent-warm-foreground: #2a1a0a;
-
-  /* Superficies extra + tinta dark */
-  --ink-subtle: #8b837f;
-  --surface-2: oklch(0.269 0 0);
-  --surface-3: oklch(0.23 0 0);
-  --surface-inverse: oklch(0.145 0 0);
-  --overlay: rgba(255, 255, 255, 0.06);
-
-  /* Gradientes + sombras dark */
-  --grad-brand: linear-gradient(135deg, #F14672 0%, #E52050 55%, #C41B48 100%);
-  --grad-warm: linear-gradient(135deg, #FF8A4C 0%, #F5853F 50%, #E52050 100%);
-  --grad-page: radial-gradient(1100px 560px at 88% -12%, rgba(229, 32, 80, 0.10) 0%, rgba(229, 32, 80, 0) 55%),
-               radial-gradient(900px 500px at -8% 108%, rgba(245, 133, 63, 0.08) 0%, rgba(245, 133, 63, 0) 50%);
-  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.30);
-  --shadow-1: 0 2px 10px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.30);
-  --shadow-2: 0 12px 30px rgba(0, 0, 0, 0.45), 0 3px 8px rgba(0, 0, 0, 0.35);
-  --shadow-3: 0 24px 60px rgba(0, 0, 0, 0.55), 0 8px 18px rgba(0, 0, 0, 0.35);
-  --shadow-brand: 0 12px 28px rgba(229, 32, 80, 0.40);
-  --shadow-accent: 0 10px 24px rgba(245, 133, 63, 0.36);
-  --ring-focus: 0 0 0 4px rgba(229, 32, 80, 0.30);
-  --ring-accent: 0 0 0 4px rgba(245, 133, 63, 0.28);
-  --ring-error: 0 0 0 4px rgba(214, 80, 77, 0.30);
-
-  /* Badges de estado de negocio (dark) */
-  --b-pendiente: var(--warning);   --b-pendiente-bg: var(--warning-soft);
-  --b-revision: var(--info);       --b-revision-bg: var(--info-soft);
-  --b-aprobado: var(--success);    --b-aprobado-bg: var(--success-soft);
-  --b-rechazado: var(--danger);    --b-rechazado-bg: var(--danger-soft);
 
   /* Semánticos dark */
   --success: #22C55E;
@@ -362,15 +202,15 @@
   --chart-4: #F59E0B;
   --chart-5: #A78BFA;
 
-  /* Sidebar dark (ítem activo = realce brand) */
+  /* Sidebar dark (neutros, IGUAL que antes) */
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: #E52050;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(229, 32, 80, 0.18);
-  --sidebar-accent-foreground: #F49DB0;
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: #E52050;
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
@@ -379,9 +219,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    /* Gradientes gentiles STUDIO en toda la app (fijos al viewport). */
-    background-image: var(--grad-page);
-    background-attachment: fixed;
   }
 }
 
@@ -403,19 +240,36 @@ body {
   overflow-x: hidden;
 }
 
-/* ===== Popup/Tooltip del mapa de Pedidos (Leaflet) =====
-   Limpiamos el padding default de Leaflet para que se vea como una card
-   propia (con el header de color que renderiza PointInfo). */
-.pedido-map-wrapper .leaflet-popup-content-wrapper,
-.pedido-map-wrapper .leaflet-tooltip {
-  padding: 0;
-  border-radius: 8px;
-  border: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
+/* ===== InfoWindow del mapa de Pedidos =====
+   Sacamos el botón X de cierre y limpiamos el padding default de Google
+   para que se vea como una card propia (con el header de color que renderiza
+   PointInfo). */
+.pedido-map-wrapper .gm-ui-hover-effect,
+.pedido-map-wrapper button.gm-ui-hover-effect {
+  display: none !important;
 }
-.pedido-map-wrapper .leaflet-popup-content {
-  margin: 0;
+.pedido-map-wrapper .gm-style-iw,
+.pedido-map-wrapper .gm-style-iw-c {
+  padding: 0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+  max-width: 320px !important;
+}
+.pedido-map-wrapper .gm-style-iw-ch,
+.pedido-map-wrapper .gm-style-iw-chr {
+  padding: 0 !important;
+  margin: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+}
+.pedido-map-wrapper .gm-style-iw-d {
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  max-height: none !important;
+}
+.pedido-map-wrapper .gm-style-iw-tc::after {
+  background: white !important;
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -604,18 +458,4 @@ body {
 /* Días "outside" (mes anterior/siguiente que aparecen): atenuados */
 .monchis-day-picker .rdp-outside .rdp-day_button {
   color: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
-}
-
-/* ── Animaciones STUDIO ─────────────────────────────────────────────────── */
-@keyframes studio-fade {
-  from { opacity: 0; }
-}
-@keyframes studio-pop {
-  from { opacity: 0; transform: translateY(12px) scale(0.97); }
-}
-@keyframes studio-slide-left {
-  from { transform: translateX(100%); }
-}
-@keyframes studio-slide-up {
-  from { transform: translateY(100%); }
 }

@@ -249,13 +249,13 @@ export function JobsHistoryTable({ jobs, onRefresh }: JobsHistoryTableProps) {
                         {job.result ? (
                           <div className="text-sm space-y-1">
                             {job.result.exitosos !== undefined && (
-                              <div className="flex items-center gap-1 text-success">
+                              <div className="flex items-center gap-1 text-green-600">
                                 <CheckCircle className="h-3 w-3" />
                                 {job.result.exitosos}
                               </div>
                             )}
                             {job.result.fallidos !== undefined && job.result.fallidos > 0 && (
-                              <div className="flex items-center gap-1 text-destructive">
+                              <div className="flex items-center gap-1 text-red-600">
                                 <XCircle className="h-3 w-3" />
                                 {job.result.fallidos}
                               </div>

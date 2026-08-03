@@ -22,7 +22,6 @@ import {
 } from '@/lib/services/reengagement.service'
 import { recordMessageSent } from '@/lib/services/messaging-frequency.service'
 import { sendTemplateByKey } from '@/lib/services/whatsapp-messenger.service'
-import { whatsappBotService } from '@/lib/services/whatsapp-bot.service'
 
 // 2 segmentos × 5 × ~8s de pausa + latencia del bot ≈ 100s peor caso.
 export const maxDuration = 150
@@ -41,20 +40,6 @@ export async function GET(request: NextRequest) {
   if (cronError) return cronError
 
   try {
-    // Circuit breaker: si la sesión de WhatsApp no está conectada, no tiene
-    // sentido iterar — abortamos sin enviar ni aplicar backoff. Evita quemar el
-    // backlog contra un bot mudo (marcar "enviado" lo que no se entrega).
-    const status = await whatsappBotService.getStatus()
-    if (!status.connected) {
-      console.warn('[REENGAGE] abortado: bot desconectado', { status: status.status })
-      return NextResponse.json({
-        success: false,
-        skipped: true,
-        reason: 'whatsapp bot desconectado',
-        botStatus: status.status,
-      })
-    }
-
     const PENDING_LIMIT = Math.max(0, parseInt(process.env.REENGAGE_PENDING_LIMIT || '5', 10))
     const NOSHOW_LIMIT = Math.max(0, parseInt(process.env.REENGAGE_NOSHOW_LIMIT || '5', 10))
     const DELAY_MS = Math.max(0, parseInt(process.env.REENGAGE_DELAY_MS || '8000', 10))
