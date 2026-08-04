@@ -88,6 +88,7 @@ import {
   MapPin,
   ClipboardList,
   FileUp,
+  Bell,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -201,6 +202,13 @@ export function IntercomContent() {
             <Layers className="h-4 w-4" />
             Segmentos
           </TabsTrigger>
+          <TabsTrigger
+            value="recordatorios"
+            className="px-5 py-2.5 text-sm font-medium gap-2 rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-[#1F8DED]"
+          >
+            <Bell className="h-4 w-4" />
+            Recordatorios de turno
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="enviar" className="space-y-8 mt-6">
@@ -215,6 +223,10 @@ export function IntercomContent() {
 
         <TabsContent value="segmentos" className="mt-6">
           <SegmentsView />
+        </TabsContent>
+
+        <TabsContent value="recordatorios" className="mt-6">
+          <TurnoRemindersView />
         </TabsContent>
       </Tabs>
 
@@ -1884,6 +1896,221 @@ function ConversationsView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ==================== RECORDATORIOS DE TURNO ====================
+
+interface TurnoReminderLogItem {
+  id: string;
+  createdAt: string;
+  shiftId: string;
+  driverId: string;
+  driverName: string;
+  dateIso: string;
+  fromHour: number | null;
+  zoneName: string;
+  status: string;
+  intercomConversationId: string | null;
+  errorMessage: string | null;
+}
+
+const REMINDER_STATUS_OPTIONS = [
+  { value: 'all', label: 'Todos' },
+  { value: 'sent', label: 'Enviados' },
+  { value: 'failed', label: 'Fallidos' },
+  { value: 'skipped_no_contact', label: 'Sin contacto Intercom' },
+] as const;
+
+function reminderStatusBadge(status: string) {
+  switch (status) {
+    case 'sent':
+      return (
+        <Badge
+          variant="outline"
+          className="gap-1 border-success bg-success-soft text-success text-[11px] font-medium"
+        >
+          <CheckCircle2 className="h-3 w-3" />
+          Enviado
+        </Badge>
+      );
+    case 'failed':
+      return (
+        <Badge
+          variant="outline"
+          className="gap-1 border-danger bg-danger-soft text-danger text-[11px] font-medium"
+        >
+          <AlertCircle className="h-3 w-3" />
+          Falló
+        </Badge>
+      );
+    case 'skipped_no_contact':
+      return (
+        <Badge variant="outline" className="text-[11px] text-muted-foreground">
+          Sin contacto
+        </Badge>
+      );
+    default:
+      return (
+        <Badge variant="outline" className="text-[11px] text-muted-foreground">
+          {status}
+        </Badge>
+      );
+  }
+}
+
+function reminderShiftHour(fromHour: number | null): string {
+  if (fromHour == null) return '—';
+  const hours = Math.floor(fromHour);
+  const minutes = Math.round((fromHour - hours) * 60);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function TurnoRemindersView() {
+  const [items, setItems] = useState<TurnoReminderLogItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>('all');
+
+  const load = useCallback(async (opts: { status: string }) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: '50' });
+      if (opts.status !== 'all') params.set('status', opts.status);
+      const res = await fetch(
+        `/api/intercom/turno-reminders?${params.toString()}`,
+        { cache: 'no-store' },
+      );
+      const json = await res.json();
+      setItems(json.items ?? []);
+      setNextCursor(json.nextCursor ?? null);
+    } catch {
+      setItems([]);
+      setNextCursor(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load({ status });
+  }, [load, status]);
+
+  async function loadMore() {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    try {
+      const params = new URLSearchParams({ limit: '50', cursor: nextCursor });
+      if (status !== 'all') params.set('status', status);
+      const res = await fetch(
+        `/api/intercom/turno-reminders?${params.toString()}`,
+        { cache: 'no-store' },
+      );
+      const json = await res.json();
+      setItems((prev) => [...prev, ...(json.items ?? [])]);
+      setNextCursor(json.nextCursor ?? null);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="text-sm font-semibold">Recordatorios de turno enviados</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Cron cada 15 min · avisa a drivers con turno reservado que arranca
+            en 15-30 min · asignado a Abel Cardozo
+          </p>
+        </div>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className="w-[190px] h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {REMINDER_STATUS_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="border border-dashed rounded-lg py-16 text-center text-sm text-muted-foreground">
+          Todavía no se mandó ningún recordatorio de turno.
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="px-3 py-2 font-medium">Driver</th>
+                <th className="px-3 py-2 font-medium">Turno</th>
+                <th className="px-3 py-2 font-medium">Zona</th>
+                <th className="px-3 py-2 font-medium">Estado</th>
+                <th className="px-3 py-2 font-medium">Enviado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className="border-t hover:bg-muted/30">
+                  <td className="px-3 py-2 font-medium whitespace-nowrap">
+                    {item.driverName}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                    {item.dateIso} · {reminderShiftHour(item.fromHour)}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                    {item.zoneName}
+                  </td>
+                  <td className="px-3 py-2">
+                    {reminderStatusBadge(item.status)}
+                    {item.status === 'failed' && item.errorMessage && (
+                      <div
+                        className="text-[11px] text-muted-foreground mt-0.5 max-w-xs truncate"
+                        title={item.errorMessage}
+                      >
+                        {item.errorMessage}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                    {formatChatTime(
+                      Math.floor(new Date(item.createdAt).getTime() / 1000),
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {nextCursor && (
+        <div className="flex justify-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              'Cargar más'
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -287,3 +287,76 @@ export async function sendTurnoReminders(
 
   return stats
 }
+
+// ==================== LOG / AUDITORÍA ====================
+
+export interface TurnoReminderLogItem {
+  id: string
+  createdAt: string
+  shiftId: string
+  driverId: string
+  driverName: string
+  dateIso: string
+  fromHour: number | null
+  zoneName: string
+  status: string
+  intercomConversationId: string | null
+  errorMessage: string | null
+}
+
+export interface TurnoReminderLogResult {
+  items: TurnoReminderLogItem[]
+  nextCursor: string | null
+}
+
+/**
+ * Lista paginada (cursor) de TurnoReminderSent con el nombre del driver
+ * resuelto, para la vista de auditoría en el panel (pestaña Recordatorios).
+ */
+export async function listTurnoReminderLogs(
+  opts: { limit?: number; cursor?: string; status?: string } = {},
+): Promise<TurnoReminderLogResult> {
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200)
+
+  const rows = await prisma.turnoReminderSent.findMany({
+    where: opts.status ? { status: opts.status } : undefined,
+    orderBy: { createdAt: "desc" },
+    take: limit + 1,
+    ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+  })
+
+  const hasMore = rows.length > limit
+  const page = hasMore ? rows.slice(0, limit) : rows
+  const nextCursor = hasMore ? page[page.length - 1].id : null
+
+  const driverIds = [...new Set(page.map((r) => r.driverId))]
+  const drivers = driverIds.length
+    ? await prisma.monchisDriverCache.findMany({
+        where: { driverId: { in: driverIds } },
+        select: { driverId: true, fullName: true, firstName: true, lastName: true },
+      })
+    : []
+  const driverMap = new Map(drivers.map((d) => [d.driverId, d]))
+
+  const items: TurnoReminderLogItem[] = page.map((r) => {
+    const d = driverMap.get(r.driverId)
+    const driverName =
+      d?.fullName ??
+      ([d?.firstName, d?.lastName].filter(Boolean).join(" ").trim() || r.driverId)
+    return {
+      id: r.id,
+      createdAt: r.createdAt.toISOString(),
+      shiftId: r.shiftId,
+      driverId: r.driverId,
+      driverName,
+      dateIso: r.dateIso,
+      fromHour: r.fromHour,
+      zoneName: r.zoneName,
+      status: r.status,
+      intercomConversationId: r.intercomConversationId,
+      errorMessage: r.errorMessage,
+    }
+  })
+
+  return { items, nextCursor }
+}
