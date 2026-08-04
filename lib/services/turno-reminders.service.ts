@@ -2,8 +2,9 @@
 //
 // Recordatorio pre-turno por Intercom. Corre cada 15 min (cron
 // `/api/cron/turno-reminders`) y le manda a cada driver con un turno
-// reservado que arranca en 15-30 min un mensaje 1-1, dejando la conversación
-// abierta y asignada a Abel Cardozo (Supervisor de Logística).
+// reservado que arranca en 15-30 min un mensaje 1-1, asignado a Abel
+// Cardozo (Supervisor de Logística) y cerrado tras el envío (no se
+// espera respuesta del driver).
 //
 // Idempotencia: TurnoReminderSent tiene unique(shiftId, driverId) — "1
 // mensaje por persona por turno" aunque el cron se solape entre corridas.
@@ -15,7 +16,7 @@ import "server-only"
 
 import { prisma } from "@/lib/prisma"
 import { fetchAllZoneShifts } from "@/lib/services/turnos.service"
-import { resolveContactId, sendDirectMessage } from "@/lib/services/intercom.service"
+import { closeConversation, resolveContactId, sendDirectMessage } from "@/lib/services/intercom.service"
 import { combineDateAndTimeInTZ, PY_TZ } from "@/lib/utils/onboarding-time"
 import type { FlattenedShift } from "@/lib/types/turnos.types"
 
@@ -247,6 +248,21 @@ export async function sendTurnoReminders(
           },
         })
         stats.sent++
+
+        // Cerramos la conversación después de mandar el recordatorio (a
+        // diferencia de otros envíos de Intercom, acá no se espera respuesta
+        // del driver). Best-effort: si falla el cierre, el mensaje ya se
+        // mandó y quedó registrado como 'sent' — no lo hacemos fallar por esto.
+        if (result.conversationId) {
+          try {
+            await closeConversation(result.conversationId)
+          } catch (closeErr) {
+            console.error(
+              "[turno-reminders] no se pudo cerrar la conversación:",
+              closeErr instanceof Error ? closeErr.message : closeErr,
+            )
+          }
+        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err)
         console.error("[turno-reminders] envío falló:", errorMessage)
