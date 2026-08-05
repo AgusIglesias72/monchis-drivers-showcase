@@ -9,8 +9,9 @@
 // Idempotencia: TurnoReminderSent tiene unique(shiftId, driverId) — "1
 // mensaje por persona por turno" aunque el cron se solape entre corridas.
 //
-// Rollout monitoreado: MAX_SENDS_PER_RUN limita los envíos reales por corrida
-// (default 5, override con TURNO_REMINDER_MAX_PER_RUN).
+// MAX_SENDS_PER_RUN: tope opcional de envíos reales por corrida. Default 0 =
+// sin tope (ya validado en producción durante el rollout monitoreado). Se
+// puede volver a limitar seteando TURNO_REMINDER_MAX_PER_RUN.
 
 import "server-only"
 
@@ -31,14 +32,12 @@ const WINDOW_FROM_MIN = 15
 const WINDOW_TO_MIN = 30
 const SEND_DELAY_MS = 200
 
-// Tope de envíos reales por corrida, para el rollout inicial monitoreado. El
-// resto de los candidatos de esa corrida queda sin fila en TurnoReminderSent
-// (no se marca "hecho"), así que si su turno sigue dentro de la ventana en la
-// próxima corrida (15 min después) se reintenta. Subir/soltar vía env var
-// cuando ya esté validado en producción.
+// Si se setea, los candidatos que superan el tope en esa corrida quedan sin
+// fila en TurnoReminderSent (no se marcan "hecho"): si su turno sigue dentro
+// de la ventana en la próxima corrida (15 min después) se reintentan.
 const MAX_SENDS_PER_RUN = Math.max(
   0,
-  parseInt(process.env.TURNO_REMINDER_MAX_PER_RUN || "5", 10),
+  parseInt(process.env.TURNO_REMINDER_MAX_PER_RUN || "0", 10),
 )
 
 interface DueShift {
@@ -150,7 +149,7 @@ export async function sendTurnoReminders(
 
       stats.candidates++
 
-      if (!dryRun && sendAttempts >= MAX_SENDS_PER_RUN) {
+      if (!dryRun && MAX_SENDS_PER_RUN > 0 && sendAttempts >= MAX_SENDS_PER_RUN) {
         stats.skippedCapped++
         continue
       }
