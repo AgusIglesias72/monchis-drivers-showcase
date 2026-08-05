@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(
       errorPage(
         'Necesitás iniciar sesión como super admin',
-        'Entrá a admin.monchis-drivers.com con tu cuenta (rol super admin) y volvé a abrir este link.',
+        'Iniciá sesión con tu cuenta (rol super admin) y volvé a abrir este link.',
         '/sign-in',
       ),
       { status: 401, headers: { 'Content-Type': 'text/html; charset=utf-8' } },

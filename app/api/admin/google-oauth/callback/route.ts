@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   if (!guard.ok) {
     return htmlError(
       'Necesitás iniciar sesión como super admin',
-      'La sesión se perdió durante el flow. Entrá a admin.monchis-drivers.com y volvé a intentar.',
+      'La sesión se perdió durante el flow. Iniciá sesión de nuevo y volvé a intentar.',
       401,
       '/sign-in',
     )
