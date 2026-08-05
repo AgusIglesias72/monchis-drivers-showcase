@@ -22,12 +22,12 @@ function htmlError(title: string, message: string, status: number, linkHref?: st
 }
 
 export async function GET(request: NextRequest) {
-  const guard = await requireAdminApi({ roles: ['SUPER_ADMIN'] })
+  const guard = await requireAdminApi()
   if (!guard.ok) {
     return htmlError(
-      'Necesitás iniciar sesión como super admin',
+      'Necesitás iniciar sesión',
       'La sesión se perdió durante el flow. Iniciá sesión de nuevo y volvé a intentar.',
-      401,
+      guard.response.status,
       '/sign-in',
     )
   }

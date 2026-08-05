@@ -27,15 +27,15 @@ const SCOPES = [
 const STATE_COOKIE = 'google_oauth_state'
 
 export async function GET(request: NextRequest) {
-  const guard = await requireAdminApi({ roles: ['SUPER_ADMIN'] })
+  const guard = await requireAdminApi()
   if (!guard.ok) {
     return new NextResponse(
       errorPage(
-        'Necesitás iniciar sesión como super admin',
-        'Iniciá sesión con tu cuenta (rol super admin) y volvé a abrir este link.',
+        'Necesitás iniciar sesión',
+        'Iniciá sesión con tu cuenta de admin y volvé a abrir este link.',
         '/sign-in',
       ),
-      { status: 401, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+      { status: guard.response.status, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
     )
   }
 
